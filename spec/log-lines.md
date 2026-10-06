@@ -18,7 +18,7 @@ A line that is not JSON is kept as `msg` with level `info` and the time it was r
 
 ## Ways in
 
-1. **`dokkit` reads files** named under `[logs]` in `dokkit.toml`. A file's read position only moves forward after the server confirms it has the lines, so a line can arrive twice and never goes missing. Files are recognised by their first bytes, so rotation and renames are followed. Every line is sent as the file's service; a `service` field of the line's own is kept in `fields`. A line without `msg` uses `message`, then `event`, then the whole line.
+1. **`dokkit` reads files** named under `[logs]` in `dokkit.toml`. A file's read position only moves forward after the server confirms it has the lines, so a line can arrive twice and never goes missing. Files are recognised by their first bytes, so rotation and renames are followed. Every line is sent as the file's service; a `service` field of the line's own is kept in `fields`, or as `service_name` on a CLEF line. A line without `msg` uses `message`, then `event`, then the whole line.
 2. **The library's log handler** plugs into the language's normal logging and sends lines in batches.
 3. **Anything else** can put `log` lines in a `POST /report` batch.
 

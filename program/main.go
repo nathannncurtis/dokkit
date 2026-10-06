@@ -357,17 +357,24 @@ func (c *client) job(l line) line {
 	l.Type, l.At = "job", now()
 	if strings.HasPrefix(c.key, "dkm_") {
 		l.Service = c.service
-		for _, p := range declarations(c.folders) {
-			if l.Service != "" {
-				break
-			}
-			if d, err := readDeclaration(p); err == nil {
-				for _, j := range d.Job {
-					if j.ID == l.Name {
-						l.Service = d.Service.ID
+		var owners []string
+		if l.Service == "" {
+			for _, p := range declarations(c.folders) {
+				if d, err := readDeclaration(p); err == nil {
+					for _, j := range d.Job {
+						if j.ID == l.Name {
+							owners = append(owners, d.Service.ID)
+						}
 					}
 				}
 			}
+		}
+		switch len(owners) {
+		case 1:
+			l.Service = owners[0]
+		case 0:
+		default:
+			fmt.Fprintf(os.Stderr, "dokkit: %s is declared by %s, give --service to say which\n", l.Name, strings.Join(owners, ", "))
 		}
 		if l.Service == "" {
 			l.Service = l.Name
@@ -443,13 +450,30 @@ func (c *client) settle(wait time.Duration) int {
 
 // flush sends spooled batches oldest first, for no longer than wait in all, and returns how many
 // are left. A batch the server keeps answering with an error is set aside once it has taken others.
+// The count is kept in the spool folder, so one-shot commands add to it too.
 func (c *client) flush(wait time.Duration) (int, error) {
+	start := time.Now()
+	stale, _ := filepath.Glob(filepath.Join(c.spool, "*.ndjson.tmp"))
+	for _, f := range stale {
+		if i, err := os.Stat(f); err == nil && time.Since(i.ModTime()) > time.Minute {
+			os.Remove(f)
+		}
+	}
 	files, _ := filepath.Glob(filepath.Join(c.spool, "*.ndjson"))
 	sort.Strings(files)
 	files = c.trim(files)
-	deadline := time.Now().Add(wait)
-	held, failed := 0, 0
+	deadline := start.Add(wait)
+	counts := c.failures()
+	before := len(counts)
+	held := 0
 	var last error
+	var doomed []string
+	defer func() {
+		if len(counts) > 0 || before > 0 {
+			b, _ := json.Marshal(counts)
+			writeFile(filepath.Join(c.spool, "failures.json"), b)
+		}
+	}()
 	for i, f := range files {
 		left := time.Until(deadline)
 		if left <= 0 {
@@ -460,7 +484,8 @@ func (c *client) flush(wait time.Duration) (int, error) {
 		if err != nil {
 			continue
 		}
-		batch := strings.TrimSuffix(filepath.Base(f)[21:], ".ndjson")
+		name := filepath.Base(f)
+		batch := strings.TrimSuffix(name[21:], ".ndjson")
 		status, answer, err := c.post(batch, body)
 		switch {
 		case err != nil:
@@ -468,27 +493,40 @@ func (c *client) flush(wait time.Duration) (int, error) {
 		case status/100 == 2:
 			refused(answer)
 			os.Remove(f)
-			failed = 0
+			delete(counts, name)
 		case status == 413 || status == 422:
-			fmt.Fprintf(os.Stderr, "dokkit: the server will never take this batch (%d), dropping it\n", status)
+			fmt.Fprintf(os.Stderr, "dokkit: the server will never take this batch (%d), dropping it\n", status)
 			os.Remove(f)
+			delete(counts, name)
 		default:
 			last = fmt.Errorf("the server answered %d", status)
-			if c.giveUp(f) {
-				fmt.Fprintf(os.Stderr, "dokkit: the server keeps answering %d to %s, setting it aside\n", status, filepath.Base(f))
-				os.Rename(f, f+".rejected")
-				continue
-			}
 			held++
-			if failed++; failed >= 3 {
-				return held + len(files) - i - 1, last
+			if counts[name]++; counts[name] >= 5 {
+				doomed = append(doomed, f)
 			}
+		}
+	}
+	if c.lastOK.After(start) {
+		for _, f := range doomed {
+			fmt.Fprintf(os.Stderr, "dokkit: the server keeps answering errors to %s, setting it aside\n", filepath.Base(f))
+			os.Rename(f, f+".rejected")
+			delete(counts, filepath.Base(f))
+			held--
 		}
 	}
 	if held == 0 {
 		last = nil
 	}
 	return held, last
+}
+
+// failures reads how many times each spooled batch has drawn a server error.
+func (c *client) failures() map[string]int {
+	counts := map[string]int{}
+	if b, err := os.ReadFile(filepath.Join(c.spool, "failures.json")); err == nil {
+		json.Unmarshal(b, &counts)
+	}
+	return counts
 }
 
 // refused says what the server would not take from a batch it accepted.
@@ -501,7 +539,7 @@ func refused(answer []byte) {
 	}
 	json.Unmarshal(answer, &a)
 	for _, r := range a.Refused {
-		fmt.Fprintf(os.Stderr, "dokkit: the server refused a line (%s): %s\n", r.Code, r.Message)
+		fmt.Fprintf(os.Stderr, "dokkit: the server refused a line (%s): %s\n", r.Code, r.Message)
 	}
 }
 
@@ -526,16 +564,17 @@ func (c *client) post(batch string, body []byte) (int, []byte, error) {
 	answer, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if res.StatusCode/100 == 2 {
 		c.lastOK = time.Now()
-		delete(c.stuck, batch)
 	}
 	return res.StatusCode, answer, nil
 }
 
-// trim drops the oldest batches when the spool is over its cap.
+// trim drops the oldest batches, set-aside ones first, when the spool is over its cap.
 func (c *client) trim(files []string) []string {
+	aside, _ := filepath.Glob(filepath.Join(c.spool, "*.rejected"))
+	all := append(aside, files...)
 	var total int64
-	sizes := make([]int64, len(files))
-	for i, f := range files {
+	sizes := make([]int64, len(all))
+	for i, f := range all {
 		if s, err := os.Stat(f); err == nil {
 			sizes[i] = s.Size()
 			total += sizes[i]
@@ -546,8 +585,8 @@ func (c *client) trim(files []string) []string {
 		limit = spoolMB
 	}
 	dropped := 0
-	for total > limit<<20 && dropped < len(files) {
-		os.Remove(files[dropped])
+	for total > limit<<20 && dropped < len(all) {
+		os.Remove(all[dropped])
 		total -= sizes[dropped]
 		dropped++
 	}
@@ -556,7 +595,7 @@ func (c *client) trim(files []string) []string {
 		fmt.Fprintln(os.Stderr, "dokkit:", msg)
 		c.report(map[string]any{"type": "log", "t": now(), "level": "warn", "msg": "dokkit: " + msg})
 	}
-	return files[dropped:]
+	return files[min(max(dropped-len(aside), 0), len(files)):]
 }
 
 func (c *client) doctor() int {

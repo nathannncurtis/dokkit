@@ -38,11 +38,11 @@ func (w *watcher) tail() {
 			moved = w.c.sendLog(d.Service.ID, f, w.logs) || moved
 		}
 	}
-	if moved {
+	if moved || w.unsaved {
 		// Positions of files that are gone stay: one number a file, and a folder that is
 		// away for a moment must not make every line arrive again.
 		b, _ := json.Marshal(w.logs)
-		writeFile(filepath.Join(w.c.spool, "logs.json"), b)
+		w.unsaved = writeFile(filepath.Join(w.c.spool, "logs.json"), b) != nil
 	}
 }
 
@@ -115,9 +115,12 @@ func (c *client) sendLog(service, path string, positions map[string]int64) bool 
 			if clef {
 				l["service_name"] = own
 			} else {
-				fields, _ := l["fields"].(map[string]any)
-				if fields == nil {
+				fields, ok := l["fields"].(map[string]any)
+				if !ok {
 					fields = map[string]any{}
+					if l["fields"] != nil {
+						fields["fields"] = l["fields"]
+					}
 				}
 				fields["service"], l["fields"] = own, fields
 			}
@@ -131,17 +134,21 @@ func (c *client) sendLog(service, path string, positions map[string]int64) bool 
 	used = min(used, end)
 	if count > 0 {
 		// The same lines from the same machine always carry the same batch id, so a resend is not stored twice.
-		batch := sha256.Sum256(append([]byte(c.key+"\n"+key+"\n"+strconv.FormatInt(pos, 10)+"\n"), body.Bytes()...))
+		batch := sha256.Sum256(append([]byte(c.key+"\n"+key+"\n"+strconv.FormatInt(pos, 10)+"\n"), buf[:used]...))
 		status, answer, err := c.post(uuid(batch[:16]), body.Bytes())
+		at := key + ":" + strconv.FormatInt(pos, 10)
 		switch {
 		case err != nil:
 			return false
 		case status/100 == 2:
 			refused(answer)
-			delete(c.stuck, key+":"+strconv.FormatInt(pos, 10))
+			delete(c.stuck, at)
 		case status == 413 || status == 422:
-		case c.giveUp(key + ":" + strconv.FormatInt(pos, 10)):
-			fmt.Fprintf(os.Stderr, "dokkit: the server keeps answering %d to the lines of %s, skipping them\n", status, path)
+		case status == 500 && c.giveUp(at):
+			delete(c.stuck, at)
+			msg := fmt.Sprintf("the server keeps answering %d to the lines of %s (bytes %d to %d), skipping them", status, path, pos, pos+int64(used))
+			fmt.Fprintln(os.Stderr, "dokkit:", msg)
+			c.report(map[string]any{"type": "log", "t": now(), "level": "warn", "msg": "dokkit: " + msg})
 		default:
 			return false
 		}

@@ -166,3 +166,112 @@ func TestTrimReportsWhatItDropped(t *testing.T) {
 		t.Fatal("the drop is reported to the server")
 	}
 }
+
+func TestAResentLogBatchKeepsItsID(t *testing.T) {
+	var ids []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ids = append(ids, r.Header.Get("Dokkit-Batch"))
+		if len(ids) == 1 {
+			w.WriteHeader(500)
+		}
+	}))
+	defer srv.Close()
+	file := filepath.Join(t.TempDir(), "plain.log")
+	os.WriteFile(file, []byte("first line\nsecond line\n"), 0o600)
+	c := &client{url: srv.URL, key: "dkm_resend", spool: t.TempDir(), http: &http.Client{}}
+	positions := map[string]int64{}
+	c.sendLog("s", file, positions)
+	time.Sleep(2 * time.Millisecond)
+	c.sendLog("s", file, positions)
+	if len(ids) != 2 || ids[0] != ids[1] {
+		t.Fatalf("batch ids: %v", ids)
+	}
+}
+
+func TestFlushSetsAsideAcrossSeparateProcesses(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		z, _ := gzip.NewReader(r.Body)
+		b := make([]byte, 64)
+		n, _ := z.Read(b)
+		if strings.Contains(string(b[:n]), "poison") {
+			w.WriteHeader(500)
+		}
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	for _, n := range []string{"1", "2", "3"} {
+		spoolFile(t, dir, "0000000000000000000"+n+"-xxxxxxxx", "poison")
+	}
+	for i := 0; i < 6; i++ {
+		spoolFile(t, dir, "0000000000000000001"+string(rune('0'+i))+"-good", "fine")
+		c := &client{url: srv.URL, key: "dka_fresh", spool: dir, http: &http.Client{}}
+		c.flush(5 * time.Second)
+	}
+	left, _ := filepath.Glob(filepath.Join(dir, "*.ndjson"))
+	aside, _ := filepath.Glob(filepath.Join(dir, "*.rejected"))
+	if len(left) != 0 || len(aside) != 3 {
+		t.Fatalf("left %v, set aside %v", left, aside)
+	}
+}
+
+func TestTrimCountsSetAsideBatchesAndFlushClearsOldTempFiles(t *testing.T) {
+	dir := t.TempDir()
+	c := &client{url: "http://127.0.0.1:1", key: "dka_trim", spool: dir, spoolMB: 1, http: &http.Client{}}
+	aside := filepath.Join(dir, "00000000000000000001-a.ndjson.rejected")
+	keep := filepath.Join(dir, "00000000000000000002-b.ndjson")
+	os.WriteFile(aside, make([]byte, 600<<10), 0o600)
+	os.WriteFile(keep, make([]byte, 600<<10), 0o600)
+	if kept := c.trim([]string{keep}); len(kept) != 1 {
+		t.Fatalf("kept %v", kept)
+	}
+	if _, err := os.Stat(aside); err == nil {
+		t.Fatal("the set-aside batch goes first")
+	}
+	tmp := filepath.Join(dir, "00000000000000000003-c.ndjson.tmp")
+	os.WriteFile(tmp, []byte("x"), 0o600)
+	old := time.Now().Add(-time.Hour)
+	os.Chtimes(tmp, old, old)
+	c.flush(time.Second)
+	if _, err := os.Stat(tmp); err == nil {
+		t.Fatal("an old temp file stays")
+	}
+}
+
+func TestLogLinesKeepAFieldsValueAndAClefService(t *testing.T) {
+	var got []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		z, _ := gzip.NewReader(r.Body)
+		s := bufio.NewScanner(z)
+		for s.Scan() {
+			var l map[string]any
+			json.Unmarshal(s.Bytes(), &l)
+			got = append(got, l)
+		}
+	}))
+	defer srv.Close()
+	file := filepath.Join(t.TempDir(), "mixed.log")
+	os.WriteFile(file, []byte("{\"msg\":\"a\",\"service\":\"x\",\"fields\":\"text\"}\n{\"@m\":\"b\",\"service\":\"y\"}\n"), 0o600)
+	c := &client{url: srv.URL, key: "dkm_fields", spool: t.TempDir(), http: &http.Client{}}
+	c.sendLog("portal", file, map[string]int64{})
+	if len(got) != 2 {
+		t.Fatalf("lines: %v", got)
+	}
+	if f, _ := got[0]["fields"].(map[string]any); f["service"] != "x" || f["fields"] != "text" {
+		t.Fatalf("fields: %v", got[0])
+	}
+	if got[1]["service_name"] != "y" || got[1]["service"] != "portal" {
+		t.Fatalf("clef: %v", got[1])
+	}
+}
+
+func TestAJobNamedByTwoServicesIsNotGuessed(t *testing.T) {
+	root := t.TempDir()
+	for _, s := range []string{"ambig-one", "ambig-two"} {
+		os.Mkdir(filepath.Join(root, s), 0o700)
+		os.WriteFile(filepath.Join(root, s, "dokkit.toml"), []byte("schema = 1\n[service]\nid = \""+s+"\"\n[[job]]\nid = \"ambig-backup\"\n"), 0o600)
+	}
+	c := &client{key: "dkm_x", folders: []string{root}}
+	if s := c.job(line{Name: "ambig-backup"}).Service; s != "ambig-backup" {
+		t.Fatalf("guessed %q", s)
+	}
+}
