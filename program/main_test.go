@@ -154,6 +154,10 @@ func TestWatchDeclaresAndRunsChecks(t *testing.T) {
 			w.Write([]byte(`{"service":"s1"}`))
 			return
 		}
+		if r.URL.Path == "/api/v1/checks" {
+			w.Write([]byte(`{"items":[{"service":"port-1","name":"tcp","type":"tcp","config":{"port":1}}]}`))
+			return
+		}
 		z, _ := gzip.NewReader(r.Body)
 		s := bufio.NewScanner(z)
 		for s.Scan() {
@@ -216,8 +220,8 @@ schedule = "0 1 * * *"
 		t.Fatalf("declared: %v", declared)
 	}
 	at := time.Now()
-	if ran := w.tick(at); ran != 3 {
-		t.Fatalf("ran %d checks, want 3 (the custom one is the app's)", ran)
+	if ran := w.tick(at); ran != 4 {
+		t.Fatalf("ran %d checks, want the file's 3 (the custom one is the app's) and the 1 added in the interface", ran)
 	}
 	if ran := w.tick(at.Add(time.Second)); ran != 0 {
 		t.Fatalf("nothing is due after a second, ran %d", ran)
@@ -230,8 +234,15 @@ schedule = "0 1 * * *"
 	for _, l := range states {
 		got[l["check"].(string)] = l["state"].(string)
 	}
-	if got["http"] != "ok" || got["http-2"] != "down" || got["tcp"] != "ok" {
+	if got["http"] != "ok" || got["http-2"] != "down" {
 		t.Fatalf("states: %v", states)
+	}
+	added := false
+	for _, l := range states {
+		added = added || (l["service"] == "port-1" && l["state"] == "down")
+	}
+	if !added {
+		t.Fatalf("the check added in the interface did not report: %v", states)
 	}
 
 	os.WriteFile(file, []byte("schema = 2"), 0o600)

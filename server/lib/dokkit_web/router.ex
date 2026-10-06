@@ -58,6 +58,8 @@ defmodule DokkitWeb.Router do
     post "/enrol", IntakeController, :enrol
     put "/declare", IntakeController, :declare
     get "/ping", IntakeController, :hello
+    post "/proposals", IntakeController, :propose
+    get "/checks", IntakeController, :checks
     get "/work", IntakeController, :work
     post "/work/:run/output", IntakeController, :work_output
     post "/work/:run/result", IntakeController, :work_result

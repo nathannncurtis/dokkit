@@ -156,6 +156,19 @@ defmodule Dokkit.TaskRun do
   end
 end
 
+defmodule Dokkit.Finding do
+  use Dokkit.Schema
+
+  schema "found" do
+    field :kind, :string
+    field :key, :string
+    field :detail, :map, default: %{}
+    field :dismissed, :boolean, default: false
+    belongs_to :machine, Dokkit.Machine
+    timestamps()
+  end
+end
+
 defmodule Dokkit.User do
   use Dokkit.Schema
 

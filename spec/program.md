@@ -98,4 +98,6 @@ In `program/`: `dokkit init`, `run`, `ping`, `check`, `apply`, `enrol`, `watch`,
 
 `dokkit watch` holds a request open to the server and runs the task runs it is given, one at a time, sending output every three seconds. It refuses a task whose command in the file is not the one that was accepted. A task runs as whoever runs `dokkit watch`. The installed service runs as the system account, so it does not take work until a task can be given an ordinary account.
 
-Not built yet: stats, `dokkit propose`, `dokkit task list` showing what is accepted, the account tasks run under, certificate pinning, and the built-in update task.
+`dokkit propose` sends the file a scan wrote. Each minute `dokkit watch` asks the server for the checks added in the interface for its machine and runs them beside the ones in files.
+
+Not built yet: stats, `dokkit task list` showing what is accepted, the account tasks run under, certificate pinning, and the built-in update task.

@@ -285,6 +285,7 @@ type watcher struct {
 	c        *client
 	folders  []string
 	files    map[string]*declaration
+	added    []*declaration
 	modified map[string]time.Time
 	logs     map[string]int64
 	sent     time.Time
@@ -321,12 +322,44 @@ func (w *watcher) refresh() {
 			delete(w.modified, p)
 		}
 	}
+	w.pull()
+}
+
+// pull asks the server for the checks added in the interface for this machine.
+// When the server is away, the ones it gave last time keep running.
+func (w *watcher) pull() {
+	var a struct {
+		Items []struct {
+			Service, Name string
+			Type          string
+			Config        map[string]any
+		}
+	}
+	if status, err := w.c.call("GET", "/api/v1/checks", "", nil, &a); err != nil || status != 200 {
+		return
+	}
+	w.added = nil
+	for _, item := range a.Items {
+		var c check
+		b, _ := json.Marshal(item.Config)
+		json.Unmarshal(b, &c)
+		c.Type, c.name = item.Type, item.Name
+		if runs, _ := c.problem(); runs {
+			d := &declaration{Check: []check{c}}
+			d.Service.ID = item.Service
+			w.added = append(w.added, d)
+		}
+	}
 }
 
 // tick runs the checks that are due and returns how many it ran.
 func (w *watcher) tick(at time.Time) int {
 	var lines []any
+	all := w.added
 	for _, d := range w.files {
+		all = append(all, d)
+	}
+	for _, d := range all {
 		for i := range d.Check {
 			c := &d.Check[i]
 			if runs, _ := c.problem(); !runs || at.Before(c.next) {

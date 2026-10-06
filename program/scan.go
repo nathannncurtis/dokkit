@@ -69,6 +69,23 @@ func scan(args []string, folders []string) int {
 	return 0
 }
 
+// propose sends the file a scan wrote, to be decided about in the interface.
+func (c *client) propose() int {
+	b, err := os.ReadFile(proposalFile)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dokkit: run dokkit scan first:", err)
+		return 1
+	}
+	var a struct{ Waiting int }
+	status, err := c.call("POST", "/api/v1/proposals", "application/json", b, &a)
+	if err != nil || status != 200 {
+		fmt.Fprintf(os.Stderr, "dokkit: the server did not take it (%d). It needs a machine key. %v\n", status, err)
+		return 1
+	}
+	fmt.Printf("Sent. %d thing(s) are waiting on the Found page.\n", a.Waiting)
+	return 0
+}
+
 // output runs one of the machine's own tools and returns its lines, or nothing when it is not there.
 func output(name string, args ...string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

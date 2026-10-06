@@ -36,6 +36,7 @@ dokkit status
 dokkit doctor
 dokkit service install|uninstall|start|stop
 dokkit scan [--no-services] [--no-ports] [--no-tasks] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]
+dokkit propose
 dokkit task list
 dokkit task run <name>
 
@@ -136,6 +137,8 @@ func cli(args []string) int {
 		return c.apply(fileArg(args))
 	case "status":
 		return c.status()
+	case "propose":
+		return c.propose()
 	case "doctor":
 		return c.doctor()
 	}

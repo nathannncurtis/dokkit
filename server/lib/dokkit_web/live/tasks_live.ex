@@ -24,6 +24,19 @@ defmodule DokkitWeb.TasksLive do
     {:noreply, load(socket)}
   end
 
+  def handle_event("sweep", %{"do" => what} = params, socket) do
+    ids = params["ids"] || []
+
+    case {socket.assigns.current_user.role, what} do
+      {:viewer, _} -> nil
+      {_, "watch"} -> Dokkit.Found.watch(ids)
+      {_, "dismiss"} -> Dokkit.Found.dismiss(ids)
+      _ -> nil
+    end
+
+    {:noreply, load(socket)}
+  end
+
   def handle_event("run", %{"id" => id}, socket) do
     user = socket.assigns.current_user
     if user.role != :viewer, do: Tasks.run(id, user.name)
@@ -31,7 +44,13 @@ defmodule DokkitWeb.TasksLive do
   end
 
   defp load(socket),
-    do: assign(socket, waiting: Tasks.waiting(), tasks: Tasks.accepted(), runs: Tasks.runs())
+    do:
+      assign(socket,
+        found: Enum.group_by(Dokkit.Found.list(), & &1.machine),
+        waiting: Tasks.waiting(),
+        tasks: Tasks.accepted(),
+        runs: Tasks.runs()
+      )
 
   def render(assigns) do
     assigns =
@@ -46,7 +65,7 @@ defmodule DokkitWeb.TasksLive do
     <Layouts.app active={@live_action} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">
-          {if @live_action == :found and @waiting != [],
+          {if @live_action == :found and (@waiting != [] or @found != %{}),
             do: "Found, waiting for you",
             else: @page_title}
         </h1>
@@ -57,6 +76,49 @@ defmodule DokkitWeb.TasksLive do
         </div>
       </div>
       <div :if={@live_action == :found} class="body">
+        <form class="card" id="found-form" phx-submit="sweep">
+          <h2>
+            What a scan found<span :if={@found != %{}} class="cnt">{@found
+            |> Map.values()
+            |> Enum.map(&length/1)
+            |> Enum.sum()}</span>
+            <span :if={@found != %{}} class="end">
+              <button class="btn sm primary" name="do" value="watch" disabled={@viewer}>
+                <.ic name="plus" />Watch selected
+              </button>
+              <button class="btn sm" name="do" value="dismiss" disabled={@viewer}>
+                Dismiss selected
+              </button>
+            </span>
+          </h2>
+          <div :if={@found == %{}} class="empty">
+            <.ic name="check-circle" />Nothing a scan found is waiting. On a machine, dokkit scan looks and dokkit propose sends what it saw.
+          </div>
+          <div :if={@found != %{}} class="lh cols-found">
+            <span></span><span>Found</span><span>How it was found</span><span>What Dokkit saw</span><span></span>
+          </div>
+          <%= for {machine, items} <- @found do %>
+            <div class="grp">
+              {machine.name}<span class="end"><span class="tag">{length(items)} found</span></span>
+            </div>
+            <label :for={f <- items} class="li slim hov cols-found">
+              <input
+                class="chk"
+                type="checkbox"
+                name="ids[]"
+                value={f.id}
+                aria-label={"Select " <> f.detail["label"]}
+              />
+              <div class="ti"><span>{f.detail["label"]}</span></div>
+              <span class="how">{if f.kind == "port", do: "Listening port", else: "Running service"}</span>
+              <span class="mute">{f.detail["saw"]}</span>
+              <span></span>
+            </label>
+          <% end %>
+          <div :if={@found != %{}} class="foot">
+            Nothing here is watched until you say so. Watching one adds a check that dokkit watch runs on that machine.
+          </div>
+        </form>
         <div class="card">
           <h2>
             Tasks waiting to be accepted<span :if={@waiting != []} class="cnt">{length(@waiting)}</span>

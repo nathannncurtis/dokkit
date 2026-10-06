@@ -97,6 +97,21 @@ defmodule DokkitWeb.IntakeController do
     end
   end
 
+  def propose(conn, params) do
+    with {:ok, machine} <- machine(conn),
+         {:ok, kept} <- Dokkit.Found.propose(machine, params) do
+      json(conn, %{waiting: kept})
+    else
+      %Plug.Conn{} = conn -> conn
+      _ -> fail(conn, 422, "bad_proposal", "Needs what dokkit scan wrote.")
+    end
+  end
+
+  @doc "The checks added in the interface, for the program on that machine to run."
+  def checks(conn, _params) do
+    with {:ok, machine} <- machine(conn), do: json(conn, %{items: Dokkit.Found.checks(machine)})
+  end
+
   defp machine(conn) do
     case bearer(conn) do
       {:ok, %{kind: :machine, machine_id: machine}} -> {:ok, machine}

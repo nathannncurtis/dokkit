@@ -1,6 +1,6 @@
 # The Dokkit API (v1)
 
-This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom` and `log` lines, the ping URLs, `GET /ping`, `PUT /declare`, taking work, and the read and act calls for issues, services, jobs, logs and tasks.
+This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom` and `log` lines, the ping URLs, `GET /ping`, `PUT /declare`, `POST /proposals`, `GET /checks`, taking work, and the read and act calls for issues, services, jobs, logs and tasks.
 
 ## One rule
 
@@ -142,7 +142,11 @@ The contents of a `dokkit.toml`, sent as JSON with the same structure. Sending t
 
 ### `POST /proposals`
 
-What a scan found, or tasks being offered. Nothing in a proposal is active until it is accepted in the interface.
+What a scan found: the file `dokkit scan` wrote, as it is. Nothing in a proposal is active until it is accepted in the interface. So far the server keeps the running Windows services and the listening ports, and leaves out what is already watched or was dismissed. Tasks are offered through `PUT /declare`.
+
+### `GET /checks`
+
+The checks added in the interface for this machine, for `dokkit` to run: `{"items": [{"service": "spooler", "name": "windows-service", "type": "windows-service", "config": {"name": "Spooler"}}]}`.
 
 ### `POST /deploys`
 
