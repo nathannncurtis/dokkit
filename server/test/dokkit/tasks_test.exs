@@ -73,7 +73,13 @@ defmodule Dokkit.TasksTest do
   test "a user token with act can run a task, and one without cannot", %{key: key} do
     declare(key, "true")
     [task] = Tasks.waiting()
+    assert %{"items" => []} = json_response(get(as(key), "/api/v1/tasks/accepted"), 200)
     :ok = Tasks.decide(task.id, "true", :accepted)
+
+    assert %{"items" => [%{"task" => "restart", "command_sha256" => sha}]} =
+             json_response(get(as(key), "/api/v1/tasks/accepted"), 200)
+
+    assert sha == Tasks.sha256("true")
     {read, _} = Keys.mint(:user, %{scopes: ["read"]})
     {act, _} = Keys.mint(:user, %{scopes: ["read", "act"]})
 

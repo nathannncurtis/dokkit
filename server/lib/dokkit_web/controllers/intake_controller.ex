@@ -161,6 +161,12 @@ defmodule DokkitWeb.IntakeController do
     with {:ok, machine} <- machine(conn), do: json(conn, %{items: Dokkit.Found.checks(machine)})
   end
 
+  @doc "The tasks accepted for this machine, so `dokkit task list` can say which they are."
+  def accepted(conn, _params) do
+    with {:ok, machine} <- machine(conn),
+         do: json(conn, %{items: Dokkit.Tasks.accepted_for(machine)})
+  end
+
   defp machine(conn) do
     case bearer(conn) do
       {:ok, %{kind: :machine, machine_id: machine}} -> {:ok, machine}

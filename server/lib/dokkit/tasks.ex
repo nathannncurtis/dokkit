@@ -50,6 +50,17 @@ defmodule Dokkit.Tasks do
 
   defp runnable, do: from(t in Task, where: t.accepted == t.command)
 
+  @doc "What a machine may be asked to run: each accepted task and the command that was accepted."
+  def accepted_for(machine_id) do
+    for t <-
+          Repo.all(
+            from t in Task,
+              where: t.machine_id == ^machine_id and not is_nil(t.accepted),
+              order_by: t.name
+          ),
+        do: %{task: t.name, command_sha256: sha256(t.accepted)}
+  end
+
   def waiting, do: Repo.all(from t in offered(), order_by: t.name, preload: :machine)
   def waiting_count, do: Repo.aggregate(offered(), :count)
 

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -241,14 +242,61 @@ func tasks(files []string) map[string]task {
 	return all
 }
 
-func taskCommand(args []string, folders []string) int {
+// accepted asks the server which commands were accepted for this machine, by task.
+// ok is false when the machine is not enrolled or the server did not answer.
+func accepted(c *client) (bySha map[string]string, ok bool) {
+	var a struct {
+		Items []struct {
+			Task string
+			Sha  string `json:"command_sha256"`
+		}
+	}
+	if c == nil {
+		return nil, false
+	}
+	if status, err := c.call("GET", "/api/v1/tasks/accepted", "", nil, &a); err != nil || status != 200 {
+		return nil, false
+	}
+	bySha = map[string]string{}
+	for _, item := range a.Items {
+		bySha[item.Task] = item.Sha
+	}
+	return bySha, true
+}
+
+// standing says whether the server would be allowed to ask for this task as it is written now.
+func standing(run, acceptedSha string, known bool) string {
+	sum := sha256.Sum256([]byte(run))
+	switch {
+	case !known:
+		return "not accepted yet"
+	case acceptedSha == hex.EncodeToString(sum[:]):
+		return "accepted"
+	}
+	return "changed since it was accepted"
+}
+
+func taskCommand(args []string, folders []string, c *client) int {
 	all := tasks(append([]string{"dokkit.toml"}, declarations(folders)...))
 	if len(args) == 1 && args[0] == "list" {
+		shas, asked := accepted(c)
 		for id, t := range all {
-			fmt.Printf("%-24s %s   in %s\n", id, t.Run, t.dir)
+			state := ""
+			if asked {
+				sha, known := shas[id]
+				state = "   " + standing(t.Run, sha, known)
+			}
+			fmt.Printf("%-24s %s   in %s%s\n", id, t.Run, t.dir, state)
 		}
 		if len(all) == 0 {
 			fmt.Println("No tasks are defined here or in the folders this machine reads.")
+			return 0
+		}
+		if !asked {
+			fmt.Println("The server was not asked which are accepted: this machine is not enrolled, or it did not answer.")
+		}
+		if u, err := user.Current(); err == nil {
+			fmt.Println("A task runs as whoever runs dokkit watch. Here that is " + u.Username + ".")
 		}
 		return 0
 	}

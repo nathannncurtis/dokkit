@@ -72,6 +72,7 @@ defmodule DokkitWeb.Router do
     post "/deploys", IntakeController, :deploy
     post "/errors", IntakeController, :error
     get "/checks", IntakeController, :checks
+    get "/tasks/accepted", IntakeController, :accepted
     get "/work", IntakeController, :work
     post "/work/:run/output", IntakeController, :work_output
     post "/work/:run/result", IntakeController, :work_result

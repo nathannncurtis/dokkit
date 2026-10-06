@@ -97,7 +97,7 @@ func cli(args []string) int {
 		if args[0] == "scan" {
 			return scan(args[1:], folders)
 		}
-		return taskCommand(args[1:], folders)
+		return taskCommand(args[1:], folders, c)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "dokkit:", err)

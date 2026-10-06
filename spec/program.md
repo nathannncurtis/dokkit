@@ -108,4 +108,6 @@ Each minute it also sends the machine's processor, memory and disk use as `metri
 
 The installed service starts a stopped Windows service again when its service page allows that, at most once in ten minutes, and says so on the check. `dokkit watch` under a login never does. This has not been run against a real service yet.
 
-Not built yet: `dokkit task list` showing what is accepted, the account tasks run under, and the built-in update task.
+`dokkit task list` asks the server which commands were accepted for this machine and says of each task whether it is accepted, not accepted yet, or changed since it was accepted, and which account tasks run as.
+
+Not built yet: giving a task an ordinary account to run under, so that the installed service can take work, and the built-in update task, which needs a signing key for releases first.

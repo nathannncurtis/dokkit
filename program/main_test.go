@@ -536,3 +536,20 @@ func TestAStoppedServiceIsStartedOnlyWhenAllowedAndNotOver(t *testing.T) {
 		t.Fatal("only the installed service starts things")
 	}
 }
+
+func TestATaskIsAcceptedOnlyAsItWasWritten(t *testing.T) {
+	sum := sha256.Sum256([]byte("scripts/zap.ps1"))
+	sha := hex.EncodeToString(sum[:])
+	if got := standing("scripts/zap.ps1", sha, true); got != "accepted" {
+		t.Fatal(got)
+	}
+	if got := standing("scripts/zap.ps1 --all", sha, true); got != "changed since it was accepted" {
+		t.Fatal(got)
+	}
+	if got := standing("scripts/zap.ps1", "", false); got != "not accepted yet" {
+		t.Fatal(got)
+	}
+	if _, asked := accepted(nil); asked {
+		t.Fatal("a machine that is not enrolled has nobody to ask")
+	}
+}
