@@ -1,0 +1,126 @@
+{
+ "help": "dokkit 0.1.0\n\nIn an app's repo\n  dokkit init\n      Asks what the app is and writes dokkit.toml.\n  dokkit check [dokkit.toml]\n      Runs every check once and prints what would be sent.\n  dokkit apply [dokkit.toml]\n      Sends the file to the server.\n\nJobs\n  dokkit run [--service <slug>] --job <name> -- <command> [arguments]\n      Runs a command and reports how it went.\n  dokkit ping [--service <slug>] <name> [start|ok|fail]\n      Reports a job that cannot be wrapped.\n\nThis machine\n  dokkit enrol <address> <token> [sha256:<certificate fingerprint>]\n      Joins this machine to a server.\n  dokkit status\n      What this machine watches and when it last reported.\n  dokkit doctor\n      Checks the server can be reached and the clock is right.\n\nFinding things\n  dokkit scan [--no-services] [--no-ports] [--no-tasks] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]\n      Looks over this machine and writes a proposal file.\n  dokkit propose\n      Sends the proposal file to be accepted.\n\nStaying running\n  dokkit watch [--background]\n      Watches this machine, as an ordinary program.\n  dokkit startup on|off\n      Starts dokkit watch each time you sign in.\n  dokkit service install|uninstall|update|start|stop\n      Runs it as a service. Needs an administrator once.\n\nTasks\n  dokkit task list\n      The tasks on this machine and whether each is accepted.\n  dokkit task run <name>\n      Runs a task here to try it.\n\nReads DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key),\nor the address and machine key that dokkit enrol saved.\ndokkit help <command> says more about one.",
+ "check": "dokkit.toml: upload-portal, 2 check(s)\n  ok   http           http://localhost:8080/healthz\n       would send {\"at\":\"2026-10-06T22:08:58.1420895Z\",\"check\":\"http\",\"service\":\"upload-portal\",\"state\":\"ok\",\"type\":\"state\",\"value\":10}\n  ok   tcp            port 5432\n       would send {\"at\":\"2026-10-06T22:08:58.1432929Z\",\"check\":\"tcp\",\"service\":\"upload-portal\",\"state\":\"ok\",\"type\":\"state\",\"value\":1}",
+ "groups": [
+  {
+   "name": "In an app's repo",
+   "commands": [
+    {
+     "name": "init",
+     "synopsis": "dokkit init",
+     "short": "Asks what the app is and writes dokkit.toml.",
+     "more": "Asks a few questions and writes a dokkit.toml in this folder: what the app is, and how to tell it is healthy. Nothing is sent."
+    },
+    {
+     "name": "check",
+     "synopsis": "dokkit check [dokkit.toml]",
+     "short": "Runs every check once and prints what would be sent.",
+     "more": "Validates the file, runs each of its checks once on this machine and prints exactly what would be sent. Needs no server and sends nothing."
+    },
+    {
+     "name": "apply",
+     "synopsis": "dokkit apply [dokkit.toml]",
+     "short": "Sends the file to the server.",
+     "more": "Declares the file to the server, for use from CI or anywhere dokkit watch does not read the folder. Sending the same file twice changes nothing."
+    }
+   ]
+  },
+  {
+   "name": "Jobs",
+   "commands": [
+    {
+     "name": "run",
+     "synopsis": "dokkit run [--service <slug>] --job <name> -- <command> [arguments]",
+     "short": "Runs a command and reports how it went.",
+     "more": "Runs the command and reports its start, finish, exit code, duration and last lines of output. Exits with the command's own exit code. A job declared in a dokkit.toml is found by name; --service says which service when it is not."
+    },
+    {
+     "name": "ping",
+     "synopsis": "dokkit ping [--service <slug>] <name> [start|ok|fail]",
+     "short": "Reports a job that cannot be wrapped.",
+     "more": "Reports one event for a job: start, ok (the default) or fail."
+    }
+   ]
+  },
+  {
+   "name": "This machine",
+   "commands": [
+    {
+     "name": "enrol",
+     "synopsis": "dokkit enrol <address> <token> [sha256:<certificate fingerprint>]",
+     "short": "Joins this machine to a server.",
+     "more": "Trades a one-time token for this machine's key and saves it. Given a fingerprint, it trusts the certificate with that fingerprint and no other."
+    },
+    {
+     "name": "status",
+     "synopsis": "dokkit status",
+     "short": "What this machine watches and when it last reported.",
+     "more": "Shows the files dokkit watch reads, when the spool was last emptied, how much is waiting, and the process number of a watch left running."
+    },
+    {
+     "name": "doctor",
+     "synopsis": "dokkit doctor",
+     "short": "Checks the server can be reached and the clock is right.",
+     "more": "Says whether the server answers, whether its certificate matches the one saved at enrol, and whether this machine's clock agrees with the server's."
+    }
+   ]
+  },
+  {
+   "name": "Finding things",
+   "commands": [
+    {
+     "name": "scan",
+     "synopsis": "dokkit scan [--no-services] [--no-ports] [--no-tasks] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]",
+     "short": "Looks over this machine and writes a proposal file.",
+     "more": "Lists what is on the machine that could be watched and writes it to a proposal file. Sends nothing. Each --no- flag leaves one kind of thing out."
+    },
+    {
+     "name": "propose",
+     "synopsis": "dokkit propose",
+     "short": "Sends the proposal file to be accepted.",
+     "more": "Sends what a scan wrote. Nothing in it is watched until a person accepts it in the interface."
+    }
+   ]
+  },
+  {
+   "name": "Staying running",
+   "commands": [
+    {
+     "name": "watch",
+     "synopsis": "dokkit watch [--background]",
+     "short": "Watches this machine, as an ordinary program.",
+     "more": "Reads dokkit.toml files from the folders in DOKKIT_FOLDERS or in the saved configuration, and from the folders directly inside them. Runs their checks, sends the log files they name, and says the machine is alive once a minute. No administrator, no service. --background leaves it running with no window."
+    },
+    {
+     "name": "startup",
+     "synopsis": "dokkit startup on|off",
+     "short": "Starts dokkit watch each time you sign in.",
+     "more": "On Windows, adds dokkit watch --background to your own startup programs, or takes it out. No administrator."
+    },
+    {
+     "name": "service",
+     "synopsis": "dokkit service install|uninstall|update|start|stop",
+     "short": "Runs it as a service. Needs an administrator once.",
+     "more": "Installs dokkit as a service that starts with the machine, so it keeps watching with nobody signed in and may restart the services its configuration names."
+    }
+   ]
+  },
+  {
+   "name": "Tasks",
+   "commands": [
+    {
+     "name": "task",
+     "synopsis": "dokkit task list",
+     "short": "The tasks on this machine and whether each is accepted.",
+     "more": "Says of each task whether it is accepted, not accepted yet, or changed since it was accepted, and which account tasks run as."
+    },
+    {
+     "name": "task",
+     "synopsis": "dokkit task run <name>",
+     "short": "Runs a task here to try it.",
+     "more": "Runs the task on this machine now. The server can only ask for a task a person accepted, pinned to the exact command accepted."
+    }
+   ]
+  }
+ ]
+}

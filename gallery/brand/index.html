@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dokkit: one place that says what needs a look</title>
+<meta name="description" content="Dokkit watches your servers, jobs, logs and errors from a server you host yourself, and says what needs a look.">
+<meta property="og:title" content="Dokkit: one place that says what needs a look">
+<meta property="og:description" content="Self-hosted monitoring for the person who is the only one watching.">
+<meta name="theme-color" content="#1e1917">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
@@ -18,7 +23,7 @@
 <header class="nav">
   <div class="wrap">
     <a class="brand" href="#top"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
-    <nav aria-label="Site"><a href="#day">How it looks</a><a href="#told">Alerts</a><a href="#agents">Agents</a><a href="#how">How it works</a><a href="#">Docs</a><a href="#">Source</a></nav>
+    <nav aria-label="Site"><a href="#day">How it looks</a><a href="#told">Alerts</a><a href="#agents">Agents</a><a href="#how">How it works</a><a href="api.html">API</a><a href="cli.html">Command line</a><a href="https://github.com/nathannncurtis/dokkit">Source</a></nav>
     <a class="btn pri" href="#install">Install</a>
   </div>
 </header>
@@ -96,26 +101,55 @@
           <div class="tools" id="tools"></div>
           <p class="tip" id="toolSay"></p>
         </div>
-        <div>
+        <div class="panel ask" id="ask">
+          <div class="qs">
+            <button class="on" data-q="0">What needs a look?</button>
+            <button data-q="1">Why did nightly-purge not run?</button>
+            <button data-q="2">What broke since the last deploy?</button>
+            <button data-q="3">Snooze the disk warning until Monday</button>
+          </div>
+          <div class="talk" id="talk" aria-live="polite"></div>
+          <p class="tip">Sample answers on the sample data. The tool calls are the real ones, and they follow the token on the left.</p>
+        </div>
+      </div>
+      <div class="ways">
           <ol>
             <li><b>An AI tool, over MCP</b><div class="cmd"><code id="c6">claude mcp add --transport http dokkit https://your.domain.com/mcp --header "Authorization: Bearer dku_..."</code><button class="btn" data-copy="c6">Copy</button></div></li>
             <li><b>A script, over the API</b><div class="cmd"><code id="c7">curl -H "Authorization: Bearer dku_..." https://your.domain.com/api/v1/inbox</code><button class="btn" data-copy="c7">Copy</button></div></li>
-            <li><b>An agent working in an app's repo, with the command line</b><div class="cmd"><code id="c8">dokkit check</code><button class="btn" data-copy="c8">Copy</button></div><span class="quiet">Runs every check once and prints what would be sent. No server needed.</span></li>
+            <li><b>In an app's repo, from the command line</b><div class="cmd"><code id="c8">dokkit check</code><button class="btn" data-copy="c8">Copy</button></div><span class="quiet">Runs every check once and prints what would be sent. No server needed.</span></li>
           </ol>
-          <p class="quiet never">Never offered to an agent: accepting what a scan found, making keys, managing people. Those stay with a person.</p>
-        </div>
+          <p class="quiet never">Never offered to an agent: accepting what a scan found, making keys, managing people. Those stay with a person. <a href="api.html">The whole API</a> and <a href="cli.html">every command</a> are written down.</p>
       </div>
     </div>
   </section>
 
   <section class="wrap how" id="how">
-    <h2>Built for the person who is the only one watching.</h2>
+    <div class="stick">
+      <h2>Built for the person who is the only one watching.</h2>
+      <div class="file"><b>dokkit.toml</b><pre id="toml">[service]
+id = "upload-portal"
+name = "Upload portal"
+
+[[check]]
+type = "http"
+url = "http://localhost:8080/healthz"
+every = "30s"
+
+[[job]]
+id = "nightly-purge"
+schedule = "0 1 * * *"   # every night at 01:00
+grace = "30m"
+
+[logs]
+path = "logs/*.jsonl"</pre></div>
+    </div>
     <dl>
       <div><dt>The app describes itself</dt><dd>A <code>dokkit.toml</code> in the app's own repo says what it is and how to tell it is healthy. Nothing is wired in by hand on the server.</dd></div>
       <div><dt>Nothing privileged listens</dt><dd>The program on each machine opens no port. Work reaches it over a connection it makes itself, and only tasks you accepted can run.</dd></div>
       <div><dt>Scanning is offered, never required</dt><dd>Let it look over a machine and propose what to watch, or list things yourself. Nobody is asked to turn off antivirus.</dd></div>
       <div><dt>On your hardware</dt><dd>A Windows service or a Docker container, on Postgres. Logs stay a year live, then go to your own archive.</dd></div>
       <div><dt>One list, not six tools</dt><dd>Checks, scheduled jobs, logs, errors, versions and deploys feed the same short list. An issue closes by itself when the thing recovers.</dd></div>
+      <div><dt>In eleven languages</dt><dd>A small library adds what only the app knows: <code>beat</code>, <code>job</code>, <code>check</code>, <code>capture</code> and a log handler. Python, .NET, JavaScript, Go, Rust, Java, PHP, Elixir, Swift, PowerShell and shell.</dd></div>
     </dl>
   </section>
 
@@ -168,8 +202,8 @@
     </div>
     <nav aria-label="Site map">
       <div><b>The product</b><a href="#day">How it looks</a><a href="#told">Alerts</a><a href="#agents">Agents</a><a href="#how">How it works</a><a href="#install">Install</a></div>
-      <div><b>Reading</b><a href="#">Docs</a><a href="#">Spec</a><a href="#">Client libraries</a><a href="#">Running it</a></div>
-      <div><b>The project</b><a href="#">Source</a><a href="#">Releases</a><a href="#">Licences</a></div>
+      <div><b>Reading</b><a href="api.html">The API</a><a href="cli.html">The command line</a><a href="https://github.com/nathannncurtis/dokkit/tree/main/clients">Client libraries</a><a href="https://github.com/nathannncurtis/dokkit/blob/main/docs/running.md">Running it</a></div>
+      <div><b>The project</b><a href="https://github.com/nathannncurtis/dokkit">Source</a><a href="https://github.com/nathannncurtis/dokkit/releases">Releases</a><a href="https://github.com/nathannncurtis/dokkit/tree/main/spec">Spec</a></div>
     </nav>
     <p class="legal">Server AGPL. Program and libraries Apache 2.0. Dokkit also accepts reports from Sentry's open-source SDKs and is not affiliated with Sentry.</p>
   </div>

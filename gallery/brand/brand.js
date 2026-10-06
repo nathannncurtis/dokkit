@@ -23,7 +23,7 @@ const DATA = {
 };
 const fresh = JSON.stringify(DATA);
 let lists = JSON.parse(fresh);
-let tab = "need";
+let tab = "need", fine = 57;
 const $ = (q) => document.querySelector(q);
 const $$ = (q) => [...document.querySelectorAll(q)];
 
@@ -43,14 +43,15 @@ function draw() {
         r.watch ? `<button class="btn sm pri" data-act>Watch it</button><button class="btn sm" data-act>Leave it</button>`
                 : `<button class="btn sm pri" data-act>Snooze an hour</button><button class="btn sm" data-act>Mark as seen</button>`
       }</div></div></div></div>
-    </div>`).join("") + (tab === "need" ? `<div class="fine"><i class="s ok"></i>57 more are fine, on 7 machines.</div>` : "");
+    </div>`).join("") + (tab === "need" ? `<div class="fine"><i class="s ok"></i>${fine} more are fine, on 7 machines.</div>` : "");
 }
 
 document.addEventListener("click", (e) => {
-  const t = e.target.closest("[data-tab],[data-act],[data-reset],[data-copy],.item > button");
+  const t = e.target.closest("[data-tab],[data-act],[data-reset],[data-copy],[data-q],.item > button");
   if (!t) return;
+  if (t.dataset.q) { $$(".qs button").forEach((b) => b.classList.toggle("on", b === t)); return ask(+t.dataset.q); }
   if (t.dataset.tab) { tab = t.dataset.tab; $$(".win aside button").forEach((b) => b.classList.toggle("on", b === t)); draw(); }
-  else if ("reset" in t.dataset) { lists = JSON.parse(fresh); draw(); }
+  else if ("reset" in t.dataset) { lists = JSON.parse(fresh); fine = 57; draw(); }
   else if ("act" in t.dataset) {
     const item = t.closest(".item");
     item.classList.add("gone");
@@ -74,7 +75,7 @@ for (let i = 18; i < 27; i++) MARKS.nas[i] = "warn";
 for (let i = 0; i < 16; i++) MARKS["front-desk-pc"][i] = "none";
 const SAY = { bad: "something was down", warn: "something needed a look", none: "switched off, no signal", undefined: "quiet, every report arrived" };
 $("#lanes").innerHTML = MACHINES.map((m) => `<span>${m}</span><div class="lane">${
-  Array.from({ length: 48 }, (_, i) => `<i class="${(MARKS[m] || {})[i] || ""}" data-m="${m}" data-i="${i}"></i>`).join("")}</div>`).join("");
+  Array.from({ length: 48 }, (_, i) => `<i class="${(MARKS[m] || {})[i] || ""}" style="--c:${i}" data-m="${m}" data-i="${i}"></i>`).join("")}</div>`).join("");
 $("#lanes").addEventListener("mouseover", (e) => {
   const c = e.target.closest("i[data-m]");
   if (!c) return;
@@ -100,7 +101,76 @@ function offer() {
   $("#tools").innerHTML = Object.entries(TOOLS).map(([s, names]) => names.map((t) => { n += on[s]; return `<code class="${on[s] ? "" : "off"}">${t}</code>`; }).join("")).join("");
   $("#toolSay").textContent = `This token is offered ${n} of 12 tools. ` + (on.act ? "It can snooze, mark as seen and run tasks you accepted, and nothing else." : "It cannot change anything.") + (on["read-logs"] ? "" : " Log contents are left out of every answer.");
 }
-$("#token").addEventListener("input", offer);
+$("#token").addEventListener("input", () => { offer(); ask(asked); });
+
+// What an agent does with it. The calls are the MCP tools; a tool the token lacks is never called.
+const ASK = [
+  () => [["call", "attention"], ["got", "3 need you · 2 soon · 4 not watched"],
+    ["says", "Three things. nightly-purge did not run at 01:00 on db-01 (DOK-12), and that one paged you. The upload portal is answering slowly (DOK-09). The disk on nas is at 91% (DOK-13)."]],
+  (on) => [["call", 'job_runs { id: "nightly-purge" }'], ["got", "last good run yesterday 01:00, 4 min · no start reported today"],
+    ...(on.logs
+      ? [["call", 'logs { service: "nightly-purge", level: "error" }'], ["got", "00:58 db-01 cron: cannot start purge.sh: /var/spool is over quota"],
+         ["says", "It never started. At 00:58 cron on db-01 could not start it because /var/spool was over its quota. The run the night before was normal, so this is new."]]
+      : [["says", "It never started: no start was reported after 01:00, and the run before it was normal. I cannot say why. This token is not offered the logs tool."],
+         ["note", "Let the token read the logs, on the left, and it can."]])],
+  () => [["call", 'since_deploy { id: "upload-portal" }'], ["got", "2.4.1 onto web-02 at 09:31 · 1 new error group · 1 issue opened"],
+    ["says", "Version 2.4.1 went onto web-02 at 09:31. Nine minutes later the portal began answering slowly (DOK-09), and there is one new error group: TimeoutError in resize.py, 14 reports. Nothing else changed."]],
+  (on) => on.act
+    ? [["call", 'snooze { id: "DOK-13", until: "Monday 09:00" }'], ["got", "snoozed"], ["says", "Done. DOK-13 is snoozed until Monday 09:00. It comes back then if the disk is still over 90%."]]
+    : [["says", "I cannot. This token reads, and is not offered snooze."], ["note", "Let the token act, on the left, and ask again."]],
+];
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let asked = 0, turn = 0;
+function ask(q) {
+  asked = q;
+  const mine = ++turn, talk = $("#talk");
+  const lines = [["you", $(`.qs [data-q="${q}"]`).textContent], ...ASK[q]({ logs: $("#scLogs").checked, act: $("#scAct").checked })];
+  talk.innerHTML = "";
+  lines.forEach(([kind, text], i) => setTimeout(() => {
+    if (mine !== turn) return;
+    talk.querySelector(".wait")?.classList.remove("wait");
+    const p = document.createElement("p");
+    p.className = kind + (i < lines.length - 1 ? " wait" : "");
+    p.textContent = (kind === "call" ? "→ " : "") + text;
+    talk.append(p);
+  }, still ? 0 : i * 650));
+}
+
+// The file, lightly coloured.
+$("#toml").innerHTML = $("#toml").textContent.replace(/"[^"]*"/g, '<span class="str">$&</span>').replace(/^\[.*\]$/gm, '<span class="k">$&</span>').replace(/#.*$/gm, '<span class="c">$&</span>');
+
+// Things arrive as they are reached.
+document.documentElement.classList.add("js");
+const seen = new IntersectionObserver((es) => es.forEach((e) => {
+  if (!e.isIntersecting) return;
+  e.target.classList.add("in");
+  seen.unobserve(e.target);
+  if (e.target.id === "ask") ask(0);
+}), { threshold: 0.15 });
+$$(".head, .panel, .events, .told h2, .saidcol, .stick, .how dl > div, .steps li, .ways li, .needs").forEach((el) => {
+  el.classList.add("rv");
+  el.style.transitionDelay = Math.min([...el.parentElement.children].indexOf(el), 5) * 70 + "ms";
+  seen.observe(el);
+});
+const here = new IntersectionObserver((es) => es.forEach((e) => {
+  if (e.isIntersecting) $$(".nav nav a").forEach((a) => a.classList.toggle("cur", a.getAttribute("href") === "#" + e.target.id));
+}), { rootMargin: "-45% 0px -50% 0px" });
+$$("main section[id]").forEach((s) => here.observe(s));
+
+// The slow portal recovers while you watch, and its issue closes by itself.
+setTimeout(() => {
+  const at = () => lists.need.findIndex((r) => r.id === "DOK-09");
+  const el = $(`.item[data-i="${at()}"]`);
+  if (tab !== "need" || !el || el.classList.contains("open")) return;
+  el.classList.add("well");
+  el.querySelector(".s").className = "s ok";
+  el.querySelector("time").textContent = "recovered";
+  setTimeout(() => {
+    if (tab !== "need" || at() < 0) return;
+    $(`.item[data-i="${at()}"]`).classList.add("gone");
+    setTimeout(() => { lists.need.splice(at(), 1); fine++; draw(); }, 300);
+  }, 2200);
+}, 9000);
 
 draw();
 say();
