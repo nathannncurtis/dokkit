@@ -7,7 +7,7 @@ defmodule Dokkit.Application do
     watch = Application.get_env(:dokkit, :watch, true)
 
     children =
-      [Dokkit.Repo, {Phoenix.PubSub, name: Dokkit.PubSub}, DokkitWeb.Endpoint] ++
+      [Dokkit.Repo, Dokkit.RateLimit, {Phoenix.PubSub, name: Dokkit.PubSub}, DokkitWeb.Endpoint] ++
         if watch, do: [Dokkit.Alerts, Dokkit.Watch], else: []
 
     with {:ok, pid} <-

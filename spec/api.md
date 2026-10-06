@@ -74,7 +74,7 @@ There is no switch that skips verification.
 
 ### Clocks
 
-The server stamps every item with its own receive time and records the sender's clock offset. "Last seen" is always the server's time. An item dated in the future is clamped to the receive time.
+The server stamps every item with its own receive time and records the sender's clock offset: a log line keeps both its own time and the time it arrived, and the offset is the difference. "Last seen" is always the server's time. An item dated in the future is clamped to the receive time.
 
 ### Limits
 
@@ -94,7 +94,7 @@ Machine key or app key.
 {"token": "dke_...", "hostname": "host-01", "os": "windows", "arch": "amd64", "dokkit": "0.1.0"}
 ```
 
-Answers `{"machine": "<id>", "key": "dkm_..."}`. The token is spent.
+Answers `{"machine": "<id>", "key": "dkm_..."}`. The token is spent. A name that is already enrolled answers `409` and the token is kept; sending `"replace": true` enrols it again and revokes that machine's earlier keys.
 
 ### `POST /report`
 
@@ -106,7 +106,7 @@ The answer:
 {"accepted": 412, "refused": [{"line": 17, "code": "unknown_service", "message": "..."}]}
 ```
 
-A refused line does not fail the batch.
+A refused line does not fail the batch, including a line the database cannot store. An app key is limited to a bucket of 10,000 lines refilling at 100 a second and answers `429` with `Retry-After` when it is empty. It may make 100 checks per service.
 
 Every line has `type` and `at`. With a machine key the machine is known. With an app key the service is known, and the line may carry `host` so the machine can be recorded as seen.
 

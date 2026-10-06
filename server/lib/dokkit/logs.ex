@@ -16,45 +16,44 @@ defmodule Dokkit.Logs do
 
   def levels, do: @levels
 
-  @doc "Turns a report line, in Dokkit's format or CLEF, into a row."
+  @doc """
+  Turns a report line, in Dokkit's format or CLEF, into a row. A line without a message is kept
+  whole as its message. `received_at` is the server's time; `at` is the sender's.
+  """
   def row(line, machine_id, service_id, received_at) do
     clef? = Map.has_key?(line, "@t") or Map.has_key?(line, "@m") or Map.has_key?(line, "@mt")
     msg = if clef?, do: line["@m"] || render(line["@mt"], line), else: line["msg"]
+    msg = if is_binary(msg), do: msg, else: Jason.encode!(line)
 
-    if is_binary(msg) do
-      level =
-        if clef?,
-          do: @clef[String.downcase(to_string(line["@l"] || "information"))],
-          else: line["level"]
+    level =
+      if clef?,
+        do: @clef[String.downcase(to_string(line["@l"] || "information"))],
+        else: line["level"]
 
-      known =
-        if clef?,
-          do: ~w(@t @l @m @mt @x @i @r type at service),
-          else: ~w(t level msg fields type at service)
+    known =
+      if clef?,
+        do: ~w(@t @l @m @mt @x @i @r type at service),
+        else: ~w(t level msg fields type at service)
 
-      extra =
-        if clef?,
-          do: Map.drop(line, known),
-          else: (is_map(line["fields"]) && line["fields"]) || %{}
+    extra =
+      if clef?,
+        do: Map.drop(line, known),
+        else: (is_map(line["fields"]) && line["fields"]) || %{}
 
-      extra = if clef? and line["@x"], do: Map.put(extra, "exception", line["@x"]), else: extra
-      cut = byte_size(msg) > @max_msg
+    extra = if clef? and line["@x"], do: Map.put(extra, "exception", line["@x"]), else: extra
+    cut = byte_size(msg) > @max_msg
+    big = byte_size(Jason.encode!(extra)) > @max_msg
 
-      {:ok,
-       %{
-         at: time(line["t"] || line["@t"] || line["at"], received_at),
-         received_at: received_at,
-         machine_id: machine_id,
-         service_id: service_id,
-         level: if(level in @levels, do: level, else: "info"),
-         msg:
-           if(cut, do: msg |> binary_part(0, @max_msg) |> String.replace_invalid(""), else: msg),
-         fields: extra,
-         cut: cut
-       }}
-    else
-      :error
-    end
+    %{
+      at: time(line["t"] || line["@t"] || line["at"], received_at),
+      received_at: received_at,
+      machine_id: machine_id,
+      service_id: service_id,
+      level: if(level in @levels, do: level, else: "info"),
+      msg: if(cut, do: msg |> binary_part(0, @max_msg) |> String.replace_invalid(""), else: msg),
+      fields: if(big, do: %{}, else: extra),
+      cut: cut or big
+    }
   end
 
   def insert([]), do: 0
