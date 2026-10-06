@@ -194,7 +194,7 @@ defmodule Dokkit.Alerts do
   @doc "An alert that never went out is sent after all when its issue comes back."
   def reopened(%Issue{id: id}) do
     Repo.update_all(from(a in Alert, where: a.issue_id == ^id and a.status == :skipped),
-      set: [status: :pending]
+      set: [status: :pending, attempts: 0, error: nil]
     )
   end
 
@@ -388,17 +388,42 @@ defmodule Dokkit.Alerts do
     end
   end
 
-  # ponytail: literal addresses only; a name that resolves to one is not checked.
   defp local?(host) do
-    host = String.downcase(host)
+    host = host |> String.downcase() |> String.trim_trailing(".")
 
     host == "localhost" or String.ends_with?(host, ".localhost") or
-      case :inet.parse_address(String.to_charlist(host)) do
-        {:ok, ip} -> local_ip?(ip)
-        _ -> false
-      end
+      Enum.any?(addrs(host), &local_ip?/1)
   end
 
+  defp addrs(host) do
+    name = String.to_charlist(host)
+
+    case :inet.parse_address(name) do
+      {:ok, ip} -> [ip]
+      _ -> for f <- [:inet, :inet6], {:ok, l} <- [:inet.getaddrs(name, f)], ip <- l, do: ip
+    end
+  end
+
+  # Connects to the address that was checked, so a second lookup cannot answer differently.
+  defp pin(url, opts) do
+    %URI{host: host} = uri = URI.parse(url)
+    host = String.trim_trailing(host, ".")
+
+    with false <- Keyword.has_key?(opts, :plug),
+         {:error, _} <- :inet.parse_address(String.to_charlist(host)),
+         [ip | _] <- Enum.sort_by(addrs(host), &tuple_size/1) do
+      ip = ip |> :inet.ntoa() |> to_string()
+      ip = if String.contains?(ip, ":"), do: "[#{ip}]", else: ip
+
+      {URI.to_string(%{uri | host: ip, authority: nil}),
+       [connect_options: [hostname: host]] ++ opts}
+    else
+      _ -> {url, opts}
+    end
+  end
+
+  defp local_ip?({0, 0, 0, 0}), do: true
+  defp local_ip?({0, 0, 0, 0, 0, 0, 0, 0}), do: true
   defp local_ip?({127, _, _, _}), do: true
   defp local_ip?({169, 254, _, _}), do: true
   defp local_ip?({0, 0, 0, 0, 0, 0, 0, 1}), do: true
@@ -415,10 +440,13 @@ defmodule Dokkit.Alerts do
         opts ++ Application.get_env(:dokkit, :req_options, [])
 
     with :ok <- check_url(url) do
+      host = URI.parse(url).host
+      {url, opts} = pin(url, opts)
+
       case Req.post(url, opts) do
         {:ok, %{status: s}} when s in 200..299 -> :ok
-        {:ok, %{status: s}} -> {:error, "#{URI.parse(url).host} answered #{s}."}
-        {:error, e} -> {:error, "#{URI.parse(url).host}: #{Exception.message(e)}"}
+        {:ok, %{status: s}} -> {:error, "#{host} answered #{s}."}
+        {:error, e} -> {:error, "#{host}: #{Exception.message(e)}"}
       end
     end
   rescue

@@ -193,30 +193,26 @@ defmodule Dokkit.AlertsTest do
     Alerts.save(%{"disk_limit" => "90"})
   end
 
-  test "an alert skipped on a brief recovery is pending again when the issue reopens" do
-    machine = Repo.insert!(%Machine{name: "alerts-reopen-box"})
-
-    issue =
-      Repo.insert!(%Dokkit.Issue{
-        machine_id: machine.id,
-        kind: "machine",
-        state: :down,
-        title: "x",
-        since: DateTime.utc_now()
-      })
-
-    alert = Repo.insert!(%Alert{issue_id: issue.id, channel: "webhook"})
-    Alerts.closing(issue)
-    assert Repo.reload!(alert).status == :skipped
-    Alerts.reopened(issue)
-    assert Repo.reload!(alert).status == :pending
+  test "an alert skipped on a brief recovery is sent when the issue reopens", %{key: key} do
+    Alerts.save(%{"pagerduty_key" => "R0UTE"})
+    Intake.ping(key, "backup", "fail", nil, "")
+    Intake.ping(key, "backup", "ok", nil, "")
+    assert [%Alert{status: :skipped}] = Repo.all(Alert)
+    Repo.update_all(Alert, set: [attempts: 5])
+    Intake.ping(key, "backup", "fail", nil, "")
+    assert [%Alert{status: :pending, attempts: 0}] = Repo.all(Alert)
+    assert Alerts.deliver_pending() == 1
+    assert [%Alert{status: :sent}] = Repo.all(Alert)
   end
 
   test "mail needs TLS, and port 465 is TLS from the start" do
     opts = Dokkit.Mail.smtp_options("mail.example", %{"smtp_port" => "587"})
     assert opts[:tls] == :always
+    assert opts[:tls_options][:cacerts]
     refute opts[:ssl]
-    assert Dokkit.Mail.smtp_options("mail.example", %{"smtp_port" => "465"})[:ssl]
+    opts = Dokkit.Mail.smtp_options("mail.example", %{"smtp_port" => "465"})
+    assert opts[:ssl] and opts[:tls] == :never
+    assert opts[:sockopts][:verify] == :verify_peer and opts[:sockopts][:cacerts]
   end
 
   test "alert addresses must be https and not local" do
@@ -229,6 +225,9 @@ defmodule Dokkit.AlertsTest do
           "https://169.254.169.254/x",
           "https://[fe80::1]/x",
           "https://localhost/x",
+          "https://localhost./x",
+          "https://0.0.0.0/x",
+          "https://[::]/x",
           "https://[::ffff:127.0.0.1]/x"
         ] do
       assert {:error, _} = Alerts.check_url(url), url

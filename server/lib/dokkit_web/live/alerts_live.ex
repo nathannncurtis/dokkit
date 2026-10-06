@@ -13,6 +13,7 @@ defmodule DokkitWeb.AlertsLive do
        rules: Alerts.rules(),
        suggestions: Alerts.suggestions(),
        saved: false,
+       error: nil,
        tests: %{}
      )}
   end
@@ -20,12 +21,19 @@ defmodule DokkitWeb.AlertsLive do
   def handle_info(:issues_changed, socket), do: {:noreply, socket}
 
   def handle_event("save", %{"alerts" => params}, socket) do
-    if owner?(socket),
-      do: {:noreply, assign(socket, config: Alerts.save(params), saved: true)},
-      else: {:noreply, socket}
+    cond do
+      !owner?(socket) ->
+        {:noreply, socket}
+
+      error = bad_address(params) ->
+        {:noreply, assign(socket, error: error, saved: false)}
+
+      true ->
+        {:noreply, assign(socket, config: Alerts.save(params), saved: true, error: nil)}
+    end
   end
 
-  def handle_event("changed", _, socket), do: {:noreply, assign(socket, saved: false)}
+  def handle_event("changed", _, socket), do: {:noreply, assign(socket, saved: false, error: nil)}
 
   def handle_event("rule", params, socket) do
     if owner?(socket) do
@@ -62,6 +70,18 @@ defmodule DokkitWeb.AlertsLive do
     else
       {:noreply, socket}
     end
+  end
+
+  defp bad_address(params) do
+    Enum.find_value(~w(ntfy_url webhook_url heartbeat_url), fn k ->
+      url = String.trim(params[k] || "")
+
+      with true <- url != "", {:error, why} <- Alerts.check_url(url) do
+        "#{String.replace(k, "_url", "")}: #{why}"
+      else
+        _ -> nil
+      end
+    end)
   end
 
   defp owner?(socket), do: socket.assigns.current_user.role == :owner
@@ -194,6 +214,7 @@ defmodule DokkitWeb.AlertsLive do
                   config={@config}
                   label="Access token, if the topic needs one"
                 />
+                <span class="hint">An https address.</span>
               </dd>
 
               <dt>Pushover</dt>
@@ -214,7 +235,9 @@ defmodule DokkitWeb.AlertsLive do
                   placeholder="https://example.com/hook"
                   aria-label="Webhook address"
                 /> <.send_test channel="webhook" tests={@tests} />
-                <span class="hint">A JSON request when an issue opens and another when it closes.</span>
+                <span class="hint">
+                  An https address. A JSON request when an issue opens and another when it closes.
+                </span>
               </dd>
 
               <dt>Mail server</dt>
@@ -313,7 +336,7 @@ defmodule DokkitWeb.AlertsLive do
                   aria-label="Outside heartbeat address"
                 />
                 <span class="hint">
-                  Dokkit calls this address every minute. Point it at a service that alerts when the calls stop, because Dokkit cannot tell anyone that it is down.
+                  An https address. Dokkit calls it every minute. Point it at a service that alerts when the calls stop, because Dokkit cannot tell anyone that it is down.
                 </span>
               </dd>
 
@@ -337,6 +360,7 @@ defmodule DokkitWeb.AlertsLive do
             <div class="foot">
               <span :if={!@owner}>Only the owner can change these.</span>
               <span :if={@saved} role="status">Saved.</span>
+              <span :if={@error} role="alert">{@error}</span>
               <span class="end"><button class="btn primary" type="submit">Save</button></span>
             </div>
           </div>

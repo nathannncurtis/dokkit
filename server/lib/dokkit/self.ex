@@ -4,6 +4,7 @@ defmodule Dokkit.Self do
   notice when the calls stop, and it keeps a row for itself like any other service.
   """
   import Ecto.Query, only: [from: 2]
+  require Logger
   alias Dokkit.{Check, Issues, Machine, Repo, Service}
 
   def tick(now, config) do
@@ -13,12 +14,16 @@ defmodule Dokkit.Self do
   end
 
   defp beat(url) do
-    with :ok <- Dokkit.Alerts.check_url(url) do
-      Req.get(
-        url,
-        [retry: false, redirect: false, receive_timeout: 10_000] ++
-          Application.get_env(:dokkit, :req_options, [])
-      )
+    case Dokkit.Alerts.check_url(url) do
+      :ok ->
+        Req.get(
+          url,
+          [retry: false, redirect: false, receive_timeout: 10_000] ++
+            Application.get_env(:dokkit, :req_options, [])
+        )
+
+      {:error, why} ->
+        Logger.warning("The heartbeat was not sent: #{why}")
     end
   rescue
     _ -> nil

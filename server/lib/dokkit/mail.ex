@@ -50,20 +50,24 @@ defmodule Dokkit.Mail do
     user = config["smtp_user"]
     port = String.to_integer(config["smtp_port"] || "587")
 
+    tls = [
+      verify: :verify_peer,
+      cacerts: :public_key.cacerts_get(),
+      server_name_indication: String.to_charlist(host),
+      depth: 99
+    ]
+
     [
       relay: host,
       port: port,
-      tls: :always,
-      tls_options: [
-        verify: :verify_peer,
-        cacerts: :public_key.cacerts_get(),
-        server_name_indication: String.to_charlist(host),
-        depth: 99
-      ],
       auth: if(user in [nil, ""], do: :never, else: :always),
       username: user || "",
       password: config["smtp_password"] || ""
-    ] ++ if(port == 465, do: [ssl: true], else: [])
+    ] ++
+      if(port == 465,
+        do: [ssl: true, tls: :never, sockopts: tls],
+        else: [tls: :always, tls_options: tls]
+      )
   end
 end
 
@@ -141,9 +145,13 @@ defmodule Dokkit.Digest do
           where: c.type == :threshold and c.state == :ok and not is_nil(c.value),
           preload: :service
       )
-      |> Enum.filter(
-        &(is_number(Dokkit.Numbers.limit(&1)) and &1.value >= 0.9 * Dokkit.Numbers.limit(&1))
-      )
+
+    close =
+      for c <- close,
+          limit = Dokkit.Numbers.limit(c),
+          is_number(limit),
+          c.value >= 0.9 * limit,
+          do: {c, limit}
 
     section("Opened without paging", for(i <- issues, do: "#{i.title} (#{i.machine.name})")) ++
       section(
@@ -157,9 +165,8 @@ defmodule Dokkit.Digest do
       section(
         "Close to a limit",
         for(
-          c <- close,
-          do:
-            "#{c.service.name}: #{c.name} is at #{Float.round(c.value, 1)} of #{Dokkit.Numbers.limit(c)}"
+          {c, limit} <- close,
+          do: "#{c.service.name}: #{c.name} is at #{Float.round(c.value, 1)} of #{limit}"
         )
       )
   end
