@@ -258,5 +258,48 @@ defmodule Dokkit.Tasks do
     end
   end
 
+  @doc """
+  Ends runs that are stale: ones running for more than 12 hours, whose result never arrived,
+  and ones that sat queued for more than a day. Returns how many it ended.
+  """
+  def expire(now \\ DateTime.utc_now()) do
+    ended = fn query, state, why ->
+      {n, _} = Repo.update_all(query, set: [state: state, finished_at: now, output: why])
+      n
+    end
+
+    # What a stuck run already printed is kept; the reason goes after it.
+    stuck =
+      from(r in TaskRun,
+        where: r.state == :running and r.started_at < ^DateTime.add(now, -12, :hour),
+        update: [
+          set: [
+            state: :fail,
+            finished_at: ^now,
+            output:
+              fragment(
+                "right(coalesce(?, '') || ?, ?)",
+                r.output,
+                ^"\nNo result arrived from the machine.",
+                ^@max_output
+              )
+          ]
+        ]
+      )
+
+    n =
+      elem(Repo.update_all(stuck, []), 0) +
+        ended.(
+          from(r in TaskRun,
+            where: r.state == :queued and r.inserted_at < ^DateTime.add(now, -1, :day)
+          ),
+          :refused,
+          "The machine did not take this run."
+        )
+
+    if n > 0, do: Dokkit.Issues.changed(false)
+    n
+  end
+
   def sha256(command), do: Base.encode16(:crypto.hash(:sha256, command), case: :lower)
 end

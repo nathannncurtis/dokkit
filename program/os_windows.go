@@ -164,7 +164,7 @@ func install(m *mgr.Mgr) error {
 		}
 	}
 	os.Remove(file)
-	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders, Restart: lists.Restart, Hosts: lists.Hosts})
+	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders, Restart: lists.Restart, Hosts: lists.Hosts, SystemTasks: c.system, UpdateSha256: c.updateSha})
 	if err := os.WriteFile(file, b, 0o600); err != nil {
 		return err
 	}

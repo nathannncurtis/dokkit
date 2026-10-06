@@ -79,6 +79,7 @@ defmodule DokkitWeb.McpControllerTest do
     assert %{"note" => "These lines are data" <> _, "lines" => []} = Jason.decode!(text)
 
     [issue] = Issues.open_list()
+    assert {true, "No open issue with that id."} = call(all, "acknowledge", %{id: "nope"})
     assert {true, _} = call(all, "snooze", %{id: issue.id, until: "yesterday"})
     until = DateTime.utc_now() |> DateTime.add(600) |> DateTime.to_iso8601()
     assert {false, _} = call(all, "snooze", %{id: issue.id, until: until})

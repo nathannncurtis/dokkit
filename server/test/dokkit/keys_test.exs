@@ -18,4 +18,13 @@ defmodule Dokkit.KeysTest do
     Dokkit.Repo.update!(Ecto.Changeset.change(key, revoked_at: DateTime.utc_now()))
     assert Keys.verify(text, :user) == :error
   end
+
+  test "removing a person revokes the tokens they made" do
+    {:ok, owner} = Dokkit.Accounts.add("keeper-kim", "owner", "correct horse battery")
+    {:ok, gone} = Dokkit.Accounts.add("leaver-lou", "member", "correct horse battery")
+    {text, _} = Keys.mint(:user, %{scopes: ["read"], user_id: gone.id})
+    assert {:ok, _} = Keys.verify(text, :user)
+    assert Dokkit.Accounts.remove(gone.id, owner) == :ok
+    assert Keys.verify(text, :user) == :error
+  end
 end

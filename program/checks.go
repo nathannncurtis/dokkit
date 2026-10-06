@@ -39,6 +39,7 @@ type declaration struct {
 	}
 	Task  []task
 	Check []check
+	Job   []struct{ ID string }
 }
 
 type check struct {
@@ -490,6 +491,7 @@ type watcher struct {
 	sent     time.Time
 	mu       sync.Mutex // guards files, which the log reader looks at from its own goroutine
 	logc     *client    // the log reader's own client, so its timeout is its own
+	unsaved  bool
 }
 
 // refresh re-reads files that are new or changed, declares them, and forgets files that are gone.
