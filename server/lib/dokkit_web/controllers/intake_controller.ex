@@ -28,6 +28,7 @@ defmodule DokkitWeb.IntakeController do
       :unauthorized -> fail(conn, 401, "bad_key", "Missing or bad key.")
       {:wait, seconds} -> slow(conn, seconds)
       :bad_batch -> fail(conn, 422, "bad_batch", "Dokkit-Batch must be a UUID.")
+      :bad_gzip -> fail(conn, 422, "bad_gzip", "The body is not valid gzip.")
       _ -> fail(conn, 413, "too_large", "A batch is at most 5 MB compressed and 10,000 lines.")
     end
   end
@@ -154,7 +155,8 @@ defmodule DokkitWeb.IntakeController do
     else
       :error -> fail(conn, 401, "bad_key", "Missing or bad key.")
       {:wait, seconds} -> slow(conn, seconds)
-      _ -> fail(conn, 413, "too_large", "Too large, or not readable.")
+      :bad_gzip -> fail(conn, 422, "bad_gzip", "The body is not valid gzip.")
+      _ -> fail(conn, 413, "too_large", "Too large.")
     end
   end
 
