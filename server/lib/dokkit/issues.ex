@@ -283,7 +283,7 @@ defmodule Dokkit.Issues do
           since: at
         })
 
-      Dokkit.Alerts.plan(issue, service)
+      Dokkit.Alerts.plan(issue, service, at)
       issue
     end
   end

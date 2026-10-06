@@ -89,6 +89,9 @@ defmodule Dokkit.Estate do
 
   defp next_run(_, _), do: nil
 
+  @duration ~r/^\d+[smhd]$/
+  @duration_error "Write times as a number and a unit: 30m, 2h, 1d."
+
   @doc "Adds a job to watch. The key in the answer is shown once."
   def add_job(params) do
     machine = String.trim(params["machine"] || "")
@@ -110,8 +113,8 @@ defmodule Dokkit.Estate do
         {:error,
          "The schedule is not a cron line Dokkit can read. Five fields, for example 0 1 * * *."}
 
-      Enum.any?(~w(grace max_runtime), &(config[&1] && !(config[&1] =~ ~r/^\d+[smhd]$/))) ->
-        {:error, "Write times as a number and a unit: 30m, 2h, 1d."}
+      Enum.any?(~w(grace max_runtime), &(config[&1] && !(config[&1] =~ @duration))) ->
+        {:error, @duration_error}
 
       true ->
         Repo.transaction(fn ->
@@ -267,9 +270,10 @@ defmodule Dokkit.Estate do
         type = to_string(c["type"])
 
         base =
-          if is_binary(c["name"]) and c["name"] != "" and type not in ~w(process windows-service systemd),
-            do: c["name"],
-            else: type
+          if is_binary(c["name"]) and c["name"] != "" and
+               type not in ~w(process windows-service systemd),
+             do: c["name"],
+             else: type
 
         n = Map.get(seen, base, 0) + 1
         {{if(n == 1, do: base, else: "#{base}-#{n}"), c}, Map.put(seen, base, n)}
@@ -365,7 +369,8 @@ defmodule Dokkit.Estate do
 
     cond do
       length(wanted) != length(list) ->
-        {:error, "Each check needs a name and a type of http, tcp, process, windows-service or systemd."}
+        {:error,
+         "Each check needs a name and a type of http, tcp, process, windows-service or systemd."}
 
       names != Enum.uniq(names) or Enum.any?(names, &(&1 in from_file)) ->
         {:error, "Two checks of a service cannot share a name."}
@@ -400,6 +405,30 @@ defmodule Dokkit.Estate do
       for {field, key} <- [route_down: "down", route_degraded: "degraded"],
           do: {field, route(params[key])}
 
+    change =
+      case params["night"] do
+        v when v in [true, "true"] -> [night: true] ++ change
+        v when v in [false, "false"] -> [night: false] ++ change
+        _ -> change
+      end
+
     Repo.update!(Ecto.Changeset.change(service, change))
   end
+
+  @doc "Changes when a job counts as late and as run too long. A job from a dokkit.toml is read-only."
+  def set_job_timing(%Check{type: :job, source: :reported} = check, params) do
+    timing = for k <- ~w(grace max_runtime), do: {k, String.trim(params[k] || "")}
+
+    if Enum.all?(timing, fn {_, v} -> v == "" or v =~ @duration end) do
+      config =
+        Map.drop(check.config, ~w(grace max_runtime))
+        |> Map.merge(Map.reject(Map.new(timing), &(elem(&1, 1) == "")))
+
+      {:ok, Repo.update!(Ecto.Changeset.change(check, config: config))}
+    else
+      {:error, @duration_error}
+    end
+  end
+
+  def set_job_timing(_, _), do: {:error, "Set in its dokkit.toml."}
 end

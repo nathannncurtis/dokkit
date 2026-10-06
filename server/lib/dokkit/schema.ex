@@ -38,6 +38,7 @@ defmodule Dokkit.Service do
     field :note, :string
     field :route_down, :string
     field :route_degraded, :string
+    field :night, :boolean, default: true
     field :watched, :boolean, default: true
     field :held, :string
     field :restart, :boolean, default: false
@@ -274,7 +275,7 @@ defmodule Dokkit.Alert do
     field :channel, :string
 
     field :status, Ecto.Enum,
-      values: [:pending, :sent, :failed, :skipped, :closing, :closed],
+      values: [:pending, :sent, :failed, :skipped, :closing, :closed, :held],
       default: :pending
 
     field :attempts, :integer, default: 0

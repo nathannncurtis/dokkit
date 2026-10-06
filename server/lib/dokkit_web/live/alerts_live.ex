@@ -25,7 +25,7 @@ defmodule DokkitWeb.AlertsLive do
       !owner?(socket) ->
         {:noreply, socket}
 
-      error = bad_address(params) ->
+      error = Alerts.night_error(params) || bad_address(params) ->
         {:noreply, assign(socket, error: error, saved: false)}
 
       true ->
@@ -336,6 +336,38 @@ defmodule DokkitWeb.AlertsLive do
                 />
                 <span class="hint">
                   An https address. Dokkit calls it every minute. Point it at a service that alerts when the calls stop, because Dokkit cannot tell anyone that it is down.
+                </span>
+              </dd>
+
+              <dt>Night</dt>
+
+              <dd>
+                <input
+                  class="inp mono"
+                  style="width: 70px"
+                  name="alerts[night_from]"
+                  value={@config["night_from"]}
+                  inputmode="numeric"
+                  aria-label="Night starts at hour"
+                />
+                <input
+                  class="inp mono"
+                  style="width: 70px"
+                  name="alerts[night_to]"
+                  value={@config["night_to"]}
+                  inputmode="numeric"
+                  aria-label="Night ends at hour"
+                />
+                <input
+                  class="inp mono"
+                  style="width: 70px"
+                  name="alerts[night_offset]"
+                  value={@config["night_offset"]}
+                  inputmode="numeric"
+                  aria-label="Hours from UTC"
+                />
+                <span class="hint">
+                  Start hour, end hour and hours from UTC, for example 22, 7 and -5. A service set not to wake you at night holds its alerts until the night ends.
                 </span>
               </dd>
 

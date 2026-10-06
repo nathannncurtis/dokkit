@@ -124,7 +124,7 @@ defmodule Dokkit.Read do
 
       Map.merge(service_row(s, s.machine), %{
         checks: checks,
-        routing: %{down: s.route_down, degraded: s.route_degraded},
+        routing: %{down: s.route_down, degraded: s.route_degraded, night: s.night},
         restart: s.restart,
         stats: s.stats,
         stats_at: s.stats_at,

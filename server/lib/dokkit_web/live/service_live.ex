@@ -7,7 +7,7 @@ defmodule DokkitWeb.ServiceLive do
   def mount(%{"id" => id}, _session, socket) do
     case Estate.service(id) do
       nil -> {:ok, push_navigate(socket, to: ~p"/all")}
-      service -> {:ok, load(assign(socket, page_title: service.name, id: id))}
+      service -> {:ok, load(assign(socket, page_title: service.name, id: id, timing_error: nil))}
     end
   end
 
@@ -16,6 +16,19 @@ defmodule DokkitWeb.ServiceLive do
 
   def handle_info({:settled, :page}, socket),
     do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
+
+  def handle_event("timing", %{"timing" => params}, socket) do
+    error =
+      with true <- socket.assigns.current_user.role != :viewer,
+           job when job != nil <- socket.assigns.job,
+           {:error, text} <- Estate.set_job_timing(job, params) do
+        text
+      else
+        _ -> nil
+      end
+
+    {:noreply, assign(load(socket), timing_error: error)}
+  end
 
   def handle_event("route", %{"route" => params}, socket) do
     if socket.assigns.current_user.role != :viewer,
@@ -252,6 +265,55 @@ defmodule DokkitWeb.ServiceLive do
               
               <dd :if={@job}><.time at={Estate.next_expected(@job)} none="Not scheduled" /></dd>
             </dl>
+            
+            <form :if={@job && @job.source == :reported} phx-submit="timing" id="timing-form">
+              <dl class="kv">
+                <dt>Count it as late after</dt>
+                
+                <dd>
+                  <input
+                    class="inp mono"
+                    style="width: 120px"
+                    name="timing[grace]"
+                    value={@job.config["grace"]}
+                    placeholder="30m"
+                    aria-label="Count it as late after"
+                  />
+                </dd>
+                
+                <dt>Say it ran long after</dt>
+                
+                <dd>
+                  <input
+                    class="inp mono"
+                    style="width: 120px"
+                    name="timing[max_runtime]"
+                    value={@job.config["max_runtime"]}
+                    placeholder="1h"
+                    aria-label="Say it ran long after"
+                  />
+                </dd>
+              </dl>
+              
+              <div class="foot">
+                <span :if={@timing_error} class="bad" role="alert">{@timing_error}</span>
+                <span class="end"><button class="btn sm" type="submit">Save</button></span>
+              </div>
+            </form>
+            
+            <dl :if={@job && @job.source == :file} class="kv">
+              <dt>Count it as late after</dt>
+              
+              <dd class="mono">{@job.config["grace"] || "30m"}</dd>
+              
+              <dt>Say it ran long after</dt>
+              
+              <dd class="mono">{@job.config["max_runtime"] || "Not set"}</dd>
+              
+              <dt></dt>
+              
+              <dd class="mute">Set in its dokkit.toml.</dd>
+            </dl>
           </div>
           
           <div class="card">
@@ -340,6 +402,18 @@ defmodule DokkitWeb.ServiceLive do
                   routes={@routes}
                   default={@defaults["degraded"]}
                 />
+              </dd>
+              
+              <dt>At night</dt>
+              
+              <dd>
+                <input type="hidden" name="route[night]" value="false" />
+                <label>
+                  <input type="checkbox" name="route[night]" value="true" checked={@service.night} />
+                  Wake me at night for this
+                </label>
+                
+                <span class="hint">Off holds its alerts until the night ends, if the issue is still open.</span>
               </dd>
             </dl>
           </form>

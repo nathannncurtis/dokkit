@@ -120,7 +120,7 @@ defmodule DokkitWeb.ApiController do
 
       service ->
         s = Dokkit.Estate.set_routing(service, params)
-        %{down: s.route_down, degraded: s.route_degraded}
+        %{down: s.route_down, degraded: s.route_degraded, night: s.night}
     end
   end
 

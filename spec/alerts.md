@@ -15,6 +15,12 @@
 - A snoozed issue never alerts.
 - Paging again when a page is not acknowledged is left to the paging service's own escalation. Dokkit does not duplicate it.
 
+## Night
+
+One night is set for the whole server on the Alerts page: a start hour, an end hour and the hours from UTC (22, 7 and 0 unless changed). No time zone database is installed, so the night is a fixed offset and does not follow daylight saving.
+
+Each service has a switch, "Wake me at night for this", on by default. When it is off and an alert for that service would go out during the night, Dokkit holds it and sends it when the night ends, if the issue is still open. An issue that closed in the meantime sends nothing. A held alert is a row in the database, so it survives a restart, and the once-a-minute sweep sends it. The first screen says "Held until 07:00" for it. The daily digest is not held.
+
 ## Recovery
 
 An issue closes itself after 3 good checks, and the page it raised is resolved automatically.

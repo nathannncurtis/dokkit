@@ -404,22 +404,6 @@
               }
             }
           },
-          "404": {
-            "description": "Not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": {
-                    "code": "not_found",
-                    "message": "No such address."
-                  }
-                }
-              }
-            }
-          },
           "401": {
             "description": "Missing or bad key.",
             "content": {
@@ -431,6 +415,22 @@
                   "error": {
                     "code": "bad_key",
                     "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such address."
                   }
                 }
               }
@@ -571,22 +571,6 @@
               }
             }
           },
-          "404": {
-            "description": "Not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": {
-                    "code": "not_found",
-                    "message": "No such address."
-                  }
-                }
-              }
-            }
-          },
           "401": {
             "description": "Missing or bad key.",
             "content": {
@@ -598,6 +582,22 @@
                   "error": {
                     "code": "bad_key",
                     "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such address."
                   }
                 }
               }
@@ -3178,7 +3178,7 @@
                       "type": "http",
                       "state": "ok",
                       "note": null,
-                      "value": 38.0,
+                      "value": 38,
                       "checked_at": "2026-10-05T21:14:00Z",
                       "source": "file",
                       "config": {
@@ -3347,7 +3347,7 @@
                   "points": [
                     {
                       "at": "2026-10-05T20:00:00Z",
-                      "value": 4.0
+                      "value": 4
                     }
                   ]
                 }
@@ -5191,7 +5191,7 @@
         "tags": [
           "Act"
         ],
-        "description": "Sets the channel for `down` and for `degraded`. A value that is not a channel clears that route. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "description": "Sets the channel for `down` and for `degraded`. A value that is not a channel clears that route. `night` is optional; false holds the alerts of a night until it ends. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
         "parameters": [
           {
             "name": "id",
@@ -5233,12 +5233,17 @@
                       "webhook",
                       "none"
                     ]
+                  },
+                  "night": {
+                    "type": "boolean",
+                    "description": "False holds this service's alerts at night until the night ends. Default true."
                   }
                 }
               },
               "example": {
                 "down": "page",
-                "degraded": "digest"
+                "degraded": "digest",
+                "night": false
               }
             }
           }
@@ -5262,12 +5267,16 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "night": {
+                      "type": "boolean"
                     }
                   }
                 },
                 "example": {
                   "down": "page",
-                  "degraded": "digest"
+                  "degraded": "digest",
+                  "night": false
                 }
               }
             }
@@ -7027,9 +7036,6 @@
         ],
         "description": "Answers 405. The MCP server takes POST only. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
         "responses": {
-          "405": {
-            "description": "Method not allowed."
-          },
           "401": {
             "description": "Missing or bad key.",
             "content": {
@@ -7045,6 +7051,9 @@
                 }
               }
             }
+          },
+          "405": {
+            "description": "Method not allowed."
           }
         },
         "security": [
@@ -7277,6 +7286,9 @@
                       "string",
                       "null"
                     ]
+                  },
+                  "night": {
+                    "type": "boolean"
                   }
                 }
               },

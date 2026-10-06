@@ -14,7 +14,10 @@ defmodule Dokkit.Alerts do
     "degraded" => "push",
     "push_with" => "ntfy",
     "disk_limit" => "90",
-    "memory_limit" => "95"
+    "memory_limit" => "95",
+    "night_from" => "22",
+    "night_to" => "7",
+    "night_offset" => "0"
   }
   @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user smtp_password)
   @plain ~w(disk_limit memory_limit ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to text_to digest_at heartbeat_url)
@@ -60,6 +63,45 @@ defmodule Dokkit.Alerts do
     )
 
     new
+  end
+
+  # No time zone database is installed, so the night is set in hours from UTC.
+  @doc "Whether `now` falls in the night set on the Alerts page."
+  def night?(now, config \\ config()) do
+    from = night_hour(config, "night_from", 0..23)
+    to = night_hour(config, "night_to", 0..23)
+    hour = Integer.mod(now.hour + night_hour(config, "night_offset", -12..14), 24)
+    if from <= to, do: hour >= from and hour < to, else: hour >= from or hour < to
+  end
+
+  defp night_hour(config, key, range) do
+    whole_hour(config[key], range) || String.to_integer(@defaults[key])
+  end
+
+  defp whole_hour(value, range) do
+    case Integer.parse(value || "") do
+      {n, ""} -> if n in range, do: n
+      _ -> nil
+    end
+  end
+
+  @doc "When the night ends, as it is said on the Alerts page."
+  def night_ends(config \\ config()),
+    do:
+      night_hour(config, "night_to", 0..23)
+      |> to_string()
+      |> String.pad_leading(2, "0")
+      |> Kernel.<>(":00")
+
+  @doc "An error for a night that is not whole hours, or nil."
+  def night_error(params) do
+    ranges = [{"night_from", 0..23}, {"night_to", 0..23}, {"night_offset", -12..14}]
+
+    unless Enum.all?(ranges, fn {k, r} ->
+             v = String.trim(params[k] || "")
+             v == "" or whole_hour(v, r) != nil
+           end),
+           do: "The night is whole hours: 0 to 23, and the hours from UTC from -12 to 14."
   end
 
   @kinds [{"Anything", ""}, {"A job", "job"}, {"A check", "check"}, {"A machine", "machine"}]
@@ -173,36 +215,73 @@ defmodule Dokkit.Alerts do
     do: Repo.one(from m in Dokkit.Machine, where: m.id == ^id, select: m.name)
 
   # A machine that is down alerts once for itself. What runs on it stays quiet until it is back.
-  def plan(%Issue{} = issue, %Service{environment: "production"} = service) do
+  def plan(issue, service, now \\ DateTime.utc_now())
+
+  def plan(%Issue{} = issue, %Service{environment: "production"} = service, now) do
     # A soon issue is only ever degraded, so it can never take the down route.
     channel =
       Map.get(service, :"route_#{issue.state}") ||
         (!issue.soon && ruled(issue, machine_name(issue.machine_id))) ||
         config()[to_string(issue.state)]
 
-    unless Dokkit.Issues.machine_down?(issue.machine_id), do: insert(issue, channel)
+    unless Dokkit.Issues.machine_down?(issue.machine_id) do
+      insert(issue, channel, if(holds?(service, channel, now), do: :held, else: :pending))
+    end
   end
 
-  def plan(%Issue{kind: "machine"} = issue, nil),
-    do: insert(issue, ruled(issue, machine_name(issue.machine_id)) || config()["down"])
+  def plan(%Issue{kind: "machine"} = issue, nil, _),
+    do: insert(issue, ruled(issue, machine_name(issue.machine_id)) || config()["down"], :pending)
 
-  def plan(_, _), do: nil
+  def plan(_, _, _), do: nil
 
-  defp insert(issue, channel) do
+  # A held alert waits in the database for the sweep after the night ends.
+  defp holds?(%Service{night: false}, channel, now), do: channel != "digest" and night?(now)
+  defp holds?(_, _, _), do: false
+
+  defp insert(issue, channel, status) do
     if sends?(channel),
-      do: Repo.insert!(%Alert{issue_id: issue.id, channel: channel})
+      do: Repo.insert!(%Alert{issue_id: issue.id, channel: channel, status: status})
+  end
+
+  @doc "Held alerts whose night is over are sent if their issue is still open, else dropped. Returns how many go out."
+  def release(now \\ DateTime.utc_now()) do
+    if night?(now) do
+      0
+    else
+      open = from i in Issue, where: is_nil(i.closed_at), select: i.id
+
+      {n, _} =
+        Repo.update_all(
+          from(a in Alert, where: a.status == :held and a.issue_id in subquery(open)),
+          set: [status: :pending]
+        )
+
+      Repo.update_all(from(a in Alert, where: a.status == :held), set: [status: :skipped])
+      n
+    end
   end
 
   @doc "An alert that never went out is sent after all when its issue comes back."
-  def reopened(%Issue{id: id}) do
+  def reopened(%Issue{id: id} = issue) do
+    held = Repo.preload(issue, :service).service |> holds?("page", DateTime.utc_now())
+
     Repo.update_all(from(a in Alert, where: a.issue_id == ^id and a.status == :skipped),
       set: [status: :pending, attempts: 0, error: nil]
     )
+
+    if held,
+      do:
+        Repo.update_all(
+          from(a in Alert,
+            where: a.issue_id == ^id and a.status == :pending and a.channel != "digest"
+          ),
+          set: [status: :held]
+        )
   end
 
   def closing(%Issue{id: id}) do
     Repo.update_all(
-      from(a in Alert, where: a.issue_id == ^id and a.status in [:pending, :failed]),
+      from(a in Alert, where: a.issue_id == ^id and a.status in [:pending, :failed, :held]),
       set: [status: :skipped]
     )
 

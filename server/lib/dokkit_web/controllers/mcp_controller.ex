@@ -91,8 +91,13 @@ defmodule DokkitWeb.McpController do
     {"unwatch", "act", "Stop watching a service. Its open issues close.", %{"id" => @text},
      ["id"]},
     {"routing", "act",
-     "Set where a service's issues go when it stops (down) and when it struggles (degraded).",
-     %{"id" => @text, "down" => @channel, "degraded" => @channel}, ["id"]},
+     "Set where a service's issues go when it stops (down) and when it struggles (degraded), and with night false whether they wait for morning at night.",
+     %{
+       "id" => @text,
+       "down" => @channel,
+       "degraded" => @channel,
+       "night" => %{"type" => "boolean"}
+     }, ["id"]},
     {"hold", "act",
      "Hold a service at a version, so a newer one is not offered. An empty or missing version lets it go.",
      %{"id" => @text, "version" => @text}, ["id"]},
@@ -117,7 +122,10 @@ defmodule DokkitWeb.McpController do
            "type" => "object",
            "properties" => %{
              "name" => @text,
-             "type" => %{"type" => "string", "enum" => ~w(http tcp process windows-service systemd)},
+             "type" => %{
+               "type" => "string",
+               "enum" => ~w(http tcp process windows-service systemd)
+             },
              "config" => %{"type" => "object"},
              "fail_after" => %{"type" => "integer"}
            },

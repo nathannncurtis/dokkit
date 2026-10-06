@@ -34,6 +34,7 @@ defmodule Dokkit.Watch do
         else: []
       ) ++
         [
+          fn -> if Dokkit.Alerts.release(now) > 0, do: Dokkit.Alerts.flush() end,
           fn -> Dokkit.Tasks.expire() end,
           fn -> Dokkit.Numbers.forecast(now) end,
           fn -> prune(now) end,

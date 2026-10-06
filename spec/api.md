@@ -224,7 +224,7 @@ A login session, or a user token with `act`. Rules, checks and restart need `adm
 | `POST /issues/bulk` | Any of the above for a list of issues. |
 | `POST /services/<id>/watch`, `/unwatch` | Start or stop watching a found service. |
 | `PUT /services/<id>/checks` (`admin`) | Edit checks added in the interface. Checks that came from a file are changed in the file. |
-| `PUT /services/<id>/routing` | Who is told, by which channel, for `down` and for `degraded`. |
+| `PUT /services/<id>/routing` | Who is told, by which channel, for `down` and for `degraded`. `night: false` holds this service's alerts during the night until it ends. |
 | `PUT /services/<id>/hold` | Mark a version on a machine as held on purpose. |
 | `PUT /services/<id>/restart` (`admin`) | Allow or stop automatic restart. |
 | `POST /proposals/<id>/accept`, `/dismiss` | Accept all or some of a proposal, or dismiss it. |
