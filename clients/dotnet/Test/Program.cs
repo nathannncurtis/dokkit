@@ -4,6 +4,7 @@ using System.Net;
 using System.Text;
 
 var got = new List<(string Path, string Body)>();
+var refused = false;
 var listener = new HttpListener();
 listener.Prefixes.Add("http://localhost:47912/");
 listener.Start();
@@ -16,7 +17,11 @@ _ = Task.Run(() =>
         if (c.Request.Headers["Content-Encoding"] == "gzip") body = new GZipStream(body, CompressionMode.Decompress);
         var text = new StreamReader(body, Encoding.UTF8).ReadToEnd();
         if (c.Request.Headers["Authorization"] != "Bearer dka_test") text = "BAD KEY";
-        lock (got) foreach (var line in text.Split('\n')) got.Add((c.Request.Url!.AbsolutePath, line));
+        // The first report is refused once; the library has to send it again.
+        var refuse = c.Request.Url!.AbsolutePath == "/api/v1/report" && !refused;
+        if (refuse) refused = true;
+        lock (got) if (!refuse) foreach (var line in text.Split('\n')) got.Add((c.Request.Url!.AbsolutePath, line));
+        c.Response.StatusCode = refuse ? 503 : 200;
         c.Response.Close();
     }
 });
@@ -37,7 +42,13 @@ using (var logs = Microsoft.Extensions.Logging.LoggerFactory.Create(b => Dokkit.
     Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(log, "too quiet to send");
     Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(log, "Disk at {Percent} percent", 91);
 }
+Dokkit.Client.Stats("{\n  \"stat\": 7\n}");
 Dokkit.Client.Flush();
+Dokkit.Client.Flush();
+
+var safe = typeof(Dokkit.Client).GetMethod("Safe", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+bool Safe(string url) => (bool)safe.Invoke(null, new object[] { url })!;
+var guarded = Safe("https://dokkit.example") && Safe("http://localhost:80") && !Safe("http://dokkit.example");
 
 var all = string.Join("\n", got.Select(g => g.Path + " " + g.Body));
 string[] want =
@@ -47,6 +58,9 @@ string[] want =
     "\"event\":\"fail\"", "/api/v1/errors {", "\"type\":\"InvalidOperationException\"", "\"level\":\"warn\",\"msg\":\"Disk at 91 percent\"", "\"handled\":false", "\"own\":true",
 };
 var missing = want.Where(w => !all.Contains(w)).ToList();
+if (!all.Contains("\"document\":{   \"stat\": 7 }")) missing.Add("stats on one line");
+if (!guarded) missing.Add("http to another machine refused");
+if (Dokkit.Client.Dropped != 0) missing.Add("nothing dropped, got " + Dokkit.Client.Dropped);
 if (missing.Count > 0 || all.Contains("4411") || all.Contains("BAD KEY") || all.Contains("ignored") || all.Contains("too quiet"))
 {
     Console.WriteLine("FAIL\nmissing: " + string.Join(" | ", missing) + "\n" + all);

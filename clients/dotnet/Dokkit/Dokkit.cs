@@ -7,7 +7,8 @@
 //     Dokkit.Client.Capture(exception);
 //
 // Nothing here throws into the app or waits on the network. Lines wait in a queue of fixed
-// size and a background thread sends them. Error message text is never sent.
+// size and a background thread sends them. Error message text is never sent. An http:// address
+// to another machine keeps the library off unless DOKKIT_INSECURE=1.
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -25,15 +26,18 @@ namespace Dokkit
 {
     public static class Client
     {
-        const int QueueSize = 1000;
+        const int QueueSize = 1000, QueueBytes = 4 << 20;
+        static readonly object Sending = new object();
+        static int lineBytes;
+        static Batch retry;
         static readonly object Gate = new object();
-        static readonly Queue<Dictionary<string, object>> Lines = new Queue<Dictionary<string, object>>();
+        static readonly Queue<string> Lines = new Queue<string>();
         static readonly Queue<Dictionary<string, object>> Errors = new Queue<Dictionary<string, object>>();
         static readonly AutoResetEvent Wake = new AutoResetEvent(false);
         static HttpClient http;
         static string url, version, environment, host;
 
-        /// <summary>How many lines were dropped because the queue was full.</summary>
+        /// <summary>How many lines were dropped because the queue was full or could not be sent.</summary>
         public static int Dropped { get; private set; }
 
         /// <summary>Turns the library on. With no address or key it stays off and every call does nothing.</summary>
@@ -44,6 +48,11 @@ namespace Dokkit
                 url = url ?? Environment.GetEnvironmentVariable("DOKKIT_URL");
                 key = key ?? Environment.GetEnvironmentVariable("DOKKIT_KEY");
                 if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(key) || http != null) return;
+                if (!Safe(url))
+                {
+                    Console.Error.WriteLine("dokkit: " + url + " is not https and not this machine; staying off. Set DOKKIT_INSECURE=1 to allow it.");
+                    return;
+                }
                 Client.url = url.TrimEnd('/');
                 Client.version = version;
                 Client.environment = environment ?? Environment.GetEnvironmentVariable("DOKKIT_ENV");
@@ -57,6 +66,10 @@ namespace Dokkit
             }
             catch { http = null; }
         }
+
+        static bool Safe(string url) =>
+            !url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || Environment.GetEnvironmentVariable("DOKKIT_INSECURE") == "1"
+            || (Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.IsLoopback || uri.Host == "localhost"));
 
         public static void Beat(string name, int everySeconds = 60) =>
             Add(Line("beat", "name", name, "every_seconds", everySeconds));
@@ -85,7 +98,8 @@ namespace Dokkit
             try
             {
                 if (http == null || error == null) return;
-                var own = Assembly.GetEntryAssembly();
+                // The entry assembly's first name segment, so its sibling projects count too. Without one, anything but the framework.
+                var prefix = Assembly.GetEntryAssembly()?.GetName().Name?.Split('.')[0];
                 var frames = new List<object>();
                 // Innermost last, as the format asks.
                 foreach (var f in (new StackTrace(error, true).GetFrames() ?? new StackFrame[0]).Reverse())
@@ -97,7 +111,7 @@ namespace Dokkit
                         ["file"] = method.DeclaringType?.FullName,
                         ["function"] = method.Name,
                         ["line"] = f.GetFileLineNumber() == 0 ? (object)null : f.GetFileLineNumber(),
-                        ["own"] = method.DeclaringType?.Assembly == own,
+                        ["own"] = IsOwn(method.DeclaringType?.Assembly, prefix),
                     });
                 }
                 var report = new Dictionary<string, object>
@@ -112,6 +126,15 @@ namespace Dokkit
             catch { }
         }
 
+        static bool IsOwn(Assembly assembly, string prefix)
+        {
+            var name = assembly?.GetName().Name;
+            if (name == null) return false;
+            if (prefix != null) return name == prefix || name.StartsWith(prefix + ".", StringComparison.Ordinal);
+            return name != "mscorlib" && name != "netstandard" && !name.StartsWith("System", StringComparison.Ordinal)
+                && !name.StartsWith("Microsoft", StringComparison.Ordinal) && name != "Dokkit";
+        }
+
         /// <summary>Also reports errors nothing caught.</summary>
         public static void CatchUnhandled() =>
             AppDomain.CurrentDomain.UnhandledException += (s, e) => { Capture(e.ExceptionObject as Exception, false); Flush(); };
@@ -119,23 +142,56 @@ namespace Dokkit
         /// <summary>Sends what is waiting. Called for you when the app exits.</summary>
         public static void Flush()
         {
-            try
+            lock (Sending)
             {
-                while (true)
+                try
                 {
-                    Dictionary<string, object> error = null;
-                    var batch = new List<Dictionary<string, object>>();
-                    lock (Gate)
+                    while (http != null)
                     {
-                        if (Errors.Count > 0) error = Errors.Dequeue();
-                        else while (Lines.Count > 0 && batch.Count < 500) batch.Add(Lines.Dequeue());
+                        var batch = retry ?? Next();
+                        retry = null;
+                        if (batch == null) return;
+                        int status;
+                        try { status = Post(batch); } catch { status = 599; }
+                        if (status < 400) continue;
+                        // A failed batch gets one more try; what is lost then is counted.
+                        var again = status >= 500 || status == 429;
+                        if (again && ++batch.Tries < 2) retry = batch;
+                        else lock (Gate) Dropped += batch.Count;
+                        if (again) return;
                     }
-                    if (error != null) { Post("/api/v1/errors", Encoding.UTF8.GetBytes(Json(error)), "application/json", false); continue; }
-                    if (batch.Count == 0) return;
-                    Post("/api/v1/report", Gzip(string.Join("\n", batch.Select(Json))), "application/x-ndjson", true);
+                }
+                catch { /* What could not be sent is dropped. The app is never told. */ }
+            }
+        }
+
+        sealed class Batch
+        {
+            public string Path, Kind;
+            public byte[] Body;
+            public bool Gzip;
+            public int Count, Tries;
+            public readonly string Id = Guid.NewGuid().ToString();
+        }
+
+        static Batch Next()
+        {
+            Dictionary<string, object> error = null;
+            var batch = new List<string>();
+            lock (Gate)
+            {
+                if (Errors.Count > 0) error = Errors.Dequeue();
+                else while (Lines.Count > 0 && batch.Count < 500)
+                {
+                    var line = Lines.Dequeue();
+                    lineBytes -= line.Length;
+                    batch.Add(line);
                 }
             }
-            catch { /* What could not be sent is dropped. The app is never told. */ }
+            if (error != null)
+                return new Batch { Path = "/api/v1/errors", Body = Encoding.UTF8.GetBytes(Json(error)), Kind = "application/json", Count = 1 };
+            if (batch.Count == 0) return null;
+            return new Batch { Path = "/api/v1/report", Body = Gzip(string.Join("\n", batch)), Kind = "application/x-ndjson", Gzip = true, Count = batch.Count };
         }
 
         static void Run()
@@ -143,16 +199,16 @@ namespace Dokkit
             while (true) { Wake.WaitOne(2000); Flush(); }
         }
 
-        static void Post(string path, byte[] body, string kind, bool gzip)
+        static int Post(Batch batch)
         {
-            var content = new ByteArrayContent(body);
-            content.Headers.TryAddWithoutValidation("Content-Type", kind);
-            if (gzip)
+            var content = new ByteArrayContent(batch.Body);
+            content.Headers.TryAddWithoutValidation("Content-Type", batch.Kind);
+            if (batch.Gzip)
             {
                 content.Headers.TryAddWithoutValidation("Content-Encoding", "gzip");
-                content.Headers.TryAddWithoutValidation("Dokkit-Batch", Guid.NewGuid().ToString());
+                content.Headers.TryAddWithoutValidation("Dokkit-Batch", batch.Id);
             }
-            http.PostAsync(url + path, content).GetAwaiter().GetResult().Dispose();
+            using (var response = http.PostAsync(url + batch.Path, content).GetAwaiter().GetResult()) return (int)response.StatusCode;
         }
 
         static byte[] Gzip(string text)
@@ -182,17 +238,24 @@ namespace Dokkit
         {
             if (http == null) return;
             line["host"] = host;
+            var text = Json(line);
             lock (Gate)
             {
-                if (Lines.Count >= QueueSize) { Lines.Dequeue(); Dropped++; }
-                Lines.Enqueue(line);
+                if (text.Length > QueueBytes) { Dropped++; return; }
+                while (Lines.Count > 0 && (Lines.Count >= QueueSize || lineBytes + text.Length > QueueBytes))
+                {
+                    lineBytes -= Lines.Dequeue().Length;
+                    Dropped++;
+                }
+                Lines.Enqueue(text);
+                lineBytes += text.Length;
             }
         }
 
         internal static void Nudge() => Wake.Set();
         internal static Dictionary<string, object> NewLine(string type, params object[] pairs) => Line(type, pairs);
 
-        sealed class Raw { public readonly string Text; public Raw(string text) { Text = text; } }
+        sealed class Raw { public readonly string Text; public Raw(string text) { Text = text.Replace('\r', ' ').Replace('\n', ' '); } }
 
         static string Json(object value)
         {
