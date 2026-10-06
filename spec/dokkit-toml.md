@@ -60,7 +60,7 @@ degraded = "push"
 
 **Secrets never go in the file.** A field ending in `_env` names an environment variable that holds one.
 
-**A declared check is active straight away. A declared task is not.** A task is a command that the server could later ask a machine to run. It arrives as a proposal, is accepted in the interface, and is pinned to what was accepted: the exact command, the absolute path of the declaring file and, when the command's first word names an existing file, that file's contents. If any of them changes, it is proposed again and the old one stops being runnable. A task runs under an ordinary account unless it was accepted to run otherwise. Without this, anyone able to edit a file in a repo could get a command run by a privileged service.
+**A declared check is active straight away. A declared task is not.** A task is a command that the server could later ask a machine to run. It arrives as a proposal, is accepted in the interface, and is pinned to what was accepted: the exact command, the absolute path of the declaring file and the contents of every word of the command that is a regular file inside the task's folder. If any of them changes, it is proposed again and the old one stops being runnable. A task runs under an ordinary account unless it was accepted to run otherwise. Without this, anyone able to edit a file in a repo could get a command run by a privileged service.
 
 **Tasks take no arguments.** The server can ask for a task by name and nothing else.
 

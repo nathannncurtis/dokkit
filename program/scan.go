@@ -227,9 +227,8 @@ type task struct {
 	dir, file        string
 }
 
-// pin is what a person accepts: the command, the file that declares it, and the contents of
-// the script the command names. Any of them changing makes the task need accepting again.
-func (t task) pin() string {
+// declaringFile is the absolute path of the file that declares the task, links resolved.
+func (t task) declaringFile() string {
 	file := t.file
 	if abs, err := filepath.Abs(file); err == nil {
 		file = abs
@@ -237,17 +236,75 @@ func (t task) pin() string {
 	if real, err := filepath.EvalSymlinks(file); err == nil {
 		file = real
 	}
+	return file
+}
+
+// words splits a command at spaces, keeping quoted text together and dropping the quotes.
+func words(command string) (out []string) {
+	var cur strings.Builder
+	var quote rune
+	started := false
+	flush := func() {
+		if started {
+			out = append(out, cur.String())
+			cur.Reset()
+			started = false
+		}
+	}
+	for _, r := range command {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			} else {
+				cur.WriteRune(r)
+			}
+		case r == '"' || r == '\'':
+			quote, started = r, true
+		case r == ' ' || r == '\t':
+			flush()
+		default:
+			cur.WriteRune(r)
+			started = true
+		}
+	}
+	flush()
+	return
+}
+
+// scripts lists the regular files inside the task's folder that its command names, links
+// resolved. A file outside the folder is not one of them.
+func (t task) scripts() (files []string) {
+	for _, w := range words(t.Run) {
+		p := filepath.FromSlash(strings.ReplaceAll(w, `\`, "/"))
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(t.dir, p)
+		}
+		if !within(t.dir, p) {
+			continue
+		}
+		real, err := filepath.EvalSymlinks(p)
+		if err != nil {
+			continue
+		}
+		if info, err := os.Stat(real); err == nil && info.Mode().IsRegular() && !slices.Contains(files, real) {
+			files = append(files, real)
+		}
+	}
+	return
+}
+
+// pin is what a person accepts: the command, the file that declares it, and the contents of
+// every file inside its folder that the command names. Any of them changing makes the task
+// need accepting again.
+func (t task) pin() string {
 	h := sha256.New()
 	h.Write([]byte(t.Run))
 	h.Write([]byte{0})
-	h.Write([]byte(file))
+	h.Write([]byte(t.declaringFile()))
 	h.Write([]byte{0})
-	script, _, _ := strings.Cut(t.Run, " ")
-	if !filepath.IsAbs(script) {
-		script = filepath.Join(t.dir, script)
-	}
-	if info, err := os.Stat(script); err == nil && info.Mode().IsRegular() {
-		if b, err := os.ReadFile(script); err == nil {
+	for _, f := range t.scripts() {
+		if b, err := os.ReadFile(f); err == nil {
 			sum := sha256.Sum256(b)
 			h.Write(sum[:])
 		}
@@ -511,7 +568,7 @@ func (c *client) work() {
 			c.postResult(result, []byte(`{"refused":"This machine has no task with that name, that command, that file and that script."}`))
 			continue
 		}
-		if err := taskFolderProblem(t.dir); err != nil {
+		if err := taskFolderProblem(t.dir, t.scripts()); err != nil {
 			body, _ := json.Marshal(map[string]string{"refused": err.Error()})
 			c.postResult(result, body)
 			continue

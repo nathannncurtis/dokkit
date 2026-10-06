@@ -170,7 +170,7 @@ GET /work?wait=50
 {"run": "<id>", "task": "security-scan", "command_sha256": "<hex>"}
 ```
 
-`command_sha256` is the pin of the task that was accepted: a SHA-256 that `dokkit` computes over the command, the absolute path of the `dokkit.toml` that declares it (links resolved) and, when the command's first word names an existing file, that file's contents. `dokkit` sends the pin with each task it declares and runs the task only when its own pin is the same one. A task accepted before pins existed has none and must be accepted again.
+`command_sha256` is the pin of the task that was accepted: a SHA-256 that `dokkit` computes over the command, the absolute path of the `dokkit.toml` that declares it (links resolved) and the contents of every word of the command (quotes removed) that is a regular file inside the task's folder, links resolved. A file outside the folder is not hashed. A task also carries the path of its file, shown beside the command. `dokkit` sends the pin with each task it declares and runs the task only when its own pin is the same one. A task accepted before pins existed has none and must be accepted again; a task declared with no pin by an older `dokkit` waits with the note that it needs a newer one and is never run.
 
 A task has a name and nothing else. There are no arguments in v1, so the server cannot shape what runs.
 

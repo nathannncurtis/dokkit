@@ -462,15 +462,31 @@ func (c *client) apply(path string) int {
 	return 0
 }
 
-func (c *client) declare(d *declaration) error {
-	if raw, ok := d.raw["task"].([]map[string]any); ok {
-		for i, t := range d.Task {
-			if i < len(raw) {
-				t.dir, t.file = filepath.Dir(d.path), d.path
-				raw[i]["pin"] = t.pin()
-			}
+// pinTasks puts each task's pin and declaring file into what is sent, and returns the pins.
+func (d *declaration) pinTasks() (pins []string) {
+	var raw []map[string]any
+	switch v := d.raw["task"].(type) {
+	case []map[string]any:
+		raw = v
+	case []any:
+		for _, e := range v {
+			m, _ := e.(map[string]any)
+			raw = append(raw, m)
 		}
 	}
+	for i, t := range d.Task {
+		t.dir, t.file = filepath.Dir(d.path), d.path
+		pin := t.pin()
+		pins = append(pins, pin)
+		if i < len(raw) && raw[i] != nil {
+			raw[i]["pin"], raw[i]["file"] = pin, t.declaringFile()
+		}
+	}
+	return
+}
+
+func (c *client) declare(d *declaration) error {
+	d.pinTasks()
 	body, _ := json.Marshal(d.raw)
 	req, _ := http.NewRequest("PUT", c.url+"/api/v1/declare", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+c.key)
@@ -495,6 +511,7 @@ type watcher struct {
 	files    map[string]*declaration
 	added    []*declaration
 	modified map[string]time.Time
+	pins     map[string]string // the task pins last sent for each file
 	logs     map[string]int64
 	sent     time.Time
 	mu       sync.Mutex // guards files, which the log reader looks at from its own goroutine
@@ -509,7 +526,14 @@ func (w *watcher) refresh() {
 		for _, p := range declarations(w.folders) {
 			found[p] = true
 			info, err := os.Stat(p)
-			if err != nil || info.ModTime().Equal(w.modified[p]) {
+			if err != nil {
+				continue
+			}
+			w.mu.Lock()
+			old := w.files[p]
+			w.mu.Unlock()
+			// An edited script changes a pin without touching the file that names it.
+			if info.ModTime().Equal(w.modified[p]) && (old == nil || strings.Join(old.pinTasks(), ",") == w.pins[p]) {
 				continue
 			}
 			w.modified[p] = info.ModTime()
@@ -521,8 +545,13 @@ func (w *watcher) refresh() {
 				fmt.Fprintf(os.Stderr, "%s  %s: %v\n", time.Now().Format("15:04:05"), p, err)
 				// Tried again on the next pass, in case the server was only away.
 				delete(w.modified, p)
+				delete(w.pins, p)
 				continue
 			}
+			if w.pins == nil {
+				w.pins = map[string]string{}
+			}
+			w.pins[p] = strings.Join(d.pinTasks(), ",")
 			fmt.Printf("%s  watching %s from %s\n", time.Now().Format("15:04:05"), d.Service.ID, p)
 			w.mu.Lock()
 			w.files[p] = d
@@ -534,6 +563,7 @@ func (w *watcher) refresh() {
 		if !found[p] {
 			delete(w.files, p)
 			delete(w.modified, p)
+			delete(w.pins, p)
 		}
 	}
 	w.mu.Unlock()

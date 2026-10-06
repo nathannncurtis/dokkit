@@ -17,12 +17,12 @@ defmodule Dokkit.Tasks do
           is_binary(run),
           # Names that start this way are Dokkit's own.
           not String.starts_with?(id, "dokkit:"),
-          do: {id, run, if(is_binary(t["pin"]), do: t["pin"])}
+          do: {id, run, text(t["pin"]), text(t["file"])}
 
-    names = for {id, _, _} <- tasks, do: id
+    names = for {id, _, _, _} <- tasks, do: id
     Repo.delete_all(from t in Task, where: t.service_id == ^service.id and t.name not in ^names)
 
-    for {id, run, pin} <- tasks do
+    for {id, run, pin, file} <- tasks do
       case Repo.get_by(Task, machine_id: service.machine_id, name: id) do
         nil ->
           Repo.insert!(%Task{
@@ -30,30 +30,41 @@ defmodule Dokkit.Tasks do
             service_id: service.id,
             name: id,
             command: run,
-            pin: pin
+            pin: pin,
+            file: file
           })
 
         task ->
           Repo.update!(
-            Ecto.Changeset.change(task, command: run, pin: pin, service_id: service.id)
+            Ecto.Changeset.change(task,
+              command: run,
+              pin: pin,
+              file: file,
+              service_id: service.id
+            )
           )
       end
     end
   end
 
+  defp text(v), do: if(is_binary(v), do: v)
+
+  # A task with no pin comes from a program too old to send one; it waits for a newer one.
   defp offered,
     do:
       from(t in Task,
         where:
-          not is_nil(t.pin) and
+          is_nil(t.pin) or
             fragment(
-              "(? IS DISTINCT FROM ? OR ? IS DISTINCT FROM ?) AND ? IS DISTINCT FROM ?",
+              "(? IS DISTINCT FROM ? OR ? IS DISTINCT FROM ?) AND (? IS DISTINCT FROM ? OR ? IS DISTINCT FROM ?)",
               t.accepted,
               t.command,
               t.accepted_pin,
               t.pin,
               t.dismissed,
-              t.command
+              t.command,
+              t.dismissed_pin,
+              t.pin
             )
       )
 
@@ -147,14 +158,16 @@ defmodule Dokkit.Tasks do
     end
   end
 
-  @doc "Accepts or dismisses the command the person was shown, and nothing newer."
-  def decide(id, command, field, as_system \\ false) when field in [:accepted, :dismissed] do
+  @doc "Accepts or dismisses the command and pin the person was shown, and nothing newer."
+  def decide(id, command, pin, field, as_system \\ false)
+      when is_binary(pin) and field in [:accepted, :dismissed] do
     with {:ok, id} <- Ecto.UUID.cast(id),
-         %Task{command: ^command} = task <- Repo.get(Task, id) do
+         %Task{command: ^command, pin: ^pin} = task <- Repo.get(Task, id) do
       Repo.update!(
         Ecto.Changeset.change(task, [
           {field, command},
-          {:accepted_pin, if(field == :accepted, do: task.pin, else: task.accepted_pin)},
+          {:accepted_pin, if(field == :accepted, do: pin, else: task.accepted_pin)},
+          {:dismissed_pin, if(field == :dismissed, do: pin, else: task.dismissed_pin)},
           {:as_system, field == :accepted and as_system}
         ])
       )

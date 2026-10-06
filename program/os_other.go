@@ -42,7 +42,39 @@ func init() {
 
 func asService() bool { return false }
 
-func taskFolderProblem(string) error { return nil }
+// taskFolderProblem refuses, when running as root, a task whose folder or script files anyone
+// else owns or can write.
+func taskFolderProblem(dir string, files []string) error {
+	if os.Geteuid() != 0 {
+		return nil
+	}
+	return rootProblem(dir, files)
+}
+
+func rootProblem(dir string, files []string) error {
+	for _, p := range append([]string{dir}, files...) {
+		fi, err := os.Stat(p)
+		if err != nil {
+			return err
+		}
+		if st, ok := fi.Sys().(*syscall.Stat_t); !ok || st.Uid != 0 || fi.Mode().Perm()&0o022 != 0 {
+			return fmt.Errorf("%s is not owned by root or can be written by others, so a task is not run from it as root.", p)
+		}
+	}
+	return nil
+}
+
+// fileIdentity names the file itself, whatever its path: the device and the inode.
+func fileIdentity(f *os.File) string {
+	fi, err := f.Stat()
+	if err != nil {
+		return ""
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return fmt.Sprintf("%v:%v", st.Dev, st.Ino)
+	}
+	return ""
+}
 
 func detach(cmd *exec.Cmd) { cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} }
 

@@ -208,13 +208,72 @@ func trustedOwner(dir string) error {
 	return fmt.Errorf("%s already exists and is owned by %s, not by administrators. Delete it from an administrator prompt, then install again", dir, owner)
 }
 
-// taskFolderProblem refuses a task whose folder an ordinary account owns, since its owner could
-// change what the service runs there.
-func taskFolderProblem(dir string) error {
-	if !asService() || trustedOwner(dir) == nil {
+// taskFolderProblem refuses a task whose folder or script files an ordinary account owns or can
+// write, since it could change what the service runs.
+func taskFolderProblem(dir string, files []string) error {
+	if is, _ := svc.IsWindowsService(); !is {
 		return nil
 	}
-	return fmt.Errorf("This task's folder, %s, is not owned by administrators, so the service does not run tasks from it.", dir)
+	if err := trustedOwner(dir); err != nil {
+		return fmt.Errorf("This task's folder, %s, is not owned by administrators, so the service does not run tasks from it.", dir)
+	}
+	for _, p := range append([]string{dir}, files...) {
+		if err := writableByOthers(p); err != nil {
+			return fmt.Errorf("%s can be changed by accounts other than administrators, so the service does not run this task.", p)
+		}
+	}
+	return nil
+}
+
+// Rights that let an account change a file or folder, or what is in it.
+const writeRights = 0x2 | 0x4 | 0x40 | 0x10000 | 0x40000 | 0x80000 | 0x40000000 | 0x10000000
+
+var trustedTrustees = []string{"S-1-5-18", "S-1-5-32-544", "S-1-3-0", "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464"}
+
+// writableByOthers is an error when the path grants write to anyone but administrators, the
+// system account, TrustedInstaller or the creator-owner placeholder.
+func writableByOthers(path string) error {
+	sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		return err
+	}
+	acl, _, err := sd.DACL()
+	if err != nil {
+		return err
+	}
+	if acl == nil {
+		return errors.New("anyone can write")
+	}
+	for i := uint32(0); i < uint32(acl.AceCount); i++ {
+		var ace *windows.ACCESS_ALLOWED_ACE
+		if windows.GetAce(acl, i, &ace) != nil {
+			return errors.New("the permissions could not be read")
+		}
+		// Only allow entries that apply to this object itself count.
+		if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE || ace.Header.AceFlags&windows.INHERIT_ONLY_ACE != 0 || uint32(ace.Mask)&writeRights == 0 {
+			continue
+		}
+		who := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
+		trusted := false
+		for _, s := range trustedTrustees {
+			if t, err := windows.StringToSid(s); err == nil && who.Equals(t) {
+				trusted = true
+			}
+		}
+		if !trusted {
+			return fmt.Errorf("%s can write", who)
+		}
+	}
+	return nil
+}
+
+// fileIdentity names the file itself, whatever its path: the volume and the index on it.
+func fileIdentity(f *os.File) string {
+	var i windows.ByHandleFileInformation
+	if windows.GetFileInformationByHandle(windows.Handle(f.Fd()), &i) != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d:%d:%d", i.VolumeSerialNumber, i.FileIndexHigh, i.FileIndexLow)
 }
 
 // detach lets a command outlive this one, with no window of its own.
