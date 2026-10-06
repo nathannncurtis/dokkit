@@ -141,6 +141,23 @@ rsync: disk full
     assert json_response(get(conn, "/api/v1/ping"), 401)
   end
 
+  test "app key addresses answer a browser preflight and carry CORS headers", %{
+    conn: conn,
+    app: app
+  } do
+    for path <- ["/api/v1/report", "/api/v1/errors", "/api/v1/in/#{app}/job/backup/ok"] do
+      pre = options(conn, path)
+      assert response(pre, 204)
+      assert get_resp_header(pre, "access-control-allow-origin") == ["*"]
+    end
+
+    assert get_resp_header(
+             get(conn, "/api/v1/in/#{app}/job/backup/ok"),
+             "access-control-allow-origin"
+           ) ==
+             ["*"]
+  end
+
   test "a start cuts short only an earlier run", %{app: app} do
     line = fn run, event, at ->
       %{type: "job", service: "backup", run: run, event: event, at: at}

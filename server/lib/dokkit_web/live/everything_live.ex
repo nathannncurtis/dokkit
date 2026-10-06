@@ -3,7 +3,11 @@ defmodule DokkitWeb.EverythingLive do
   alias Dokkit.Estate
 
   def mount(_params, _session, socket), do: {:ok, load(assign(socket, page_title: "Everything"))}
-  def handle_info(:issues_changed, socket), do: {:noreply, load(socket)}
+  def handle_info(:issues_changed, socket),
+    do: {:noreply, DokkitWeb.Auth.debounce(socket, :page, &load/1)}
+
+  def handle_info({:settled, :page}, socket),
+    do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
 
   defp load(socket) do
     down = for m <- Dokkit.Issues.machines(), m.down, do: m.id

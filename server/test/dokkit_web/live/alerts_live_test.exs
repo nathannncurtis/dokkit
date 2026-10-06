@@ -58,7 +58,13 @@ defmodule DokkitWeb.AlertsLiveTest do
     viewer = Repo.insert!(%User{name: "vic-sees", password_hash: "-", role: :viewer})
 
     {:ok, _, html} =
-      live(Plug.Test.init_test_session(conn, %{"user_id" => viewer.id}), "/alerts")
+      live(
+        Plug.Test.init_test_session(conn, %{
+          "user_id" => viewer.id,
+          "signed_at" => Dokkit.Accounts.stamp()
+        }),
+        "/alerts"
+      )
 
     for v <- ~w(ntfy-seen hook-seen beat-seen smtp-seen-user), do: refute(html =~ v)
   end
@@ -67,7 +73,13 @@ defmodule DokkitWeb.AlertsLiveTest do
     viewer = Repo.insert!(%User{name: "vic", password_hash: "-", role: :viewer})
 
     {:ok, view, html} =
-      live(Plug.Test.init_test_session(conn, %{"user_id" => viewer.id}), "/alerts")
+      live(
+        Plug.Test.init_test_session(conn, %{
+          "user_id" => viewer.id,
+          "signed_at" => Dokkit.Accounts.stamp()
+        }),
+        "/alerts"
+      )
 
     assert html =~ "Only the owner can change these."
     render_submit(view, "save", %{"alerts" => %{"down" => "none"}})

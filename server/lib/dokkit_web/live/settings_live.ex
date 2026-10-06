@@ -55,7 +55,13 @@ defmodule DokkitWeb.SettingsLive do
       if label == "" or scopes == [] do
         assign(socket, error: "A token needs a name and at least one thing it may do.")
       else
-        {text, _} = Keys.mint(:user, %{label: label, scopes: scopes})
+        {text, _} =
+          Keys.mint(:user, %{
+            label: label,
+            scopes: scopes,
+            user_id: socket.assigns.current_user.id
+          })
+
         assign(socket, new_token: text, error: nil)
       end
     end)
@@ -89,11 +95,15 @@ defmodule DokkitWeb.SettingsLive do
     <Layouts.app active={:settings} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Settings</h1>
+         <a class="btn ghost sm" href={~p"/password"}>Change password</a>
       </div>
+
       <div class="body set">
         <p :if={@error} class="lead bad" role="alert">{@error}</p>
+
         <div class="card">
           <h2>People<span class="cnt">{length(@people)}</span></h2>
+
           <div :for={p <- @people} class="est" id={"person-#{p.id}"}>
             <b>{p.name}</b>
             <span style="display:flex; gap:8px; align-items:center">
@@ -126,9 +136,9 @@ defmodule DokkitWeb.SettingsLive do
               aria-label="A first password"
               autocomplete="new-password"
               required
-            />
-            <span class="end"><button class="btn primary" type="submit">Add person</button></span>
+            /> <span class="end"><button class="btn primary" type="submit">Add person</button></span>
           </form>
+
           <p class="lead">
             A member can do everything except manage people, keys and alert channels. A viewer can look and change nothing.
           </p>
@@ -146,8 +156,7 @@ defmodule DokkitWeb.SettingsLive do
                 {k.hint}{if k.scopes != [], do: "  " <> Enum.join(k.scopes, ", ")}
               </div>
             </div>
-            <span class="tag">{@kinds[k.kind]}</span>
-            <span class="mono">{at(k.inserted_at)}</span>
+             <span class="tag">{@kinds[k.kind]}</span> <span class="mono">{at(k.inserted_at)}</span>
             <span :if={k.used_at} class="mono">{at(k.used_at)}</span>
             <span :if={!k.used_at} class="mute">Never</span>
             <button
@@ -176,8 +185,7 @@ defmodule DokkitWeb.SettingsLive do
               placeholder="What it is for"
               aria-label="What it is for"
               required
-            />
-            <label><input type="checkbox" name="token[read]" value="true" checked /> Read</label>
+            /> <label><input type="checkbox" name="token[read]" value="true" checked /> Read</label>
             <label><input type="checkbox" name="token[read-logs]" value="true" /> Read logs</label>
             <label><input type="checkbox" name="token[act]" value="true" /> Snooze and acknowledge</label>
             <label><input type="checkbox" name="token[admin]" value="true" /> Manage keys and people</label>

@@ -111,6 +111,7 @@ defmodule Dokkit.Key do
     field :revoked_at, :utc_datetime_usec
     belongs_to :machine, Dokkit.Machine
     belongs_to :service, Dokkit.Service
+    belongs_to :user, Dokkit.User
     timestamps()
   end
 end
@@ -256,6 +257,7 @@ defmodule Dokkit.User do
     field :name, :string
     field :password_hash, :string, redact: true
     field :role, Ecto.Enum, values: [:owner, :member, :viewer]
+    field :sessions_after, :integer, default: 0
     timestamps()
   end
 end

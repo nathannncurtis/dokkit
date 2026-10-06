@@ -48,7 +48,7 @@ Every key has a recognisable prefix and a built-in checksum, so a leaked one can
 | App key | `dka_` | A library, or a script inside an app | Write-only, for one service. It can read nothing, is rate-limited and can be revoked, so it is safe inside a desktop or phone app. |
 | User token | `dku_` | Scripts and the MCP | Scopes: `read`, `read-logs`, `act`, `admin`. |
 
-The web interface uses a login session, not a token.
+The web interface uses a login session, not a token. A session lasts 14 days, and signing out or changing the password ends every session of that person. Every sign-in or password change is counted before the password is checked: after 10 from one name and address together, or 30 from one address, in ten minutes, the answer is `429` with `Retry-After` until the window passes. Many attempts on one name from different addresses are slowed, not refused. Behind a proxy the address is the last `X-Forwarded-For` entry. A user token made by a person stops working when that person is removed; user tokens made before that was recorded are not tied to anyone and have to be revoked and made again.
 
 Roles for people: `owner`, `member`, and `viewer`. A viewer sees everything except secrets and keys.
 
@@ -57,6 +57,7 @@ Roles for people: `owner`, `member`, and `viewer`. A viewer sees everything exce
 - Base path `/api/v1`. Within v1, changes only ever add. Unknown fields are ignored by both sides.
 - Requests and answers are JSON unless stated.
 - Keys travel as `Authorization: Bearer <key>`.
+- `POST /report`, `POST /errors` and the ping URLs answer `OPTIONS` and send `Access-Control-Allow-Origin: *`, so a browser page can use an app key.
 - Times are RFC 3339 in UTC.
 - Lists use cursors. A list answer is `{"items": [...], "next": "<cursor or null>"}` and the next page is asked for with `?cursor=`.
 - Lists take `q` (search), `machine`, `service`, `environment`, `from` and `to` wherever those make sense.

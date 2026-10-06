@@ -26,7 +26,11 @@ defmodule DokkitWeb.ApiController do
 
     if scopes == [] or blank?(p["label"]),
       do: fail(conn, 422, "bad_key", "A token needs a label and scopes."),
-      else: minted(conn, Keys.mint(:user, %{label: p["label"], scopes: scopes}))
+      else:
+        minted(
+          conn,
+          Keys.mint(:user, %{label: p["label"], scopes: scopes, user_id: conn.assigns.key.user_id})
+        )
   end
 
   def add_key(conn, %{"kind" => "app", "service" => id}) do

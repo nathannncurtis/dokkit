@@ -63,6 +63,7 @@ defmodule Dokkit.TasksTest do
              404
            )
 
+    send(view.pid, {:settled, :page})
     html = render(view)
     assert html =~ "Finished"
     assert html =~ "Started portal"
