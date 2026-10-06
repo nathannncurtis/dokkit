@@ -1,5 +1,7 @@
 # Installs the Dokkit server on this Windows machine as a service, or upgrades one that is
 # already here. Run it from an administrator PowerShell, in the folder of an unpacked release.
+# Or piped from the site, which fetches the release and, the first time, a Postgres:
+#     irm https://dokkit.dev/install.ps1 | iex
 #
 # The first time, with a Postgres of its own or with one that is already there:
 #     .\install.ps1 -Postgres 'C:\Downloads\pgsql'
@@ -29,6 +31,38 @@ $ErrorActionPreference = 'Stop'
 $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw 'Run this from an administrator PowerShell.'
+}
+
+# Piped from the site there is no release beside this script, so it fetches one, and a Postgres
+# for a first install that named no database, then runs the copy inside that release.
+if (-not $PSScriptRoot -or -not (Test-Path (Join-Path $PSScriptRoot 'bin\dokkit.bat'))) {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    $ProgressPreference = 'SilentlyContinue'
+    $work = Join-Path $env:TEMP ('dokkit-install-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory $work | Out-Null
+    $fetch = {
+        param($Url, $Name)
+        Write-Host "Fetching $Url"
+        Invoke-WebRequest -Uri $Url -OutFile (Join-Path $work "$Name.zip") -UseBasicParsing
+        Expand-Archive -Path (Join-Path $work "$Name.zip") -DestinationPath (Join-Path $work $Name)
+    }
+    $releaseUrl = 'https://github.com/nathannncurtis/dokkit/releases/latest/download/dokkit-windows-x64.zip'
+    if ($env:DOKKIT_RELEASE_URL) { $releaseUrl = $env:DOKKIT_RELEASE_URL }
+    & $fetch $releaseUrl 'dokkit'
+    $again = @{}
+    foreach ($name in $PSBoundParameters.Keys) { $again[$name] = $PSBoundParameters[$name] }
+    $first = -not (Test-Path (Join-Path $env:ProgramData 'Dokkit\settings.env'))
+    if ($first -and -not $DatabaseUrl -and -not $Postgres) {
+        $postgresUrl = 'https://get.enterprisedb.com/postgresql/postgresql-17.6-1-windows-x64-binaries.zip'
+        if ($env:DOKKIT_POSTGRES_URL) { $postgresUrl = $env:DOKKIT_POSTGRES_URL }
+        & $fetch $postgresUrl 'postgres'
+        $again.Postgres = Join-Path $work 'postgres\pgsql'
+    }
+    $inner = Get-ChildItem (Join-Path $work 'dokkit') -Recurse -Filter install.ps1 | Select-Object -First 1
+    if (-not $inner) { throw "The release from $releaseUrl holds no install.ps1." }
+    & $inner.FullName @again
+    Write-Host "The downloads are in $work and can be deleted."
+    return
 }
 
 $service = 'dokkit_dokkit'
