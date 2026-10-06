@@ -62,7 +62,7 @@ Roles for people: `owner`, `member`, and `viewer`. A viewer sees everything exce
 - Lists use cursors. A list answer is `{"items": [...], "next": "<cursor or null>"}` and the next page is asked for with `?cursor=`.
 - Lists take `q` (search), `machine`, `service`, `environment`, `from` and `to` wherever those make sense.
 - An error answer is `{"error": {"code": "...", "message": "..."}}`.
-- `401` for a missing or bad key, `403` for a key without the scope, `404` for something that does not exist or that the key may not know exists, `413` for too large, `422` for a body that does not fit this contract, `429` with `Retry-After` when the server is busy or a key has used up its request bucket.
+- `401` for a missing or bad key, `403` for a key without the scope, `404` for something that does not exist or that the key may not know exists, `413` for too large, `422` for a body that does not fit this contract (a body that is not valid gzip answers `422` with the code `bad_gzip`), `429` with `Retry-After` when the server is busy or a key has used up its request bucket.
 
 ### Encryption
 
@@ -170,7 +170,7 @@ GET /work?wait=50
 {"run": "<id>", "task": "security-scan", "command_sha256": "<hex>"}
 ```
 
-`command_sha256` is the SHA-256 of the command that was accepted. `dokkit` runs the task only when the command in its own file has the same one.
+`command_sha256` is the pin of the task that was accepted: a SHA-256 that `dokkit` computes over the command, the absolute path of the `dokkit.toml` that declares it (links resolved) and the contents of every word of the command (quotes removed) that is a regular file inside the task's folder, links resolved. A file outside the folder is not hashed. A task also carries the path of its file, shown beside the command. `dokkit` sends the pin with each task it declares and runs the task only when its own pin is the same one. A task accepted before pins existed has none and must be accepted again; a task declared with no pin by an older `dokkit` waits with the note that it needs a newer one and is never run.
 
 A task has a name and nothing else. There are no arguments in v1, so the server cannot shape what runs.
 

@@ -58,7 +58,9 @@ func (w *watcher) tail() {
 }
 
 // sendLog sends what is new in one file and says whether its position moved.
-// A file is known by its first line, so it is followed through a rename.
+// A file is known by its first line and its own identity (inode, or volume and file index), so
+// it is followed through a rename and two files that start alike are told apart. A position
+// saved under the first line alone is taken over by the first file that starts with that line.
 func (c *client) sendLog(service, path string, positions map[string]int64) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -73,8 +75,15 @@ func (c *client) sendLog(service, path string, positions map[string]int64) bool 
 		return false
 	}
 	sum := sha256.Sum256(first)
+	old := hex.EncodeToString(sum[:16])
+	sum = sha256.Sum256(append(append(first[:len(first):len(first)], 0), fileIdentity(f)...))
 	key := hex.EncodeToString(sum[:16])
-	pos := positions[key]
+	pos, known := positions[key]
+	oldPos, hadOld := positions[old]
+	migrate := !known && hadOld
+	if migrate {
+		pos = oldPos
+	}
 	if info, err := f.Stat(); err != nil || info.Size() < pos {
 		pos = 0
 	}
@@ -165,5 +174,8 @@ func (c *client) sendLog(service, path string, positions map[string]int64) bool 
 		}
 	}
 	positions[key] = pos + int64(used)
+	if migrate {
+		delete(positions, old)
+	}
 	return used > 0
 }

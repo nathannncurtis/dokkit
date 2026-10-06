@@ -1,7 +1,8 @@
 defmodule Dokkit.Tasks do
   @moduledoc """
-  Tasks: named commands a dokkit.toml offers. One is runnable only while the command a person
-  accepted is still the command in the file. A changed command waits to be accepted again.
+  Tasks: named commands a dokkit.toml offers. One is runnable only while the command and the pin
+  a person accepted are still the ones the file offers. The pin is the program's hash of the
+  command, the file's path and the script it runs. A change to either waits to be accepted again.
   """
   import Ecto.Query
   alias Dokkit.{Repo, Task, TaskRun}
@@ -11,56 +12,73 @@ defmodule Dokkit.Tasks do
   @doc "Takes the tasks of a declared file. The file owns them, so ones it no longer lists go."
   def declared(service, tasks) do
     tasks =
-      for %{"id" => id, "run" => run} <- List.wrap(tasks),
+      for %{"id" => id, "run" => run} = t <- List.wrap(tasks),
           is_binary(id),
           is_binary(run),
           # Names that start this way are Dokkit's own.
           not String.starts_with?(id, "dokkit:"),
-          do: {id, run}
+          do: {id, run, text(t["pin"]), text(t["file"])}
 
-    names = for {id, _} <- tasks, do: id
+    names = for {id, _, _, _} <- tasks, do: id
     Repo.delete_all(from t in Task, where: t.service_id == ^service.id and t.name not in ^names)
 
-    for {id, run} <- tasks do
+    for {id, run, pin, file} <- tasks do
       case Repo.get_by(Task, machine_id: service.machine_id, name: id) do
         nil ->
           Repo.insert!(%Task{
             machine_id: service.machine_id,
             service_id: service.id,
             name: id,
-            command: run
+            command: run,
+            pin: pin,
+            file: file
           })
 
         task ->
-          Repo.update!(Ecto.Changeset.change(task, command: run, service_id: service.id))
+          Repo.update!(
+            Ecto.Changeset.change(task,
+              command: run,
+              pin: pin,
+              file: file,
+              service_id: service.id
+            )
+          )
       end
     end
   end
 
+  defp text(v), do: if(is_binary(v), do: v)
+
+  # A task with no pin comes from a program too old to send one; it waits for a newer one.
   defp offered,
     do:
       from(t in Task,
         where:
-          fragment(
-            "? IS DISTINCT FROM ? AND ? IS DISTINCT FROM ?",
-            t.accepted,
-            t.command,
-            t.dismissed,
-            t.command
-          )
+          is_nil(t.pin) or
+            fragment(
+              "(? IS DISTINCT FROM ? OR ? IS DISTINCT FROM ?) AND (? IS DISTINCT FROM ? OR ? IS DISTINCT FROM ?)",
+              t.accepted,
+              t.command,
+              t.accepted_pin,
+              t.pin,
+              t.dismissed,
+              t.command,
+              t.dismissed_pin,
+              t.pin
+            )
       )
 
-  defp runnable, do: from(t in Task, where: t.accepted == t.command)
+  defp runnable, do: from(t in Task, where: t.accepted == t.command and t.accepted_pin == t.pin)
 
-  @doc "What a machine may be asked to run: each accepted task and the command that was accepted."
+  @doc "What a machine may be asked to run: each accepted task and the pin that was accepted."
   def accepted_for(machine_id) do
     for t <-
           Repo.all(
             from t in Task,
-              where: t.machine_id == ^machine_id and not is_nil(t.accepted),
+              where: t.machine_id == ^machine_id and not is_nil(t.accepted_pin),
               order_by: t.name
           ),
-        do: %{task: t.name, command_sha256: sha256(t.accepted), as: account(t)}
+        do: %{task: t.name, command_sha256: t.accepted_pin, as: account(t)}
   end
 
   def waiting, do: Repo.all(from t in offered(), order_by: t.name, preload: :machine)
@@ -131,20 +149,25 @@ defmodule Dokkit.Tasks do
             machine_id: machine_id,
             name: @update,
             command: @update,
-            accepted: @update
+            accepted: @update,
+            pin: @update,
+            accepted_pin: @update
           })
 
       run(task.id, by)
     end
   end
 
-  @doc "Accepts or dismisses the command the person was shown, and nothing newer."
-  def decide(id, command, field, as_system \\ false) when field in [:accepted, :dismissed] do
+  @doc "Accepts or dismisses the command and pin the person was shown, and nothing newer."
+  def decide(id, command, pin, field, as_system \\ false)
+      when is_binary(pin) and field in [:accepted, :dismissed] do
     with {:ok, id} <- Ecto.UUID.cast(id),
-         %Task{command: ^command} = task <- Repo.get(Task, id) do
+         %Task{command: ^command, pin: ^pin} = task <- Repo.get(Task, id) do
       Repo.update!(
         Ecto.Changeset.change(task, [
           {field, command},
+          {:accepted_pin, if(field == :accepted, do: pin, else: task.accepted_pin)},
+          {:dismissed_pin, if(field == :dismissed, do: pin, else: task.dismissed_pin)},
           {:as_system, field == :accepted and as_system}
         ])
       )
@@ -191,7 +214,9 @@ defmodule Dokkit.Tasks do
       Repo.one(
         from r in TaskRun,
           join: t in assoc(r, :task),
-          where: r.state == :queued and t.machine_id == ^machine_id and t.accepted == t.command,
+          where:
+            r.state == :queued and t.machine_id == ^machine_id and t.accepted == t.command and
+              t.accepted_pin == t.pin,
           order_by: r.inserted_at,
           limit: 1,
           preload: [task: t]
@@ -300,6 +325,4 @@ defmodule Dokkit.Tasks do
     if n > 0, do: Dokkit.Issues.changed(false)
     n
   end
-
-  def sha256(command), do: Base.encode16(:crypto.hash(:sha256, command), case: :lower)
 end

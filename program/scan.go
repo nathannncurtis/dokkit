@@ -224,7 +224,92 @@ func declarations(folders []string) (all []string) {
 
 type task struct {
 	ID, Run, Timeout string
-	dir              string
+	dir, file        string
+}
+
+// declaringFile is the absolute path of the file that declares the task, links resolved.
+func (t task) declaringFile() string {
+	file := t.file
+	if abs, err := filepath.Abs(file); err == nil {
+		file = abs
+	}
+	if real, err := filepath.EvalSymlinks(file); err == nil {
+		file = real
+	}
+	return file
+}
+
+// words splits a command at spaces, keeping quoted text together and dropping the quotes.
+func words(command string) (out []string) {
+	var cur strings.Builder
+	var quote rune
+	started := false
+	flush := func() {
+		if started {
+			out = append(out, cur.String())
+			cur.Reset()
+			started = false
+		}
+	}
+	for _, r := range command {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			} else {
+				cur.WriteRune(r)
+			}
+		case r == '"' || r == '\'':
+			quote, started = r, true
+		case r == ' ' || r == '\t':
+			flush()
+		default:
+			cur.WriteRune(r)
+			started = true
+		}
+	}
+	flush()
+	return
+}
+
+// scripts lists the regular files inside the task's folder that its command names, links
+// resolved. A file outside the folder is not one of them.
+func (t task) scripts() (files []string) {
+	for _, w := range words(t.Run) {
+		p := filepath.FromSlash(strings.ReplaceAll(w, `\`, "/"))
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(t.dir, p)
+		}
+		if !within(t.dir, p) {
+			continue
+		}
+		real, err := filepath.EvalSymlinks(p)
+		if err != nil {
+			continue
+		}
+		if info, err := os.Stat(real); err == nil && info.Mode().IsRegular() && !slices.Contains(files, real) {
+			files = append(files, real)
+		}
+	}
+	return
+}
+
+// pin is what a person accepts: the command, the file that declares it, and the contents of
+// every file inside its folder that the command names. Any of them changing makes the task
+// need accepting again.
+func (t task) pin() string {
+	h := sha256.New()
+	h.Write([]byte(t.Run))
+	h.Write([]byte{0})
+	h.Write([]byte(t.declaringFile()))
+	h.Write([]byte{0})
+	for _, f := range t.scripts() {
+		if b, err := os.ReadFile(f); err == nil {
+			sum := sha256.Sum256(b)
+			h.Write(sum[:])
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // tasks reads the tasks these dokkit.toml files define. A name that two files both
@@ -247,7 +332,7 @@ func tasks(files []string) map[string]task {
 				if _, taken := all[t.ID]; taken {
 					clash[t.ID] = true
 				}
-				t.dir = filepath.Dir(p)
+				t.dir, t.file = filepath.Dir(p), p
 				all[t.ID] = t
 			}
 		}
@@ -258,7 +343,7 @@ func tasks(files []string) map[string]task {
 	return all
 }
 
-// accepted asks the server which commands were accepted for this machine, by task.
+// accepted asks the server which pins were accepted for this machine, by task.
 // ok is false when the machine is not enrolled or the server did not answer.
 func accepted(c *client) (bySha map[string]string, ok bool) {
 	var a struct {
@@ -281,12 +366,11 @@ func accepted(c *client) (bySha map[string]string, ok bool) {
 }
 
 // standing says whether the server would be allowed to ask for this task as it is written now.
-func standing(run, acceptedSha string, known bool) string {
-	sum := sha256.Sum256([]byte(run))
+func standing(t task, acceptedSha string, known bool) string {
 	switch {
 	case !known:
 		return "not accepted yet"
-	case acceptedSha == hex.EncodeToString(sum[:]):
+	case acceptedSha == t.pin():
 		return "accepted"
 	}
 	return "changed since it was accepted"
@@ -300,7 +384,7 @@ func taskCommand(args []string, folders []string, c *client) int {
 			state := ""
 			if asked {
 				sha, known := shas[id]
-				state = "   " + standing(t.Run, sha, known)
+				state = "   " + standing(t, sha, known)
 			}
 			fmt.Printf("%-24s %s   in %s%s\n", id, t.Run, t.dir, state)
 		}
@@ -479,10 +563,14 @@ func (c *client) work() {
 		}
 		result := "/api/v1/work/" + job.Run + "/result"
 		t, defined := tasks(declarations(c.folders))[job.Task]
-		sum := sha256.Sum256([]byte(t.Run))
-		// Only the command a person accepted runs. A file edited since then is refused.
-		if !defined || hex.EncodeToString(sum[:]) != job.Sha {
-			c.postResult(result, []byte(`{"refused":"This machine has no task with that name and that command."}`))
+		// Only the task a person accepted runs. A command, file or script changed since then is refused.
+		if !defined || t.pin() != job.Sha {
+			c.postResult(result, []byte(`{"refused":"This machine has no task with that name, that command, that file and that script."}`))
+			continue
+		}
+		if err := taskFolderProblem(t.dir, t.scripts()); err != nil {
+			body, _ := json.Marshal(map[string]string{"refused": err.Error()})
+			c.postResult(result, body)
 			continue
 		}
 		if job.As == "system" && !c.system {
