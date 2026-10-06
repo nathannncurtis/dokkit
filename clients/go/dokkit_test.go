@@ -82,3 +82,81 @@ func TestEverythingIsOffUntilStartedThenSends(t *testing.T) {
 		t.Fatal("message text or an early line was sent, or the key was not")
 	}
 }
+
+type secret struct{}
+
+func (secret) LogValue() slog.Value { return slog.StringValue("redacted") }
+
+type boom struct{}
+
+func (boom) MarshalJSON() ([]byte, error) { panic("no") }
+
+func reset() {
+	mu.Lock()
+	defer mu.Unlock()
+	on, lines, errs, queued, held, dropped = false, nil, nil, 0, nil, 0
+}
+
+func TestValuesAreResolvedAndCopiedWhenQueued(t *testing.T) {
+	reset()
+	StartWith("", "http://127.0.0.1:1", "dka_test")
+	fields := map[string]any{"a": 1}
+	Log("info", "x", fields)
+	fields["a"] = 2
+	Stats(boom{})
+	slog.New(Handler(slog.LevelInfo)).Info("m", "s", secret{}, "err", errors.New("bad"))
+	mu.Lock()
+	defer mu.Unlock()
+	all := ""
+	for _, l := range lines {
+		all += string(l)
+	}
+	if !strings.Contains(all, `"a":1`) || !strings.Contains(all, `"s":"redacted"`) || !strings.Contains(all, `"err":"bad"`) || dropped != 1 {
+		t.Fatalf("%s dropped=%d", all, dropped)
+	}
+}
+
+func TestFailedBatchIsRetriedOnceThenCounted(t *testing.T) {
+	reset()
+	hits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits++; w.WriteHeader(503) }))
+	defer server.Close()
+	StartWith("", server.URL, "dka_test")
+	Beat("w", 1)
+	Flush()
+	Flush()
+	Flush()
+	if hits != 2 || Dropped() != 1 {
+		t.Fatalf("hits=%d dropped=%d", hits, Dropped())
+	}
+}
+
+func TestHttpToAnotherMachineStaysOffUnlessAllowed(t *testing.T) {
+	if secure("http://example.com") || !secure("https://example.com") || !secure("http://localhost:4000") {
+		t.Fatal("secure")
+	}
+	t.Setenv("DOKKIT_INSECURE", "1")
+	if !secure("http://example.com") {
+		t.Fatal("insecure allowed")
+	}
+}
+
+func TestQueueIsBoundedByBytes(t *testing.T) {
+	reset()
+	StartWith("", "http://127.0.0.1:1", "dka_test")
+	big := strings.Repeat("x", 900<<10)
+	for i := 0; i < 12; i++ {
+		Log("info", big, nil)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if queued > maxBytes || dropped == 0 {
+		t.Fatalf("queued=%d dropped=%d", queued, dropped)
+	}
+}
+
+func TestFramesCarryNoFolders(t *testing.T) {
+	if got := relative("/home/bob/go/pkg/mod/github.com/x/y@v1/sub/a.go", "github.com/x/y/sub.F"); got != "github.com/x/y/sub/a.go" {
+		t.Fatal(got)
+	}
+}
