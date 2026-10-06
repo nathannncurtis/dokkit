@@ -18,7 +18,7 @@
 <header class="nav">
   <div class="wrap">
     <a class="brand" href="#top"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
-    <nav aria-label="Site"><a href="#day">How it looks</a><a href="#told">Alerts</a><a href="#how">How it works</a><a href="#">Docs</a><a href="#">Source</a></nav>
+    <nav aria-label="Site"><a href="#day">How it looks</a><a href="#told">Alerts</a><a href="#agents">Agents</a><a href="#how">How it works</a><a href="#">Docs</a><a href="#">Source</a></nav>
     <a class="btn pri" href="#install">Install</a>
   </div>
 </header>
@@ -81,6 +81,33 @@
     </div>
   </section>
 
+  <section class="band" id="agents">
+    <div class="wrap">
+      <div class="head">
+        <h2>Your AI agents can <span>watch it too.</span></h2>
+        <p>Everything the interface shows comes from one API. A script, the command line and an AI tool all reach it the same way, each with a token that says how far it may go.</p>
+      </div>
+      <div class="doors">
+        <div class="panel rows" id="token">
+          <div class="chead"><i class="s ok"></i><div><b>A token for an agent</b><code>dku_&hellip; &middot; made in Settings</code></div></div>
+          <div class="crow"><span>Read states, issues, jobs and errors</span><code>always</code></div>
+          <div class="crow"><span>Read what is written in the logs</span><label class="sw"><input type="checkbox" id="scLogs"><span></span></label></div>
+          <div class="crow"><span>Snooze, mark as seen, run tasks you accepted</span><label class="sw"><input type="checkbox" id="scAct"><span></span></label></div>
+          <div class="tools" id="tools"></div>
+          <p class="tip" id="toolSay"></p>
+        </div>
+        <div>
+          <ol>
+            <li><b>An AI tool, over MCP</b><div class="cmd"><code id="c6">claude mcp add --transport http dokkit https://your.domain.com/mcp --header "Authorization: Bearer dku_..."</code><button class="btn" data-copy="c6">Copy</button></div></li>
+            <li><b>A script, over the API</b><div class="cmd"><code id="c7">curl -H "Authorization: Bearer dku_..." https://your.domain.com/api/v1/inbox</code><button class="btn" data-copy="c7">Copy</button></div></li>
+            <li><b>An agent working in an app's repo, with the command line</b><div class="cmd"><code id="c8">dokkit check</code><button class="btn" data-copy="c8">Copy</button></div><span class="quiet">Runs every check once and prints what would be sent. No server needed.</span></li>
+          </ol>
+          <p class="quiet never">Never offered to an agent: accepting what a scan found, making keys, managing people. Those stay with a person.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="wrap how" id="how">
     <h2>Built for the person who is the only one watching.</h2>
     <dl>
@@ -140,7 +167,7 @@
       <a class="btn pri" href="#install">Install</a>
     </div>
     <nav aria-label="Site map">
-      <div><b>The product</b><a href="#day">How it looks</a><a href="#told">Alerts</a><a href="#how">How it works</a><a href="#install">Install</a></div>
+      <div><b>The product</b><a href="#day">How it looks</a><a href="#told">Alerts</a><a href="#agents">Agents</a><a href="#how">How it works</a><a href="#install">Install</a></div>
       <div><b>Reading</b><a href="#">Docs</a><a href="#">Spec</a><a href="#">Client libraries</a><a href="#">Running it</a></div>
       <div><b>The project</b><a href="#">Source</a><a href="#">Releases</a><a href="#">Licences</a></div>
     </nav>

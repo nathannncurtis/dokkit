@@ -92,5 +92,16 @@ function say() {
 }
 $("#told").addEventListener("input", say);
 
+// What an agent is offered follows its token.
+const TOOLS = { read: ["attention", "find", "service", "since_deploy", "jobs", "job_runs", "errors", "tasks"], "read-logs": ["logs"], act: ["snooze", "acknowledge", "run_task"] };
+function offer() {
+  const on = { read: true, "read-logs": $("#scLogs").checked, act: $("#scAct").checked };
+  let n = 0;
+  $("#tools").innerHTML = Object.entries(TOOLS).map(([s, names]) => names.map((t) => { n += on[s]; return `<code class="${on[s] ? "" : "off"}">${t}</code>`; }).join("")).join("");
+  $("#toolSay").textContent = `This token is offered ${n} of 12 tools. ` + (on.act ? "It can snooze, mark as seen and run tasks you accepted, and nothing else." : "It cannot change anything.") + (on["read-logs"] ? "" : " Log contents are left out of every answer.");
+}
+$("#token").addEventListener("input", offer);
+
 draw();
 say();
+offer();
