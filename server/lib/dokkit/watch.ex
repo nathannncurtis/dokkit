@@ -4,6 +4,7 @@ defmodule Dokkit.Watch do
   import Ecto.Query
   require Logger
   alias Dokkit.{Check, Issues, JobRun, Repo}
+  alias DokkitWeb.Show
 
   @every :timer.minutes(1)
   @units %{"s" => 1, "m" => 60, "h" => 3600, "d" => 86_400}
@@ -34,6 +35,7 @@ defmodule Dokkit.Watch do
       ) ++
         [
           fn -> Dokkit.Tasks.expire() end,
+          fn -> Dokkit.Numbers.forecast(now) end,
           fn -> prune(now) end,
           fn -> Dokkit.Digest.tick(now, Dokkit.Alerts.config()) end,
           fn -> Dokkit.Self.tick(now, Dokkit.Alerts.config(), booted) end,
@@ -152,7 +154,7 @@ defmodule Dokkit.Watch do
                    coalesce(r.started_at, r.finished_at) >= ^DateTime.add(due, -early)
            ) do
       {"#{Dokkit.Intake.label(check.service, check.name)} did not run",
-       "Expected at #{Calendar.strftime(due, "%H:%M")} UTC"}
+       "Expected at #{Calendar.strftime(due, "%H:%M")} UTC." <> last_good(check)}
     else
       _ -> nil
     end
@@ -161,6 +163,51 @@ defmodule Dokkit.Watch do
   end
 
   defp missed(_, _, _), do: nil
+
+  defp last_good(check) do
+    run =
+      Repo.one(
+        from r in JobRun,
+          where: r.check_id == ^check.id and r.result == :ok and not is_nil(r.finished_at),
+          order_by: [desc: r.finished_at],
+          limit: 1
+      )
+
+    case run && took_ms(run) do
+      nil -> if run, do: " Its last good run was #{Show.at(run.finished_at)} UTC.", else: ""
+      ms -> " Its last good run was #{Show.at(run.finished_at)} UTC and took #{Show.took(ms)}."
+    end
+  end
+
+  defp took_ms(%JobRun{duration_ms: ms}) when is_integer(ms), do: ms
+
+  defp took_ms(%JobRun{started_at: %DateTime{} = from, finished_at: %DateTime{} = to}),
+    do: DateTime.diff(to, from, :millisecond)
+
+  defp took_ms(_), do: nil
+
+  @doc "The title and note for a finished run that took longer than the job's max_runtime, else nil."
+  def ran_long(%Check{config: %{"max_runtime" => max}} = check, %JobRun{} = run, label) do
+    limit = seconds(max, 3600) * 1000
+    ms = took_ms(run)
+
+    if ms && ms > limit do
+      week = DateTime.add(run.finished_at || DateTime.utc_now(), -7 * 86_400)
+
+      times =
+        Repo.all(
+          from r in JobRun,
+            where: r.check_id == ^check.id and r.result == :ok and r.finished_at > ^week
+        )
+        |> Enum.count(&((took_ms(&1) || 0) > limit))
+
+      {"#{label} ran long",
+       "It took #{Show.took(ms)}. The limit is #{max}." <>
+         if(times > 1, do: " That is #{times} times in the last 7 days.", else: "")}
+    end
+  end
+
+  def ran_long(_, _, _), do: nil
 
   defp overran(%Check{config: %{"max_runtime" => max}} = check, now) do
     limit = DateTime.add(now, -seconds(max, 3600))

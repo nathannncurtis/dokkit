@@ -117,7 +117,7 @@ defmodule DokkitWeb.McpController do
            "type" => "object",
            "properties" => %{
              "name" => @text,
-             "type" => %{"type" => "string", "enum" => ~w(http tcp process windows-service)},
+             "type" => %{"type" => "string", "enum" => ~w(http tcp process windows-service systemd)},
              "config" => %{"type" => "object"},
              "fail_after" => %{"type" => "integer"}
            },

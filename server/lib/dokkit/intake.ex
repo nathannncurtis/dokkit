@@ -395,7 +395,13 @@ defmodule Dokkit.Intake do
 
     case event do
       "ok" ->
-        Issues.record(check, :ok, at: at)
+        case Dokkit.Watch.ran_long(check, run, label(service, name)) do
+          {title, note} ->
+            Issues.record(check, :degraded, at: at, soon: true, title: title, note: note)
+
+          nil ->
+            Issues.record(check, :ok, at: at)
+        end
 
       "fail" ->
         Issues.record(check, :down,

@@ -5504,7 +5504,8 @@
                             "http",
                             "tcp",
                             "process",
-                            "windows-service"
+                            "windows-service",
+                            "systemd"
                           ]
                         },
                         "config": {

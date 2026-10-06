@@ -56,7 +56,13 @@ defmodule Dokkit.Issues do
         nil
 
       {bad, %Issue{} = issue} ->
-        Repo.update!(Ecto.Changeset.change(issue, state: bad, soon: soon?(check, bad, opts)))
+        Repo.update!(
+          Ecto.Changeset.change(issue,
+            state: bad,
+            soon: soon?(check, bad, opts),
+            title: opts[:title] || issue.title
+          )
+        )
 
       {:unknown, nil} ->
         nil

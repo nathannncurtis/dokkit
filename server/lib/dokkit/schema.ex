@@ -54,7 +54,7 @@ end
 defmodule Dokkit.Check do
   use Dokkit.Schema
 
-  @types ~w(http tcp process windows-service beat job stats threshold expiry custom)a
+  @types ~w(http tcp process windows-service systemd beat job stats threshold expiry custom)a
 
   schema "checks" do
     field :name, :string

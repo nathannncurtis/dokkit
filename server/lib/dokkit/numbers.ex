@@ -47,7 +47,9 @@ defmodule Dokkit.Numbers do
             at: at,
             value: value / 1,
             title: machine_title(check.config["limit_from"], name),
-            note: "#{name} is #{round1(value)}, over the limit of #{limit}"
+            note:
+              "#{name} is #{round1(value)}, over the limit of #{limit}" <>
+                full_in(check.config["full_in_days"])
           ),
         else: Issues.record(check, :ok, at: at, value: value / 1)
     end
@@ -80,6 +82,12 @@ defmodule Dokkit.Numbers do
       })
     end
   end
+
+  defp full_in(days) when is_integer(days),
+    do:
+      ". At this week's rate it is full in about #{days} #{if days == 1, do: "day", else: "days"}."
+
+  defp full_in(_), do: ""
 
   defp machine_title("disk_limit", name),
     do: "Disk #{String.replace_prefix(name, "disk.used_percent.", "")} is nearly full"
@@ -122,6 +130,105 @@ defmodule Dokkit.Numbers do
   end
 
   def stats(_, _, _), do: {:error, "bad_line", "Needs a stats document with schema 1."}
+
+  @forecast_days 14
+  @disk "disk.used_percent."
+
+  @doc """
+  Once a sweep: a disk under its limit that a straight line through its last 7 days of
+  readings carries to the limit within 14 days opens a soon issue, which closes when the
+  line no longer gets there. A disk over its limit says in its note when it will be full.
+  """
+  def forecast(now \\ DateTime.utc_now()) do
+    limit =
+      case Float.parse(Dokkit.Alerts.config()["disk_limit"] || "") do
+        {n, _} -> n
+        :error -> nil
+      end
+
+    rows =
+      Repo.all(
+        from m in Metric,
+          where: is_nil(m.service_id) and like(m.name, ^(@disk <> "%")),
+          where: m.at > ^DateTime.add(now, -7 * 86_400),
+          group_by: [m.machine_id, m.name],
+          select: %{
+            machine_id: m.machine_id,
+            name: m.name,
+            first: min(m.at),
+            last: max(m.at),
+            slope: fragment("regr_slope(?, extract(epoch from ?)::float8)", m.value, m.at),
+            current: fragment("(array_agg(? order by ? desc))[1]", m.value, m.at)
+          }
+      )
+
+    ids = Enum.map(rows, & &1.machine_id)
+
+    names =
+      Map.new(Repo.all(from m in Dokkit.Machine, where: m.id in ^ids, select: {m.id, m.name}))
+
+    checks =
+      Repo.all(
+        from c in Check,
+          join: s in assoc(c, :service),
+          where: s.slug == "machine" and s.machine_id in ^ids,
+          preload: [service: s]
+      )
+      |> Map.new(&{{&1.service.machine_id, &1.name}, &1})
+
+    for r <- rows, limit, watched = checks[{r.machine_id, r.name}] do
+      per_day = if r.slope, do: r.slope * 86_400, else: 0
+      known = DateTime.diff(r.last, r.first) >= 2 * 86_400 and per_day > 0
+      days = fn target -> max(1, round((target - r.current) / per_day)) end
+      disk = String.replace_prefix(r.name, @disk, "")
+      over? = r.current >= limit
+      full = if known and over? and r.current < 100, do: days.(100)
+
+      soon =
+        if known and not over? and r.current + per_day * @forecast_days >= limit, do: days.(limit)
+
+      if watched.config["full_in_days"] != full do
+        config =
+          if full,
+            do: Map.put(watched.config, "full_in_days", full),
+            else: Map.delete(watched.config, "full_in_days")
+
+        Repo.update!(Ecto.Changeset.change(watched, config: config))
+      end
+
+      name = "forecast." <> r.name
+      check = checks[{r.machine_id, name}]
+
+      cond do
+        soon ->
+          check =
+            check ||
+              Repo.insert!(%Check{
+                service_id: watched.service_id,
+                name: name,
+                type: :custom,
+                fail_after: 1
+              })
+
+          Issues.record(check, :degraded,
+            at: now,
+            soon: true,
+            title:
+              "Disk #{disk} on #{names[r.machine_id]} fills in about #{soon} #{if soon == 1, do: "day", else: "days"}",
+            note:
+              "It is #{round1(r.current)} percent full. The limit is #{if limit == trunc(limit), do: trunc(limit), else: limit}."
+          )
+
+        check ->
+          Issues.record(check, :ok, at: now)
+
+        true ->
+          nil
+      end
+    end
+
+    :ok
+  end
 
   defp round1(value), do: Float.round(value / 1, 1)
 

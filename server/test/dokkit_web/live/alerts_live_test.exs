@@ -1,5 +1,5 @@
 defmodule DokkitWeb.AlertsLiveTest do
-  use DokkitWeb.ConnCase, async: true
+  use DokkitWeb.ConnCase, async: false
   import Phoenix.LiveViewTest
   alias Dokkit.{Alerts, Repo, User}
 

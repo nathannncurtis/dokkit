@@ -1,5 +1,5 @@
 defmodule Dokkit.NumbersTest do
-  use DokkitWeb.ConnCase, async: true
+  use DokkitWeb.ConnCase, async: false
   import Phoenix.LiveViewTest
   alias Dokkit.{Issues, Keys, Machine, Read, Repo, Service}
 

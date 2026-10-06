@@ -140,7 +140,7 @@ defmodule Dokkit.Estate do
   end
 
   @kinds ~w(service job dependency app)
-  @types ~w(http tcp process windows-service beat stats threshold expiry custom)
+  @types ~w(http tcp process windows-service systemd beat stats threshold expiry custom)
 
   @doc """
   Takes the contents of a dokkit.toml for a machine. The file owns the service and its
@@ -254,10 +254,10 @@ defmodule Dokkit.Estate do
   def declare(_, _), do: {:error, "A declaration needs [service] with an id."}
 
   # Process and service checks are named by type, so their own name stays in the config.
-  defp config_drop(type) when type in ~w(process windows-service), do: ~w(type fail_after)
+  defp config_drop(type) when type in ~w(process windows-service systemd), do: ~w(type fail_after)
   defp config_drop(_), do: ~w(type name fail_after)
 
-  # Named as the program names them: by the type for process and windows-service, otherwise
+  # Named as the program names them: by the type for process, windows-service and systemd, otherwise
   # by the name or the type, numbered when a base repeats.
   defp named(checks) do
     {list, _} =
@@ -267,7 +267,7 @@ defmodule Dokkit.Estate do
         type = to_string(c["type"])
 
         base =
-          if is_binary(c["name"]) and c["name"] != "" and type not in ~w(process windows-service),
+          if is_binary(c["name"]) and c["name"] != "" and type not in ~w(process windows-service systemd),
             do: c["name"],
             else: type
 
@@ -336,7 +336,7 @@ defmodule Dokkit.Estate do
     Repo.update!(Ecto.Changeset.change(service, [{field, value}]))
   end
 
-  @runs ~w(http tcp process windows-service)
+  @runs ~w(http tcp process windows-service systemd)
 
   @doc """
   Replaces the checks added in the interface. Checks that came from a file are left alone:
@@ -365,7 +365,7 @@ defmodule Dokkit.Estate do
 
     cond do
       length(wanted) != length(list) ->
-        {:error, "Each check needs a name and a type of http, tcp, process or windows-service."}
+        {:error, "Each check needs a name and a type of http, tcp, process, windows-service or systemd."}
 
       names != Enum.uniq(names) or Enum.any?(names, &(&1 in from_file)) ->
         {:error, "Two checks of a service cannot share a name."}

@@ -1,5 +1,5 @@
 defmodule DokkitWeb.McpControllerTest do
-  use DokkitWeb.ConnCase, async: true
+  use DokkitWeb.ConnCase, async: false
   alias Dokkit.{Estate, Issues, Keys}
 
   setup do

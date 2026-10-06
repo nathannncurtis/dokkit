@@ -26,10 +26,11 @@ There is one HTTP API on the server. `dokkit`, the CLI, the libraries, the MCP a
 
 | Type | Passes when |
 |---|---|
-| `http` | A URL answers with an expected status inside a time limit. |
+| `http` | A URL answers with an expected status inside a time limit. An optional `slow` (a duration such as `2s`) makes a slow answer degraded, not down. |
 | `tcp` | A port accepts a connection. |
 | `process` | A process with a given name or command line is running. |
 | `windows-service` | A Windows service is in the running state. |
+| `systemd` | A systemd unit is active. The unit is in `name`. |
 | `beat` | The app said it was alive inside the expected interval. |
 | `job` | A run started and finished well inside its schedule, grace and maximum runtime. |
 | `stats` | The service's stats document was fetched and its numbers are inside their limits. |

@@ -7,21 +7,46 @@ defmodule Dokkit.Found do
   alias Dokkit.{Check, Finding, Repo, Service}
 
   @max 2000
-  @runs ~w(http tcp process windows-service)a
+  @runs ~w(http tcp process windows-service systemd)a
 
-  @doc "Takes a proposal file. Only what can be checked today is kept: running Windows services and listening ports."
+  @doc "Takes a proposal file. Only what can be watched today is kept: running services, listening ports and scheduled tasks."
   def propose(machine_id, %{"found" => %{} = found} = body) do
     watched =
       MapSet.new(checks(machine_id), fn c ->
         {c.type, to_string(c.config["name"] || c.config["port"])}
       end)
 
+    type = %{"windows" => :"windows-service", "linux" => :systemd}[body["os"]]
+
     services =
       for %{"name" => name, "state" => "running"} = s <- List.wrap(found["services"]),
-          body["os"] == "windows",
+          type,
           is_binary(name),
-          {:"windows-service", name} not in watched,
-          do: {"service", name, %{"label" => text(s["display"]) || name, "saw" => "Running"}}
+          {type, name} not in watched,
+          do:
+            {"service", name,
+             %{
+               "label" => text(s["display"]) || name,
+               "saw" => "Running",
+               "type" => to_string(type)
+             }}
+
+    slugs =
+      MapSet.new(Repo.all(from s in Service, where: s.machine_id == ^machine_id, select: s.slug))
+
+    tasks =
+      for %{"name" => name} = t <- List.wrap(found["tasks"]),
+          is_binary(name),
+          label = String.trim_leading(name, "\\"),
+          label != "",
+          not MapSet.member?(slugs, slug(label)),
+          do:
+            {"task", name,
+             %{
+               "label" => label,
+               "saw" => text(t["runs"]) || "Scheduled",
+               "schedule" => cron(t["schedule"])
+             }}
 
     ports =
       for %{"port" => port} = p <- List.wrap(found["ports"]),
@@ -35,7 +60,7 @@ defmodule Dokkit.Found do
     now = DateTime.utc_now()
 
     rows =
-      for {kind, key, detail} <- Enum.take(services ++ ports, @max) do
+      for {kind, key, detail} <- Enum.take(services ++ ports ++ tasks, @max) do
         %{
           id: Ecto.UUID.generate(),
           machine_id: machine_id,
@@ -58,6 +83,15 @@ defmodule Dokkit.Found do
 
   def propose(_, _), do: :error
 
+  # Only a five-field cron line the server can read is kept.
+  defp cron(line) when is_binary(line) do
+    if length(String.split(line)) == 5 and
+         Dokkit.Estate.next_expected(%Check{config: %{"schedule" => line}}),
+       do: line
+  end
+
+  defp cron(_), do: nil
+
   defp text(value), do: is_binary(value) && value != "" && String.slice(value, 0, 200)
 
   defp waiting, do: from(f in Finding, where: not f.dismissed)
@@ -78,8 +112,14 @@ defmodule Dokkit.Found do
       {slug, name, type, check, config} =
         case f.kind do
           "service" ->
-            {slug(f.key), f.detail["label"], :"windows-service", "windows-service",
+            type = f.detail["type"] || "windows-service"
+
+            {slug(f.key), f.detail["label"], String.to_existing_atom(type), type,
              %{"name" => f.key}}
+
+          "task" ->
+            {slug(f.detail["label"]), f.detail["label"], :job, slug(f.detail["label"]),
+             if(f.detail["schedule"], do: %{"schedule" => f.detail["schedule"]}, else: %{})}
 
           "port" ->
             {"port-" <> f.key, "#{f.detail["saw"]} on port #{f.key}", :tcp, "tcp",
@@ -88,10 +128,21 @@ defmodule Dokkit.Found do
 
       service =
         Repo.get_by(Service, machine_id: f.machine_id, slug: slug) ||
-          Repo.insert!(%Service{machine_id: f.machine_id, slug: slug, name: name})
+          Repo.insert!(%Service{
+            machine_id: f.machine_id,
+            slug: slug,
+            name: name,
+            kind: if(type == :job, do: :job, else: :service)
+          })
 
       Repo.get_by(Check, service_id: service.id, name: check) ||
-        Repo.insert!(%Check{service_id: service.id, name: check, type: type, config: config})
+        Repo.insert!(%Check{
+          service_id: service.id,
+          name: check,
+          type: type,
+          config: config,
+          fail_after: if(type == :job, do: 1, else: 3)
+        })
 
       Repo.delete!(f)
     end
@@ -117,7 +168,7 @@ defmodule Dokkit.Found do
           name: c.name,
           type: c.type,
           config: c.config,
-          restart: s.restart and c.type == :"windows-service"
+          restart: s.restart and c.type in [:"windows-service", :systemd]
         }
     )
   end

@@ -1,5 +1,5 @@
 defmodule Dokkit.WatchFixesTest do
-  use Dokkit.DataCase, async: true
+  use Dokkit.DataCase, async: false
   import Ecto.Query
   alias Dokkit.{Alert, Check, Estate, Issue, Issues, JobRun, Machine, Repo, Service, Watch}
 

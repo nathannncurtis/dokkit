@@ -1,5 +1,5 @@
 defmodule Dokkit.AlertsTest do
-  use Dokkit.DataCase, async: true
+  use Dokkit.DataCase, async: false
   alias Dokkit.{Alert, Alerts, Intake, Issues, Keys, Machine, Repo, Service}
 
   setup do
