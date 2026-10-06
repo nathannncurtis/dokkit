@@ -2,23 +2,23 @@
 const DATA = {
   need: [
     { id: "DOK-12", s: "bad", t: "nightly-purge did not run", m: "db-01", w: "34 min",
-      more: "Due at 01:00 and no start was reported. Its last good run was the night before and took 4 minutes. You were paged once, at 01:33." },
+      more: "Expected at 01:00. Its last good run was the night before and took 4 minutes. Paged at 01:33." },
     { id: "DOK-09", s: "warn", t: "upload portal answers slowly", m: "web-02", w: "12 min",
-      more: "Three checks in a row took over two seconds. It is still answering. A silent push was sent; nobody was paged." },
+      more: "Three checks in a row took over two seconds, the limit its file sets. It is still answering. Pushed, not paged." },
     { id: "DOK-13", s: "warn", t: "disk at 91%", m: "nas", w: "since 09:12",
-      more: "The limit is 90%. At this week's rate it is full in about nine days." },
+      more: "The limit is 90%. At this week's rate it is full in about 9 days." },
   ],
   soon: [
     { id: "DOK-14", s: "warn", t: "certificate for mail expires in 21 days", m: "mail", w: "30 Oct",
       more: "Dokkit warns thirty days ahead. This closes by itself when a newer certificate is seen." },
-    { id: "DOK-15", s: "warn", t: "backup ran long twice this week", m: "nas", w: "Tue, Thu",
-      more: "Both runs finished. It is here because the pattern is new, not because anything failed." },
+    { id: "DOK-15", s: "warn", t: "backup ran long", m: "nas", w: "Thu",
+      more: "It took 3 hours against a limit of 2. 2 times in the last 7 days. Both runs finished, so nobody was woken." },
   ],
   found: [
     { id: "found", s: "none", t: "sshd is listening on port 22", m: "build", w: "found", watch: true, more: "Found when the machine was scanned. Nothing checks it yet." },
     { id: "found", s: "none", t: "a scheduled task named defrag", m: "sql", w: "found", watch: true, more: "Found when the machine was scanned. Nothing checks it yet." },
     { id: "found", s: "none", t: "something is listening on port 8443", m: "web-02", w: "found", watch: true, more: "Found when the machine was scanned. Nothing checks it yet." },
-    { id: "found", s: "none", t: "the print spooler service", m: "front-desk-pc", w: "found", watch: true, more: "Found when the machine was scanned. Nothing checks it yet." },
+    { id: "found", s: "none", t: "the print spooler service", m: "build", w: "found", watch: true, more: "Found when the machine was scanned. Nothing checks it yet." },
   ],
 };
 const fresh = JSON.stringify(DATA);
@@ -85,11 +85,12 @@ $("#lanes").addEventListener("mouseover", (e) => {
 
 // Who is told: the choices write the sentence.
 function say() {
-  const how = $('input[name="how"]:checked').value, night = $("#night").checked, restart = $("#restart").checked, late = $("#late").value;
+  const how = $('input[name="how"]:checked').value, night = $("#night").checked, late = $("#late").value, long = $("#long").value;
   $("#lateOut").textContent = late + " min";
+  $("#longOut").textContent = long + " min";
   const what = { page: "page you", push: "send a silent push", email: "email you", digest: "put it in the morning digest" }[how];
   const when = how === "digest" ? "" : night ? ", even at night" : ", and wait for morning if it is night";
-  $("#said").innerHTML = `If nightly-purge has not run ${late} minutes after 01:00, Dokkit will ${restart ? "start it once, and if that fails " : ""}<b>${what}</b>${when}.`;
+  $("#said").innerHTML = `If nightly-purge has not run ${late} minutes after 01:00, Dokkit will <b>${what}</b>${when}. A run over ${long} minutes goes under Soon and wakes nobody.`;
 }
 $("#told").addEventListener("input", say);
 
@@ -135,10 +136,10 @@ const ASK = [
   () => [["call", 'since_deploy { id: "upload-portal" }'], ["got", "2.4.1 onto web-02 at 09:31 · 1 new error group · 1 issue opened"],
     ["says", "Version 2.4.1 went onto web-02 at 09:31. Nine minutes later the portal began answering slowly (DOK-09), and there is one new error group: TimeoutError in resize.py, 14 reports. Nothing else changed."]],
   (on) => on.act
-    ? [["call", 'snooze { id: "DOK-13", until: "Monday 09:00" }'], ["got", "snoozed"], ["says", "Done. DOK-13 is snoozed until Monday 09:00. It comes back then if the disk is still over 90%."]]
+    ? [["call", 'snooze { id: "DOK-13", until: "Monday 09:00" }'], ["got", "snoozed"], ["says", "Done. DOK-13 is snoozed until Monday 09:00. It closes by itself before then if the disk drops under 90%."]]
     : [["says", "I cannot. This token reads, and is not offered snooze."], ["note", "Let the token act, on the left, and ask again."]],
   (on) => on.all
-    ? [["call", 'add_rule { kind: "machine", machine: "db-01", state: "down", channel: "page" }'], ["got", "rule added, last in the list"], ["says", "Done. If db-01 goes down, you are paged. It is the last rule, so earlier rules still win."]]
+    ? [["call", 'add_rule { kind: "machine", machine: "db-01", state: "down", channel: "page" }'], ["got", "rule added, last in the list"], ["says", "Done. If db-01 goes down, you are paged. A service's own routing and earlier rules still win."]]
     : [["says", "I cannot. Rules decide who is told, and this token is not offered add_rule."], ["note", "Full control, on the left, makes you confirm first."]],
 ];
 const still = matchMedia("(prefers-reduced-motion: reduce)").matches;

@@ -44,12 +44,12 @@ Joins this machine to a server. Trades a one-time token for this machine's key a
 
 ### `dokkit status`
 
-What this machine watches and when it last reported. Shows the files dokkit watch reads, when the spool was last emptied, how much is waiting, and the process number of a watch left running.
+What this machine watches and when it last reported. Shows the files dokkit watch reads, when it last sent, and how many reports are waiting. It says a watch is running only while that watch has written down in the last three minutes, and then gives its process number.
 
 
 ### `dokkit doctor`
 
-Checks the server can be reached and the clock is right. Says whether the server answers, whether its certificate matches the one saved at enrol, and whether this machine's clock agrees with the server's.
+A rough check of the server and the clock. Says whether the server answers and knows this key, whether this machine's clock is within 30 seconds of the server's, and whether reports are waiting. A certificate that is not the one saved at enrol shows as the server not answering.
 
 
 ## Finding things
@@ -57,12 +57,12 @@ Checks the server can be reached and the clock is right. Says whether the server
 
 ### `dokkit scan [--no-services] [--no-ports] [--no-tasks] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]`
 
-Looks over this machine and writes a proposal file. Lists what is on the machine that could be watched and writes it to a proposal file. Sends nothing. Each --no- flag leaves one kind of thing out.
+Looks over this machine and writes a proposal file. Lists what is on the machine that could be watched and writes it to dokkit-proposal.json in this folder. Sends nothing. Each --no- flag leaves one kind of thing out.
 
 
 ### `dokkit propose`
 
-Sends the proposal file to be accepted. Sends what a scan wrote. Nothing in it is watched until a person accepts it in the interface.
+Sends the proposal file to be accepted. Sends dokkit-proposal.json, which a scan wrote. Nothing in it is watched until a person accepts it in the interface.
 
 
 ## Staying running
@@ -70,17 +70,17 @@ Sends the proposal file to be accepted. Sends what a scan wrote. Nothing in it i
 
 ### `dokkit watch [--background]`
 
-Watches this machine, as an ordinary program. Reads dokkit.toml files from the folders in DOKKIT_FOLDERS or in the saved configuration, and from the folders directly inside them. Runs their checks, sends the log files they name, and says the machine is alive once a minute. No administrator, no service. --background leaves it running with no window.
+Watches this machine, as an ordinary program. Reads dokkit.toml files from the folders in DOKKIT_FOLDERS or in the saved configuration, and from the folders directly inside them. Runs their checks, sends the log files they name, runs the tasks a person accepted, and says the machine is alive once a minute. No administrator, no service. --background leaves it running after this window closes.
 
 
 ### `dokkit startup on|off`
 
-Starts dokkit watch each time you sign in. On Windows, adds dokkit watch --background to your own startup programs, or takes it out. No administrator.
+Starts dokkit watch each time you sign in. Windows only. Works on Windows only so far. Adds dokkit watch --background to your own startup programs, or takes it out. No administrator. Elsewhere, use dokkit service, or add dokkit watch --background to your desktop's startup programs.
 
 
 ### `dokkit service install|uninstall|update|start|stop`
 
-Runs it as a service. Needs an administrator once. Installs dokkit as a service that starts with the machine, so it keeps watching with nobody signed in and may restart the services its configuration names.
+Runs it as a service, on Windows or Linux. Needs an administrator or root. Works on Windows and on Linux with systemd; not on macOS yet. Installs dokkit as a service that starts with the machine, so it keeps watching with nobody signed in. On Windows it runs as the system account. On Linux it runs as a user named dokkit, which is made if useradd is there. It may restart only the services or units that this machine's own configuration names. On Linux that needs dokkit to run as root or systemd to allow it. Needs an administrator prompt on Windows and root on Linux.
 
 
 ## Tasks
@@ -88,7 +88,7 @@ Runs it as a service. Needs an administrator once. Installs dokkit as a service 
 
 ### `dokkit task list`
 
-The tasks on this machine and whether each is accepted. Says of each task whether it is accepted, not accepted yet, or changed since it was accepted, and which account tasks run as.
+The tasks on this machine and whether each is accepted. Lists the tasks in this folder and in the folders this machine reads. When the server answers, says of each whether it is accepted, not accepted yet, or changed since it was accepted. Says which account you are running as.
 
 
 ### `dokkit task run <name>`

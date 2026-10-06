@@ -77,8 +77,8 @@
       <div class="chead"><i class="s warn"></i><div><b>nightly-purge</b><code>db-01 · job · every night at 01:00</code></div></div>
       <div class="crow"><span>If it does not run</span><div class="seg"><label><input type="radio" name="how" value="page" checked><span>Page</span></label><label><input type="radio" name="how" value="push"><span>Push</span></label><label><input type="radio" name="how" value="email"><span>Email</span></label><label><input type="radio" name="how" value="digest"><span>Digest</span></label></div></div>
       <div class="crow"><span>Wake me at night for this</span><label class="sw"><input type="checkbox" id="night" checked><span></span></label></div>
-      <div class="crow"><span>Restart it before telling anyone</span><label class="sw"><input type="checkbox" id="restart"><span></span></label></div>
-      <div class="crow"><span>Count it as late after</span><input type="range" id="late" min="5" max="120" step="5" value="30" aria-label="Minutes late"><code id="lateOut">30 min</code></div>
+            <div class="crow"><span>Count it as late after</span><input type="range" id="late" min="5" max="120" step="5" value="30" aria-label="Minutes late"><code id="lateOut">30 min</code></div>
+      <div class="crow"><span>Say it ran long after</span><input type="range" id="long" min="5" max="120" step="5" value="60" aria-label="Minutes running"><code id="longOut">60 min</code></div>
     </div>
     <div class="saidcol">
       <p class="said" id="said"></p>
@@ -135,7 +135,9 @@
   <section class="wrap how" id="how">
     <div class="stick">
       <h2>You build it. You are also <span>the only one watching it.</span></h2>
-      <div class="file"><b>dokkit.toml</b><pre id="toml">[service]
+      <div class="file"><b>dokkit.toml</b><pre id="toml">schema = 1
+
+[service]
 id = "upload-portal"
 name = "Upload portal"
 
@@ -143,6 +145,7 @@ name = "Upload portal"
 type = "http"
 url = "http://localhost:8080/healthz"
 every = "30s"
+slow = "2s"                # slower is degraded, not down
 
 [[job]]
 id = "nightly-purge"
@@ -160,7 +163,7 @@ path = "logs/*.jsonl"</pre></div>
       <div><dt>Scanning is offered, never required</dt><dd>Let it look over a machine and propose what to watch, or list things yourself. Nobody is asked to turn off antivirus.</dd></div>
       <div><dt>On your hardware</dt><dd>A Windows service or a Docker container, on Postgres. Logs stay a year live, then go to your own archive.</dd></div>
       <div><dt>One list, not six tools</dt><dd>Checks, scheduled jobs, logs, errors, versions and deploys feed the same short list. An issue closes by itself when the thing recovers.</dd></div>
-      <div><dt>In eleven languages</dt><dd>A small library adds what only the app knows: <code>beat</code>, <code>job</code>, <code>check</code>, <code>capture</code> and a log handler. Python, .NET, JavaScript, Go, Rust, Java, PHP, Elixir, Swift, PowerShell and shell.</dd></div>
+      <div><dt>In eleven languages</dt><dd>A small library adds what only the app knows: <code>beat</code>, <code>job</code>, <code>check</code>, <code>capture</code> and <code>log</code>, with a handler for the language's own logging where it has one. Python, .NET, JavaScript, Go, Rust, Java, PHP, Elixir, Swift, PowerShell and shell.</dd></div>
     </dl>
   </section>
 
@@ -182,7 +185,8 @@ path = "logs/*.jsonl"</pre></div>
         <div>
           <h3>Then</h3>
           <ol>
-            <li><b>On each machine you want watched</b><div class="cmd"><code id="c3">dokkit enrol https://your.domain.com &lt;token&gt;</code><button class="btn" data-copy="c3">Copy</button></div></li>
+            <li><b>On each machine you want watched, get the program</b><div class="cmd"><code id="c10">curl -fsSL https://dokkit.dev/get.sh | sh</code><button class="btn" data-copy="c10">Copy</button></div><div class="cmd"><code id="c11">irm https://dokkit.dev/get.ps1 | iex</code><button class="btn" data-copy="c11">Copy</button></div></li>
+            <li><b>Join it to your server</b><div class="cmd"><code id="c3">dokkit enrol https://your.domain.com &lt;token&gt;</code><button class="btn" data-copy="c3">Copy</button></div></li>
             <li><b>In each app's own repo</b><div class="cmd"><code id="c4">dokkit init</code><button class="btn" data-copy="c4">Copy</button></div></li>
           </ol>
         </div>
@@ -195,7 +199,7 @@ path = "logs/*.jsonl"</pre></div>
             <tr><th>Processor</th><td>1 core</td><td>2 cores</td></tr>
             <tr><th>Memory</th><td>1 GB</td><td>2 GB</td></tr>
             <tr><th>Disk</th><td>20 GB</td><td>40 GB, more if you keep a lot of logs</td></tr>
-            <tr><th>System</th><td colspan="2">Linux with Docker, or Windows 10, 11 or Server as a service. Postgres 15 or newer.</td></tr>
+            <tr><th>System</th><td colspan="2">Debian or Ubuntu for the one-line install, any Linux with Docker by hand, or Windows 10, 11 or Server as a service. Postgres 15 or newer.</td></tr>
           </tbody>
         </table>
         <p class="quiet">Estimates for about ten machines and sixty services. They have not been measured yet. The program on each watched machine needs next to nothing.</p>

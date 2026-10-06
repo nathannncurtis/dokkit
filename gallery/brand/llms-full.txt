@@ -30,7 +30,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 
 | Tool | Scope | Does |
 |---|---|---|
-| `attention` | `read` | Shows what needs a look right now. |
+| `attention` | `read` | Shows what needs a look now, what will soon, what was found and is not watched, what is snoozed, issues in other environments, and how many things are fine. |
 | `find` | `read` | Searches services, optionally on one machine. |
 | `service` | `read` | Shows one service: state, checks, routing, open issue. |
 | `since_deploy` | `read` | Shows what changed or broke for a service since its last deploy. |
@@ -105,6 +105,7 @@ type = "http"
 url = "http://localhost:8080/healthz"
 every = "30s"
 timeout = "5s"
+slow = "2s"                     # an answer slower than this is degraded, not down
 
 [stats]
 url = "http://localhost:8080/internal/stats"
@@ -135,7 +136,7 @@ degraded = "push"
 |---|---|
 | `schema` | The version of this file format. `1`. |
 | `[service]` | What the app is. `id` is unique on its machine and never changes. |
-| `[[check]]` | One per check. `type` is one of the check types in `api.md`. Each type has its own fields: `url` for `http`, `port` for `tcp`, `name` for `process` and `windows-service`, `metric` and `limit` for `threshold` (bad when the metric is over the limit), `date_from` for `expiry` (an `https` address or `host:port` for a certificate, or a file whose first line is a date). All take `every`. |
+| `[[check]]` | One per check. `type` is one of the check types in `api.md`. Each type has its own fields: `url` for `http`, `port` for `tcp`, `name` for `process`, `windows-service` and `systemd` (the unit), `metric` and `limit` for `threshold` (bad when the metric is over the limit), `date_from` for `expiry` (an `https` address or `host:port` for a certificate, or a file whose first line is a date). All take `every`. `http` also takes `slow`: an answer that comes back successfully but takes longer is `degraded`, with the time as its value, and the server opens an issue only after its usual run of bad results. |
 | `[stats]` | Where the stats document is and which environment variable holds its key. |
 | `[logs]` | Files to read. Paths are relative to the file and must stay inside its folder. Lines follow `log-lines.md`. |
 | `[[job]]` | A scheduled job: when it should run, how late it may be, and how long it may take. `schedule` is a five-field cron line read as UTC, and `@reboot` is refused. |
@@ -210,12 +211,12 @@ Joins this machine to a server. Trades a one-time token for this machine's key a
 
 ### `dokkit status`
 
-What this machine watches and when it last reported. Shows the files dokkit watch reads, when the spool was last emptied, how much is waiting, and the process number of a watch left running.
+What this machine watches and when it last reported. Shows the files dokkit watch reads, when it last sent, and how many reports are waiting. It says a watch is running only while that watch has written down in the last three minutes, and then gives its process number.
 
 
 ### `dokkit doctor`
 
-Checks the server can be reached and the clock is right. Says whether the server answers, whether its certificate matches the one saved at enrol, and whether this machine's clock agrees with the server's.
+A rough check of the server and the clock. Says whether the server answers and knows this key, whether this machine's clock is within 30 seconds of the server's, and whether reports are waiting. A certificate that is not the one saved at enrol shows as the server not answering.
 
 
 ## Finding things
@@ -223,12 +224,12 @@ Checks the server can be reached and the clock is right. Says whether the server
 
 ### `dokkit scan [--no-services] [--no-ports] [--no-tasks] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]`
 
-Looks over this machine and writes a proposal file. Lists what is on the machine that could be watched and writes it to a proposal file. Sends nothing. Each --no- flag leaves one kind of thing out.
+Looks over this machine and writes a proposal file. Lists what is on the machine that could be watched and writes it to dokkit-proposal.json in this folder. Sends nothing. Each --no- flag leaves one kind of thing out.
 
 
 ### `dokkit propose`
 
-Sends the proposal file to be accepted. Sends what a scan wrote. Nothing in it is watched until a person accepts it in the interface.
+Sends the proposal file to be accepted. Sends dokkit-proposal.json, which a scan wrote. Nothing in it is watched until a person accepts it in the interface.
 
 
 ## Staying running
@@ -236,17 +237,17 @@ Sends the proposal file to be accepted. Sends what a scan wrote. Nothing in it i
 
 ### `dokkit watch [--background]`
 
-Watches this machine, as an ordinary program. Reads dokkit.toml files from the folders in DOKKIT_FOLDERS or in the saved configuration, and from the folders directly inside them. Runs their checks, sends the log files they name, and says the machine is alive once a minute. No administrator, no service. --background leaves it running with no window.
+Watches this machine, as an ordinary program. Reads dokkit.toml files from the folders in DOKKIT_FOLDERS or in the saved configuration, and from the folders directly inside them. Runs their checks, sends the log files they name, runs the tasks a person accepted, and says the machine is alive once a minute. No administrator, no service. --background leaves it running after this window closes.
 
 
 ### `dokkit startup on|off`
 
-Starts dokkit watch each time you sign in. On Windows, adds dokkit watch --background to your own startup programs, or takes it out. No administrator.
+Starts dokkit watch each time you sign in. Windows only. Works on Windows only so far. Adds dokkit watch --background to your own startup programs, or takes it out. No administrator. Elsewhere, use dokkit service, or add dokkit watch --background to your desktop's startup programs.
 
 
 ### `dokkit service install|uninstall|update|start|stop`
 
-Runs it as a service. Needs an administrator once. Installs dokkit as a service that starts with the machine, so it keeps watching with nobody signed in and may restart the services its configuration names.
+Runs it as a service, on Windows or Linux. Needs an administrator or root. Works on Windows and on Linux with systemd; not on macOS yet. Installs dokkit as a service that starts with the machine, so it keeps watching with nobody signed in. On Windows it runs as the system account. On Linux it runs as a user named dokkit, which is made if useradd is there. It may restart only the services or units that this machine's own configuration names. On Linux that needs dokkit to run as root or systemd to allow it. Needs an administrator prompt on Windows and root on Linux.
 
 
 ## Tasks
@@ -254,7 +255,7 @@ Runs it as a service. Needs an administrator once. Installs dokkit as a service 
 
 ### `dokkit task list`
 
-The tasks on this machine and whether each is accepted. Says of each task whether it is accepted, not accepted yet, or changed since it was accepted, and which account tasks run as.
+The tasks on this machine and whether each is accepted. Lists the tasks in this folder and in the folders this machine reads. When the server answers, says of each whether it is accepted, not accepted yet, or changed since it was accepted. Says which account you are running as.
 
 
 ### `dokkit task run <name>`
@@ -867,7 +868,7 @@ List error groups. Error groups by type and place, newest first, at most 200. Ta
 
 ### GET /api/v1/inbox
 
-What needs a look. What needs a look, and what is snoozed. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+What needs a look. What needs a look, what will soon, what was found and is not watched, what is snoozed, issues in other environments, and how many things are fine. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 `200` OK.
@@ -891,10 +892,54 @@ What needs a look. What needs a look, and what is snoozed. Takes a user token (`
       "alert": {
         "channel": "page",
         "status": "sent"
-      }
+      },
+      "soon": false
     }
   ],
-  "snoozed": []
+  "soon": [
+    {
+      "id": "9b2e4d10-77aa-4c3e-8f61-2a5c0d9e1b44",
+      "short_id": "DOK-13",
+      "kind": "check",
+      "state": "degraded",
+      "title": "Certificate for upload-portal expires in 12 days",
+      "note": "12 days left",
+      "count": 1,
+      "since": "2026-10-05T20:41:00Z",
+      "snoozed_until": null,
+      "acknowledged_at": null,
+      "machine": "web-02",
+      "service": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+      "alert": {
+        "channel": "push",
+        "status": "sent"
+      },
+      "soon": true
+    }
+  ],
+  "not_watched": [
+    {
+      "id": "c1d7a0f2-5e3b-4a96-b8d4-0f7e2a6c9b15",
+      "kind": "port",
+      "name": "5432",
+      "detail": {
+        "label": "Port 5432",
+        "saw": "postgres"
+      },
+      "machine": "db-01"
+    }
+  ],
+  "snoozed": [],
+  "other_environments": [
+    {
+      "environment": "dev",
+      "issues": []
+    }
+  ],
+  "fine": {
+    "services": 14,
+    "machines": 5
+  }
 }
 ```
 

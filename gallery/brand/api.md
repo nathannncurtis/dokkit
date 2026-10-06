@@ -591,7 +591,7 @@ List error groups. Error groups by type and place, newest first, at most 200. Ta
 
 ### GET /api/v1/inbox
 
-What needs a look. What needs a look, and what is snoozed. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+What needs a look. What needs a look, what will soon, what was found and is not watched, what is snoozed, issues in other environments, and how many things are fine. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 `200` OK.
@@ -615,10 +615,54 @@ What needs a look. What needs a look, and what is snoozed. Takes a user token (`
       "alert": {
         "channel": "page",
         "status": "sent"
-      }
+      },
+      "soon": false
     }
   ],
-  "snoozed": []
+  "soon": [
+    {
+      "id": "9b2e4d10-77aa-4c3e-8f61-2a5c0d9e1b44",
+      "short_id": "DOK-13",
+      "kind": "check",
+      "state": "degraded",
+      "title": "Certificate for upload-portal expires in 12 days",
+      "note": "12 days left",
+      "count": 1,
+      "since": "2026-10-05T20:41:00Z",
+      "snoozed_until": null,
+      "acknowledged_at": null,
+      "machine": "web-02",
+      "service": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+      "alert": {
+        "channel": "push",
+        "status": "sent"
+      },
+      "soon": true
+    }
+  ],
+  "not_watched": [
+    {
+      "id": "c1d7a0f2-5e3b-4a96-b8d4-0f7e2a6c9b15",
+      "kind": "port",
+      "name": "5432",
+      "detail": {
+        "label": "Port 5432",
+        "saw": "postgres"
+      },
+      "machine": "db-01"
+    }
+  ],
+  "snoozed": [],
+  "other_environments": [
+    {
+      "environment": "dev",
+      "issues": []
+    }
+  ],
+  "fine": {
+    "services": 14,
+    "machines": 5
+  }
 }
 ```
 
