@@ -31,6 +31,7 @@ func (w *watcher) tail() {
 		c = w.logc
 	}
 	c.http.Timeout = 20 * time.Second
+	c.claimed = map[string]string{}
 	w.mu.Lock()
 	declared := slices.Collect(maps.Values(w.files))
 	w.mu.Unlock()
@@ -58,7 +59,8 @@ func (w *watcher) tail() {
 }
 
 // sendLog sends what is new in one file and says whether its position moved.
-// A file is known by its first line, so it is followed through a rename.
+// A file is known by its first line, so it is followed through a rename. A second file in a
+// pass with a first line another already has is known by its path as well.
 func (c *client) sendLog(service, path string, positions map[string]int64) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -74,6 +76,13 @@ func (c *client) sendLog(service, path string, positions map[string]int64) bool 
 	}
 	sum := sha256.Sum256(first)
 	key := hex.EncodeToString(sum[:16])
+	if owner, taken := c.claimed[key]; taken && owner != path {
+		sum = sha256.Sum256(append(append(first[:len(first):len(first)], 0), path...))
+		key = hex.EncodeToString(sum[:16])
+	}
+	if c.claimed != nil {
+		c.claimed[key] = path
+	}
 	pos := positions[key]
 	if info, err := f.Stat(); err != nil || info.Size() < pos {
 		pos = 0
