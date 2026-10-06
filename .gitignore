@@ -1,9 +1,3 @@
 __pycache__/
 *.pyc
 .impeccable/
-
-# font trials not used by the mock
-gallery/app/vendor/*
-!gallery/app/vendor/ibm-plex-*
-!gallery/app/vendor/[Pp]hosphor*
-!gallery/app/vendor/PHOSPHOR-LICENSE.txt

@@ -17,7 +17,7 @@ defmodule DokkitWeb do
   those modules here.
   """
 
-  def static_paths, do: ~w(assets css vendor favicon.ico robots.txt)
+  def static_paths, do: ~w(assets css vendor favicon.svg robots.txt)
 
   def router do
     quote do

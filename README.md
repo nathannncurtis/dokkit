@@ -4,7 +4,32 @@ One place that watches everything I run and tells me what needs my attention.
 
 This is a personal project. It is private while it is in development and will be open source once the install-specific material listed at the bottom is out of it and there is a proper demo.
 
-Nothing here is the product yet. This repo holds the design work so far: the decisions, the contract every piece will be built against, a clickable mock of the interface, and the explorations that led to it.
+The server and the `dokkit` program are being built, against the contract in `spec/`. What works and what does not is under "Where it stands". The repo also holds the decisions, a clickable mock of the interface, and the explorations that led to it.
+
+## Where it stands
+
+Working, with tests:
+
+- **Jobs.** A job is added in the interface and reports with a plain web request or with `dokkit run`. A failed run opens an issue at once; a missed or overlong one within a minute.
+- **Checks.** A `dokkit.toml` declares a service and its checks. `dokkit watch` runs http, tcp, process and Windows-service checks, and three failures in a row open an issue.
+- **Machines.** A machine enrols with a one-use token and says it is alive once a minute. Three minutes of silence opens one issue and quiets what runs on it.
+- **Alerts.** A page through PagerDuty, a quiet push through ntfy, Pushover or PagerDuty, or a webhook. Once per issue, resolved when it closes.
+- **Logs.** Lines in Dokkit's format or CLEF, kept in monthly partitions, searched on the Logs page.
+- **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Alerts and Settings. People sign in; the first one claims the server with a setup code.
+- **The API and the MCP**, for user tokens made in Settings.
+
+Not built yet: errors, deploys and versions, stats, beats and metrics, email, text and the digest, alert rules and suggestions, found-and-not-watched, tasks, scanning, log file reading, the libraries, running as a Windows service, the installer and the Docker image.
+
+To run it for development, with Postgres on localhost:
+
+```
+cd server
+mix setup
+mix phx.server          # http://localhost:4000, and the setup code is in its output
+
+cd program
+go build -o dokkit.exe .
+```
 
 ## The pieces
 
@@ -100,13 +125,12 @@ Four kinds of key: one to enrol a machine, one per machine, one per app that can
 |---|---|
 | `gallery/app/` | The current mock, filled with an invented company's data. Open `index.html` through a web server. Settings switches theme, dark base and accent. `node check.js` renders every route. |
 | `gallery/app/logos/` | The generated logo images. The mock uses a vector traced from `d2.png`. |
-| `gallery/demo/` | An earlier clickable demo, and `data.js`, the real inventory the earlier mocks are filled from. |
-| `gallery/`, `gallery/v2/` to `gallery/v5/` | Earlier explorations, kept for reference. |
+| `gallery/earlier/` | The explorations that came before, kept for reference. `demo/data.js` is the real inventory they are filled from. |
 | `spec/` | The contract: the API, `dokkit.toml`, alerts, log lines, errors, the `dokkit` program, the library, the MCP, and the stats document two applications already implement. |
 | `docs/` | Wiring an app in, running the server, moving over from other tools, and the note on Sentry's SDKs. |
 | `interview/` | The requirements interview, and the small board it was answered on. |
-| `server/` | The server: Phoenix on Postgres. |
-| `program/` | The `dokkit` program, in Go. `go build -o dokkit.exe .` |
+| `server/` | The server: Phoenix on Postgres. Its pages use the mock's stylesheet, copied to `server/priv/static/css/dokkit.css`. |
+| `program/` | The `dokkit` program, in Go. |
 
 To look at the mock:
 
@@ -120,12 +144,11 @@ Then open `http://localhost:7912/app/`.
 
 The current mock in `gallery/app/` runs on invented data. Everything older is filled with one real install's inventory and has to be replaced or removed first:
 
-- `gallery/demo/data.js`: real machine names, services, versions and ports.
-- Every page under `gallery/` that names those machines and services.
+- `gallery/earlier/`: every page names real machines and services, and `demo/data.js` holds their versions and ports.
 - `interview/`: the interview refers to the same install.
 - `spec/stats-v1.md`: written for two specific applications.
 - The interface was built with another product's layout as the reference. It mostly stays as it is; the parts that are recognisably theirs get changed, and the description under "The look" is reworded to match.
-- The mocks and this repo's own name still say Docket in places: the older galleries, the interview files, and the repo itself.
+- The earlier galleries and the interview files still say Docket.
 - `docs/sentry-compatibility.md` is followed everywhere the project describes itself.
 
 ## Licence

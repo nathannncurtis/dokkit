@@ -1,6 +1,6 @@
 # Running the server
 
-Nothing here is built yet. This is how it is meant to work.
+This is how it is meant to work. So far the server runs from its source (see the README), signs people in with the setup code described below, and is not yet packaged as a Windows service or a Docker image. The outside heartbeat and its own row are not built yet.
 
 ## Two forms
 
