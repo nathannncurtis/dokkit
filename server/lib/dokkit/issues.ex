@@ -153,6 +153,19 @@ defmodule Dokkit.Issues do
       Dokkit.Alerts.closing(issue)
     end
 
+    # What opened while the machine was down was held back; now it can be told.
+    unalerted =
+      Repo.all(
+        from i in Issue,
+          left_join: a in assoc(i, :alert),
+          where:
+            i.machine_id in ^Enum.map(back, & &1.machine_id) and i.kind != "machine" and
+              is_nil(i.closed_at) and is_nil(a.id),
+          preload: :service
+      )
+
+    for i <- unalerted, do: Dokkit.Alerts.plan(i, i.service)
+
     length(gone) + length(back)
   end
 
@@ -227,7 +240,7 @@ defmodule Dokkit.Issues do
   end
 
   # A service is as bad as its worst check, and says what that check said.
-  defp refresh(service) do
+  def refresh(service) do
     checks =
       Repo.all(from c in Check, where: c.service_id == ^service.id, select: {c.state, c.note})
 

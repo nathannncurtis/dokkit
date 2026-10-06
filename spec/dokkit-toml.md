@@ -50,7 +50,7 @@ degraded = "push"
 | `[[check]]` | One per check. `type` is one of the check types in `api.md`. Each type has its own fields: `url` for `http`, `port` for `tcp`, `name` for `process` and `windows-service`, `metric` and `limit` for `threshold` (bad when the metric is over the limit), `date_from` for `expiry` (an `https` address or `host:port` for a certificate, or a file whose first line is a date). All take `every`. |
 | `[stats]` | Where the stats document is and which environment variable holds its key. |
 | `[logs]` | Files to read. Paths are relative to the file. Lines follow `log-lines.md`. |
-| `[[job]]` | A scheduled job: when it should run, how late it may be, and how long it may take. |
+| `[[job]]` | A scheduled job: when it should run, how late it may be, and how long it may take. `schedule` is a five-field cron line read as UTC, and `@reboot` is refused. |
 | `[[task]]` | A named piece of work the server may be allowed to ask for. |
 | `[alert]` | A starting suggestion for who is told. |
 

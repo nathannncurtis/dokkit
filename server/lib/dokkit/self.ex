@@ -8,7 +8,8 @@ defmodule Dokkit.Self do
 
   def tick(now, config) do
     url = config["heartbeat_url"]
-    if url not in [nil, ""], do: beat(url)
+    # A database that does not answer cannot record it, so the outside call stops instead.
+    if url not in [nil, ""] and match?({:ok, _}, Repo.query("SELECT 1")), do: beat(url)
     row(now)
   end
 
@@ -75,11 +76,12 @@ defmodule Dokkit.Self do
     with dir when is_binary(dir) <- Application.get_env(:dokkit, :archive) do
       File.mkdir_p(dir)
 
-      case File.stat(dir) do
-        {:ok, %{type: :directory, access: :read_write}} ->
+      # Writing is the test: file attributes say nothing of Windows permissions.
+      case File.write(Path.join(dir, ".dokkit-write-check"), "") do
+        :ok ->
           Issues.record(check(service, "archive"), :ok, at: now)
 
-        _ ->
+        {:error, _} ->
           Issues.record(check(service, "archive"), :down,
             at: now,
             note: "The archive folder cannot be written to."
