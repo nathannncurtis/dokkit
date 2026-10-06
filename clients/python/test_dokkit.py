@@ -2,6 +2,7 @@ import gzip
 import http.server
 import json
 import logging
+import os
 import threading
 import unittest
 
@@ -61,6 +62,62 @@ class Test(unittest.TestCase):
         self.assertFalse(error["handled"])
         self.assertTrue(error["frames"][-1]["own"])
         self.assertNotIn("4411", json.dumps(got))
+
+
+class Library(unittest.TestCase):
+    def setUp(self):
+        self.old = dokkit._state
+        dokkit._state = dokkit._State("http://127.0.0.1:9", "k", None, None)
+
+    def tearDown(self):
+        dokkit._state = self.old
+
+    def test_a_line_that_cannot_be_serialized_is_dropped_alone(self):
+        dokkit.beat("a")
+        circular = {}
+        circular["self"] = circular
+        dokkit.stats(circular)
+        dokkit.stats({(1, 2): "tuple key"})
+        dokkit.beat("b")
+        self.assertEqual(len(dokkit._state.lines), 2)
+
+    def test_a_bad_format_string_does_not_raise_into_the_app(self):
+        record = logging.LogRecord("app", logging.ERROR, "f", 1, "%d items", ("x",), None)
+        dokkit.handler().emit(record)
+
+    def test_own_frames_need_a_path_separator(self):
+        root = dokkit._state.root
+        self.assertTrue(dokkit._own(root + os.sep + "app.py"))
+        self.assertFalse(dokkit._own(root + "-other" + os.sep + "app.py"))
+        self.assertEqual(dokkit._path(os.path.join(os.sep, "home", "bob", "x", "site-packages", "lib", "m.py")), "lib/m.py")
+        self.assertEqual(dokkit._path(os.path.join(os.sep, "home", "bob", "stdlib.py")), "stdlib.py")
+
+    def test_a_non_local_http_address_keeps_it_off(self):
+        self.assertTrue(dokkit._insecure("http://example.com"))
+        self.assertFalse(dokkit._insecure("https://example.com"))
+        self.assertFalse(dokkit._insecure("http://localhost:4000"))
+        self.assertFalse(dokkit._insecure("http://127.0.0.1:4000"))
+
+    def test_the_queue_is_bounded_by_bytes_and_a_failed_batch_is_retried_once(self):
+        state = dokkit._state
+        for _ in range(3):
+            dokkit.stats({"x": "y" * 2_000_000})
+        self.assertEqual(len(state.lines), 1)
+        self.assertEqual(state.dropped, 2)
+        state.flush()
+        self.assertEqual(state.retry[2], 1)
+        state.flush()
+        self.assertIsNone(state.retry)
+        self.assertEqual(state.dropped, 3)
+
+    @unittest.skipUnless(hasattr(os, "fork"), "needs fork")
+    def test_the_sender_thread_is_back_after_a_fork(self):
+        dokkit._state.add({"type": "beat"})
+        dokkit._state.lines.append("x")
+        pid = os.fork()
+        if pid == 0:
+            os._exit(0 if any(t.name == "dokkit" for t in threading.enumerate()) and not dokkit._state.lines else 1)
+        self.assertEqual(os.waitpid(pid, 0)[1], 0)
 
 
 if __name__ == "__main__":

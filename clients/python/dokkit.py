@@ -20,14 +20,17 @@ import gzip
 import json
 import logging
 import os
+import re
 import socket
 import sys
 import threading
 import traceback
+import urllib.parse
 import urllib.request
 import uuid
 
 QUEUE = 1000
+MAX_BYTES = 4_000_000
 _state = None
 
 
@@ -36,20 +39,45 @@ class _State:
         self.url, self.key = url.rstrip("/"), key
         self.version, self.environment = version, environment
         self.host = socket.gethostname()
-        self.lines = collections.deque(maxlen=QUEUE)
+        self.lines = collections.deque()
+        self.size = 0
         self.errors = collections.deque(maxlen=100)
         self.dropped = 0
-        self.wake = threading.Event()
+        self.retry = None
         # The folder the app was started from: frames under it are the app's own.
         self.root = os.path.abspath(os.getcwd())
+        self.restart()
+
+    def restart(self, forked=False):
+        """Also runs in a forked child, where the sender thread and any held lock are gone."""
+        if forked:
+            # The parent still owns what was queued at the fork.
+            self.lines.clear()
+            self.errors.clear()
+            self.retry = None
+            self.size = 0
+        self.lock = threading.Lock()
+        self.sending = threading.Lock()
+        self.wake = threading.Event()
         threading.Thread(target=self._run, name="dokkit", daemon=True).start()
 
     def add(self, line):
-        if len(self.lines) == self.lines.maxlen:
-            self.dropped += 1
         line.setdefault("at", _now())
         line["host"] = self.host
-        self.lines.append(line)
+        try:
+            text = json.dumps(line, default=str)
+        except (TypeError, ValueError):
+            self.dropped += 1
+            return
+        if len(text) > MAX_BYTES:
+            self.dropped += 1
+            return
+        with self.lock:
+            while self.lines and (len(self.lines) >= QUEUE or self.size + len(text) > MAX_BYTES):
+                self.size -= len(self.lines.popleft())
+                self.dropped += 1
+            self.lines.append(text)
+            self.size += len(text)
 
     def _run(self):
         while True:
@@ -58,15 +86,32 @@ class _State:
             self.flush()
 
     def flush(self):
+        with self.sending:
+            self._flush()
+
+    def _flush(self):
         try:
             while self.errors:
                 self._post("/api/v1/errors", json.dumps(self.errors.popleft()).encode(), "application/json")
-            batch = []
-            while self.lines and len(batch) < 500:
-                batch.append(self.lines.popleft())
-            if batch:
-                body = gzip.compress("\n".join(json.dumps(l, default=str) for l in batch).encode())
-                self._post("/api/v1/report", body, "application/x-ndjson", {"Content-Encoding": "gzip", "Dokkit-Batch": str(uuid.uuid4())})
+            while self.retry or self.lines:
+                if not self.retry:
+                    with self.lock:
+                        batch = [self.lines.popleft() for _ in range(min(500, len(self.lines)))]
+                        self.size -= sum(len(l) for l in batch)
+                    self.retry = [str(uuid.uuid4()), batch, 0]
+                batch_id, batch, tries = self.retry
+                try:
+                    body = gzip.compress("\n".join(batch).encode())
+                    self._post("/api/v1/report", body, "application/x-ndjson", {"Content-Encoding": "gzip", "Dokkit-Batch": batch_id})
+                    self.retry = None
+                except Exception:
+                    # A failed batch gets one more try; after that it is dropped and counted.
+                    if tries:
+                        self.dropped += len(batch)
+                        self.retry = None
+                    else:
+                        self.retry[2] = 1
+                    return
         except Exception:
             # What could not be sent is dropped. The app is never told.
             pass
@@ -91,6 +136,9 @@ def start(version=None, environment=None, url=None, key=None):
     key = key or os.environ.get("DOKKIT_KEY", "")
     if not url or not key or _state:
         return
+    if _insecure(url):
+        print("dokkit: http:// address to a non-local host; set DOKKIT_INSECURE=1 to allow it. Staying off.", file=sys.stderr)
+        return
     try:
         _state = _State(url, key, version, environment or os.environ.get("DOKKIT_ENV"))
         atexit.register(flush)
@@ -98,6 +146,21 @@ def start(version=None, environment=None, url=None, key=None):
             _state.add({"type": "deploy", "version": str(version)})
     except Exception:
         _state = None
+
+
+def _insecure(url):
+    u = urllib.parse.urlparse(url)
+    local = re.fullmatch(r"localhost|127(\.\d+){3}|::1", u.hostname or "")
+    return u.scheme == "http" and not local and os.environ.get("DOKKIT_INSECURE") != "1"
+
+
+def _after_fork():
+    if _state:
+        _state.restart(forked=True)
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_after_fork)
 
 
 def flush():
@@ -176,7 +239,7 @@ def capture(error=None, handled=True, tags=None):
             return
         frames = [
             {
-                "file": os.path.relpath(f.filename, _state.root) if _own(f.filename) else f.filename,
+                "file": _path(f.filename),
                 "function": f.name,
                 "line": f.lineno,
                 "own": _own(f.filename),
@@ -202,7 +265,15 @@ def capture(error=None, handled=True, tags=None):
 
 def _own(filename):
     path = os.path.abspath(filename)
-    return path.startswith(_state.root) and "site-packages" not in path
+    return path.startswith(_state.root.rstrip(os.sep) + os.sep) and "site-packages" not in path
+
+
+def _path(filename):
+    """Relative to the app's folder; other files keep only what follows site-packages, or their name."""
+    if _own(filename):
+        return os.path.relpath(filename, _state.root)
+    path = os.path.abspath(filename).replace(os.sep, "/")
+    return path.split("/site-packages/", 1)[1] if "/site-packages/" in path else os.path.basename(path)
 
 
 def catch_unhandled():
@@ -221,8 +292,11 @@ class _Handler(logging.Handler):
     LEVELS = {10: "debug", 20: "info", 30: "warn", 40: "error", 50: "fatal"}
 
     def emit(self, record):
-        level = self.LEVELS.get(record.levelno // 10 * 10, "info")
-        _add({"type": "log", "t": _now(), "level": level, "msg": record.getMessage(), "fields": {"logger": record.name}})
+        try:
+            level = self.LEVELS.get(record.levelno // 10 * 10, "info")
+            _add({"type": "log", "t": _now(), "level": level, "msg": record.getMessage(), "fields": {"logger": record.name}})
+        except Exception:
+            pass
 
 
 def handler(level=logging.INFO):

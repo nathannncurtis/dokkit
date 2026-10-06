@@ -8,6 +8,7 @@ export function start(options?: {
   url?: string;
   key?: string;
   host?: string;
+  insecure?: boolean;
 }): void;
 
 export function beat(name: string, everySeconds?: number): void;
@@ -34,7 +35,7 @@ export function job<T>(
 /** Sends an error: its type and stack, never its message. */
 export function capture(error: unknown, options?: { handled?: boolean; tags?: Record<string, unknown> }): void;
 
-/** Also reports errors nothing caught. */
+/** Also reports errors nothing caught. In Node the process ends after the report is sent, or after 3 seconds, unless another uncaughtException listener exists. */
 export function catchUnhandled(): void;
 
 /** Sends what is waiting. Runs by itself every two seconds. */
