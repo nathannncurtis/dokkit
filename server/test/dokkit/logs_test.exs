@@ -55,7 +55,7 @@ defmodule Dokkit.LogsTest do
           "@l" => "Warning",
           "@x" => "boom"
         },
-        %{type: "log", level: "info"}
+        "not json"
       ])
 
     assert %{"accepted" => 2, "refused" => [%{"line" => 3, "code" => "bad_line"}]} =
