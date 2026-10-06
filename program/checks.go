@@ -463,6 +463,14 @@ func (c *client) apply(path string) int {
 }
 
 func (c *client) declare(d *declaration) error {
+	if raw, ok := d.raw["task"].([]map[string]any); ok {
+		for i, t := range d.Task {
+			if i < len(raw) {
+				t.dir, t.file = filepath.Dir(d.path), d.path
+				raw[i]["pin"] = t.pin()
+			}
+		}
+	}
 	body, _ := json.Marshal(d.raw)
 	req, _ := http.NewRequest("PUT", c.url+"/api/v1/declare", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+c.key)

@@ -208,6 +208,15 @@ func trustedOwner(dir string) error {
 	return fmt.Errorf("%s already exists and is owned by %s, not by administrators. Delete it from an administrator prompt, then install again", dir, owner)
 }
 
+// taskFolderProblem refuses a task whose folder an ordinary account owns, since its owner could
+// change what the service runs there.
+func taskFolderProblem(dir string) error {
+	if !asService() || trustedOwner(dir) == nil {
+		return nil
+	}
+	return fmt.Errorf("This task's folder, %s, is not owned by administrators, so the service does not run tasks from it.", dir)
+}
+
 // detach lets a command outlive this one, with no window of its own.
 func detach(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &windows.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW | windows.CREATE_NEW_PROCESS_GROUP}

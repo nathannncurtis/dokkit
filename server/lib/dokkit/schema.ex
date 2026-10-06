@@ -141,6 +141,8 @@ defmodule Dokkit.Task do
     field :name, :string
     field :command, :string
     field :accepted, :string
+    field :pin, :string
+    field :accepted_pin, :string
     field :dismissed, :string
     field :as_system, :boolean, default: false
     belongs_to :machine, Dokkit.Machine

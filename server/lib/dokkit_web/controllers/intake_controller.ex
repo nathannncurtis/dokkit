@@ -83,7 +83,7 @@ defmodule DokkitWeb.IntakeController do
             run: run.id,
             task: run.task.name,
             as: Dokkit.Tasks.account(run.task),
-            command_sha256: Dokkit.Tasks.sha256(run.task.command)
+            command_sha256: run.task.accepted_pin
           })
       end
     end

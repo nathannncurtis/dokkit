@@ -42,6 +42,8 @@ func init() {
 
 func asService() bool { return false }
 
+func taskFolderProblem(string) error { return nil }
+
 func detach(cmd *exec.Cmd) { cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} }
 
 func startup(bool) error {

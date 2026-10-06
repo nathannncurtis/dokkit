@@ -11,8 +11,8 @@ defmodule Dokkit.TasksTest do
 
   defp as(key), do: put_req_header(build_conn(), "authorization", "Bearer " <> key)
 
-  defp declare(key, command) do
-    doc = %{schema: 1, service: %{id: "portal"}, task: [%{id: "restart", run: command}]}
+  defp declare(key, command, pin \\ "pin-1") do
+    doc = %{schema: 1, service: %{id: "portal"}, task: [%{id: "restart", run: command, pin: pin}]}
     assert json_response(put(as(key), "/api/v1/declare", doc), 200)
   end
 
@@ -47,7 +47,7 @@ defmodule Dokkit.TasksTest do
 
     work = json_response(get(as(key), "/api/v1/work?wait=0"), 200)
     assert work["task"] == "restart"
-    assert work["command_sha256"] == Tasks.sha256("systemctl restart portal")
+    assert work["command_sha256"] == "pin-1"
     assert response(get(as(key), "/api/v1/work?wait=0"), 204)
 
     out = as(key) |> put_req_header("content-type", "text/plain")
@@ -76,6 +76,39 @@ defmodule Dokkit.TasksTest do
     assert html =~ "The command changed since it was accepted"
   end
 
+  test "a changed pin puts an accepted task back to proposed and no work is handed out", %{
+    key: key
+  } do
+    declare(key, "backup.bat", "pin-a")
+    [task] = Tasks.waiting()
+    :ok = Tasks.decide(task.id, "backup.bat", :accepted)
+    assert Tasks.waiting() == []
+    assert Tasks.run(task.id, "sam")
+
+    declare(key, "backup.bat", "pin-b")
+    assert [%{id: id}] = Tasks.waiting()
+    assert id == task.id
+    assert response(get(as(key), "/api/v1/work?wait=0"), 204)
+    assert Tasks.run(task.id, "sam") == nil
+
+    assert %{"items" => [%{"command_sha256" => "pin-a"}]} =
+             json_response(get(as(key), "/api/v1/tasks/accepted"), 200)
+
+    :ok = Tasks.decide(task.id, "backup.bat", :accepted)
+    assert Tasks.waiting() == []
+    assert Tasks.run(task.id, "sam")
+  end
+
+  test "a task accepted before pins existed is proposed again and never runs unpinned", %{
+    key: key
+  } do
+    declare(key, "old.bat", "pin-x")
+    Repo.update_all(Dokkit.Task, set: [accepted: "old.bat", accepted_pin: nil])
+    assert [task] = Tasks.waiting()
+    assert Tasks.run(task.id, "sam") == nil
+    assert %{"items" => []} = json_response(get(as(key), "/api/v1/tasks/accepted"), 200)
+  end
+
   test "a user token with act can run a task, and one without cannot", %{key: key} do
     declare(key, "true")
     [task] = Tasks.waiting()
@@ -85,7 +118,7 @@ defmodule Dokkit.TasksTest do
     assert %{"items" => [%{"task" => "restart", "command_sha256" => sha}]} =
              json_response(get(as(key), "/api/v1/tasks/accepted"), 200)
 
-    assert sha == Tasks.sha256("true")
+    assert sha == "pin-1"
     {read, _} = Keys.mint(:user, %{scopes: ["read"]})
     {act, _} = Keys.mint(:user, %{scopes: ["read", "act"]})
 

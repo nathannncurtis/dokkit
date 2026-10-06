@@ -394,9 +394,9 @@ func TestScanWritesAFileAndTasksRunWhereTheirFileIs(t *testing.T) {
 func TestWorkRunsOnlyTheAcceptedCommand(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "dokkit.toml"), []byte("schema = 1\n[service]\nid = \"portal\"\n[[task]]\nid = \"hello\"\nrun = \"echo hello from the task\"\n"), 0o600)
-	sum := sha256.Sum256([]byte("echo hello from the task"))
+	pin := tasks(declarations([]string{dir}))["hello"].pin()
 	offers := []string{
-		`{"run":"r1","task":"hello","command_sha256":"` + hex.EncodeToString(sum[:]) + `"}`,
+		`{"run":"r1","task":"hello","command_sha256":"` + pin + `"}`,
 		`{"run":"r2","task":"hello","command_sha256":"some other command"}`,
 	}
 	got := make(chan string, 8)
@@ -539,19 +539,42 @@ func TestAStoppedServiceIsStartedOnlyWhenAllowedAndNotOver(t *testing.T) {
 }
 
 func TestATaskIsAcceptedOnlyAsItWasWritten(t *testing.T) {
-	sum := sha256.Sum256([]byte("scripts/zap.ps1"))
-	sha := hex.EncodeToString(sum[:])
-	if got := standing("scripts/zap.ps1", sha, true); got != "accepted" {
+	dir := t.TempDir()
+	zap := task{ID: "zap", Run: "scripts/zap.ps1", dir: dir, file: filepath.Join(dir, "dokkit.toml")}
+	sha := zap.pin()
+	if got := standing(zap, sha, true); got != "accepted" {
 		t.Fatal(got)
 	}
-	if got := standing("scripts/zap.ps1 --all", sha, true); got != "changed since it was accepted" {
+	more := zap
+	more.Run = "scripts/zap.ps1 --all"
+	if got := standing(more, sha, true); got != "changed since it was accepted" {
 		t.Fatal(got)
 	}
-	if got := standing("scripts/zap.ps1", "", false); got != "not accepted yet" {
+	if got := standing(zap, "", false); got != "not accepted yet" {
 		t.Fatal(got)
 	}
 	if _, asked := accepted(nil); asked {
 		t.Fatal("a machine that is not enrolled has nobody to ask")
+	}
+}
+
+func TestATaskPinCoversItsScriptAndItsFolder(t *testing.T) {
+	a, b := t.TempDir(), t.TempDir()
+	os.WriteFile(filepath.Join(a, "backup.bat"), []byte("echo one"), 0o600)
+	os.WriteFile(filepath.Join(b, "backup.bat"), []byte("echo one"), 0o600)
+	at := func(dir string) task {
+		return task{ID: "backup", Run: "backup.bat --all", dir: dir, file: filepath.Join(dir, "dokkit.toml")}
+	}
+	before := at(a).pin()
+	if before != at(a).pin() {
+		t.Fatal("the same task has the same pin")
+	}
+	if at(b).pin() == before {
+		t.Fatal("the same task text declared from another folder has another pin")
+	}
+	os.WriteFile(filepath.Join(a, "backup.bat"), []byte("echo two"), 0o600)
+	if at(a).pin() == before {
+		t.Fatal("the pin follows the script's contents")
 	}
 }
 
@@ -616,14 +639,14 @@ func TestATimedOutTaskDoesNotWaitForWhatItStarted(t *testing.T) {
 func TestSystemTasksNeedTheMachinesOwnSay(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "dokkit.toml"), []byte("schema = 1\n[service]\nid = \"s\"\n[[task]]\nid = \"hello\"\nrun = \"echo hi\"\n"), 0o600)
-	sum := sha256.Sum256([]byte("echo hi"))
+	pin := tasks(declarations([]string{dir}))["hello"].pin()
 	offered := false
 	posts := make(chan string, 8)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			if !offered {
 				offered = true
-				w.Write([]byte(`{"run":"s1","task":"hello","as":"system","command_sha256":"` + hex.EncodeToString(sum[:]) + `"}`))
+				w.Write([]byte(`{"run":"s1","task":"hello","as":"system","command_sha256":"` + pin + `"}`))
 				return
 			}
 			time.Sleep(100 * time.Millisecond)
