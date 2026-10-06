@@ -179,6 +179,8 @@ type client struct {
 	pin             string
 	url, key, spool string
 	folders         []string
+	restartable     []string
+	hosts           []string
 	http            *http.Client
 }
 
@@ -206,6 +208,10 @@ type saved struct {
 	Key     string   `json:"key"`
 	Pin     string   `json:"pin,omitempty"`
 	Folders []string `json:"folders,omitempty"`
+	// Read only from the installed service's own configuration: services it may start, and
+	// other machines a check from the server may reach.
+	Restart []string `json:"restart,omitempty"`
+	Hosts   []string `json:"hosts,omitempty"`
 }
 
 func configPath() (string, error) {
@@ -225,13 +231,14 @@ func load() (*client, error) {
 			json.Unmarshal(b, &s)
 		}
 	}
+	s.Restart, s.Hosts = nil, nil
 	// An installed service's configuration wins for whoever is allowed to read it.
 	if dir := machineDir(); dir != "" && os.Getenv("DOKKIT_CONFIG") == "" {
 		if b, err := os.ReadFile(filepath.Join(dir, "config.json")); err == nil && json.Unmarshal(b, &s) == nil && c.spool == "" {
 			c.spool = filepath.Join(dir, "spool")
 		}
 	}
-	c.folders, c.pin = s.Folders, s.Pin
+	c.folders, c.pin, c.restartable, c.hosts = s.Folders, s.Pin, s.Restart, s.Hosts
 	pinTo(s.Pin)
 	if f := os.Getenv("DOKKIT_FOLDERS"); f != "" {
 		c.folders = filepath.SplitList(f)

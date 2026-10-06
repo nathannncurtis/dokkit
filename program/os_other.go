@@ -62,7 +62,7 @@ func findDisks() (all []found) {
 		}
 		total, _ := strconv.ParseInt(f[1], 10, 64)
 		free, _ := strconv.ParseInt(f[3], 10, 64)
-		all = append(all, found{"mount": f[5], "total_gb": fmt.Sprint(total >> 20), "free_gb": fmt.Sprint(free >> 20)})
+		all = append(all, found{"mount": f[5], "total_gb": fmt.Sprint(total >> 20), "free_gb": fmt.Sprint(free >> 20), "total_bytes": fmt.Sprint(total << 10), "free_bytes": fmt.Sprint(free << 10)})
 	}
 	return
 }

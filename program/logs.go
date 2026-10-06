@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -23,18 +25,27 @@ const (
 // once the server has the lines, so a line can arrive twice and never goes missing.
 func (w *watcher) tail() {
 	moved := false
-	w.c.http.Timeout = 20 * time.Second
-	for _, d := range w.files {
+	c := w.c
+	if w.logc != nil {
+		c = w.logc
+	}
+	c.http.Timeout = 20 * time.Second
+	w.mu.Lock()
+	declared := slices.Collect(maps.Values(w.files))
+	w.mu.Unlock()
+	for _, d := range declared {
 		if d.Logs.Path == "" {
 			continue
 		}
-		pattern := d.Logs.Path
+		dir, pattern := filepath.Dir(d.path), d.Logs.Path
 		if !filepath.IsAbs(pattern) {
-			pattern = filepath.Join(filepath.Dir(d.path), pattern)
+			pattern = filepath.Join(dir, pattern)
 		}
 		files, _ := filepath.Glob(pattern)
 		for _, f := range files {
-			moved = w.c.sendLog(d.Service.ID, f, w.logs) || moved
+			if within(dir, f) {
+				moved = c.sendLog(d.Service.ID, f, w.logs) || moved
+			}
 		}
 	}
 	if moved {
