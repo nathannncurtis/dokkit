@@ -44,6 +44,7 @@ type line = map[string]any
 type batch struct {
 	path  string
 	items [][]byte
+	id    string
 	tried bool
 }
 
@@ -320,7 +321,7 @@ func Flush() {
 		held = nil
 		if b == nil {
 			if len(errs) > 0 {
-				b = &batch{path: "/api/v1/errors", items: errs[:1:1]}
+				b = &batch{path: "/api/v1/errors", items: errs[:1:1], id: id()}
 				errs = errs[1:]
 			} else if len(lines) > 0 {
 				n, size := 0, 0
@@ -328,7 +329,7 @@ func Flush() {
 					size += len(lines[n])
 					n++
 				}
-				b = &batch{path: "/api/v1/report", items: lines[:n:n]}
+				b = &batch{path: "/api/v1/report", items: lines[:n:n], id: id()}
 				lines = lines[n:]
 				queued -= size
 			}
@@ -369,7 +370,7 @@ func send(b *batch) bool {
 	req.Header.Set("Content-Type", kind)
 	if zipped {
 		req.Header.Set("Content-Encoding", "gzip")
-		req.Header.Set("Dokkit-Batch", id())
+		req.Header.Set("Dokkit-Batch", b.id)
 	}
 	res, err := client.Do(req)
 	if err != nil {

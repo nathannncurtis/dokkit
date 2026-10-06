@@ -28,6 +28,7 @@ const MAX_BATCH: usize = 4 << 20; // the server refuses an unzipped batch over 5
 struct Batch {
     path: &'static str,
     items: Vec<String>,
+    id: String,
     tried: bool,
 }
 
@@ -306,7 +307,7 @@ pub fn flush() {
             let batch = match s.held.take() {
                 Some(held) => held,
                 None => match s.errors.pop_front() {
-                    Some(error) => Batch { path: "/api/v1/errors", items: vec![error], tried: false },
+                    Some(error) => Batch { path: "/api/v1/errors", items: vec![error], id: id(), tried: false },
                     None => {
                         let (mut n, mut size) = (0, 0);
                         while n < s.lines.len() && n < 500 && (n == 0 || size + s.lines[n].len() <= MAX_BATCH) {
@@ -314,7 +315,7 @@ pub fn flush() {
                             n += 1;
                         }
                         s.bytes -= size;
-                        Batch { path: "/api/v1/report", items: s.lines.drain(..n).collect(), tried: false }
+                        Batch { path: "/api/v1/report", items: s.lines.drain(..n).collect(), id: id(), tried: false }
                     }
                 },
             };
@@ -328,7 +329,7 @@ pub fn flush() {
             .timeout(Duration::from_secs(10))
             .set("Authorization", &format!("Bearer {key}"))
             .set("Content-Type", kind)
-            .set("Dokkit-Batch", &id())
+            .set("Dokkit-Batch", &batch.id)
             .send_string(&body);
         // A refusal is not retried; an unreachable server or a server error is, once.
         if matches!(sent, Err(ureq::Error::Transport(_)) | Err(ureq::Error::Status(500.., _))) {
