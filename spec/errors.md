@@ -58,4 +58,4 @@ This door is written from the published protocol. It contains no code from Sentr
 
 ## Built so far
 
-`POST /api/v1/errors` in Dokkit's own format, the Errors page, `GET /errors` and the `errors` tool. Message text is always dropped, because no service can be set to keep it yet. A group stores its first hundred reports and then one in a hundred; the count is exact. The door for Sentry's SDKs is not built yet, and an error does not open an issue or alert anyone.
+`POST /api/v1/errors` in Dokkit's own format, the Errors page, `GET /errors` and the `errors` tool. Message text is always dropped, because no service can be set to keep it yet. A group stores its first hundred reports and then one in a hundred; the count is exact. The door for Sentry's SDKs takes gzip or plain envelopes and keeps their error events. An error does not open an issue or alert anyone.

@@ -51,4 +51,80 @@ defmodule Dokkit.ErrorsTest do
     assert html =~ "line 214"
     assert html =~ "2 reports"
   end
+
+  test "an error event from one of Sentry's SDKs becomes a report, and the rest is dropped" do
+    machine = Repo.insert!(%Machine{name: "vault"})
+
+    service =
+      Repo.insert!(%Service{machine_id: machine.id, slug: "portal", name: "Upload portal"})
+
+    {app, _} = Keys.mint(:app, %{service_id: service.id})
+
+    event =
+      Jason.encode!(%{
+        timestamp: 1_790_000_000.5,
+        release: "2.3.0",
+        server_name: "host-01",
+        tags: [["route", "/upload"]],
+        exception: %{
+          values: [
+            %{
+              type: "TimeoutError",
+              value: "patient 4411 timed out",
+              mechanism: %{handled: false},
+              stacktrace: %{
+                frames: [
+                  %{filename: "httpx/_client.py", function: "send", lineno: 914, in_app: false},
+                  %{filename: "app/worker.py", function: "run_job", lineno: 212, in_app: true}
+                ]
+              }
+            }
+          ]
+        }
+      })
+
+    envelope =
+      Enum.join(
+        [
+          ~s({"event_id":"9ec79c33ec9942ab8353589fcb2e04dc","dsn":"https://#{app}@dokkit.example/1"}),
+          ~s({"type":"session"}),
+          ~s({"sid":"x"}),
+          ~s({"type":"event","length":#{byte_size(event)}}),
+          event,
+          ~s({"type":"transaction"}),
+          ~s({"spans":[]})
+        ],
+        "\n"
+      )
+
+    conn =
+      build_conn()
+      |> put_req_header("content-type", "application/x-sentry-envelope")
+      |> put_req_header("content-encoding", "gzip")
+      |> post("/api/1/envelope/", :zlib.gzip(envelope))
+
+    assert json_response(conn, 200)
+    assert [limits] = get_resp_header(conn, "x-sentry-rate-limits")
+    assert limits =~ "transaction"
+
+    assert [
+             %{
+               type: "TimeoutError",
+               top: "app/worker.py in run_job",
+               handled: false,
+               host: "host-01"
+             }
+           ] =
+             Read.errors()
+
+    refute inspect(Repo.all(Dokkit.ErrorEvent)) =~ "4411"
+
+    bad =
+      build_conn()
+      |> put_req_header("content-type", "application/x-sentry-envelope")
+      |> put_req_header("x-sentry-auth", "Sentry sentry_version=7, sentry_key=dka_nope")
+      |> post("/api/1/envelope/", envelope)
+
+    assert json_response(bad, 401)
+  end
 end

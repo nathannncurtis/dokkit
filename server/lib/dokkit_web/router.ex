@@ -54,6 +54,12 @@ defmodule DokkitWeb.Router do
     get "/", McpController, :other
   end
 
+  scope "/api", DokkitWeb do
+    pipe_through :api
+
+    post "/:project/envelope", IntakeController, :envelope
+  end
+
   scope "/api/v1", DokkitWeb do
     pipe_through :api
 

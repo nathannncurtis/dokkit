@@ -96,7 +96,7 @@ defmodule Dokkit.Errors do
     with true <- is_binary(text),
          {:ok, at, _} <- DateTime.from_iso8601(text),
          true <- DateTime.compare(at, now) != :gt do
-      at
+      %{at | microsecond: {elem(at.microsecond, 0), 6}}
     else
       _ -> now
     end

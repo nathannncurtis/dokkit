@@ -116,6 +116,36 @@ defmodule DokkitWeb.IntakeController do
     end
   end
 
+  @doc "The door for Sentry's SDKs. See spec/errors.md."
+  def envelope(conn, params) do
+    with {:ok, body, conn} <- body(conn),
+         {:ok, text} <- plain(conn, body),
+         {named, reports} = Dokkit.Envelope.read(text),
+         {:ok, key} <- Keys.verify(sentry_key(conn, params) || named || "", :app) do
+      for report <- reports, do: Intake.error(key, report)
+
+      conn
+      # Tells the SDK to keep the kinds Dokkit drops to itself for a day.
+      |> put_resp_header(
+        "x-sentry-rate-limits",
+        "86400:transaction;span;session;attachment;profile;replay;monitor;feedback:organization"
+      )
+      |> json(%{})
+    else
+      :error -> fail(conn, 401, "bad_key", "Missing or bad key.")
+      _ -> fail(conn, 413, "too_large", "Too large, or not readable.")
+    end
+  end
+
+  defp sentry_key(conn, params) do
+    auth = conn |> get_req_header("x-sentry-auth") |> List.first() || ""
+
+    case Regex.run(~r/sentry_key=([^,\s]+)/, auth) do
+      [_, key] -> key
+      _ -> params["sentry_key"]
+    end
+  end
+
   def propose(conn, params) do
     with {:ok, machine} <- machine(conn),
          {:ok, kept} <- Dokkit.Found.propose(machine, params) do
