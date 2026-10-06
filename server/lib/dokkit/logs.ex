@@ -129,7 +129,8 @@ defmodule Dokkit.Logs do
   def archive(dir, today \\ Date.utc_today()) do
     cutoff = Date.shift(Date.beginning_of_month(today), month: -@keep_months)
 
-    held = for {name, until} <- restored(), until > DateTime.utc_now(), do: name
+    back = restored()
+    held = for {name, until} <- back, until > DateTime.utc_now(), do: name
 
     months =
       Repo.query!("""
@@ -146,22 +147,33 @@ defmodule Dokkit.Logs do
       File.mkdir_p!(dir)
       path = Path.join(dir, "logs-#{year}-#{month}.ndjson.gz")
 
-      %{rows: rows} =
-        Repo.query!("SELECT row_to_json(l)::text FROM #{name} l ORDER BY l.at", [],
-          timeout: :infinity
-        )
+      # A month that came back from its file is only dropped; any other month is written out
+      # first, under a free name. Written as .part first so a half file is never an archive.
+      path =
+        if "logs-#{year}-#{month}" in Map.keys(back) and File.exists?(path) do
+          path
+        else
+          %{rows: rows} =
+            Repo.query!("SELECT row_to_json(l)::text FROM #{name} l ORDER BY l.at", [],
+              timeout: :infinity
+            )
 
-      # An existing file is the archive; a month that came back from it is only dropped.
-      # Written under another name first, so a half-written file is never taken for the archive.
-      unless File.exists?(path) do
-        File.write!(path <> ".part", :zlib.gzip(Enum.map_join(rows, "\n", &hd/1)))
-        File.rename!(path <> ".part", path)
-      end
+          path = free(path)
+          File.write!(path <> ".part", :zlib.gzip(Enum.map_join(rows, "
+", &hd/1)))
+          File.rename!(path <> ".part", path)
+          path
+        end
 
       Repo.query!("DROP TABLE #{name}")
       :persistent_term.erase({__MODULE__, key})
       path
     end
+  end
+
+  defp free(path, n \\ 1) do
+    next = if n == 1, do: path, else: String.replace_suffix(path, ".ndjson.gz", ".#{n}.ndjson.gz")
+    if File.exists?(next), do: free(path, n + 1), else: next
   end
 
   @restored_days 7
@@ -209,30 +221,39 @@ defmodule Dokkit.Logs do
       value = Map.new(back, fn {k, v} -> {k, DateTime.to_iso8601(v)} end)
 
       rows = rows(path)
-      # Partitions are made before the transaction, never inside it.
-      rows |> Enum.map(& &1.at) |> Enum.uniq_by(&{&1.year, &1.month}) |> Enum.each(&ensure_partition/1)
+      save_restored(Map.put(value, name, DateTime.to_iso8601(until)))
 
-      # Rows and the note that the month is back go in together; a stop halfway leaves neither.
-      {:ok, count} =
-        Repo.transaction(
-          fn ->
-            Repo.insert!(
-              %Dokkit.Setting{
-                key: "restored",
-                value: Map.put(value, name, DateTime.to_iso8601(until))
-              },
-              on_conflict: {:replace, [:value, :updated_at]},
-              conflict_target: :key
-            )
+      # The note is committed first so the hourly archive sees the month as held; it goes
+      # again if the rows do not all go in.
+      try do
+        rows
+        |> Enum.map(& &1.at)
+        |> Enum.uniq_by(&{&1.year, &1.month})
+        |> Enum.each(&ensure_partition/1)
 
-            rows |> Enum.chunk_every(1000) |> Enum.each(&Repo.insert_all(Dokkit.Log, &1))
-            length(rows)
-          end,
-          timeout: :infinity
-        )
+        {:ok, count} =
+          Repo.transaction(
+            fn ->
+              rows |> Enum.chunk_every(1000) |> Enum.each(&Repo.insert_all(Dokkit.Log, &1))
+              length(rows)
+            end,
+            timeout: :infinity
+          )
 
-      count
+        count
+      rescue
+        e ->
+          save_restored(value)
+          reraise e, __STACKTRACE__
+      end
     end
+  end
+
+  defp save_restored(value) do
+    Repo.insert!(%Dokkit.Setting{key: "restored", value: value},
+      on_conflict: {:replace, [:value, :updated_at]},
+      conflict_target: :key
+    )
   end
 
   defp rows(path) do
@@ -251,19 +272,19 @@ defmodule Dokkit.Logs do
     end
 
     for line <- path |> File.read!() |> :zlib.gunzip() |> String.split("\n", trim: true),
-          l = Jason.decode!(line),
-          l["machine_id"] in machines do
-        %{
-          at: time.(l["at"]),
-          received_at: time.(l["received_at"]),
-          level: l["level"],
-          msg: l["msg"],
-          fields: l["fields"],
-          cut: l["cut"],
-          machine_id: l["machine_id"],
-          service_id: if(l["service_id"] in services, do: l["service_id"])
-        }
-      end
+        l = Jason.decode!(line),
+        l["machine_id"] in machines do
+      %{
+        at: time.(l["at"]),
+        received_at: time.(l["received_at"]),
+        level: l["level"],
+        msg: l["msg"],
+        fields: l["fields"],
+        cut: l["cut"],
+        machine_id: l["machine_id"],
+        service_id: if(l["service_id"] in services, do: l["service_id"])
+      }
+    end
   end
 
   # Times far from now would each make a partition, so they are read as now.

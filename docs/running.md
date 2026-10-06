@@ -22,6 +22,8 @@ Postgres, always.
 
 Dokkit does not back up its own database. Whoever runs it does, with whatever they already use for Postgres. The plain way is a nightly `pg_dump` to another machine, wrapped in `dokkit run` so the backup shows up as a job like any other.
 
+Dokkit connects with its time zone set to UTC, and a migration re-bounds any log month made under another zone.
+
 Log months older than a year are archived as compressed files to a folder that is a setting. Those files are the archive, not a backup of the live database.
 
 ## First start
