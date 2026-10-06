@@ -31,6 +31,12 @@ using (var run = Dokkit.Client.Job("nightly-purge"))
     try { throw new InvalidOperationException("patient 4411"); }
     catch (Exception e) { run.Fail(e); }
 }
+using (var logs = Microsoft.Extensions.Logging.LoggerFactory.Create(b => Dokkit.DokkitLogging.AddDokkit(b, Microsoft.Extensions.Logging.LogLevel.Warning)))
+{
+    var log = logs.CreateLogger("app");
+    Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(log, "too quiet to send");
+    Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(log, "Disk at {Percent} percent", 91);
+}
 Dokkit.Client.Flush();
 
 var all = string.Join("\n", got.Select(g => g.Path + " " + g.Body));
@@ -38,10 +44,10 @@ string[] want =
 {
     "/api/v1/report {\"type\":\"deploy\"", "\"type\":\"beat\"", "\"every_seconds\":30", "\"state\":\"degraded\"",
     "oldest item is \\\"14\\\" minutes old", "\"event\":\"start\"", "\"event\":\"progress\"", "\"done\":4000",
-    "\"event\":\"fail\"", "/api/v1/errors {", "\"type\":\"InvalidOperationException\"", "\"handled\":false", "\"own\":true",
+    "\"event\":\"fail\"", "/api/v1/errors {", "\"type\":\"InvalidOperationException\"", "\"level\":\"warn\",\"msg\":\"Disk at 91 percent\"", "\"handled\":false", "\"own\":true",
 };
 var missing = want.Where(w => !all.Contains(w)).ToList();
-if (missing.Count > 0 || all.Contains("4411") || all.Contains("BAD KEY") || all.Contains("ignored"))
+if (missing.Count > 0 || all.Contains("4411") || all.Contains("BAD KEY") || all.Contains("ignored") || all.Contains("too quiet"))
 {
     Console.WriteLine("FAIL\nmissing: " + string.Join(" | ", missing) + "\n" + all);
     return 1;

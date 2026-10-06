@@ -42,7 +42,7 @@ Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift
 
 `clients/python/dokkit.py`: one file, standard library only. `start`, `beat`, `job`, `check`, `metric`, `stats`, `capture`, `catch_unhandled` and `handler` for the logging module.
 
-`clients/dotnet/Dokkit/Dokkit.cs`: one file for .NET Standard 2.0, no packages. `Start`, `Beat`, `Job`, `Check`, `Metric`, `Stats`, `Log`, `Capture` and `CatchUnhandled`. It has no provider for `Microsoft.Extensions.Logging` yet; an app that writes Serilog's compact format to a file can have `dokkit` read it.
+`clients/dotnet/Dokkit/Dokkit.cs`: one file for .NET Standard 2.0, no packages. `Start`, `Beat`, `Job`, `Check`, `Metric`, `Stats`, `Log`, `Capture` and `CatchUnhandled`. `clients/dotnet/Dokkit.Logging` is a second small project with the one package it needs, a provider for `Microsoft.Extensions.Logging`: `builder.Logging.AddDokkit()`. An app that writes Serilog's compact format to a file can have `dokkit` read it instead.
 
 `clients/javascript/dokkit.js`: one file, no packages, for Node 18 or later and for browsers. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture` and `catchUnhandled`. `dokkit.d.ts` beside it gives TypeScript the types.
 
