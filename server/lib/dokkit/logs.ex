@@ -42,7 +42,7 @@ defmodule Dokkit.Logs do
 
       {:ok,
        %{
-         at: time(line["t"] || line["@t"] || line["at"], received_at),
+         at: time(line["t"] || line["@t"] || line["at"], DateTime.utc_now()),
          received_at: received_at,
          machine_id: machine_id,
          service_id: service_id,
@@ -113,7 +113,7 @@ defmodule Dokkit.Logs do
       name = "logs_y#{year}m#{String.pad_leading(to_string(month), 2, "0")}"
 
       Repo.query!(
-        "CREATE TABLE IF NOT EXISTS #{name} PARTITION OF logs FOR VALUES FROM ('#{from}') TO ('#{to}')"
+        "CREATE TABLE IF NOT EXISTS #{name} PARTITION OF logs FOR VALUES FROM ('#{from} 00:00:00+00') TO ('#{to} 00:00:00+00')"
       )
 
       :persistent_term.put({__MODULE__, key}, true)
@@ -151,9 +151,13 @@ defmodule Dokkit.Logs do
           timeout: :infinity
         )
 
+      # An existing file is the archive; a month that came back from it is only dropped.
       # Written under another name first, so a half-written file is never taken for the archive.
-      File.write!(path <> ".part", :zlib.gzip(Enum.map_join(rows, "\n", &hd/1)))
-      File.rename!(path <> ".part", path)
+      unless File.exists?(path) do
+        File.write!(path <> ".part", :zlib.gzip(Enum.map_join(rows, "\n", &hd/1)))
+        File.rename!(path <> ".part", path)
+      end
+
       Repo.query!("DROP TABLE #{name}")
       :persistent_term.erase({__MODULE__, key})
       path
@@ -204,17 +208,34 @@ defmodule Dokkit.Logs do
       until = DateTime.add(now, @restored_days * 86_400)
       value = Map.new(back, fn {k, v} -> {k, DateTime.to_iso8601(v)} end)
 
-      Repo.insert!(
-        %Dokkit.Setting{key: "restored", value: Map.put(value, name, DateTime.to_iso8601(until))},
-        on_conflict: {:replace, [:value, :updated_at]},
-        conflict_target: :key
-      )
+      rows = rows(path)
+      # Partitions are made before the transaction, never inside it.
+      rows |> Enum.map(& &1.at) |> Enum.uniq_by(&{&1.year, &1.month}) |> Enum.each(&ensure_partition/1)
 
-      load(path)
+      # Rows and the note that the month is back go in together; a stop halfway leaves neither.
+      {:ok, count} =
+        Repo.transaction(
+          fn ->
+            Repo.insert!(
+              %Dokkit.Setting{
+                key: "restored",
+                value: Map.put(value, name, DateTime.to_iso8601(until))
+              },
+              on_conflict: {:replace, [:value, :updated_at]},
+              conflict_target: :key
+            )
+
+            rows |> Enum.chunk_every(1000) |> Enum.each(&Repo.insert_all(Dokkit.Log, &1))
+            length(rows)
+          end,
+          timeout: :infinity
+        )
+
+      count
     end
   end
 
-  defp load(path) do
+  defp rows(path) do
     machines = MapSet.new(Repo.all(from m in Dokkit.Machine, select: m.id))
     services = MapSet.new(Repo.all(from s in Dokkit.Service, select: s.id))
 
@@ -229,15 +250,11 @@ defmodule Dokkit.Logs do
       %{at | microsecond: {elem(at.microsecond, 0), 6}}
     end
 
-    rows =
-      for line <- path |> File.read!() |> :zlib.gunzip() |> String.split("\n", trim: true),
+    for line <- path |> File.read!() |> :zlib.gunzip() |> String.split("\n", trim: true),
           l = Jason.decode!(line),
           l["machine_id"] in machines do
-        at = time.(l["at"])
-        ensure_partition(at)
-
         %{
-          at: at,
+          at: time.(l["at"]),
           received_at: time.(l["received_at"]),
           level: l["level"],
           msg: l["msg"],
@@ -247,16 +264,13 @@ defmodule Dokkit.Logs do
           service_id: if(l["service_id"] in services, do: l["service_id"])
         }
       end
-
-    rows |> Enum.chunk_every(1000) |> Enum.each(&Repo.insert_all(Dokkit.Log, &1))
-    length(rows)
   end
 
   # Times far from now would each make a partition, so they are read as now.
   defp time(text, now) when is_binary(text) do
     with {:ok, at, _} <- DateTime.from_iso8601(text),
          true <- DateTime.compare(at, now) != :gt,
-         true <- DateTime.diff(now, at, :day) < 400 do
+         true <- DateTime.diff(now, at, :day) < 365 do
       %{at | microsecond: {elem(at.microsecond, 0), 6}}
     else
       _ -> now
