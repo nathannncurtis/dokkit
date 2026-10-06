@@ -15,7 +15,7 @@ defmodule DokkitWeb.DeploysLive do
   def handle_event("fetch", %{"machine" => id}, socket) do
     user = socket.assigns.current_user
     if user.role == :owner, do: Dokkit.Tasks.update(id, user.name)
-    {:noreply, assign(load(socket), asked: [id | socket.assigns[:asked] || []])}
+    {:noreply, push_navigate(socket, to: ~p"/tasks")}
   end
 
   defp load(socket) do
@@ -40,7 +40,6 @@ defmodule DokkitWeb.DeploysLive do
       held: held,
       behind:
         for(m <- machines, held, m.kind == :enrolled, m.program_version not in [nil, held], do: m),
-      asked: socket.assigns[:asked] || [],
       deploys: Dokkit.Deploys.list(),
       apps: Dokkit.Deploys.apps(),
       machines: machines,
@@ -108,7 +107,6 @@ defmodule DokkitWeb.DeploysLive do
             <div class="ti"><span>{m.name}</span></div>
             <span class="tag warn">{m.program_version}</span>
             <button
-              :if={m.id not in @asked}
               class="btn sm"
               type="button"
               phx-click="fetch"
@@ -117,7 +115,6 @@ defmodule DokkitWeb.DeploysLive do
             >
               Fetch the newer copy
             </button>
-            <.link :if={m.id in @asked} class="st" navigate={~p"/tasks"}>Asked. The run says where it is.</.link>
           </div>
           <div class="foot">
             A machine only fetches the file. Someone finishes the update on that machine, as an administrator; the program never replaces itself.

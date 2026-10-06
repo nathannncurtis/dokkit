@@ -4,53 +4,7 @@ defmodule DokkitWeb.ApiController do
   alias Dokkit.{Issues, Keys, Read}
 
   plug :token
-
-  plug :scope,
-       "read"
-       when action in [
-              :inbox,
-              :machines,
-              :services,
-              :service,
-              :issues,
-              :jobs,
-              :runs,
-              :tasks,
-              :task_runs,
-              :deploys,
-              :errors,
-              :error,
-              :series,
-              :rules,
-              :machine,
-              :versions,
-              :issue,
-              :proposals
-            ]
-
-  plug :scope, "read-logs" when action in [:logs]
-
-  plug :scope,
-       "act"
-       when action in [
-              :snooze,
-              :unsnooze,
-              :acknowledge,
-              :run_task,
-              :note,
-              :bulk,
-              :routing,
-              :watch,
-              :unwatch,
-              :checks,
-              :hold,
-              :restart,
-              :accept,
-              :dismiss,
-              :add_rule,
-              :update_rule,
-              :delete_rule
-            ]
+  plug :scope
 
   def inbox(conn, _), do: json(conn, Read.inbox())
   def issues(conn, _), do: list(conn, Read.issues())
@@ -60,9 +14,6 @@ defmodule DokkitWeb.ApiController do
   def deploys(conn, _), do: list(conn, Read.deploys())
   def errors(conn, _), do: list(conn, Read.errors())
   def rules(conn, _), do: list(conn, Read.rules())
-
-  plug :scope,
-       "admin" when action in [:keys, :add_key, :revoke_key, :users, :add_user, :remove_user]
 
   def keys(conn, _), do: list(conn, Read.keys())
   def users(conn, _), do: list(conn, Read.users())
@@ -168,10 +119,10 @@ defmodule DokkitWeb.ApiController do
   def unwatch(conn, %{"id" => id}), do: change(conn, id, &Dokkit.Estate.set_watched(&1, false))
 
   def hold(conn, %{"id" => id} = p),
-    do: change(conn, id, &Dokkit.Estate.set_hold(&1, p["version"]))
+    do: change(conn, id, &Dokkit.Estate.set(&1, :held, p["version"]))
 
   def restart(conn, %{"id" => id} = p),
-    do: change(conn, id, &Dokkit.Estate.set_restart(&1, p["allow"]))
+    do: change(conn, id, &Dokkit.Estate.set(&1, :restart, p["allow"]))
 
   def checks(conn, %{"id" => id} = params) do
     with %{} = service <- Dokkit.Estate.service(id),
@@ -224,12 +175,7 @@ defmodule DokkitWeb.ApiController do
   defp one(conn, nil), do: missing(conn)
   defp one(conn, thing), do: json(conn, thing)
 
-  def error(conn, %{"id" => id}) do
-    case Read.error(id) do
-      nil -> missing(conn)
-      error -> json(conn, error)
-    end
-  end
+  def error(conn, %{"id" => id}), do: one(conn, Read.error(id))
 
   def tasks(conn, _), do: list(conn, Read.tasks())
   def task_runs(conn, _), do: list(conn, Read.task_runs())
@@ -241,33 +187,12 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
-  def service(conn, %{"id" => id}) do
-    case Read.service(id) do
-      nil -> missing(conn)
-      service -> json(conn, service)
-    end
-  end
+  def service(conn, %{"id" => id}), do: one(conn, Read.service(id))
 
-  def series(conn, %{"id" => id} = params) do
-    case Read.series(id, params) do
-      nil -> missing(conn)
-      series -> json(conn, series)
-    end
-  end
+  def series(conn, %{"id" => id} = params), do: one(conn, Read.series(id, params))
 
-  def runs(conn, %{"id" => id}) do
-    case Read.runs(id) do
-      nil -> missing(conn)
-      runs -> list(conn, runs)
-    end
-  end
-
-  def logs(conn, params) do
-    case Read.logs(params) do
-      nil -> missing(conn)
-      lines -> list(conn, lines)
-    end
-  end
+  def runs(conn, %{"id" => id}), do: list(conn, Read.runs(id))
+  def logs(conn, params), do: list(conn, Read.logs(params))
 
   def snooze(conn, %{"id" => id, "until" => until}) do
     case seconds_until(until) do
@@ -302,6 +227,7 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
+  defp list(conn, nil), do: missing(conn)
   defp list(conn, items), do: json(conn, %{items: items, next: nil})
   defp missing(conn), do: fail(conn, 404, "not_found", "No such thing.")
 
@@ -315,7 +241,17 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
-  defp scope(conn, scope) do
+  # What a call needs follows from the call: reading needs read, log contents need
+  # read-logs, keys and people need admin, and anything else changes something.
+  defp scope(conn, _) do
+    scope =
+      case {conn.method, Enum.at(conn.path_info, 2)} do
+        {_, area} when area in ["keys", "users"] -> "admin"
+        {"GET", "logs"} -> "read-logs"
+        {"GET", _} -> "read"
+        _ -> "act"
+      end
+
     if scope in conn.assigns.key.scopes,
       do: conn,
       else: conn |> fail(403, "no_scope", "This token may not #{scope}.") |> halt()

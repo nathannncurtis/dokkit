@@ -251,11 +251,8 @@ func copyFile(from, to string) error {
 }
 
 var (
-	advapi32         = windows.NewLazySystemDLL("advapi32.dll")
-	logonUser        = advapi32.NewProc("LogonUserW")
-	crypt32          = windows.NewLazySystemDLL("crypt32.dll")
-	cryptMsgGetParam = crypt32.NewProc("CryptMsgGetParam")
-	cryptMsgClose    = crypt32.NewProc("CryptMsgClose")
+	advapi32  = windows.NewLazySystemDLL("advapi32.dll")
+	logonUser = advapi32.NewProc("LogonUserW")
 )
 
 // asLocalService makes a command run as Local Service, the account Windows keeps for
@@ -271,65 +268,6 @@ func asLocalService(cmd *exec.Cmd) (func(), error) {
 	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Token: syscall.Token(token)}
 	return func() { token.Close() }, nil
-}
-
-// signer says who signed a program, and only when Windows trusts the signature and the
-// file has not changed since it was signed.
-func signer(path string) (string, error) {
-	file, err := windows.UTF16PtrFromString(path)
-	if err != nil {
-		return "", err
-	}
-	trust := &windows.WinTrustData{
-		Size:             uint32(unsafe.Sizeof(windows.WinTrustData{})),
-		UIChoice:         windows.WTD_UI_NONE,
-		RevocationChecks: windows.WTD_REVOKE_NONE,
-		UnionChoice:      windows.WTD_CHOICE_FILE,
-		StateAction:      windows.WTD_STATEACTION_VERIFY,
-		FileOrCatalogOrBlobOrSgnrOrCert: unsafe.Pointer(&windows.WinTrustFileInfo{
-			Size:     uint32(unsafe.Sizeof(windows.WinTrustFileInfo{})),
-			FilePath: file,
-		}),
-	}
-	err = windows.WinVerifyTrustEx(windows.InvalidHWND, &windows.WINTRUST_ACTION_GENERIC_VERIFY_V2, trust)
-	trust.StateAction = windows.WTD_STATEACTION_CLOSE
-	windows.WinVerifyTrustEx(windows.InvalidHWND, &windows.WINTRUST_ACTION_GENERIC_VERIFY_V2, trust)
-	if err != nil {
-		return "", errors.New("it has no signature Windows trusts")
-	}
-
-	// Trusted. Now read whose signature it is.
-	var store, msg windows.Handle
-	err = windows.CryptQueryObject(windows.CERT_QUERY_OBJECT_FILE, unsafe.Pointer(file),
-		windows.CERT_QUERY_CONTENT_FLAG_PKCS7_SIGNED_EMBED, windows.CERT_QUERY_FORMAT_FLAG_BINARY, 0,
-		nil, nil, nil, &store, &msg, nil)
-	if err != nil {
-		return "", err
-	}
-	defer windows.CertCloseStore(store, 0)
-	defer cryptMsgClose.Call(uintptr(msg))
-	const signerCertInfo = 7
-	var size uint32
-	cryptMsgGetParam.Call(uintptr(msg), signerCertInfo, 0, 0, uintptr(unsafe.Pointer(&size)))
-	if size == 0 {
-		return "", errors.New("its signature names nobody")
-	}
-	info := make([]byte, size)
-	if ok, _, err := cryptMsgGetParam.Call(uintptr(msg), signerCertInfo, 0, uintptr(unsafe.Pointer(&info[0])), uintptr(unsafe.Pointer(&size))); ok == 0 {
-		return "", err
-	}
-	cert, err := windows.CertFindCertificateInStore(store, windows.X509_ASN_ENCODING|windows.PKCS_7_ASN_ENCODING, 0,
-		windows.CERT_FIND_SUBJECT_CERT, unsafe.Pointer(&info[0]), nil)
-	if err != nil {
-		return "", err
-	}
-	defer windows.CertFreeCertificateContext(cert)
-	name := make([]uint16, 256)
-	windows.CertGetNameString(cert, windows.CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, nil, &name[0], uint32(len(name)))
-	if who := windows.UTF16ToString(name); who != "" {
-		return who, nil
-	}
-	return "", errors.New("its signature names nobody")
 }
 
 func finishUpdate(path string) string {

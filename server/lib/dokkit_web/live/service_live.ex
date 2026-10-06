@@ -26,9 +26,9 @@ defmodule DokkitWeb.ServiceLive do
     if socket.assigns.current_user.role != :viewer do
       case event do
         "watching" -> Estate.set_watched(service, !service.watched)
-        "hold" -> Estate.set_hold(service, String.trim(params["version"] || ""))
-        "restart" -> Estate.set_restart(service, !service.restart)
-        "messages" -> Estate.set_keep_messages(service, !service.keep_messages)
+        "hold" -> Estate.set(service, :held, String.trim(params["version"] || ""))
+        "restart" -> Estate.set(service, :restart, !service.restart)
+        "messages" -> Estate.set(service, :keep_messages, !service.keep_messages)
       end
     end
 

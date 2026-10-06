@@ -577,7 +577,7 @@ func TestAnUpdateIsFetchedAndNothingIsReplaced(t *testing.T) {
 	if err != nil || string(b) != "the newer copy" {
 		t.Fatalf("the copy is left beside the spool: %q %v", b, err)
 	}
-	if !strings.Contains(said, "The newer copy is at") || !strings.Contains(said, "not signed") || !strings.Contains(said, "To finish") {
+	if !strings.Contains(said, "The newer copy is at") || !strings.Contains(said, "To finish") {
 		t.Fatalf("the run says where it is and how to finish: %q", said)
 	}
 }

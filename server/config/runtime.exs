@@ -3,11 +3,9 @@ import Config
 # A Windows service is not started through a script, so there is nowhere to set variables for
 # it. Its settings are lines of NAME=value in a file only administrators can read. A variable
 # that is already set wins.
-settings =
-  System.get_env("DOKKIT_SETTINGS") ||
-    Path.join(System.get_env("ProgramData") || "/etc", "Dokkit/settings.env")
+settings = Path.join(System.get_env("ProgramData") || "", "Dokkit/settings.env")
 
-if config_env() == :prod and File.regular?(settings) do
+if config_env() == :prod and Path.type(settings) == :absolute and File.regular?(settings) do
   for line <- settings |> File.read!() |> String.split(~r/\r?\n/, trim: true),
       [name, value] <- [String.split(line, "=", parts: 2)],
       System.get_env(name) == nil,

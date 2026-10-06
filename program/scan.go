@@ -370,7 +370,7 @@ func (c *client) update(run string) {
 	if err != nil {
 		said, code = "Not fetched: "+err.Error(), 1
 	} else {
-		said = "The newer copy is at " + path + ", " + signedBy(path) + ".\n" + finishUpdate(path)
+		said = "The newer copy is at " + path + ".\n" + finishUpdate(path)
 	}
 	fmt.Println(time.Now().Format("15:04:05"), "", said)
 	c.call("POST", "/api/v1/work/"+run+"/output", "text/plain", []byte(said+"\n"), nil)
@@ -398,13 +398,6 @@ func (c *client) fetchUpdate() (string, error) {
 		return "", fmt.Errorf("the server has no newer copy for this kind of machine (%d)", status)
 	}
 	return path, os.Rename(path+".part", path)
-}
-
-func signedBy(path string) string {
-	if who, err := signer(path); err == nil {
-		return "signed by " + who
-	}
-	return "not signed"
 }
 
 // work asks the server for task runs, holding each request open, and runs them one at a time.

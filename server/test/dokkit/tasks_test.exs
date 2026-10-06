@@ -142,7 +142,10 @@ defmodule Dokkit.TasksTest do
     Dokkit.Repo.update_all(Dokkit.Machine, set: [kind: :enrolled, program_version: "0.1.0"])
     {:ok, view, html} = live(signed_in(conn), "/versions")
     assert html =~ "This server holds 0.2.0"
-    assert render_click(view, "fetch", %{"machine" => machine.id}) =~ "The run says where it is"
+
+    assert {:error, {:live_redirect, %{to: "/tasks"}}} =
+             render_click(view, "fetch", %{"machine" => machine.id})
+
     assert %{"task" => "dokkit:update"} = json_response(get(as(key), "/api/v1/work?wait=0"), 200)
   end
 end

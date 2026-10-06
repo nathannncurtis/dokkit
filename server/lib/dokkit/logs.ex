@@ -196,12 +196,13 @@ defmodule Dokkit.Logs do
   def restore(path) do
     name = Path.basename(path, ".ndjson.gz")
     now = DateTime.utc_now()
+    back = restored()
 
-    if match?(%DateTime{}, restored()[name]) and DateTime.compare(restored()[name], now) == :gt do
+    if back[name] && DateTime.compare(back[name], now) == :gt do
       0
     else
       until = DateTime.add(now, @restored_days * 86_400)
-      value = Map.new(restored(), fn {k, v} -> {k, DateTime.to_iso8601(v)} end)
+      value = Map.new(back, fn {k, v} -> {k, DateTime.to_iso8601(v)} end)
 
       Repo.insert!(
         %Dokkit.Setting{key: "restored", value: Map.put(value, name, DateTime.to_iso8601(until))},

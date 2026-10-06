@@ -65,7 +65,7 @@ A scan never reads file contents, credentials, browser data, or another program'
 
 ## Updates
 
-`dokkit` never updates itself, and never replaces its own file. The interface shows when a machine is behind the copy the server holds. A person can ask that machine to fetch the newer copy, which is a built-in task: the file is left in an `update` folder beside the spool, and the run says where it is and who signed it, or that it is not signed. The update is finished on the machine by a person, as an administrator: `"<that file>" service update` stops the service, puts the newer copy in its place and starts it. A program that swaps itself for whatever a server sends it, while running as the system account, is the thing this avoids.
+`dokkit` never updates itself, and never replaces its own file. The interface shows when a machine is behind the copy the server holds. A person can ask that machine to fetch the newer copy, which is a built-in task: the file is left in an `update` folder beside the spool, and the run says where it is. The update is finished on the machine by a person, as an administrator: `"<that file>" service update` stops the service, puts the newer copy in its place and starts it. A program that swaps itself for whatever a server sends it, while running as the system account, is the thing this avoids.
 
 ## Signing
 

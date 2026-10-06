@@ -275,22 +275,19 @@ defmodule Dokkit.Estate do
     service
   end
 
-  @doc "Marks a version as held on purpose, so being behind is not news. nil lets go."
-  def set_hold(%Service{} = service, version),
-    do:
-      Repo.update!(
-        Ecto.Changeset.change(service,
-          held: (is_binary(version) && version != "" && version) || nil
-        )
-      )
+  @doc """
+  Sets one of a service's own switches: `:held`, a version kept on purpose so that being
+  behind is not news; `:restart`, letting the installed program start its Windows service
+  when it has stopped; `:keep_messages`, keeping the text of its errors from now on.
+  """
+  def set(%Service{} = service, field, value) when field in [:held, :restart, :keep_messages] do
+    value =
+      if field == :held,
+        do: (is_binary(value) and value != "" and value) || nil,
+        else: value == true
 
-  @doc "Allows the installed program to start this service's Windows service when it has stopped."
-  def set_restart(%Service{} = service, allow),
-    do: Repo.update!(Ecto.Changeset.change(service, restart: allow == true))
-
-  @doc "Keeps the message text of this service's errors from now on, or stops keeping it."
-  def set_keep_messages(%Service{} = service, keep),
-    do: Repo.update!(Ecto.Changeset.change(service, keep_messages: keep == true))
+    Repo.update!(Ecto.Changeset.change(service, [{field, value}]))
+  end
 
   @runs ~w(http tcp process windows-service)
 
