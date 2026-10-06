@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -107,6 +108,9 @@ func (w *watcher) stats() []any {
 func fetchStats(d *declaration) any {
 	var document map[string]any
 	req, err := http.NewRequest("GET", d.Stats.URL, nil)
+	if k := d.Stats.KeyEnv; err == nil && k != "" && !strings.HasPrefix(k, statsKeyPrefix) {
+		err = errors.New("key_env must name a variable that starts with " + statsKeyPrefix)
+	}
 	if err == nil {
 		if d.Stats.KeyEnv != "" {
 			req.Header.Set("X-Stats-Key", os.Getenv(d.Stats.KeyEnv))

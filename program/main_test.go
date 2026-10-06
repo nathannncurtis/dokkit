@@ -459,7 +459,7 @@ func TestStatsVitalsAndExpiry(t *testing.T) {
 	}
 
 	r := d.Check[0].run()
-	if l := stateLine(d, &d.Check[0], r); l["state"] != "degraded" || l["value"].(float64) > 10 || l["value"].(float64) < 9 {
+	if l := stateLine(d, &d.Check[0], r); l["state"] != "degraded" || l["value"].(float64) > 11 || l["value"].(float64) < 9 {
 		t.Fatalf("expiry: %v", l)
 	}
 

@@ -238,6 +238,12 @@ func load() (*client, error) {
 			c.spool = filepath.Join(dir, "spool")
 		}
 	}
+	if p := listsPath(); p != "" {
+		var l saved
+		if b, err := os.ReadFile(p); err == nil && json.Unmarshal(b, &l) == nil {
+			s.Restart, s.Hosts = l.Restart, l.Hosts
+		}
+	}
 	c.folders, c.pin, c.restartable, c.hosts = s.Folders, s.Pin, s.Restart, s.Hosts
 	pinTo(s.Pin)
 	if f := os.Getenv("DOKKIT_FOLDERS"); f != "" {

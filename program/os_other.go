@@ -7,12 +7,29 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 )
 
 func machineDir() string { return "" }
+
+// listsPath is the file naming the services this machine may start and the hosts it may reach,
+// used only while root owns it and the folder and nobody else can write to either.
+func listsPath() string {
+	const p = "/etc/dokkit/config.json"
+	for _, f := range []string{p, filepath.Dir(p)} {
+		fi, err := os.Stat(f)
+		if err != nil {
+			return ""
+		}
+		if st, ok := fi.Sys().(*syscall.Stat_t); !ok || st.Uid != 0 || fi.Mode().Perm()&0o022 != 0 {
+			return ""
+		}
+	}
+	return p
+}
 
 func asService() bool { return false }
 

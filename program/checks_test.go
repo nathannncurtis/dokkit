@@ -15,8 +15,8 @@ func TestExpiryCountsWholeDaysAndASelfSignedCertificateIsRead(t *testing.T) {
 	if r := expiryResult(at.Add(-time.Hour), at); r.state != "down" {
 		t.Fatalf("a date an hour past is down: %+v", r)
 	}
-	if r := expiryResult(at.Add(10*time.Hour), at); r.state != "degraded" || r.value != 0 {
-		t.Fatalf("ten hours left is degraded with 0 days: %+v", r)
+	if r := expiryResult(at.Add(10*time.Hour), at); r.state != "degraded" || r.value != 1 {
+		t.Fatalf("ten hours left is degraded and shows 1 day: %+v", r)
 	}
 	if r := expiryResult(at.Add(40*24*time.Hour), at); !r.ok {
 		t.Fatalf("forty days is fine: %+v", r)
@@ -61,8 +61,18 @@ func TestFilesAndKeysStayWhereTheFileAllows(t *testing.T) {
 		t.Fatal("a date file outside the folder is not read")
 	}
 	os.WriteFile(file, []byte("schema = 1\n[service]\nid = \"app\"\n[stats]\nurl = \"http://x\"\nkey_env = \"PATH\"\n"), 0o600)
-	if _, err := readDeclaration(file); err == nil {
-		t.Fatal("key_env outside the stats prefix is refused")
+	d, err = readDeclaration(file)
+	if err != nil {
+		t.Fatal("the file is kept; only the key is refused:", err)
+	}
+	if line := fetchStats(d).(map[string]any); line["state"] != "down" || !strings.Contains(line["note"].(string), statsKeyPrefix) {
+		t.Fatalf("key_env outside the stats prefix is reported: %v", line)
+	}
+	day := filepath.Join(dir, "when")
+	os.WriteFile(day, []byte(time.Now().UTC().Format("2006-01-02")+"\n"), 0o600)
+	c = &check{Type: "expiry", DateFrom: "when", dir: dir}
+	if until, err := c.expires(); err != nil || expiryResult(until, time.Now()).state == "down" {
+		t.Fatalf("a date is good through its own day: %v %v", until, err)
 	}
 }
 
@@ -73,6 +83,7 @@ func TestPulledChecksNeedThisMachinesLeave(t *testing.T) {
 			{"service":"s","name":"other-svc","type":"windows-service","restart":true,"config":{"name":"Other"}},
 			{"service":"s","name":"far","type":"tcp","config":{"host":"10.9.9.9","port":1}},
 			{"service":"s","name":"named","type":"tcp","config":{"host":"db.example","port":1}},
+			{"service":"s","name":"spoof","type":"tcp","config":{"host":"127.example.com","port":1}},
 			{"service":"s","name":"near","type":"tcp","config":{"host":"localhost","port":1}}]}`))
 	}))
 	defer srv.Close()
@@ -83,11 +94,15 @@ func TestPulledChecksNeedThisMachinesLeave(t *testing.T) {
 	for _, d := range w.added {
 		got[d.Check[0].name] = d.Check[0].restart
 	}
-	if len(got) != 4 || !got["allowed-svc"] || got["other-svc"] {
+	if !got["allowed-svc"] || got["other-svc"] {
 		t.Fatalf("only a named service is started: %v", got)
 	}
-	if _, ok := got["far"]; ok {
-		t.Fatal("a host nobody named is not reached")
+	for _, name := range []string{"far", "spoof"} {
+		for _, d := range w.added {
+			if c := d.Check[0]; c.name == name && c.run().state != "down" || c.name == name && c.refused == "" {
+				t.Fatalf("a host nobody named is refused and reported: %s", name)
+			}
+		}
 	}
 	if _, ok := got["named"]; !ok {
 		t.Fatal("a host the configuration names is")

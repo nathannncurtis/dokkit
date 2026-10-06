@@ -49,6 +49,8 @@ type check struct {
 	name, dir             string
 	next                  time.Time
 	restart               bool
+	refuseStart           bool
+	refused               string
 }
 
 // Only variables with this prefix can be sent to a stats address.
@@ -121,9 +123,6 @@ func readDeclaration(path string) (*declaration, error) {
 	}
 	if d.Service.ID == "" {
 		return nil, errors.New("[service] needs an id")
-	}
-	if k := d.Stats.KeyEnv; k != "" && !strings.HasPrefix(k, statsKeyPrefix) {
-		return nil, fmt.Errorf("[stats] key_env must name a variable that starts with %s", statsKeyPrefix)
 	}
 	// The same names the server gives: the check's name, or its type, numbered when it repeats.
 	seen := map[string]int{}
@@ -223,13 +222,26 @@ func (c *check) host() string {
 // mayReach says whether a check pulled from the server may go to host: this machine always,
 // anything else only when this machine's own configuration names it.
 func (c *client) mayReach(host string) bool {
-	if host == "" || host == "localhost" || host == "::1" || strings.HasPrefix(host, "127.") {
+	if host == "" || strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil && (ip.IsLoopback() || ownAddress(ip)) {
 		return true
 	}
 	if me, _ := os.Hostname(); strings.EqualFold(me, host) {
 		return true
 	}
 	return slices.ContainsFunc(c.hosts, func(h string) bool { return strings.EqualFold(h, host) })
+}
+
+func ownAddress(ip net.IP) bool {
+	addrs, _ := net.InterfaceAddrs()
+	for _, a := range addrs {
+		if n, ok := a.(*net.IPNet); ok && n.IP.Equal(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // expires reads a date from a certificate (an https address or host:port) or from a file's first line.
@@ -261,7 +273,8 @@ func (c *check) expires() (time.Time, error) {
 	if t, err := time.Parse(time.RFC3339, line); err == nil {
 		return t, nil
 	}
-	return time.Parse("2006-01-02", line)
+	t, err := time.Parse("2006-01-02", line)
+	return t.Add(24 * time.Hour), err // a bare date lasts through that day
 }
 
 func (c *check) timeout() time.Duration {
@@ -272,6 +285,9 @@ func (c *check) timeout() time.Duration {
 }
 
 func (c *check) run() result {
+	if c.refused != "" {
+		return result{state: "down", note: c.refused}
+	}
 	started := time.Now()
 	var err error
 	switch c.Type {
@@ -302,8 +318,13 @@ func (c *check) run() result {
 	case "process":
 		err = processRunning(c.Name)
 	case "windows-service":
-		if err = serviceRunning(c.Name); err != nil && c.tryRestart() {
-			return result{ok: true, note: "had stopped; started it again"}
+		if err = serviceRunning(c.Name); err != nil {
+			if c.tryRestart() {
+				return result{ok: true, note: "had stopped; started it again"}
+			}
+			if c.refuseStart {
+				err = fmt.Errorf("%w; this machine does not allow starting it, list it under restart in its config.json", err)
+			}
 		}
 	}
 	if err != nil {
@@ -312,11 +333,15 @@ func (c *check) run() result {
 	return result{ok: true, value: float64(time.Since(started).Milliseconds())}
 }
 
-// expiryResult counts whole days left, so a date that went by an hour ago is already down.
+// expiryResult is down once the time has passed, and shows whole days left, rounded up while any remain.
 func expiryResult(until, at time.Time) result {
-	days := math.Floor(until.Sub(at).Hours() / 24)
+	left := until.Sub(at).Hours() / 24
+	days := math.Floor(left)
+	if left > 0 {
+		days = math.Ceil(left)
+	}
 	switch {
-	case days < 0:
+	case left < 0:
 		return result{state: "down", value: days, note: "ran out on " + until.Format("Jan 2 2006")}
 	case days < 30:
 		return result{state: "degraded", value: days, note: fmt.Sprintf("runs out in %.0f days, on %s", days, until.Format("Jan 2 2006"))}
@@ -527,8 +552,12 @@ func (w *watcher) pull() {
 		c.Type, c.name = item.Type, item.Name
 		// Only a service this machine's own configuration names is ever started, and only
 		// addresses on this machine, or named there, are reached.
-		c.restart = item.Restart && slices.ContainsFunc(w.c.restartable, func(n string) bool { return strings.EqualFold(n, c.Name) })
-		if runs, _ := c.problem(); runs && w.c.mayReach(c.host()) {
+		listed := slices.ContainsFunc(w.c.restartable, func(n string) bool { return strings.EqualFold(n, c.Name) })
+		c.restart, c.refuseStart = item.Restart && listed, item.Restart && !listed
+		if runs, _ := c.problem(); runs {
+			if h := c.host(); !w.c.mayReach(h) {
+				c.refused = "this machine does not allow reaching " + h + "; list it under hosts in its config.json"
+			}
 			d := &declaration{Check: []check{c}}
 			d.Service.ID = item.Service
 			w.added = append(w.added, d)

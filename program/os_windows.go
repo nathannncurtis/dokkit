@@ -24,6 +24,9 @@ const serviceName = "dokkit"
 // Only administrators and the system account can read it.
 func machineDir() string { return filepath.Join(os.Getenv("ProgramData"), "dokkit") }
 
+// The installed service's config.json carries the lists; there is no other place.
+func listsPath() string { return "" }
+
 // asService runs watch when Windows started this program as a service.
 func asService() bool {
 	if is, _ := svc.IsWindowsService(); !is {
@@ -99,7 +102,14 @@ func serviceCommand(action string) int {
 			return err
 		}
 		s.Control(svc.Stop)
-		os.Remove(filepath.Join(machineDir(), "config.json"))
+		// The address and key go; the restart and hosts lists stay for the next install.
+		file := filepath.Join(machineDir(), "config.json")
+		var l saved
+		if keep, err := os.ReadFile(file); err == nil && trustedOwner(file) == nil {
+			json.Unmarshal(keep, &l)
+		}
+		b, _ := json.Marshal(saved{Restart: l.Restart, Hosts: l.Hosts})
+		os.WriteFile(file, b, 0o600)
 		return s.Delete()
 	}()
 	if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
@@ -120,26 +130,42 @@ func install(m *mgr.Mgr) error {
 		s.Close()
 		return errors.New("the service is already installed")
 	}
-	c, err := load()
-	if err != nil {
-		return err
-	}
 	dir := machineDir()
 	if _, err := os.Stat(dir); err == nil {
 		if err := trustedOwner(dir); err != nil {
 			return err
 		}
 	}
+	// A config.json left in the folder counts only for its two lists, and only if an administrator owns it.
+	file := filepath.Join(dir, "config.json")
+	var lists saved
+	if b, err := os.ReadFile(file); err == nil && trustedOwner(file) == nil {
+		json.Unmarshal(b, &lists)
+	}
+	if p, err := configPath(); err == nil && os.Getenv("DOKKIT_CONFIG") == "" {
+		os.Setenv("DOKKIT_CONFIG", p) // the address and key come from the person installing, never from the folder
+	}
+	c, err := load()
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Join(dir, "spool"), 0o700); err != nil {
 		return err
 	}
-	// The system account and administrators, by their fixed ids, and nobody else.
-	if out, err := exec.Command("icacls", dir, "/T", "/C", "/inheritance:r", "/grant:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F").CombinedOutput(); err != nil {
-		return fmt.Errorf("could not lock down %s: %s", dir, out)
+	os.RemoveAll(filepath.Join(dir, "update"))
+	// Everything inside becomes administrator-owned with the system account and administrators as the only entries.
+	for _, args := range [][]string{
+		{dir, "/setowner", "*S-1-5-32-544", "/T", "/C"},
+		{dir, "/reset", "/T", "/C"},
+		{dir, "/inheritance:r", "/grant:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F", "/T", "/C"},
+	} {
+		if out, err := exec.Command("icacls", args...).CombinedOutput(); err != nil {
+			return fmt.Errorf("could not lock down %s: %s", dir, out)
+		}
 	}
-	os.Remove(filepath.Join(dir, "config.json"))
-	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders})
-	if err := os.WriteFile(filepath.Join(dir, "config.json"), b, 0o600); err != nil {
+	os.Remove(file)
+	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders, Restart: lists.Restart, Hosts: lists.Hosts})
+	if err := os.WriteFile(file, b, 0o600); err != nil {
 		return err
 	}
 	from, err := os.Executable()
