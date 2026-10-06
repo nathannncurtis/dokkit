@@ -94,14 +94,33 @@ function say() {
 $("#told").addEventListener("input", say);
 
 // What an agent is offered follows its token.
-const TOOLS = { read: ["attention", "find", "service", "since_deploy", "jobs", "job_runs", "errors", "tasks"], "read-logs": ["logs"], act: ["snooze", "acknowledge", "run_task"] };
+const TOOLS = {
+  read: ["attention", "find", "service", "since_deploy", "jobs", "job_runs", "errors", "tasks", "task_runs", "machines", "machine", "issues", "issue", "deploys", "versions", "rules", "proposals", "series"],
+  "read-logs": ["logs"],
+  act: ["snooze", "unsnooze", "acknowledge", "note", "bulk", "watch", "unwatch", "routing", "hold", "accept_proposal", "dismiss_proposal", "run_task"],
+  admin: ["add_rule", "update_rule", "delete_rule", "set_checks", "allow_restart", "keys", "make_key", "revoke_key", "people", "add_person", "remove_person"],
+};
 function offer() {
-  const on = { read: true, "read-logs": $("#scLogs").checked, act: $("#scAct").checked };
+  const all = $("#scAll").checked;
+  const on = { read: true, "read-logs": all || $("#scLogs").checked, act: all || $("#scAct").checked, admin: all };
   let n = 0;
-  $("#tools").innerHTML = Object.entries(TOOLS).map(([s, names]) => names.map((t) => { n += on[s]; return `<code class="${on[s] ? "" : "off"}">${t}</code>`; }).join("")).join("");
-  $("#toolSay").textContent = `This token is offered ${n} of 12 tools. ` + (on.act ? "It can snooze, mark as seen and run tasks you accepted, and nothing else." : "It cannot change anything.") + (on["read-logs"] ? "" : " Log contents are left out of every answer.");
+  $("#tools").innerHTML = Object.entries(TOOLS).map(([s, names]) => names.map((t) => { n += on[s]; return `<code class="${on[s] ? (s === "admin" ? "adm" : "") : "off"}">${t}</code>`; }).join("")).join("");
+  $("#toolSay").textContent = `This token is offered ${n} of 42 tools. ` + (all ? "It can do anything you can, keys and people included." : (on.act ? "It can act on issues and run tasks you accepted. It cannot touch keys, people or rules." : "It cannot change anything.") + (on["read-logs"] ? "" : " Log contents are left out of every answer."));
 }
-$("#token").addEventListener("input", () => { offer(); ask(asked); });
+// Full control is not a switch you can just flip.
+let sure = false;
+$("#token").addEventListener("input", (e) => {
+  const box = $("#scAll");
+  if (e.target === box) {
+    if (box.checked && !sure) { box.checked = false; $("#sure").hidden = false; return $("#sureText").focus(); }
+    if (!box.checked) sure = false;
+  }
+  if (e.target.id === "sureText") return ($("#sureYes").disabled = e.target.value.trim() !== "brightwater");
+  offer(); ask(asked);
+});
+$("#sureYes").onclick = () => { sure = true; $("#scAll").checked = true; shut(); offer(); ask(asked); };
+const shut = () => { $("#sure").hidden = true; $("#sureText").value = ""; $("#sureYes").disabled = true; };
+$("#sureNo").onclick = shut;
 
 // What an agent does with it. The calls are the MCP tools; a tool the token lacks is never called.
 const ASK = [
@@ -118,13 +137,17 @@ const ASK = [
   (on) => on.act
     ? [["call", 'snooze { id: "DOK-13", until: "Monday 09:00" }'], ["got", "snoozed"], ["says", "Done. DOK-13 is snoozed until Monday 09:00. It comes back then if the disk is still over 90%."]]
     : [["says", "I cannot. This token reads, and is not offered snooze."], ["note", "Let the token act, on the left, and ask again."]],
+  (on) => on.all
+    ? [["call", 'add_rule { kind: "machine", machine: "db-01", state: "down", channel: "page" }'], ["got", "rule added, last in the list"], ["says", "Done. If db-01 goes down, you are paged. It is the last rule, so earlier rules still win."]]
+    : [["says", "I cannot. Rules decide who is told, and this token is not offered add_rule."], ["note", "Full control, on the left, makes you confirm first."]],
 ];
 const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let asked = 0, turn = 0;
 function ask(q) {
   asked = q;
   const mine = ++turn, talk = $("#talk");
-  const lines = [["you", $(`.qs [data-q="${q}"]`).textContent], ...ASK[q]({ logs: $("#scLogs").checked, act: $("#scAct").checked })];
+  const all = $("#scAll").checked;
+  const lines = [["you", $(`.qs [data-q="${q}"]`).textContent], ...ASK[q]({ logs: all || $("#scLogs").checked, act: all || $("#scAct").checked, all })];
   talk.innerHTML = "";
   lines.forEach(([kind, text], i) => setTimeout(() => {
     if (mine !== turn) return;

@@ -97,7 +97,14 @@
           <div class="chead"><i class="s ok"></i><div><b>A token for an agent</b><code>dku_&hellip; &middot; made in Settings</code></div></div>
           <div class="crow"><span>Read states, issues, jobs and errors</span><code>always</code></div>
           <div class="crow"><span>Read what is written in the logs</span><label class="sw"><input type="checkbox" id="scLogs"><span></span></label></div>
-          <div class="crow"><span>Snooze, mark as seen, run tasks you accepted</span><label class="sw"><input type="checkbox" id="scAct"><span></span></label></div>
+          <div class="crow"><span>Snooze, mark as seen, watch, run tasks you accepted</span><label class="sw"><input type="checkbox" id="scAct"><span></span></label></div>
+          <div class="crow"><span>Everything you can do: keys, people, rules, checks</span><label class="sw"><input type="checkbox" id="scAll"><span></span></label></div>
+          <div class="sure" id="sure" hidden>
+            <b>A token that can do everything</b>
+            <p>Whatever holds it can make and revoke keys, add and remove people, and change who is told, with nobody asked first. Dokkit makes you say so twice.</p>
+            <label><span>Type <code>brightwater</code> to confirm</span><input id="sureText" autocomplete="off" spellcheck="false"></label>
+            <div class="acts"><button class="btn sm" id="sureNo" type="button">Cancel</button><button class="btn sm bad" id="sureYes" type="button" disabled>Give it full control</button></div>
+          </div>
           <div class="tools" id="tools"></div>
           <p class="tip" id="toolSay"></p>
         </div>
@@ -107,6 +114,7 @@
             <button data-q="1">Why did nightly-purge not run?</button>
             <button data-q="2">What broke since the last deploy?</button>
             <button data-q="3">Snooze the disk warning until Monday</button>
+            <button data-q="4">Page me if db-01 goes down</button>
           </div>
           <div class="talk" id="talk" aria-live="polite"></div>
           <p class="tip">Sample answers on the sample data. The tool calls are the real ones, and they follow the token on the left.</p>
@@ -118,7 +126,7 @@
             <li><b>A script, over the API</b><div class="cmd"><code id="c7">curl -H "Authorization: Bearer dku_..." https://your.domain.com/api/v1/inbox</code><button class="btn" data-copy="c7">Copy</button></div></li>
             <li><b>In an app's repo, from the command line</b><div class="cmd"><code id="c8">dokkit check</code><button class="btn" data-copy="c8">Copy</button></div><span class="quiet">Runs every check once and prints what would be sent. No server needed.</span></li>
           </ol>
-          <p class="quiet never">Never offered to an agent: accepting what a scan found, making keys, managing people. Those stay with a person. <a href="api.html">The whole API</a> and <a href="cli.html">every command</a> are written down.</p>
+          <p class="quiet never">An agent can be given everything you can do, and Dokkit asks you to be sure before it makes that token. <a href="api.html">The whole API</a> and <a href="cli.html">every command</a> are written down.</p>
       </div>
     </div>
   </section>
