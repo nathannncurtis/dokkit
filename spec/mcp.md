@@ -16,7 +16,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 
 | Tool | Scope | Does |
 |---|---|---|
-| `attention` | `read` | Shows what needs a look right now. |
+| `attention` | `read` | Shows what needs a look now, what will soon, what was found and is not watched, what is snoozed, issues in other environments, and how many things are fine. |
 | `find` | `read` | Searches services, optionally on one machine. |
 | `service` | `read` | Shows one service: state, checks, routing, open issue. |
 | `since_deploy` | `read` | Shows what changed or broke for a service since its last deploy. |

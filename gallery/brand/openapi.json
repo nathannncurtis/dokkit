@@ -2360,7 +2360,7 @@
         "tags": [
           "Read"
         ],
-        "description": "What needs a look, and what is snoozed. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "description": "What needs a look, what will soon, what was found and is not watched, what is snoozed, issues in other environments, and how many things are fine. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
         "responses": {
           "200": {
             "description": "OK.",
@@ -2375,10 +2375,72 @@
                         "$ref": "#/components/schemas/Issue"
                       }
                     },
+                    "soon": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Issue"
+                      }
+                    },
+                    "not_watched": {
+                      "type": "array",
+                      "description": "What a scan found that nobody watches or dismissed.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "description": "service or port."
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "object"
+                          },
+                          "machine": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
                     "snoozed": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/Issue"
+                      }
+                    },
+                    "other_environments": {
+                      "type": "array",
+                      "description": "Issues of services that are not in production, by environment. They never count as needing you.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "environment": {
+                            "type": "string"
+                          },
+                          "issues": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/components/schemas/Issue"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "fine": {
+                      "type": "object",
+                      "description": "Watched services with nothing open, and how many machines.",
+                      "properties": {
+                        "services": {
+                          "type": "integer"
+                        },
+                        "machines": {
+                          "type": "integer"
+                        }
                       }
                     }
                   }
@@ -2401,10 +2463,54 @@
                       "alert": {
                         "channel": "page",
                         "status": "sent"
-                      }
+                      },
+                      "soon": false
                     }
                   ],
-                  "snoozed": []
+                  "soon": [
+                    {
+                      "id": "9b2e4d10-77aa-4c3e-8f61-2a5c0d9e1b44",
+                      "short_id": "DOK-13",
+                      "kind": "check",
+                      "state": "degraded",
+                      "title": "Certificate for upload-portal expires in 12 days",
+                      "note": "12 days left",
+                      "count": 1,
+                      "since": "2026-10-05T20:41:00Z",
+                      "snoozed_until": null,
+                      "acknowledged_at": null,
+                      "machine": "web-02",
+                      "service": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                      "alert": {
+                        "channel": "push",
+                        "status": "sent"
+                      },
+                      "soon": true
+                    }
+                  ],
+                  "not_watched": [
+                    {
+                      "id": "c1d7a0f2-5e3b-4a96-b8d4-0f7e2a6c9b15",
+                      "kind": "port",
+                      "name": "5432",
+                      "detail": {
+                        "label": "Port 5432",
+                        "saw": "postgres"
+                      },
+                      "machine": "db-01"
+                    }
+                  ],
+                  "snoozed": [],
+                  "other_environments": [
+                    {
+                      "environment": "dev",
+                      "issues": []
+                    }
+                  ],
+                  "fine": {
+                    "services": 14,
+                    "machines": 5
+                  }
                 }
               }
             }
@@ -7022,6 +7128,10 @@
           },
           "state": {
             "type": "string"
+          },
+          "soon": {
+            "type": "boolean",
+            "description": "True for a warning ahead of a failure. It lists under Soon and never pages."
           },
           "title": {
             "type": "string"

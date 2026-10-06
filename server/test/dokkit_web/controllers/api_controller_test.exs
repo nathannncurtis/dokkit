@@ -26,6 +26,15 @@ defmodule DokkitWeb.ApiControllerTest do
     |> dispatch(@endpoint, method, "/api/v1" <> path, body)
   end
 
+  test "the inbox has every list and the fine count", %{read: read} do
+    body = json_response(call(:get, "/inbox", read), 200)
+
+    assert Enum.sort(Map.keys(body)) ==
+             ~w(fine needs_you not_watched other_environments snoozed soon)
+
+    assert %{"services" => _, "machines" => _} = body["fine"]
+  end
+
   test "a read token reads everything but log contents, and cannot act", %{job: job, read: read} do
     assert %{"needs_you" => [issue], "snoozed" => []} =
              json_response(call(:get, "/inbox", read), 200)

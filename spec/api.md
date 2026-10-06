@@ -196,7 +196,7 @@ A login session, or a user token with `read`. Log contents need `read-logs`: wit
 
 | Call | Gives |
 |---|---|
-| `GET /inbox` | What needs a look, what will soon, and what was found and is not watched, with counts. |
+| `GET /inbox` | `needs_you`, `soon`, `not_watched`, `snoozed`, `other_environments` (grouped by environment, never counted as needing you) and `fine` (`services` and `machines` with nothing open). |
 | `GET /machines`, `GET /machines/<id>` | Machines, their vitals and thresholds. |
 | `GET /services`, `GET /services/<id>` | Services. One service includes its checks, facts, routing, version on each machine, recent deploys and open issues. |
 | `GET /services/<id>/series` | Chart data. Takes `metric`, `from`, `to` and `points`. |

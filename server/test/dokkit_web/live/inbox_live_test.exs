@@ -29,7 +29,7 @@ defmodule DokkitWeb.InboxLiveTest do
   } do
     {_, key} = Keys.mint(:app, %{service_id: service.id})
     {:ok, view, html} = live(conn, "/")
-    assert html =~ "Nothing needs you"
+    assert html =~ "Nothing here needs you"
 
     Intake.ping(key, "backup", "fail", nil, "")
     assert render(view) =~ "Nightly backup failed"
@@ -37,7 +37,7 @@ defmodule DokkitWeb.InboxLiveTest do
 
     Intake.ping(key, "backup", "ok", nil, "")
     send(view.pid, {:settled, :page})
-    assert render(view) =~ "Nothing needs you"
+    assert render(view) =~ "Nothing here needs you"
   end
 
   test "a job that misses its time becomes an issue once, and a late run closes it", %{
@@ -84,7 +84,7 @@ defmodule DokkitWeb.InboxLiveTest do
 
     view |> element("#issue-#{issue.id} input.chk") |> render_click()
     html = view |> element("button", "Snooze selected") |> render_click()
-    assert html =~ "Nothing needs you"
+    assert html =~ "Nothing here needs you"
     assert Dokkit.Issues.open_count() == 0
     assert [%{id: id}] = Dokkit.Issues.snoozed_list()
     assert id == issue.id
@@ -138,6 +138,102 @@ defmodule DokkitWeb.InboxLiveTest do
     html = view |> form("#note-form", text: " Disk was full; cleared it ") |> render_submit()
     assert html =~ "Disk was full; cleared it"
     assert html =~ "sam,"
+  end
+
+  defp bad_check(machine, name, env, type, state, opts \\ []) do
+    s =
+      Repo.insert!(%Service{machine_id: machine.id, slug: name, name: name, environment: env})
+
+    c = Repo.insert!(%Check{service_id: s.id, name: name, type: type, fail_after: 1})
+    {s, Dokkit.Issues.record(c, state, opts)}
+  end
+
+  test "a degraded expiry is soon, not needs you, and stops being soon when it goes down" do
+    m = Repo.insert!(%Machine{name: "inbox-soon"})
+    {_, check} = bad_check(m, "cert", "production", :expiry, :degraded)
+    assert %{needs_you: [], soon: [%{title: "cert: cert is degraded"}]} = Dokkit.Read.inbox()
+
+    Dokkit.Issues.record(check, :down)
+    assert %{needs_you: [%{soon: false}], soon: []} = Dokkit.Read.inbox()
+  end
+
+  test "a soon issue never takes the down route" do
+    m = Repo.insert!(%Machine{name: "inbox-route"})
+    s = Repo.insert!(%Service{machine_id: m.id, slug: "disk", name: "disk"})
+    c = Repo.insert!(%Check{service_id: s.id, name: "disk", type: :custom, fail_after: 1})
+    Dokkit.Issues.record(c, :degraded, soon: true)
+    [issue] = Dokkit.Issues.open_list()
+    assert issue.soon
+    assert Repo.get_by!(Dokkit.Alert, issue_id: issue.id).channel == "push"
+  end
+
+  test "found things are under Not watched and can be watched or left from the first screen", %{
+    conn: conn
+  } do
+    m = Repo.insert!(%Machine{name: "inbox-found"})
+
+    for {key, label} <- [{"5432", "Port 5432"}, {"6379", "Port 6379"}] do
+      Repo.insert!(%Dokkit.Finding{
+        machine_id: m.id,
+        kind: "port",
+        key: key,
+        detail: %{"label" => label, "saw" => "Listening"}
+      })
+    end
+
+    {:ok, view, html} = live(conn, "/")
+    assert html =~ "Not watched"
+    html = view |> element("button[phx-value-tab=found]") |> render_click()
+    assert html =~ "Port 5432" and html =~ "Port 6379"
+
+    [a, b] = Dokkit.Found.list()
+    html = view |> element("#found-#{a.id} button", "Watch it") |> render_click()
+    refute html =~ a.detail["label"] <> "</span>"
+    assert Repo.get_by(Service, machine_id: m.id, slug: "port-" <> a.key)
+    view |> element("#found-#{b.id} button", "Leave it") |> render_click()
+    assert Dokkit.Found.count() == 0
+  end
+
+  test "a row opens to snooze for an hour or mark as seen, and email shows as Emailed", %{
+    conn: conn,
+    service: service
+  } do
+    {_, key} = Keys.mint(:app, %{service_id: service.id})
+    Intake.ping(key, "backup", "fail", nil, "")
+    [issue] = Dokkit.Issues.open_list()
+    Repo.update!(Ecto.Changeset.change(Repo.get_by!(Dokkit.Alert, issue_id: issue.id), channel: "email", status: :sent))
+
+    {:ok, view, html} = live(conn, "/")
+    assert html =~ "<details"
+    assert html =~ "Emailed"
+    refute html =~ "Webhook called"
+
+    html = view |> element("#issue-#{issue.id} button", "Mark as seen") |> render_click()
+    assert html =~ "Seen"
+    assert Repo.get!(Dokkit.Issue, issue.id).acknowledged_at
+
+    view |> element("#issue-#{issue.id} button", "Snooze an hour") |> render_click()
+    assert [%{id: id}] = Dokkit.Issues.snoozed_list()
+    assert id == issue.id
+  end
+
+  test "the fine line counts watched services with nothing open, and the machines", %{conn: conn} do
+    {:ok, _, html} = live(conn, "/")
+    assert html =~ "1 more is fine, on 1 machine."
+    assert %{fine: %{services: 1, machines: 1}} = Dokkit.Read.inbox()
+  end
+
+  test "another environment stays out of Needs you and shows in its own group", %{conn: conn} do
+    m = Repo.insert!(%Machine{name: "inbox-env"})
+    bad_check(m, "staging-api", "dev", :custom, :down)
+
+    assert %{needs_you: [], other_environments: [%{environment: "dev", issues: [_]}]} =
+             Dokkit.Read.inbox()
+
+    {:ok, _, html} = live(conn, "/")
+    assert html =~ "Nothing here needs you"
+    assert html =~ ~r/class="grp">\s*dev/
+    assert html =~ "staging-api"
   end
 
   test "a burst of changes on the inbox is coalesced into one pending reload", %{conn: conn} do

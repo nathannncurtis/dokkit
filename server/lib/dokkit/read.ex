@@ -4,9 +4,18 @@ defmodule Dokkit.Read do
   alias Dokkit.{Estate, Issue, Issues, Logs, Repo}
 
   def inbox do
+    %{needs_you: needs_you, soon: soon, other: other} = Issues.groups()
+
     %{
-      needs_you: Enum.map(Issues.open_list(), &issue/1),
-      snoozed: Enum.map(Issues.snoozed_list(), &issue/1)
+      needs_you: Enum.map(needs_you, &issue/1),
+      soon: Enum.map(soon, &issue/1),
+      not_watched: for(f <- Dokkit.Found.list(), do: found(f)),
+      snoozed: Enum.map(Issues.snoozed_list(), &issue/1),
+      other_environments:
+        for {env, list} <- Enum.group_by(other, & &1.service.environment) |> Enum.sort() do
+          %{environment: env, issues: Enum.map(list, &issue/1)}
+        end,
+      fine: Issues.fine()
     }
   end
 
@@ -86,8 +95,7 @@ defmodule Dokkit.Read do
   @doc "What waits to be accepted: found things, and tasks a file offers."
   def proposals do
     found =
-      for f <- Dokkit.Found.list(),
-          do: %{id: f.id, kind: f.kind, name: f.key, detail: f.detail, machine: f.machine.name}
+      for f <- Dokkit.Found.list(), do: found(f)
 
     tasks =
       for t <- Dokkit.Tasks.waiting(),
@@ -299,12 +307,16 @@ defmodule Dokkit.Read do
     do:
       Map.take(r, [:id, :state, :by, :exit_code, :duration_ms, :output, :started_at, :finished_at])
 
+  defp found(f),
+    do: %{id: f.id, kind: f.kind, name: f.key, detail: f.detail, machine: f.machine.name}
+
   defp issue(%Issue{} = i) do
     %{
       id: i.id,
       short_id: Issue.short_id(i),
       kind: i.kind,
       state: i.state,
+      soon: i.soon,
       title: i.title,
       note: i.check && i.check.note,
       count: i.count,

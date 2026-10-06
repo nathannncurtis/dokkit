@@ -7,7 +7,10 @@ defmodule DokkitWeb.OpenapiTest do
     doc = Path.expand("../../../spec/openapi.json", __DIR__) |> File.read!() |> Jason.decode!()
 
     documented =
-      for {path, item} <- doc["paths"], verb <- Map.keys(item), verb in @verbs, into: MapSet.new() do
+      for {path, item} <- doc["paths"],
+          verb <- Map.keys(item),
+          verb in @verbs,
+          into: MapSet.new() do
         {verb, path}
       end
 

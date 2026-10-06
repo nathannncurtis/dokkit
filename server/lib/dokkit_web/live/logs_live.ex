@@ -51,6 +51,7 @@ defmodule DokkitWeb.LogsLive do
       <div class="head">
         <h1 tabindex="-1">Logs</h1>
       </div>
+
       <form class="filters" phx-change="filter" phx-submit="filter" id="log-filter">
         <label class="search">
           <.ic name="magnifying-glass" />
@@ -63,6 +64,7 @@ defmodule DokkitWeb.LogsLive do
             phx-debounce="300"
           />
         </label>
+
         <span class="dd">
           <select class="inp" name="level" aria-label="Level">
             <option :for={{text, value} <- @levels} value={value} selected={value == @filter.level}>
@@ -71,6 +73,7 @@ defmodule DokkitWeb.LogsLive do
           </select>
           <.ic name="caret-down" />
         </span>
+
         <.link
           :if={@filter.service}
           class="btn"
@@ -80,12 +83,15 @@ defmodule DokkitWeb.LogsLive do
           {@filter.service.name} <.ic name="x" />
         </.link>
       </form>
+
       <div class="body">
         <div class="card">
           <div :if={@lines == []} class="empty"><.ic name="scroll" />No log lines match.</div>
+
           <div :if={@lines != []} class="lh cols-logs" style={@cols}>
             <span>Time</span><span>Level</span><span>Machine</span><span>Service</span><span>Message</span>
           </div>
+
           <div :for={l <- @lines} class="li slim cols-logs" style={@cols}>
             <span class="mono">{at(l.at)}</span>
             <span class={["tag", l.level in ~w(error fatal) && "bad", l.level == "warn" && "warn"]}>{String.capitalize(
@@ -95,6 +101,7 @@ defmodule DokkitWeb.LogsLive do
             <span :if={!l.service} class="mute">The machine</span>
             <span>{l.msg}<span :if={l.cut} class="mute"> (cut)</span></span>
           </div>
+
           <div :if={length(@lines) == 200} class="foot">
             The newest 200 lines that match. Narrow the filter to see older ones.
           </div>

@@ -20,7 +20,8 @@ defmodule DokkitWeb.McpController do
   }
   @tools [
     {"attention", "read",
-     "What needs a look right now: open issues, and the ones that are snoozed.", %{}, []},
+     "What needs a look right now, what will need one soon, what was found and is not watched, what is snoozed, issues in other environments, and how many things are fine.",
+     %{}, []},
     {"find", "read", "Search services by name. Optionally only on one machine.",
      %{"q" => @text, "machine" => @text}, []},
     {"service", "read",

@@ -6,6 +6,10 @@ defmodule Dokkit.Issues do
   @same_issue_seconds 30 * 60
   @rank %{ok: 0, unknown: 1, degraded: 2, down: 3}
 
+  @doc """
+  Records a check result. Pass `soon: true` when a degraded result is a warning ahead of a
+  failure: the issue lists under Soon and never pages. An expiry check is always soon.
+  """
   def record(%Check{} = check, state, opts \\ []) when state in [:ok, :degraded, :down] do
     # A service nobody is watching keeps no state and opens nothing.
     if Repo.exists?(from s in Service, where: s.id == ^check.service_id and not s.watched),
@@ -52,13 +56,13 @@ defmodule Dokkit.Issues do
         nil
 
       {bad, %Issue{} = issue} ->
-        Repo.update!(Ecto.Changeset.change(issue, state: bad))
+        Repo.update!(Ecto.Changeset.change(issue, state: bad, soon: soon?(check, bad, opts)))
 
       {:unknown, nil} ->
         nil
 
       {bad, nil} ->
-        open(check, service, bad, at, opts[:title])
+        open(check, service, bad, at, opts[:title], soon?(check, bad, opts))
     end
 
     refresh(service)
@@ -68,6 +72,26 @@ defmodule Dokkit.Issues do
   @doc "Open issues that are not snoozed: what needs someone."
   def open_list(now \\ DateTime.utc_now()) do
     Repo.all(from i in listed(), where: is_nil(i.snoozed_until) or i.snoozed_until <= ^now)
+  end
+
+  @doc "Open issues that are not snoozed, split: `needs_you`, `soon`, and `other` (not production)."
+  def groups(now \\ DateTime.utc_now()) do
+    {other, mine} =
+      Enum.split_with(open_list(now), &(&1.service && &1.service.environment != "production"))
+
+    {soon, needs_you} = Enum.split_with(mine, & &1.soon)
+    %{needs_you: needs_you, soon: soon, other: other}
+  end
+
+  @doc "Watched services with no open issue, and the machines."
+  def fine do
+    busy =
+      from i in Issue,
+        where: is_nil(i.closed_at) and not is_nil(i.service_id),
+        select: i.service_id
+
+    quiet = from s in Service, where: s.watched and s.id not in subquery(busy)
+    %{services: Repo.aggregate(quiet, :count), machines: length(machines())}
   end
 
   def snoozed_list(now \\ DateTime.utc_now()) do
@@ -216,7 +240,10 @@ defmodule Dokkit.Issues do
   defp open_for(check),
     do: Repo.one(from i in Issue, where: i.check_id == ^check.id and is_nil(i.closed_at))
 
-  defp open(check, service, state, at, title) do
+  defp soon?(check, state, opts),
+    do: state == :degraded and (opts[:soon] == true or check.type == :expiry)
+
+  defp open(check, service, state, at, title, soon) do
     recent =
       Repo.one(
         from i in Issue,
@@ -230,7 +257,12 @@ defmodule Dokkit.Issues do
       Dokkit.Alerts.reopened(recent)
 
       Repo.update!(
-        Ecto.Changeset.change(recent, closed_at: nil, state: state, count: recent.count + 1)
+        Ecto.Changeset.change(recent,
+          closed_at: nil,
+          state: state,
+          soon: soon,
+          count: recent.count + 1
+        )
       )
     else
       issue =
@@ -240,6 +272,7 @@ defmodule Dokkit.Issues do
           check_id: check.id,
           kind: to_string(check.type),
           state: state,
+          soon: soon,
           title: title || "#{service.name}: #{check.name} is #{state}",
           since: at
         })

@@ -152,6 +152,7 @@ defmodule DokkitWeb.TasksLive do
               <div class="ti"><.ic name="terminal-window" /><span>{t.name}</span></div>
               <code class="cmd">{t.command}</code>
               <div :if={t.file} class="meta"><span>In {t.file}</span></div>
+
               <div class="meta">
                 <span class="tag">{t.machine.name}</span>
                 <span :if={is_nil(t.pin)}>Needs a newer dokkit on this machine</span>

@@ -14,11 +14,13 @@ defmodule DokkitWeb.SessionHTML do
       <form class="card" method="post" action={@action}>
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
         <h1><Layouts.mark />{@title}</h1>
+
         <p :if={@lead != []} class="mute">{render_slot(@lead)}</p>
+
         <p :if={@error} class="bad" role="alert">
           <i class="ph ph-warning" aria-hidden="true"></i>{@error}
         </p>
-         {render_slot(@inner_block)} <button class="btn primary" type="submit">{@button}</button>
+        {render_slot(@inner_block)} <button class="btn primary" type="submit">{@button}</button>
       </form>
     </main>
     """
@@ -30,6 +32,7 @@ defmodule DokkitWeb.SessionHTML do
       <label>
         Name<input class="inp" name="name" value={@name} autocomplete="username" required autofocus />
       </label>
+
       <label>
         Password<input
           class="inp"
@@ -69,7 +72,7 @@ defmodule DokkitWeb.SessionHTML do
           required
         /> <small class="mute">At least {Dokkit.Accounts.min_password()} characters.</small>
       </label>
-       <a href={~p"/settings"}>Back to settings</a>
+      <a href={~p"/settings"}>Back to settings</a>
     </.door>
     """
   end
@@ -80,6 +83,7 @@ defmodule DokkitWeb.SessionHTML do
       <:lead>
         This server has no account yet. It printed a setup code in its log when it started. Enter it here, so that nobody else on the network can claim the server first.
       </:lead>
+
       <label>
         Setup code<input
           class="inp mono"
@@ -90,9 +94,11 @@ defmodule DokkitWeb.SessionHTML do
           autofocus
         />
       </label>
+
       <label>
         Name<input class="inp" name="name" value={@name} autocomplete="username" required />
       </label>
+
       <label>
         Password<input
           class="inp"

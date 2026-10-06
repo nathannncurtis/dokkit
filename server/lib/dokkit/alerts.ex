@@ -174,8 +174,10 @@ defmodule Dokkit.Alerts do
 
   # A machine that is down alerts once for itself. What runs on it stays quiet until it is back.
   def plan(%Issue{} = issue, %Service{environment: "production"} = service) do
+    # A soon issue is only ever degraded, so it can never take the down route.
     channel =
-      Map.get(service, :"route_#{issue.state}") || ruled(issue, machine_name(issue.machine_id)) ||
+      Map.get(service, :"route_#{issue.state}") ||
+        (!issue.soon && ruled(issue, machine_name(issue.machine_id))) ||
         config()[to_string(issue.state)]
 
     unless Dokkit.Issues.machine_down?(issue.machine_id), do: insert(issue, channel)

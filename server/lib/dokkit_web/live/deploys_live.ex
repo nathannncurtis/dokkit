@@ -64,44 +64,55 @@ defmodule DokkitWeb.DeploysLive do
       <div class="head">
         <h1 tabindex="-1">{@page_title}</h1>
       </div>
+
       <div :if={@live_action == :versions} class="body">
         <div class="card">
           <h2>Services<span class="end">Which version is on which machine</span></h2>
+
           <div :if={@rows == []} class="empty">
             <.ic name="git-branch" />No service has reported a version yet.
           </div>
+
           <div :if={@rows != []} class="scroll">
             <table class="vt">
               <thead>
                 <tr>
                   <th scope="col">Service</th>
+
                   <th :for={m <- @machines} scope="col">{m.name}</th>
+
                   <th></th>
                 </tr>
               </thead>
+
               <tbody>
                 <tr :for={{name, on, service} <- @rows} class={!service && "flat"}>
                   <th scope="row">
                     <.link :if={service} navigate={~p"/s/#{service.id}"}>{name}</.link>
                     <span :if={!service}>{name}</span>
                   </th>
+
                   <td :for={m <- @machines}>
                     <span :if={on[m.id] && on[m.id] != newest(on)} class="tag warn">{on[m.id]}</span>
                     <span :if={on[m.id] == newest(on)}>{on[m.id]}</span>
                   </td>
+
                   <td><.ic :if={service} name="caret-right" /></td>
                 </tr>
               </tbody>
             </table>
           </div>
+
           <div :if={@rows != []} class="foot">
             <span class="tag warn">Behind the newest</span><span>Empty: not installed there</span>
           </div>
         </div>
       </div>
+
       <div :if={@live_action == :versions and @behind != []} class="body" style="padding-top: 0">
         <div class="card">
           <h2>The dokkit program<span class="end">This server holds {@held}</span></h2>
+
           <div
             :for={m <- @behind}
             class="li slim"
@@ -120,14 +131,17 @@ defmodule DokkitWeb.DeploysLive do
               Fetch the newer copy
             </button>
           </div>
+
           <div class="foot">
             A machine only fetches the file. Someone finishes the update on that machine, as an administrator; the program never replaces itself.
           </div>
         </div>
       </div>
+
       <div :if={@live_action == :versions and @apps != []} class="body" style="padding-top: 0">
         <div class="card">
           <h2>Desktop apps<span class="end">Which version is on how many machines</span></h2>
+
           <div :for={a <- @apps} id={"app-#{a.service.id}"}>
             <.link
               class="li slim"
@@ -138,6 +152,7 @@ defmodule DokkitWeb.DeploysLive do
               <span class="st">{a.hosts} {if a.hosts == 1, do: "machine", else: "machines"}</span>
               <.ic name="caret-right" />
             </.link>
+
             <div
               :for={{{version, hosts}, n} <- Enum.with_index(a.versions)}
               class="li slim"
@@ -150,14 +165,17 @@ defmodule DokkitWeb.DeploysLive do
           </div>
         </div>
       </div>
+
       <div :if={@live_action == :deploys} class="body">
         <div class="card">
           <div :if={@deploys == []} class="empty">
             <.ic name="rocket-launch" />No deploy seen yet. One is recorded when a service's version changes.
           </div>
+
           <div :if={@deploys != []} class="lh cols-dep" style={"--cols:" <> @cols}>
             <span>Service</span><span>Version</span><span>Machine</span><span>When</span><span>How it was seen</span><span></span>
           </div>
+
           <.link
             :for={d <- @deploys}
             class="li slim cols-dep"
@@ -165,11 +183,11 @@ defmodule DokkitWeb.DeploysLive do
             navigate={~p"/s/#{d.service_id}"}
           >
             <div class="ti"><span>{d.service.name}</span></div>
+
             <span class="mono" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px">
               {d.from}<.ic name="arrow-right" />{d.version}
             </span>
-            <span class="tag">{d.service.machine.name}</span>
-            <span class="mono">{at(d.at)}</span>
+            <span class="tag">{d.service.machine.name}</span> <span class="mono">{at(d.at)}</span>
             <span class="tag">
               {if d.how == "reported",
                 do: "Reported" <> if(d.by, do: " by #{d.by}", else: ""),

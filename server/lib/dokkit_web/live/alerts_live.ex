@@ -213,8 +213,7 @@ defmodule DokkitWeb.AlertsLive do
                   name="ntfy_token"
                   config={@config}
                   label="Access token, if the topic needs one"
-                />
-                <span class="hint">An https address.</span>
+                /> <span class="hint">An https address.</span>
               </dd>
 
               <dt>Pushover</dt>
