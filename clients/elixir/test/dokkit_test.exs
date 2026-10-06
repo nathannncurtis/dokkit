@@ -1,6 +1,31 @@
 defmodule DokkitTest do
   use ExUnit.Case
 
+  setup do
+    stop()
+    on_exit(&stop/0)
+  end
+
+  defp stop do
+    if pid = GenServer.whereis(Dokkit), do: GenServer.stop(pid)
+  end
+
+  defp mock do
+    {:ok, listen} = :gen_tcp.listen(0, [:binary, packet: :http_bin, active: false, reuseaddr: true])
+    {:ok, port} = :inet.port(listen)
+    test = self()
+    spawn_link(fn -> serve(listen, test) end)
+    "http://127.0.0.1:#{port}/"
+  end
+
+  defp received(acc) do
+    receive do
+      {:got, path, _, body} -> received([{path, body} | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
   # A server that hands every request to the test and answers 200.
   defp serve(listen, test) do
     {:ok, socket} = :gen_tcp.accept(listen)
@@ -72,5 +97,49 @@ defmodule DokkitTest do
     assert error["type"] == "ArgumentError"
     assert error["handled"] == false
     assert List.last(error["frames"])["own"]
+  end
+
+  test "a value that cannot be encoded is dropped and the library carries on" do
+    Dokkit.start(url: "http://127.0.0.1:1", key: "dka_test")
+    Dokkit.metric("x", self())
+    Dokkit.log("info", <<255>>)
+    Dokkit.capture(:oops, [], tags: %{"k" => %{}})
+    Dokkit.beat("worker")
+    state = :sys.get_state(Dokkit)
+    assert state.count == 1 and state.dropped == 2 and state.errors == []
+  end
+
+  test "a throw or an exit in a job is a failure" do
+    Dokkit.start(url: mock(), key: "dka_test")
+    assert catch_throw(Dokkit.job("t", fn _ -> throw(:oops) end)) == :oops
+    assert catch_exit(Dokkit.job("e", fn _ -> exit(:bye) end)) == :bye
+    Dokkit.flush()
+    got = received([])
+    assert Enum.count(got, fn {_, body} -> body =~ ~s("event":"fail") end) == 2
+    assert for({"/api/v1/errors", body} <- got, do: JSON.decode!(body)["type"]) == ["throw", "exit"]
+  end
+
+  test "a failed batch is tried once more and then counted as dropped" do
+    Dokkit.start(url: "http://127.0.0.1:1", key: "dka_test")
+    Dokkit.beat("worker")
+    Dokkit.flush()
+    assert Dokkit.dropped() == 0
+    Dokkit.flush()
+    assert Dokkit.dropped() == 1
+  end
+
+  test "the queue is bounded by bytes" do
+    Dokkit.start(url: "http://127.0.0.1:1", key: "dka_test")
+    for _ <- 1..12, do: Dokkit.log("info", String.duplicate("x", 900 * 1024))
+    state = :sys.get_state(Dokkit)
+    assert state.bytes <= 8 * 1024 * 1024 and state.dropped > 0
+  end
+
+  test "http to another machine keeps it off, and https checks the certificate" do
+    ExUnit.CaptureIO.capture_io(:stderr, fn -> Dokkit.start(url: "http://example.com", key: "k") end)
+    assert GenServer.whereis(Dokkit) == nil
+    assert [ssl: ssl] = Dokkit.ssl_options("https://example.com")
+    assert ssl[:verify] == :verify_peer
+    assert Dokkit.ssl_options("http://127.0.0.1") == []
   end
 end

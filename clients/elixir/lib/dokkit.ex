@@ -10,18 +10,22 @@ defmodule Dokkit do
       :logger.add_handler(:dokkit, Dokkit, %{level: :info})
 
   Nothing here raises into the app or waits on the network. Lines wait in a queue of fixed
-  size and one process sends them. Error message text is never sent.
+  size and one process sends them. Error message text is never sent. An http address to
+  another machine keeps the library off unless DOKKIT_INSECURE=1.
   """
   use GenServer
 
   @queue 1000
+  @max_bytes 8 * 1024 * 1024
+  @max_line 1024 * 1024
+  @max_batch 4 * 1024 * 1024
 
   @doc "Turns the library on. With no address or key it stays off and every call does nothing."
   def start(opts \\ []) do
     url = opts[:url] || System.get_env("DOKKIT_URL", "")
     key = opts[:key] || System.get_env("DOKKIT_KEY", "")
 
-    if url != "" and key != "" and GenServer.whereis(__MODULE__) == nil do
+    if url != "" and key != "" and secure?(url) and GenServer.whereis(__MODULE__) == nil do
       {:ok, host} = :inet.gethostname()
       Application.ensure_all_started([:inets, :ssl])
 
@@ -31,11 +35,16 @@ defmodule Dokkit do
           url: String.trim_trailing(url, "/"),
           key: key,
           version: opts[:version],
-          app: opts[:app],
+          app: opts[:app] || own_app(),
           environment: opts[:environment] || System.get_env("DOKKIT_ENV"),
           host: to_string(host),
-          lines: [],
+          lines: :queue.new(),
+          count: 0,
+          bytes: 0,
           errors: [],
+          held: [],
+          sender: nil,
+          waiters: [],
           dropped: 0
         },
         name: __MODULE__
@@ -45,6 +54,33 @@ defmodule Dokkit do
     end
 
     :ok
+  end
+
+  # The app of the process that starts the library, so its frames count as the app's own.
+  defp own_app do
+    case :application.get_application() do
+      {:ok, app} -> app
+      _ -> nil
+    end
+  end
+
+  defp secure?(url) do
+    %URI{scheme: scheme, host: host} = URI.parse(url)
+
+    ok =
+      scheme != "http" or System.get_env("DOKKIT_INSECURE") == "1" or
+        host == "localhost" or
+        match?({:ok, {127, _, _, _}}, :inet.parse_address(to_charlist(host || ""))) or
+        host == "::1"
+
+    unless ok,
+      do:
+        IO.puts(
+          :stderr,
+          "dokkit: off, the address is http and not this machine; use https or set DOKKIT_INSECURE=1"
+        )
+
+    ok
   end
 
   def beat(name, every_seconds \\ 60),
@@ -72,11 +108,13 @@ defmodule Dokkit do
       result = work.(fn done, total -> send.("progress", %{done: done, total: total}) end)
       send.("ok", %{exit_code: 0, duration_ms: took.()})
       result
-    rescue
-      error ->
+    catch
+      kind, reason ->
+        stacktrace = __STACKTRACE__
         send.("fail", %{exit_code: 1, duration_ms: took.()})
-        capture(error, __STACKTRACE__, handled: false)
-        reraise error, __STACKTRACE__
+        error = if kind == :error, do: Exception.normalize(:error, reason, stacktrace), else: reason
+        capture(error, stacktrace, handled: false, type: if(kind == :exit, do: "exit"))
+        :erlang.raise(kind, reason, stacktrace)
     after
       cast(:flush)
     end
@@ -84,12 +122,16 @@ defmodule Dokkit do
 
   @doc "Sends an error: its type and stack, never its message."
   def capture(error, stacktrace, opts \\ []) do
-    type = if is_exception(error), do: inspect(error.__struct__), else: "throw"
+    type = opts[:type] || if(is_exception(error), do: inspect(error.__struct__), else: "throw")
     cast({:error, type, stacktrace, Keyword.get(opts, :handled, true), Map.new(opts[:tags] || %{})})
   end
 
-  @doc "How many lines were dropped because the queue was full."
-  def dropped, do: if(GenServer.whereis(__MODULE__), do: GenServer.call(__MODULE__, :dropped), else: 0)
+  @doc "How many lines were dropped: the queue was full, or they could not be sent."
+  def dropped do
+    if GenServer.whereis(__MODULE__), do: GenServer.call(__MODULE__, :dropped), else: 0
+  catch
+    :exit, _ -> 0
+  end
 
   @doc "Sends what is waiting. Call it before the app stops."
   def flush do
@@ -146,9 +188,10 @@ defmodule Dokkit do
   def handle_cast({:line, line}, s) do
     line = line |> Map.put(:host, s.host) |> Map.reject(fn {_, v} -> is_nil(v) end)
 
-    if length(s.lines) >= @queue,
-      do: {:noreply, %{s | lines: [line | Enum.drop(s.lines, -1)], dropped: s.dropped + 1}},
-      else: {:noreply, %{s | lines: [line | s.lines]}}
+    case encode(line) do
+      body when is_binary(body) and byte_size(body) <= @max_line -> {:noreply, enqueue(s, body)}
+      _ -> {:noreply, %{s | dropped: s.dropped + 1}}
+    end
   end
 
   def handle_cast({:error, type, stacktrace, handled, tags}, s) do
@@ -174,41 +217,149 @@ defmodule Dokkit do
       tags: Map.new(tags, fn {k, v} -> {to_string(k), to_string(v)} end)
     }
 
-    {:noreply, if(length(s.errors) < 100, do: %{s | errors: [report | s.errors]}, else: s)}
+    case encode(report) do
+      body when is_binary(body) and length(s.errors) < 100 -> {:noreply, %{s | errors: [body | s.errors]}}
+      _ -> {:noreply, s}
+    end
+  rescue
+    _ -> {:noreply, s}
   end
 
-  def handle_cast(:flush, s), do: {:noreply, send_all(s)}
+  def handle_cast(:flush, s), do: {:noreply, start_send(s)}
 
   @impl true
-  def handle_call(:flush, _from, s), do: {:reply, :ok, send_all(s)}
+  def handle_call(:flush, from, s) do
+    s = start_send(s)
+    if s.sender == nil, do: {:reply, :ok, s}, else: {:noreply, %{s | waiters: [from | s.waiters]}}
+  end
+
   def handle_call(:dropped, _from, s), do: {:reply, s.dropped, s}
 
   @impl true
-  def handle_info(:tick, s), do: {:noreply, send_all(s)}
+  def handle_info(:tick, s), do: {:noreply, start_send(s)}
+
+  def handle_info({:DOWN, ref, :process, _, reason}, %{sender: {_, ref, batches}} = s) do
+    failed =
+      case reason do
+        {:sent, failed} -> failed
+        _ -> batches
+      end
+
+    s = Enum.reduce(failed, %{s | sender: nil}, &retry_or_drop/2)
+    s = if s.waiters != [] and (s.count > 0 or s.errors != []), do: start_send(s), else: s
+
+    if s.sender == nil do
+      Enum.each(s.waiters, &GenServer.reply(&1, :ok))
+      {:noreply, %{s | waiters: []}}
+    else
+      {:noreply, s}
+    end
+  end
+
   def handle_info(_, s), do: {:noreply, s}
 
-  # What cannot be sent is dropped. The app is never told.
-  defp send_all(s) do
-    for error <- Enum.reverse(s.errors),
-        do: post(s, "/api/v1/errors", JSON.encode!(error), "application/json", [])
+  # A batch that failed is kept for one more try, then counted as dropped.
+  defp retry_or_drop(%{tried: true} = batch, s), do: %{s | dropped: s.dropped + batch.n}
+  defp retry_or_drop(batch, s), do: %{s | held: s.held ++ [%{batch | tried: true}]}
 
-    for batch <- s.lines |> Enum.reverse() |> Enum.chunk_every(500) do
-      body = batch |> Enum.map_join("\n", &JSON.encode!/1) |> :zlib.gzip()
+  # One that cannot be encoded is dropped.
+  defp encode(term) do
+    JSON.encode!(term)
+  rescue
+    _ -> nil
+  end
 
-      post(s, "/api/v1/report", body, "application/x-ndjson", [
-        {~c"content-encoding", ~c"gzip"},
-        {~c"dokkit-batch", to_charlist(id())}
-      ])
+  defp enqueue(s, body) do
+    s = trim(s, byte_size(body))
+    %{s | lines: :queue.in(body, s.lines), count: s.count + 1, bytes: s.bytes + byte_size(body)}
+  end
+
+  defp trim(s, size) do
+    if s.count > 0 and (s.count >= @queue or s.bytes + size > @max_bytes) do
+      {{:value, old}, rest} = :queue.out(s.lines)
+
+      trim(
+        %{s | lines: rest, count: s.count - 1, bytes: s.bytes - byte_size(old), dropped: s.dropped + 1},
+        size
+      )
+    else
+      s
     end
-
-    %{s | lines: [], errors: []}
   end
 
-  defp post(s, path, body, kind, headers) do
-    headers = [{~c"authorization", to_charlist("Bearer " <> s.key)} | headers]
-    request = {to_charlist(s.url <> path), headers, to_charlist(kind), body}
-    :httpc.request(:post, request, [timeout: 10_000], [])
+  # Sending is done by another process, so the library never waits on the network.
+  defp start_send(%{sender: nil} = s) do
+    errors =
+      for e <- Enum.reverse(s.errors), do: %{path: "/api/v1/errors", items: [e], n: 1, id: id(), tried: false}
+
+    {reports, s} = take_reports(s, [])
+    batches = s.held ++ errors ++ reports
+    s = %{s | held: [], errors: []}
+
+    if batches == [] do
+      s
+    else
+      conf = %{url: s.url, key: s.key}
+      {pid, ref} = spawn_monitor(fn -> exit({:sent, Enum.reject(batches, &post(conf, &1))}) end)
+      %{s | sender: {pid, ref, batches}}
+    end
+  end
+
+  defp start_send(s), do: s
+
+  defp take_reports(%{count: 0} = s, acc), do: {Enum.reverse(acc), s}
+
+  defp take_reports(s, acc) do
+    {items, s} = pull(s, [], 0)
+    batch = %{path: "/api/v1/report", items: items, n: length(items), id: id(), tried: false}
+    take_reports(s, [batch | acc])
+  end
+
+  defp pull(s, items, size) do
+    case :queue.peek(s.lines) do
+      {:value, line} when length(items) < 500 and (items == [] or size + byte_size(line) <= @max_batch) ->
+        {_, rest} = :queue.out(s.lines)
+        s = %{s | lines: rest, count: s.count - 1, bytes: s.bytes - byte_size(line)}
+        pull(s, [line | items], size + byte_size(line))
+
+      _ ->
+        {Enum.reverse(items), s}
+    end
+  end
+
+  # True when the batch got an answer. A refusal is not tried again; no answer or a server error is.
+  defp post(conf, batch) do
+    {kind, body, headers} =
+      case batch.path do
+        "/api/v1/errors" ->
+          {"application/json", hd(batch.items), []}
+
+        _ ->
+          {"application/x-ndjson", :zlib.gzip(Enum.join(batch.items, "\n")),
+           [{~c"content-encoding", ~c"gzip"}, {~c"dokkit-batch", to_charlist(batch.id)}]}
+      end
+
+    headers = [{~c"authorization", to_charlist("Bearer " <> conf.key)} | headers]
+    request = {to_charlist(conf.url <> batch.path), headers, to_charlist(kind), body}
+
+    case :httpc.request(:post, request, [timeout: 10_000] ++ ssl_options(conf.url), []) do
+      {:ok, {{_, status, _}, _, _}} -> status < 500
+      _ -> false
+    end
   catch
-    _, _ -> :error
+    _, _ -> false
   end
+
+  @doc false
+  def ssl_options("https://" <> _) do
+    [
+      ssl: [
+        verify: :verify_peer,
+        cacerts: :public_key.cacerts_get(),
+        customize_hostname_check: [match_fun: :public_key.pkix_verify_hostname_match_fun(:https)]
+      ]
+    ]
+  end
+
+  def ssl_options(_), do: []
 end
