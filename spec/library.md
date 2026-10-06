@@ -16,8 +16,10 @@ It can also send the stats document (`stats-v1.md`) itself, for an app `dokkit` 
 
 - **Blank configuration means off.** With no address set, every call does nothing.
 - **It never breaks or slows the app it lives in.** Sending happens in the background. A failure to send is dropped, never raised.
-- **It uses a fixed amount of memory.** A full queue drops the oldest and counts what it dropped.
+- **It uses a fixed amount of memory.** A full queue drops the oldest and counts what it dropped. The queue is bounded by bytes as well as by lines. A batch that fails to send is kept for one more try with the same batch id, and counted as dropped if that fails too.
 - **It sends no personal data by default.** No error message text, no request contents, no user records.
+- **It does not send secrets in the clear.** An `http://` address to a host other than this machine keeps the library off, with one line to stderr, unless `DOKKIT_INSECURE=1` is set. The server must use a certificate the machine already trusts; libraries do not pin certificates.
+- **Stack frames carry paths relative to the app's folder.** Files outside it carry only their name, or the part after `site-packages`, `node_modules` or `vendor`.
 
 ## Configuration
 
