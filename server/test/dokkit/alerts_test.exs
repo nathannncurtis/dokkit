@@ -145,5 +145,23 @@ defmodule Dokkit.AlertsTest do
     assert %{state: :ok, version: version} = Repo.get_by!(Service, slug: "dokkit")
     assert version =~ "."
     assert [%{name: "database.size_mb"}] = Repo.all(Dokkit.Metric)
+
+    # Every enrolled machine quiet at once is Dokkit's own news.
+    now = DateTime.utc_now()
+
+    Repo.insert!(%Dokkit.Machine{
+      name: "loft",
+      kind: :enrolled,
+      last_seen_at: DateTime.add(now, -1200)
+    })
+
+    Dokkit.Self.tick(now, %{})
+
+    assert %{state: :degraded, note: "No machine has reported for 20 minutes."} =
+             Repo.get_by!(Service, slug: "dokkit")
+
+    Repo.update_all(Dokkit.Machine, set: [last_seen_at: now])
+    Dokkit.Self.tick(now, %{})
+    assert %{state: :ok} = Repo.get_by!(Service, slug: "dokkit")
   end
 end
