@@ -161,6 +161,12 @@ defmodule Dokkit.AlertsTest do
     assert %{state: :degraded, note: "No machine has reported for 20 minutes."} =
              Repo.get_by!(Service, slug: "dokkit")
 
+    # A server that has just started has not heard from anyone yet.
+    Dokkit.Self.tick(now, %{}, now)
+    assert %{state: :ok} = Repo.get_by!(Service, slug: "dokkit")
+
+    Dokkit.Self.tick(now, %{})
+    assert %{state: :degraded} = Repo.get_by!(Service, slug: "dokkit")
     Repo.update_all(Dokkit.Machine, set: [last_seen_at: now])
     Dokkit.Self.tick(now, %{})
     assert %{state: :ok} = Repo.get_by!(Service, slug: "dokkit")

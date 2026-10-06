@@ -304,7 +304,20 @@ defmodule Dokkit.Intake do
           else: []
       )
 
+    new? = Ecto.get_meta(run, :state) == :built
     run = Repo.insert_or_update!(Ecto.Changeset.change(run, changes))
+
+    # A new start means any earlier run still marked running was cut short.
+    if event == "start" and new?,
+      do:
+        Repo.update_all(
+          from(r in JobRun,
+            where:
+              r.check_id == ^check.id and r.result == :running and r.id != ^run.id and
+                r.started_at < ^at
+          ),
+          set: [result: :fail, finished_at: at]
+        )
 
     case event do
       "ok" ->
