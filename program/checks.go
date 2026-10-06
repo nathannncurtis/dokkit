@@ -23,10 +23,13 @@ type declaration struct {
 	path    string
 	raw     map[string]any
 	Schema  int
-	Service struct{ ID, Name string }
-	Logs    struct{ Path string }
-	Task    []task
-	Check   []check
+	Service struct {
+		ID, Name    string
+		VersionFrom string `toml:"version_from"`
+	}
+	Logs  struct{ Path string }
+	Task  []task
+	Check []check
 }
 
 type check struct {
@@ -352,6 +355,25 @@ func (w *watcher) pull() {
 	}
 }
 
+// versions reads the version of each service whose file names a file to read it from.
+func (w *watcher) versions() (all []map[string]string) {
+	for _, d := range w.files {
+		from := d.Service.VersionFrom
+		if from == "" || from == "stats" {
+			continue
+		}
+		if !filepath.IsAbs(from) {
+			from = filepath.Join(filepath.Dir(d.path), from)
+		}
+		b, err := os.ReadFile(from)
+		line, _, _ := strings.Cut(strings.TrimSpace(string(b)), "\n")
+		if line = strings.TrimSpace(line); err == nil && line != "" && len(line) <= 100 {
+			all = append(all, map[string]string{"id": d.Service.ID, "version": line})
+		}
+	}
+	return
+}
+
 // tick runs the checks that are due and returns how many it ran.
 func (w *watcher) tick(at time.Time) int {
 	var lines []any
@@ -396,7 +418,7 @@ func (c *client) watch() int {
 		if at.Sub(beat) >= beatEvery {
 			beat = at
 			w.refresh()
-			c.beat()
+			c.beat(w.versions())
 			ran++
 		}
 		ran += w.tick(at)

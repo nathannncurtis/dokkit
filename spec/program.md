@@ -100,4 +100,6 @@ In `program/`: `dokkit init`, `run`, `ping`, `check`, `apply`, `enrol`, `watch`,
 
 `dokkit propose` sends the file a scan wrote. Each minute `dokkit watch` asks the server for the checks added in the interface for its machine and runs them beside the ones in files.
 
+Each minute `dokkit watch` reads the first line of the file a `version_from` names and reports it as that service's version. A `version_from` that is a command is not run: nothing has accepted that command.
+
 Not built yet: stats, `dokkit task list` showing what is accepted, the account tasks run under, certificate pinning, and the built-in update task.

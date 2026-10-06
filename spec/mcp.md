@@ -37,4 +37,4 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 
 ## Built so far
 
-`POST /mcp` with a user token: `attention`, `find`, `service`, `jobs`, `job_runs`, `tasks`, `logs`, `snooze`, `acknowledge` and `run_task`. A tool the token may not use is not listed. `since_deploy` and `errors` wait for deploys and errors.
+`POST /mcp` with a user token: `attention`, `find`, `service`, `jobs`, `job_runs`, `since_deploy`, `tasks`, `logs`, `snooze`, `acknowledge` and `run_task`. A tool the token may not use is not listed. `errors` waits for errors.

@@ -169,6 +169,20 @@ defmodule Dokkit.Finding do
   end
 end
 
+defmodule Dokkit.Deploy do
+  use Dokkit.Schema
+
+  schema "deploys" do
+    field :from, :string
+    field :version, :string
+    field :commit, :string
+    field :by, :string
+    field :how, :string
+    field :at, :utc_datetime_usec
+    belongs_to :service, Dokkit.Service
+  end
+end
+
 defmodule Dokkit.User do
   use Dokkit.Schema
 

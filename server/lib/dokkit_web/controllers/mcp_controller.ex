@@ -32,6 +32,9 @@ defmodule DokkitWeb.McpController do
      "Snooze an issue until a time (RFC 3339). Takes the issue id from attention.",
      %{"id" => @text, "until" => @text}, ["id", "until"]},
     {"acknowledge", "act", "Mark an issue as seen.", %{"id" => @text}, ["id"]},
+    {"since_deploy", "read",
+     "The latest deploy of one service and the issues that opened after it. Takes the id from find.",
+     %{"id" => @text}, ["id"]},
     {"tasks", "read", "The accepted tasks, each with its machine, command and latest run.", %{},
      []},
     {"run_task", "act",
@@ -144,6 +147,9 @@ defmodule DokkitWeb.McpController do
     Issues.acknowledge(id)
     %{ok: true}
   end
+
+  defp tool("since_deploy", %{"id" => id}),
+    do: Read.since_deploy(id) || {:error, "No service with that id."}
 
   defp tool("tasks", _), do: Read.tasks()
 

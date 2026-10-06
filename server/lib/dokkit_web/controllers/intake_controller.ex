@@ -97,6 +97,16 @@ defmodule DokkitWeb.IntakeController do
     end
   end
 
+  def deploy(conn, params) do
+    with {:ok, key} <- bearer(conn), :ok <- Intake.deploy(key, params) do
+      Dokkit.Issues.changed(false)
+      json(conn, %{ok: true})
+    else
+      {:error, code, message} -> fail(conn, 422, code, message)
+      _ -> fail(conn, 401, "bad_key", "Missing or bad key.")
+    end
+  end
+
   def propose(conn, params) do
     with {:ok, machine} <- machine(conn),
          {:ok, kept} <- Dokkit.Found.propose(machine, params) do

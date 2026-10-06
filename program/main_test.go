@@ -129,7 +129,7 @@ func TestEnrolSavesTheKeyAndWatchUsesIt(t *testing.T) {
 	if err != nil || c.key != "dkm_machine" || c.url != srv.URL {
 		t.Fatalf("saved config not used: %+v %v", c, err)
 	}
-	c.beat()
+	c.beat(nil)
 	c.flush(5 * time.Second)
 	if inventory["type"] != "inventory" || inventory["dokkit"] != version {
 		t.Fatalf("inventory: %v", inventory)
@@ -177,6 +177,7 @@ func TestWatchDeclaresAndRunsChecks(t *testing.T) {
 [service]
 id = "portal"
 name = "Upload portal"
+version_from = "VERSION"
 
 [[check]]
 type = "http"
@@ -218,6 +219,10 @@ schedule = "0 1 * * *"
 	w.refresh()
 	if declared["service"].(map[string]any)["id"] != "portal" || len(declared["job"].([]any)) != 1 {
 		t.Fatalf("declared: %v", declared)
+	}
+	os.WriteFile(filepath.Join(folder, "portal", "VERSION"), []byte("2.3.1\nbuilt on a Tuesday\n"), 0o600)
+	if v := w.versions(); len(v) != 1 || v[0]["id"] != "portal" || v[0]["version"] != "2.3.1" {
+		t.Fatalf("versions: %v", v)
 	}
 	at := time.Now()
 	if ran := w.tick(at); ran != 4 {

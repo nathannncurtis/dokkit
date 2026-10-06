@@ -149,6 +149,20 @@ defmodule Dokkit.Intake do
     end
   end
 
+  defp line(key, "deploy", line, _at) do
+    with {:ok, service} <- service(key, line),
+         version when is_binary(version) <- line["version"] do
+      Dokkit.Deploys.record(service, version,
+        how: "reported",
+        commit: label_text(line["commit"]),
+        by: label_text(line["by"])
+      )
+    else
+      {:error, _, _} = refusal -> refusal
+      _ -> {:error, "bad_line", "A deploy needs a version."}
+    end
+  end
+
   defp line(key, "job", line, at) do
     with {:ok, service} <- service(key, line), true <- line["event"] in @events do
       job(service, line, at)
@@ -175,14 +189,28 @@ defmodule Dokkit.Intake do
           do: {field, line[key]}
 
     Repo.update_all(from(m in Machine, where: m.id == ^id), set: [kind: :enrolled] ++ change)
+
+    for %{"id" => slug, "version" => version} <- List.wrap(line["services"]),
+        is_binary(slug) and is_binary(version),
+        service = Repo.get_by(Service, machine_id: id, slug: slug),
+        do: Dokkit.Deploys.record(service, version)
+
     :ok
   end
 
   # The other types are added with the features that read them.
-  defp line(_, type, _, _) when type in ~w(metric stats deploy),
+  defp line(_, type, _, _) when type in ~w(metric stats),
     do: {:error, "not_yet", "This server does not store #{type} lines yet."}
 
   defp line(_, type, _, _), do: {:error, "unknown_type", "Unknown type #{inspect(type)}."}
+
+  @doc "A deploy told to the server on its own, as CI does."
+  def deploy(%Key{} = key, params) do
+    seen(key)
+    line(key, "deploy", params, DateTime.utc_now())
+  end
+
+  defp label_text(value), do: if(is_binary(value), do: String.slice(value, 0, 100))
 
   defp job(service, line, at) do
     name = line["name"] || service.slug

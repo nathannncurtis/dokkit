@@ -1,5 +1,6 @@
 defmodule Dokkit.Read do
   @moduledoc "What the API and the MCP answer with, as plain maps."
+  import Ecto.Query, only: [from: 2]
   alias Dokkit.{Estate, Issue, Issues, Logs, Repo}
 
   def inbox do
@@ -84,6 +85,39 @@ defmodule Dokkit.Read do
           machine: l.machine.name,
           service: l.service && l.service.slug
         }
+      end
+    end
+  end
+
+  def deploys(opts \\ []) do
+    for d <- Dokkit.Deploys.list(opts) do
+      d
+      |> Map.take([:from, :version, :commit, :by, :how, :at])
+      |> Map.merge(%{
+        service: d.service_id,
+        name: d.service.name,
+        machine: d.service.machine.name
+      })
+    end
+  end
+
+  @doc "The latest deploy of a service and the issues that opened after it."
+  def since_deploy(id) do
+    with %{} = s <- Estate.service(id) do
+      case deploys(service: s.id, limit: 1) do
+        [] ->
+          %{deploy: nil, issues_since: []}
+
+        [deploy] ->
+          issues =
+            Repo.all(
+              from i in Issue,
+                where: i.service_id == ^s.id and i.since >= ^deploy.at,
+                order_by: i.since,
+                preload: [:machine, :service, :check, :alert]
+            )
+
+          %{deploy: deploy, issues_since: Enum.map(issues, &issue/1)}
       end
     end
   end

@@ -257,8 +257,8 @@ func enrol(address, token string) int {
 }
 
 // beat says this machine is alive.
-func (c *client) beat() {
-	c.report(map[string]any{"type": "inventory", "at": now(), "os": runtime.GOOS, "arch": runtime.GOARCH, "dokkit": version})
+func (c *client) beat(services []map[string]string) {
+	c.report(map[string]any{"type": "inventory", "at": now(), "os": runtime.GOOS, "arch": runtime.GOARCH, "dokkit": version, "services": services})
 }
 
 // job fills in what every job line carries. A machine key names the job as a service of its machine.

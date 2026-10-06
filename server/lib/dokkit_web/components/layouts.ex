@@ -70,6 +70,7 @@ defmodule DokkitWeb.Layouts do
          {:jobs, "clock-countdown", "Jobs", ~p"/jobs"},
          {:logs, "scroll", "Logs", ~p"/logs"}
        ]},
+      {"Changes", [{:deploys, "rocket-launch", "Deploys", ~p"/deploys"}]},
       {"Manage",
        [
          {:found, "binoculars", "Found", ~p"/found"},

@@ -13,15 +13,16 @@ Working, with tests:
 - **Jobs.** A job is added in the interface and reports with a plain web request or with `dokkit run`. A failed run opens an issue at once; a missed or overlong one within a minute.
 - **Checks.** A `dokkit.toml` declares a service and its checks. `dokkit watch` runs http, tcp, process and Windows-service checks, and three failures in a row open an issue.
 - **Beats.** An app sends a `beat` line from its main loop. When two are missed and a minute more passes, an issue opens: the app is up and stuck.
+- **Deploys.** A service's version changing is a deploy. `dokkit watch` reads the version from the file `version_from` names, or CI says it with one request. The Deploys page lists them.
 - **Machines.** A machine enrols with a one-use token and says it is alive once a minute. Three minutes of silence opens one issue and quiets what runs on it.
 - **Alerts.** A page through PagerDuty, a quiet push through ntfy, Pushover or PagerDuty, or a webhook. Once per issue, resolved when it closes.
 - **Logs.** Lines in Dokkit's format or CLEF, kept in monthly partitions, searched on the Logs page. `dokkit watch` reads the log files a `dokkit.toml` names.
 - **Found.** `dokkit scan` writes what is on a machine to a file and `dokkit propose` sends it. Running Windows services and listening ports wait on the Found page, and watching one adds a check that `dokkit watch` runs on that machine.
 - **Tasks.** A `dokkit.toml` offers a named command. The owner accepts it on the Found page, it is run from the Tasks page, and `dokkit watch` on its machine carries it out and sends back the output. A command that changes has to be accepted again.
-- **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Found, Tasks, Alerts and Settings. People sign in; the first one claims the server with a setup code.
+- **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Deploys, Found, Tasks, Alerts and Settings. People sign in; the first one claims the server with a setup code.
 - **The API and the MCP**, for user tokens made in Settings.
 
-Not built yet: errors, deploys and versions, stats, metrics, email, text and the digest, alert rules and suggestions, the libraries, the installer and the Docker image.
+Not built yet: errors, the Versions page, stats, metrics, email, text and the digest, alert rules and suggestions, the libraries, the installer and the Docker image.
 
 To run it for development, with Postgres on localhost:
 
