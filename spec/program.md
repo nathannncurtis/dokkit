@@ -11,6 +11,7 @@ One Go binary, `dokkit`. The same file is the command-line tool and the thing th
 | | `dokkit apply` | Sends the file to Dokkit. |
 | Jobs | `dokkit run --job <name> -- <command>` | Runs the command and reports start, finish, exit code, duration and the last lines of output. Exits with the command's own exit code. |
 | | `dokkit ping <name> [start, ok or fail]` | For a job that cannot be wrapped. |
+| | `--service <slug>` on either | The service the job is declared under. Without it the program finds the `[[job]]` of that name in the `dokkit.toml` files it reads. |
 | This machine | `dokkit enrol <address> <token>` | Trades a one-time token for this machine's key and stores the server's certificate fingerprint. |
 | | `dokkit status` | What this machine is watching and when it last reported. |
 | | `dokkit doctor` | Can it reach the server, does the certificate match, is the clock right. |
@@ -37,7 +38,7 @@ Each is a choice. None is a requirement for the next.
 
 **No open port, at any level.** `dokkit` only makes outbound requests. Work arrives over a request it holds open to the server.
 
-**Nothing is lost when the server is unreachable.** Everything goes to a spool folder on disk first and is sent from there. A log file's read position only moves forward after the server confirms it has the lines. The spool has a size cap, 500 MB by default. When it is hit, the oldest goes and the number dropped is reported.
+**Nothing is lost when the server is unreachable.** Everything goes to a spool folder on disk first and is sent from there. A log file's read position only moves forward after the server confirms it has the lines. The spool has a size cap, 500 MB by default, set with `DOKKIT_SPOOL_MB` or `spool_mb` in the saved configuration. When it is hit, the oldest goes and the number dropped is reported to the server as a warning log line. A batch the server keeps answering with an error is set aside (renamed `.rejected`) once the server has taken others since, so it does not hold up the rest.
 
 **`dokkit run` and `dokkit ping` work with or without `dokkit` running.** If it is running they leave their report in the spool folder. If not, they send it themselves.
 

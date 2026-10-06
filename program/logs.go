@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -41,7 +42,7 @@ func (w *watcher) tail() {
 		// Positions of files that are gone stay: one number a file, and a folder that is
 		// away for a moment must not make every line arrive again.
 		b, _ := json.Marshal(w.logs)
-		os.WriteFile(filepath.Join(w.c.spool, "logs.json"), b, 0o600)
+		writeFile(filepath.Join(w.c.spool, "logs.json"), b)
 	}
 }
 
@@ -92,10 +93,36 @@ func (c *client) sendLog(service, path string, positions map[string]int64) bool 
 		if json.Unmarshal(raw, &l) != nil || l == nil {
 			l = map[string]any{"t": now(), "level": "info", "msg": strings.ToValidUTF8(string(raw), "")}
 		}
-		l["type"] = "log"
-		if _, named := l["service"]; !named {
-			l["service"] = service
+		_, clef := l["@t"]
+		if _, ok := l["@m"]; ok {
+			clef = true
 		}
+		if _, ok := l["@mt"]; ok {
+			clef = true
+		}
+		if _, ok := l["msg"].(string); !ok && !clef {
+			l["msg"] = strings.ToValidUTF8(string(raw), "")
+			for _, k := range []string{"message", "event"} {
+				if m, ok := l[k].(string); ok {
+					l["msg"] = m
+					break
+				}
+			}
+		}
+		l["type"] = "log"
+		// The file's service owns the line; one of its own is kept as a field.
+		if own, named := l["service"]; named {
+			if clef {
+				l["service_name"] = own
+			} else {
+				fields, _ := l["fields"].(map[string]any)
+				if fields == nil {
+					fields = map[string]any{}
+				}
+				fields["service"], l["fields"] = own, fields
+			}
+		}
+		l["service"] = service
 		j, _ := json.Marshal(l)
 		body.Write(j)
 		body.WriteByte('\n')
@@ -103,10 +130,19 @@ func (c *client) sendLog(service, path string, positions map[string]int64) bool 
 	}
 	used = min(used, end)
 	if count > 0 {
-		// The same lines always carry the same batch id, so a resend is not stored twice.
-		batch := sha256.Sum256([]byte(key + strconv.FormatInt(pos, 10)))
-		status, _, err := c.post(uuid(batch[:16]), body.Bytes())
-		if err != nil || (status/100 != 2 && status != 413 && status != 422) {
+		// The same lines from the same machine always carry the same batch id, so a resend is not stored twice.
+		batch := sha256.Sum256(append([]byte(c.key+"\n"+key+"\n"+strconv.FormatInt(pos, 10)+"\n"), body.Bytes()...))
+		status, answer, err := c.post(uuid(batch[:16]), body.Bytes())
+		switch {
+		case err != nil:
+			return false
+		case status/100 == 2:
+			refused(answer)
+			delete(c.stuck, key+":"+strconv.FormatInt(pos, 10))
+		case status == 413 || status == 422:
+		case c.giveUp(key + ":" + strconv.FormatInt(pos, 10)):
+			fmt.Fprintf(os.Stderr, "dokkit: the server keeps answering %d to the lines of %s, skipping them\n", status, path)
+		default:
 			return false
 		}
 	}

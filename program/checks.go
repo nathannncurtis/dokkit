@@ -36,6 +36,7 @@ type declaration struct {
 	}
 	Task  []task
 	Check []check
+	Job   []struct{ ID string }
 }
 
 type check struct {
