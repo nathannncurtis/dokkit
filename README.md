@@ -17,15 +17,15 @@ Working, with tests:
 - **Errors.** An app posts an error with its type and stack. Reports are grouped by type and the app's own frames, and message text is not kept. The Errors page lists the groups. Dokkit also accepts reports from Sentry's open-source SDKs.
 - **Numbers.** `dokkit watch` sends each machine's processor, memory and disk use, fetches a service's stats document, and apps can send their own metrics. A threshold check opens an issue when a number is over its limit, and an expiry check warns 30 days before a certificate or a dated file runs out. Service pages chart the last 24 hours.
 - **Machines.** A machine enrols with a one-use token and says it is alive once a minute. Three minutes of silence opens one issue and quiets what runs on it.
-- **Alerts.** A page through PagerDuty, a quiet push through ntfy, Pushover or PagerDuty, an email, a text, a daily digest, or a webhook. Rules send one kind of issue somewhere else. Once per issue, resolved when it closes.
+- **Alerts.** A page through PagerDuty, a quiet push through ntfy, Pushover or PagerDuty, an email, a text, a daily digest, or a webhook. Rules send one kind of issue somewhere else. Once per issue, resolved when it closes. Email and text go to several addresses. An issue that keeps being snoozed is offered the daily digest. Each machine's disks and memory are watched against two limits without anything declared.
 - **Logs.** Lines in Dokkit's format or CLEF, kept in monthly partitions, searched on the Logs page. `dokkit watch` reads the log files a `dokkit.toml` names.
 - **Found.** `dokkit scan` writes what is on a machine to a file and `dokkit propose` sends it. Running Windows services and listening ports wait on the Found page, and watching one adds a check that `dokkit watch` runs on that machine.
 - **Tasks.** A `dokkit.toml` offers a named command. The owner accepts it on the Found page, it is run from the Tasks page, and `dokkit watch` on its machine carries it out and sends back the output. A command that changes has to be accepted again.
-- **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Errors, Deploys, Found, Tasks, Alerts and Settings. People sign in; the first one claims the server with a setup code.
+- **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Errors, Deploys, Found, Tasks, Alerts and Settings. People sign in; the first one claims the server with a setup code. A service page stops and starts watching, holds a version, keeps error messages or not, takes notes on its open issue, and lets the installed program start a stopped Windows service again. Versions lists desktop apps by how many PCs are on each version.
 - **Libraries.** For Python, .NET, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift, one file each: beats, job progress, an app's own checks, errors, logs.
-- **The API and the MCP**, for user tokens made in Settings.
+- **The API and the MCP**, for user tokens made in Settings. Every read and act call in `spec/api.md` is there, and a token with the `admin` scope manages keys and people.
 
-Not built yet: alert suggestions, the Windows installer. The Docker image is written and has not been built.
+Written and not yet run on a real machine: the Windows install script for the server, the Docker image, installing the program as a service, and sending mail through a real mail server. Not built yet: a Postgres installed with the server, an ordinary account for tasks under the installed service, and the program updating itself.
 
 To run it for development, with Postgres on localhost:
 

@@ -51,7 +51,7 @@ Its own usernames and passwords. It is meant for a local network or a private ov
 
 **Docker.** `server/Dockerfile` and `server/compose.yml`, with Postgres 17 beside it. Neither has been built or run yet: this was written on a machine with no Docker. It listens on plain HTTP on port 4000 for a proxy that holds the certificate.
 
-**Windows.** No installer yet. By hand: build the release, set the four variables for the machine, run the migrate line above, then `bin\dokkit.bat install` and `bin\dokkit.bat start`, which register and start it as a Windows service. That last step has not been run.
+**Windows.** `install.ps1` ships in the release folder. From an administrator PowerShell, `.\install.ps1 -DatabaseUrl 'ecto://user:password@host/dokkit'` copies the server to `Program Files\Dokkit`, writes its settings to `ProgramData\Dokkit\settings.env` where only administrators and the system account can read them, brings the database up to date, and registers and starts a Windows service. Run again with no arguments from a newer release, it stops the service, copies, updates the database and starts it. The server reads that settings file itself, because a Windows service is not started through a script that could set variables. The script has not been run yet, and it needs a Postgres that is already there.
 
 **Its own TLS.** With `DOKKIT_CERT` and `DOKKIT_CERT_KEY` set to a certificate and its key, the server serves HTTPS itself and the enrol page shows the fingerprint for machines to pin.
 
@@ -59,4 +59,4 @@ Its own usernames and passwords. It is meant for a local network or a private ov
 
 **Archiving.** With `DOKKIT_ARCHIVE` set to a folder, each log month older than a year is written there as `logs-YYYY-MM.ndjson.gz` and dropped from the database, checked once an hour. `Dokkit.Logs.restore/1` loads a file back. Without the setting every month stays.
 
-Not built yet: the installer and its private Postgres.
+Not built yet: a Postgres of its own, installed with it.
