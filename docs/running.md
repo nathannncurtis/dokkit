@@ -22,6 +22,8 @@ Postgres, always.
 
 Dokkit does not back up its own database. Whoever runs it does, with whatever they already use for Postgres. The plain way is a nightly `pg_dump` to another machine, wrapped in `dokkit run` so the backup shows up as a job like any other.
 
+Dokkit connects with its time zone set to UTC, and a migration re-bounds any log month made under another zone.
+
 Log months older than a year are archived as compressed files to a folder that is a setting. Those files are the archive, not a backup of the live database.
 
 ## First start
@@ -32,7 +34,7 @@ The first visit to the interface creates the owner account. It asks for a setup 
 
 Dokkit cannot page about itself when it is down, so two things cover it:
 
-1. **An outside heartbeat.** Dokkit calls an address every minute. The address is a setting. Point it at any service that alerts when the calls stop. That also covers the whole site losing power or its connection.
+1. **An outside heartbeat.** Dokkit calls an address every minute. The address is a setting and must be https. Point it at any service that alerts when the calls stop. That also covers the whole site losing power or its connection.
 2. **Its own row.** Dokkit watches whether it is taking reports, how full its database is, and whether archiving worked, and shows itself as a service like any other. How that alerts is a choice. The default is a quiet push, and a page only when it can no longer take in or store reports.
 
 ## Upgrades
@@ -70,8 +72,8 @@ The script has not been run yet. The Postgres commands in it were tried by hand,
 
 **Its own TLS.** With `DOKKIT_CERT` and `DOKKIT_CERT_KEY` set to a certificate and its key, the server serves HTTPS itself and the enrol page shows the fingerprint for machines to pin.
 
-**Who watches Dokkit.** The outside heartbeat is a setting on the Alerts page. Dokkit's own row is a service called Dokkit with a check that the database answers, a chart of the database's size, a check that goes bad when every enrolled machine has been quiet for ten minutes at once, and, when an archive folder is set, a check that the folder can be written to. It routes to a quiet push.
+**Who watches Dokkit.** The outside heartbeat is an https address set on the Alerts page. Dokkit's own row is a service called Dokkit with a check that the database answers, a chart of the database's size, a check that goes bad when every enrolled machine has been quiet for ten minutes at once, and, when an archive folder is set, a check that the folder can be written to (it writes an empty file called `.dokkit-write-check` there each minute). It routes to a quiet push.
 
 **The program for machines to fetch.** With `DOKKIT_PROGRAMS` set to a folder holding `version.txt` and files named like `dokkit-windows-amd64.exe`, the Versions page lists the machines behind that version and can ask each to fetch the newer copy.
 
-**Archiving.** With `DOKKIT_ARCHIVE` set to a folder, each log month older than a year is written there as `logs-YYYY-MM.ndjson.gz` and dropped from the database, checked once an hour. `Dokkit.Logs.restore/1` loads a file back. Without the setting every month stays.
+**Archiving.** With `DOKKIT_ARCHIVE` set to a folder, each log month older than a year is written there as `logs-YYYY-MM.ndjson.gz` and dropped from the database, checked once an hour. `Dokkit.Logs.restore/1` loads a file back. A month whose file is already there is dropped without rewriting the file. Without the setting every month stays.

@@ -1,9 +1,15 @@
+defmodule Dokkit.Intake.Refused do
+  defexception [:code, :message]
+end
+
 defmodule Dokkit.Intake do
   @moduledoc "Everything that arrives from machines and apps. See spec/api.md, Intake."
   import Ecto.Query
   alias Dokkit.{Batch, Check, Issues, JobRun, Key, Machine, Repo, Service}
+  alias Dokkit.Intake.Refused
 
   @max_lines 10_000
+  @app_checks 100
   @tail_bytes 16 * 1024
   @states %{"ok" => :ok, "degraded" => :degraded, "down" => :down}
   @events ~w(start progress ok fail)
@@ -21,7 +27,7 @@ defmodule Dokkit.Intake do
 
       true ->
         now = DateTime.utc_now()
-        lines = Enum.map(lines, &Jason.decode/1)
+        lines = Enum.map(lines, &decode/1)
         # A month's partition is made before the transaction, never inside it.
         Enum.each(lines, fn
           {:ok, %{"type" => "log"} = line} -> Dokkit.Logs.ensure_partition(line, now)
@@ -33,15 +39,24 @@ defmodule Dokkit.Intake do
     |> tap(fn _ -> Issues.changed() end)
   end
 
-  @doc "Trades a one-use enrolment token for a machine and its key."
+  @doc """
+  Trades a one-use enrolment token for a machine and its key. A name that is already enrolled
+  is refused unless the token was minted for that name, which revokes that machine's earlier keys.
+  """
   def enrol(token, params) do
     name = String.trim(to_string(params["hostname"] || ""))
 
     with true <- name != "",
          {:ok, %Key{used_at: nil} = enrol} <- Dokkit.Keys.verify(token, :enrol) do
+      replace = enrol.label == name
+
       Repo.transaction(fn ->
         now = DateTime.utc_now()
-        Repo.update!(Ecto.Changeset.change(enrol, used_at: now, revoked_at: now))
+
+        spend = from(k in Key, where: k.id == ^enrol.id and is_nil(k.used_at))
+
+        with {0, _} <- Repo.update_all(spend, set: [used_at: now, revoked_at: now]),
+             do: Repo.rollback(:spent)
 
         attrs = [
           kind: :enrolled,
@@ -53,8 +68,22 @@ defmodule Dokkit.Intake do
 
         machine =
           case Repo.get_by(Machine, name: name) do
-            nil -> Repo.insert!(struct!(Machine, [name: name] ++ attrs))
-            machine -> Repo.update!(Ecto.Changeset.change(machine, attrs))
+            nil ->
+              Repo.insert!(struct!(Machine, [name: name] ++ attrs))
+
+            %Machine{kind: :enrolled} when not replace ->
+              Repo.rollback(:taken)
+
+            machine ->
+              Repo.update_all(
+                from(k in Key,
+                  where:
+                    k.machine_id == ^machine.id and k.kind == :machine and is_nil(k.revoked_at)
+                ),
+                set: [revoked_at: now]
+              )
+
+              Repo.update!(Ecto.Changeset.change(machine, attrs))
           end
 
         {key, _} = Dokkit.Keys.mint(:machine, %{machine_id: machine.id, label: name})
@@ -68,16 +97,57 @@ defmodule Dokkit.Intake do
   def ping(%Key{kind: :app} = key, name, event, run, tail) when event in @events do
     Repo.transaction(fn ->
       service = seen(key)
-
-      job(
-        service,
-        %{"name" => name, "event" => event, "run" => run, "tail" => tail},
-        DateTime.utc_now()
-      )
+      line = clean(%{"name" => name, "event" => event, "run" => run, "tail" => tail})
+      job(key, service, line, DateTime.utc_now())
     end)
-    |> elem(1)
+    |> case do
+      {:ok, ok} -> ok
+      {:error, _} -> :error
+    end
     |> tap(fn _ -> Issues.changed() end)
+  rescue
+    e in Refused -> {:error, e.code, e.message}
   end
+
+  defp decode(text) do
+    with {:ok, line} <- Jason.decode(text), do: {:ok, clean(line)}
+  end
+
+  # Postgres text and jsonb refuse NUL and invalid UTF-8.
+  defp clean(text) when is_binary(text),
+    do: text |> String.replace_invalid("") |> String.replace(<<0>>, "")
+
+  defp clean(%{} = map), do: Map.new(map, fn {k, v} -> {clean(k), clean(v)} end)
+  defp clean(list) when is_list(list), do: Enum.map(list, &clean/1)
+  defp clean(other), do: other
+
+  # A line the database refuses as bad data is refused alone; anything else fails the batch to be retried.
+  defp guarded(fun) do
+    Repo.query!("SAVEPOINT line")
+    result = fun.()
+    Repo.query!("RELEASE SAVEPOINT line")
+    result
+  rescue
+    e ->
+      if not data_error?(e), do: reraise(e, __STACKTRACE__)
+      Repo.query!("ROLLBACK TO SAVEPOINT line")
+
+      case e do
+        %Refused{code: code, message: message} -> {:error, code, message}
+        _ -> {:error, "bad_line", "The server could not store this line."}
+      end
+  end
+
+  defp data_error?(%Refused{}), do: true
+  defp data_error?(%DBConnection.EncodeError{}), do: true
+  defp data_error?(%Ecto.InvalidChangesetError{}), do: true
+  defp data_error?(%Ecto.ChangeError{}), do: true
+  defp data_error?(%Ecto.Query.CastError{}), do: true
+
+  defp data_error?(%Postgrex.Error{postgres: %{code: code, pg_code: pg}}),
+    do: code != :unique_violation and is_binary(pg) and String.starts_with?(pg, ["22", "23"])
+
+  defp data_error?(_), do: false
 
   defp store(key, batch_id, lines, now) do
     seen(key)
@@ -88,7 +158,11 @@ defmodule Dokkit.Intake do
       |> Enum.with_index(1)
       |> Enum.map(fn {decoded, n} ->
         with {:ok, %{"type" => type} = line} <- decoded,
-             ok when ok == :ok or elem(ok, 0) == :log <- line(key, type, line, at(line, now)) do
+             ok when ok == :ok or elem(ok, 0) == :log <-
+               if(type == "log",
+                 do: log_line(key, line, now),
+                 else: guarded(fn -> line(key, type, line, at(line, now)) end)
+               ) do
           ok
         else
           {:error, code, message} ->
@@ -122,7 +196,7 @@ defmodule Dokkit.Intake do
     with {:ok, service} <- service(key, line),
          {:ok, state} <- Map.fetch(@states, line["state"]),
          name when is_binary(name) <- line["check"] do
-      check = check(service, name, :custom, 3)
+      check = check(key, service, name, :custom, 3)
       Issues.record(check, state, at: at, note: line["note"], value: number(line["value"]))
       :ok
     else
@@ -135,7 +209,7 @@ defmodule Dokkit.Intake do
     with {:ok, service} <- service(key, line), name when is_binary(name) <- line["name"] do
       every = line["every_seconds"]
       config = %{"every_seconds" => if(is_integer(every) and every > 0, do: every, else: 60)}
-      check = check(service, name, :beat, 1)
+      check = check(key, service, name, :beat, 1)
 
       check =
         if check.config == config,
@@ -165,7 +239,7 @@ defmodule Dokkit.Intake do
   defp line(key, "stats", line, at) do
     with {:ok, service} <- service(key, line),
          :ok <- Dokkit.Numbers.stats(service, line["document"], at) do
-      Issues.record(check(service, "stats", :stats, 3), :ok, at: at)
+      Issues.record(check(key, service, "stats", :stats, 3), :ok, at: at)
       :ok
     end
   end
@@ -192,20 +266,10 @@ defmodule Dokkit.Intake do
 
   defp line(key, "job", line, at) do
     with {:ok, service} <- service(key, line), true <- line["event"] in @events do
-      job(service, line, at)
+      job(key, service, line, at)
     else
       {:error, _, _} = refusal -> refusal
       _ -> {:error, "bad_line", "Needs an event of start, progress, ok or fail."}
-    end
-  end
-
-  defp line(key, "log", line, at) do
-    with {:ok, service} <- log_service(key, line),
-         {:ok, row} <- Dokkit.Logs.row(line, machine(key, service), service && service.id, at) do
-      {:log, row}
-    else
-      {:error, _, _} = refusal -> refusal
-      _ -> {:error, "bad_line", "A log line needs msg."}
     end
   end
 
@@ -226,6 +290,13 @@ defmodule Dokkit.Intake do
   end
 
   defp line(_, type, _, _), do: {:error, "unknown_type", "Unknown type #{inspect(type)}."}
+
+  # The row's time is the sender's; received_at is the server's, so the offset is their difference.
+  defp log_line(key, line, now) do
+    with {:ok, service} <- log_service(key, line) do
+      {:log, Dokkit.Logs.row(line, machine(key, service), service && service.id, now)}
+    end
+  end
 
   # The host an app reports from, when that is not the machine its service lives on.
   defp elsewhere(%Key{kind: :app}, service, host) when is_binary(host) and host != "" do
@@ -253,7 +324,8 @@ defmodule Dokkit.Intake do
       end
 
     Repo.insert_all(Machine, rows,
-      on_conflict: {:replace, [:last_seen_at]},
+      on_conflict:
+        from(m in Machine, where: m.kind == :seen, update: [set: [last_seen_at: ^now]]),
       conflict_target: :name
     )
   end
@@ -262,6 +334,7 @@ defmodule Dokkit.Intake do
 
   @doc "An error report, in the format of spec/errors.md."
   def error(%Key{} = key, report) do
+    report = clean(report)
     seen(key)
     hosts(key, [report["host"]], DateTime.utc_now())
     with {:ok, service} <- service(key, report), do: Dokkit.Errors.report(service, report)
@@ -269,15 +342,16 @@ defmodule Dokkit.Intake do
 
   @doc "A deploy told to the server on its own, as CI does."
   def deploy(%Key{} = key, params) do
+    params = clean(params)
     seen(key)
     line(key, "deploy", params, DateTime.utc_now())
   end
 
   defp label_text(value), do: if(is_binary(value), do: String.slice(value, 0, 100))
 
-  defp job(service, line, at) do
+  defp job(key, service, line, at) do
     name = line["name"] || service.slug
-    check = check(service, name, :job, 1)
+    check = check(key, service, name, :job, 1)
     event = line["event"]
     run = find_run(check, line["run"], event)
 
@@ -304,7 +378,20 @@ defmodule Dokkit.Intake do
           else: []
       )
 
+    new? = Ecto.get_meta(run, :state) == :built
     run = Repo.insert_or_update!(Ecto.Changeset.change(run, changes))
+
+    # A new start means any earlier run still marked running was cut short.
+    if event == "start" and new?,
+      do:
+        Repo.update_all(
+          from(r in JobRun,
+            where:
+              r.check_id == ^check.id and r.result == :running and r.id != ^run.id and
+                r.started_at < ^at
+          ),
+          set: [result: :fail, finished_at: at]
+        )
 
     case event do
       "ok" ->
@@ -364,8 +451,8 @@ defmodule Dokkit.Intake do
     size = byte_size(text)
 
     if size > @tail_bytes,
-      do: binary_part(text, size - @tail_bytes, @tail_bytes) |> String.replace_invalid(""),
-      else: text
+      do: binary_part(text, size - @tail_bytes, @tail_bytes) |> clean(),
+      else: clean(text)
   end
 
   defp service(%Key{kind: :app, service_id: id}, _), do: {:ok, Repo.get!(Service, id)}
@@ -389,22 +476,38 @@ defmodule Dokkit.Intake do
   defp machine(%Key{machine_id: id}, nil), do: id
   defp machine(_, service), do: service.machine_id
 
-  defp check(service, name, type, fail_after) do
+  defp check(key, service, name, type, fail_after) do
     Repo.get_by(Check, service_id: service.id, name: name) ||
       Repo.insert!(%Check{
         service_id: service.id,
-        name: name,
+        name: room(key, service, name),
         type: type,
         source: :reported,
         fail_after: fail_after
       })
   end
 
+  # An app key can make only so many checks, so a leaked key cannot fill the database.
+  defp room(%Key{kind: :app}, service, name) do
+    if Repo.aggregate(from(c in Check, where: c.service_id == ^service.id), :count) >= @app_checks,
+      do:
+        raise(Refused,
+          code: "too_many_checks",
+          message: "A service takes at most #{@app_checks} checks from an app key."
+        ),
+      else: name
+  end
+
+  defp room(_, _, name), do: name
+
   defp seen(%Key{} = key) do
     now = DateTime.utc_now()
     service = key.service_id && Repo.get!(Service, key.service_id)
     machine = key.machine_id || (service && service.machine_id)
-    Repo.update_all(from(m in Machine, where: m.id == ^machine), set: [last_seen_at: now])
+
+    if key.kind == :machine,
+      do: Repo.update_all(from(m in Machine, where: m.id == ^machine), set: [last_seen_at: now])
+
     Repo.update_all(from(k in Key, where: k.id == ^key.id), set: [used_at: now])
     service
   end
