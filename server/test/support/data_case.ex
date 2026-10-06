@@ -2,16 +2,6 @@ defmodule Dokkit.DataCase do
   @moduledoc "Tests that use the database run inside a sandbox that is rolled back afterwards."
   use ExUnit.CaseTemplate
 
-  using do
-    quote do
-      alias Dokkit.Repo
-
-      import Ecto
-      import Ecto.Changeset
-      import Ecto.Query
-    end
-  end
-
   setup tags do
     Dokkit.DataCase.setup_sandbox(tags)
     :ok

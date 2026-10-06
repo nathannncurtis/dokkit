@@ -24,10 +24,8 @@ defmodule Dokkit.MachinesTest do
              Repo.get!(Machine, id)
 
     assert %{"accepted" => 1} =
-             json_response(
-               report(key, [%{type: "inventory", os: "windows", dokkit: "0.1.1"}]),
-               200
-             )
+             report(key, [%{type: "inventory", os: "windows", dokkit: "0.1.1"}])
+             |> json_response(200)
 
     assert Repo.get!(Machine, id).program_version == "0.1.1"
 
