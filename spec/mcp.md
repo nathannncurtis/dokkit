@@ -1,15 +1,15 @@
 # The MCP server
 
-Docket serves a Model Context Protocol endpoint at `/mcp` so an AI tool can ask it questions and take a few everyday actions.
+Dokkit serves a Model Context Protocol endpoint at `/mcp` so an AI tool can ask it questions and take a few everyday actions.
 
-It lives on the server, never on Davit. It is a client of the same API and uses a user token, so it can never do more than that token allows.
+It lives on the server, never on `dokkit`. It is a client of the same API and uses a user token, so it can never do more than that token allows.
 
 ## Connecting
 
 Over HTTP with a user token as a bearer header. For Claude Code:
 
 ```
-claude mcp add --transport http docket https://<docket address>/mcp --header "Authorization: Bearer dku_..."
+claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Authorization: Bearer dku_..."
 ```
 
 ## Tools

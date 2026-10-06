@@ -8,9 +8,9 @@ For what only the app knows about itself. The same five things in every language
 | `job("name")` | Start, finish, failure, and progress such as "4,000 of 9,000". |
 | `check("name", state, value, note)` | The app's own checks, for example "the oldest item in the queue is 14 minutes old". |
 | `capture(error)` | Sends an error in the format in `errors.md`. Can also catch unhandled errors if asked to. |
-| A log handler | Plugs into the language's normal logging. Optional: writing lines to a file for Davit to read works just as well. |
+| A log handler | Plugs into the language's normal logging. Optional: writing lines to a file for `dokkit` to read works just as well. |
 
-It can also send the stats document (`stats-v1.md`) itself, for an app Davit cannot reach, such as a desktop app or a phone app. There is one stats format and two ways to deliver it: Davit fetches it, or the library sends it.
+It can also send the stats document (`stats-v1.md`) itself, for an app `dokkit` cannot reach, such as a desktop app or a phone app. There is one stats format and two ways to deliver it: `dokkit` fetches it, or the library sends it.
 
 ## Rules
 
@@ -25,14 +25,14 @@ Two environment variables:
 
 | Variable | Holds |
 |---|---|
-| `DOCKET_URL` | The server address. |
-| `DOCKET_KEY` | An app key. |
+| `DOKKIT_URL` | The server address. |
+| `DOKKIT_KEY` | An app key. |
 
 The service's id and version come from the app key and from what the app passes at start.
 
-## Machines with no Davit
+## Machines with no `dokkit`
 
-An app using the library reports its host name. The host shows up in Docket as a machine of the `seen` kind, with its last-seen time, the app's version on it, and its errors. This is how staff PCs become rows without installing anything extra on them.
+An app using the library reports its host name. The host shows up in Dokkit as a machine of the `seen` kind, with its last-seen time, the app's version on it, and its errors. This is how staff PCs become rows without installing anything extra on them.
 
 ## Languages
 

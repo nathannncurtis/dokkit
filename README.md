@@ -1,4 +1,4 @@
-# Docket
+# Dokkit
 
 One place that watches everything I run and tells me what needs my attention.
 
@@ -10,11 +10,10 @@ Nothing here is the product yet. This repo holds the design work so far: the dec
 
 | Piece | What it is | Built with |
 |---|---|---|
-| **Docket** | The server and the web interface. | Phoenix on Postgres |
-| **Davit** | Runs on each machine. Watches what is on it, reports to Docket, and can run named tasks. | Go, one file |
-| **CLI** | Part of Davit. Wraps a command and reports how it went. | Go |
+| **The server** | Takes everything in, stores it, alerts, and serves the web interface. | Phoenix on Postgres |
+| **The `dokkit` program** | Runs on each machine. Watches what is on it, reports to the server, and can run named tasks. It is also the command-line tool. | Go, one file |
 | **Libraries** | For things only an app knows about itself: that it is alive inside, job progress, its own checks, errors. | Python and C# first |
-| **MCP** | Lets an AI tool ask Docket questions and take a few everyday actions. | Served by Docket |
+| **MCP** | Lets an AI tool ask Dokkit questions and take a few everyday actions. | Part of the server |
 
 ## Decisions
 
@@ -29,23 +28,30 @@ Nothing here is the product yet. This repo holds the design work so far: the dec
 
 ### Alerts
 
-- I route each alert: page, email, or text, and who gets it.
+- I route each alert: page, push, email, text, digest or webhook, and who gets it.
 - Paging goes through PagerDuty, because it breaks Do Not Disturb.
-- Anything that does not page defaults to a quiet push or a morning digest.
+- A quiet push can go through PagerDuty at low urgency, ntfy or Pushover.
+- Anything that does not page defaults to a quiet push or a morning digest. The digest time is a setting, and an empty morning sends nothing.
+- Three failed checks open an issue. An issue pages once. A machine that is down is one page, not one per service on it.
+- Dokkit suggests changes to rules and never makes them itself.
 - Safe services can be restarted automatically. That is allow-listed per service.
+- The detail is in `spec/alerts.md`.
 
-### Docket, the server
+### The server
 
 - One Phoenix application on one Postgres database. Not SQLite.
 - Ships as a native Windows service and as a Docker image, both out of the box, so it can move to Linux or a cloud host later.
+- The Windows installer offers to set up its own Postgres or to use one that is already there.
+- It calls an outside address every minute, so something outside can page when it goes quiet.
+- Running it is covered in `docs/running.md`.
 - Logs are kept live for 12 months. Each older month is archived as one compressed file and can be loaded back.
 - Its own usernames and passwords. Reachable on the local network and over a private overlay network, never exposed publicly.
 - Light and dark themes, both supported.
 
-### Davit, on each machine
+### The `dokkit` program, on each machine
 
-- **No open network port on a privileged process.** It only makes outbound requests and receives work over one it holds open. Everything it has to send goes to a folder on disk first, so nothing is lost when Docket is unreachable. It listens on nothing, not even localhost.
-- **Docket can only ask for a named task defined on that machine.** Never an arbitrary command. A security scan or a report is a named task.
+- **No open network port on a privileged process.** It only makes outbound requests and receives work over one it holds open. Everything it has to send goes to a folder on disk first, so nothing is lost when the server is unreachable. It listens on nothing, not even localhost.
+- **The server can only ask for a named task defined on that machine.** Never an arbitrary command. A security scan or a report is a named task.
 - **Scanning is an option, never a requirement.** Three levels, each a choice:
 
   | Level | Needs | What it does |
@@ -55,13 +61,15 @@ Nothing here is the product yet. This repo holds the design work so far: the dec
   | Installed service | Administrator, once | Survives logoff, restarts allow-listed services, and scans when asked. |
 
 - A scan is a command. It writes a proposal, and nothing is watched until the proposal is accepted.
-- It must never require antivirus to be turned off.
+- Every part of a scan can be switched off, and a scan never reads file contents, credentials, browser data or another program's memory.
+- It never updates itself. The interface says when a newer one is out and the update is started from there.
+- Releases are signed. It must never require antivirus to be turned off.
 
 ### The API
 
-Docket, Davit, the CLI, the libraries and the MCP meet at one HTTP API. The interface is a thin layer over the same server code, so nothing can be seen or done in it that the API cannot do. The full contract is in `spec/`.
+The server, the `dokkit` program, the libraries and the MCP meet at one HTTP API. The interface is a thin layer over the same server code, so nothing can be seen or done in it that the API cannot do. The full contract is in `spec/`.
 
-- **Intake**: a machine enrols, state and logs and job runs come in as batches, a `docket.toml` is declared, a scan is proposed, deploys are marked, errors arrive, and Davit asks for work.
+- **Intake**: a machine enrols, state and logs and job runs come in as batches, a `dokkit.toml` is declared, a scan is proposed, deploys are marked, errors arrive, and `dokkit` asks for work.
 - **Read**: everything the interface shows.
 - **Act**: snooze, acknowledge, watch, route, accept, run a task.
 
@@ -69,15 +77,15 @@ Four kinds of key: one to enrol a machine, one per machine, one per app that can
 
 ### How an app joins
 
-- It declares itself in a `docket.toml` in its own repo: what it is, how to check it, its jobs, its log files. No code change.
+- It declares itself in a `dokkit.toml` in its own repo: what it is, how to check it, its jobs, its log files. No code change.
 - It adds the library only for what it alone knows.
 - A task in that file is only a proposal until it is accepted in the interface, and the server can ask for a task by name and nothing else.
 - Steps are in `docs/integrating.md`.
 
 ### Errors
 
-- Docket's own library and its own error format are the front door.
-- Docket also accepts reports from Sentry's open-source SDKs, so a language without a Docket library can still report. How the project behaves about that is in `docs/sentry-compatibility.md`.
+- Dokkit's own library and its own error format are the front door.
+- Dokkit also accepts reports from Sentry's open-source SDKs, so a language without a Dokkit library can still report. How the project behaves about that is in `docs/sentry-compatibility.md`.
 
 ### The look
 
@@ -94,8 +102,8 @@ Four kinds of key: one to enrol a machine, one per machine, one per app that can
 | `gallery/app/logos/` | The generated logo images. The mock uses a vector traced from `d2.png`. |
 | `gallery/demo/` | An earlier clickable demo, and `data.js`, the inventory the mocks are filled from. |
 | `gallery/`, `gallery/v2/` to `gallery/v5/` | Earlier explorations, kept for reference. |
-| `spec/` | The contract: the API, `docket.toml`, log lines, errors, Davit and the CLI, the library, the MCP, and the stats document two applications already implement. |
-| `docs/` | Wiring an app in, and the note on Sentry's SDKs. |
+| `spec/` | The contract: the API, `dokkit.toml`, alerts, log lines, errors, the `dokkit` program, the library, the MCP, and the stats document two applications already implement. |
+| `docs/` | Wiring an app in, running the server, moving over from other tools, and the note on Sentry's SDKs. |
 | `questions.json`, `answers.jsonl`, `index.html`, `server.py` | The requirements interview, and the small board it was answered on. |
 
 To look at the mock:
@@ -114,5 +122,14 @@ The mocks are filled with one real install's inventory. All of it has to be repl
 - Every page under `gallery/` that names those machines and services.
 - `answers.jsonl` and `questions.json`: the interview refers to the same install.
 - `spec/stats-v1.md`: written for two specific applications.
-- The interface needs its own identity. The mock was built with another product's layout as the reference; one pass to change whatever is recognisably theirs, and the description under "The look" reworded to match.
+- The interface was built with another product's layout as the reference. It mostly stays as it is; the parts that are recognisably theirs get changed, and the description under "The look" is reworded to match.
+- The mocks and this repo's own name still say Docket in places: the older galleries, the interview files, and the repo itself.
 - `docs/sentry-compatibility.md` is followed everywhere the project describes itself.
+
+## Licence
+
+When this is public: the server is AGPL 3.0, and the `dokkit` program and the libraries are Apache 2.0.
+
+## The name
+
+Dokkit is one name for the whole thing: the product, the server, and the program on each machine. It is "docket" respelled: a docket is the list of what is waiting to be dealt with.

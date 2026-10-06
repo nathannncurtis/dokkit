@@ -1,8 +1,8 @@
 # Errors
 
-Two doors. Docket's own is the front door. The second exists so that an app in a language with no Docket library yet can still report.
+Two doors. Dokkit's own is the front door. The second exists so that an app in a language with no Dokkit library yet can still report.
 
-## Docket's own format
+## Dokkit's own format
 
 `POST /api/v1/errors` with an app key.
 
@@ -38,7 +38,7 @@ Errors are grouped by `type` and the app's own frames. A group is one row in the
 
 ## Reports from Sentry's open-source SDKs
 
-Docket also accepts reports from Sentry's open-source SDKs. An SDK is given an address made from an app key and Docket's host, and sends to:
+Dokkit also accepts reports from Sentry's open-source SDKs. An SDK is given an address made from an app key and Dokkit's host, and sends to:
 
 ```
 POST /api/<project>/envelope/
@@ -46,9 +46,9 @@ POST /api/<project>/envelope/
 
 The path is that shape because the SDKs build it from the address they are given.
 
-What Docket does with a report:
+What Dokkit does with a report:
 
-- **Error events are stored**, mapped onto the same fields as Docket's own format.
+- **Error events are stored**, mapped onto the same fields as Dokkit's own format.
 - **Everything else is read and dropped**: performance traces, sessions, replays, profiles, attachments. The answer is still a success, and it tells the SDK to stop sending those kinds.
 - The app key is taken from the auth header, the query string or the envelope header, whichever the SDK used.
 - Compressed bodies are accepted.

@@ -11,20 +11,20 @@ One JSON object per line.
 | `t` | Yes | When it happened. RFC 3339. |
 | `level` | Yes | `trace`, `debug`, `info`, `warn`, `error` or `fatal`. |
 | `msg` | Yes | The line. |
-| `service` | No | The service id. Filled in from `docket.toml` or the app key when absent. |
+| `service` | No | The service id. Filled in from `dokkit.toml` or the app key when absent. |
 | `fields` | No | Anything else, as a flat object. Searchable. |
 
 A line that is not JSON is kept as `msg` with level `info` and the time it was read.
 
 ## Ways in
 
-1. **Davit reads files** named under `[logs]` in `docket.toml`. A file's read position only moves forward after the server confirms it has the lines, so a line can arrive twice and never goes missing. Files are recognised by their first bytes, so rotation and renames are followed.
+1. **`dokkit` reads files** named under `[logs]` in `dokkit.toml`. A file's read position only moves forward after the server confirms it has the lines, so a line can arrive twice and never goes missing. Files are recognised by their first bytes, so rotation and renames are followed.
 2. **The library's log handler** plugs into the language's normal logging and sends lines in batches.
 3. **Anything else** can put `log` lines in a `POST /report` batch.
 
 ## The CLEF format
 
-Docket also reads the Compact Log Event Format, the open line format written by Serilog and read by Seq (`@t`, `@l`, `@m`, `@mt`, `@x`). An app that already writes it can move by changing an address and nothing else.
+Dokkit also reads the Compact Log Event Format, the open line format written by Serilog and read by Seq (`@t`, `@l`, `@m`, `@mt`, `@x`). An app that already writes it can move by changing an address and nothing else.
 
 | CLEF | Becomes |
 |---|---|

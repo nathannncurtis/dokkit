@@ -1,4 +1,4 @@
-# `docket.toml`
+# `dokkit.toml`
 
 One file in an app's repo that says what the app is and how to tell if it is healthy. It ships with the app.
 
@@ -64,13 +64,13 @@ degraded = "push"
 
 **Tasks take no arguments.** The server can ask for a task by name and nothing else.
 
-## How the file reaches Docket
+## How the file reaches Dokkit
 
 Two ways, both supported:
 
-1. **Davit reads it.** Davit's own configuration lists the folders it may read `docket.toml` files from. That configuration is only editable by an administrator. Davit re-reads a file when it changes.
-2. **It is sent.** `davit apply` sends the file from anywhere that has a key, for example from CI.
+1. **`dokkit` reads it.** `dokkit`'s own configuration lists the folders it may read `dokkit.toml` files from. That configuration is only editable by an administrator. `dokkit` re-reads a file when it changes.
+2. **It is sent.** `dokkit apply` sends the file from anywhere that has a key, for example from CI.
 
 ## Checking it
 
-`davit check` validates the file, runs every check once on the current machine, and prints exactly what would be sent. It needs no server.
+`dokkit check` validates the file, runs every check once on the current machine, and prints exactly what would be sent. It needs no server.

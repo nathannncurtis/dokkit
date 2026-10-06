@@ -1,16 +1,16 @@
-# The Docket API (v1)
+# The Dokkit API (v1)
 
-This is the contract. The server, Davit, the CLI, the client libraries and the MCP are all tested against it. Nothing here is built yet.
+This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Nothing here is built yet.
 
 ## One rule
 
-There is one HTTP API on the server. Davit, the CLI, the libraries, the MCP and any script are clients of it. The web interface and the API are thin layers over the same server code, so nothing can be seen or done in the interface that the API cannot do.
+There is one HTTP API on the server. `dokkit`, the CLI, the libraries, the MCP and any script are clients of it. The web interface and the API are thin layers over the same server code, so nothing can be seen or done in the interface that the API cannot do.
 
 ## The words
 
 | Word | Meaning |
 |---|---|
-| **Machine** | A host. Either `enrolled` (Davit is on it) or `seen` (an app on it reported, for example a staff PC). A machine of kind `group` holds things with no host, such as outside dependencies. |
+| **Machine** | A host. Either `enrolled` (`dokkit` is on it) or `seen` (an app on it reported, for example a staff PC). A machine of kind `group` holds things with no host, such as outside dependencies. |
 | **Service** | Anything that is a row. Kind is `service`, `job`, `dependency` or `app` (a desktop app on many PCs). Has `version`, `listens` and `environment`. |
 | **Check** | One way of knowing a service's state. See the check types below. |
 | **State** | `ok`, `degraded`, `down`, `unknown` (watched, no signal) or `unwatched` (found, nothing watching it). |
@@ -43,8 +43,8 @@ Every key has a recognisable prefix and a built-in checksum, so a leaked one can
 
 | Key | Prefix | Held by | Can do |
 |---|---|---|---|
-| Enrolment token | `dke_` | Pasted once into `davit enrol` | One use, expires. Trades for a machine key. |
-| Machine key | `dkm_` | Davit | Report for that machine, propose, take work. |
+| Enrolment token | `dke_` | Pasted once into `dokkit enrol` | One use, expires. Trades for a machine key. |
+| Machine key | `dkm_` | `dokkit` | Report for that machine, propose, take work. |
 | App key | `dka_` | A library, or a script inside an app | Write-only, for one service. It can read nothing, is rate-limited and can be revoked, so it is safe inside a desktop or phone app. |
 | User token | `dku_` | Scripts and the MCP | Scopes: `read`, `read-logs`, `act`, `admin`. |
 
@@ -68,7 +68,7 @@ Roles for people: `owner`, `member`, and `viewer`. A viewer sees everything exce
 Two supported ways on a local network:
 
 1. A real certificate, from a reverse proxy or a private overlay network.
-2. Pinning. The enrol command copied from the interface carries the server certificate's fingerprint. Davit stores it and refuses any other server from then on.
+2. Pinning. The enrol command copied from the interface carries the server certificate's fingerprint. `dokkit` stores it and refuses any other server from then on.
 
 There is no switch that skips verification.
 
@@ -89,14 +89,14 @@ Machine key or app key.
 ### `POST /enrol`
 
 ```json
-{"token": "dke_...", "hostname": "host-01", "os": "windows", "arch": "amd64", "davit": "0.1.0"}
+{"token": "dke_...", "hostname": "host-01", "os": "windows", "arch": "amd64", "dokkit": "0.1.0"}
 ```
 
 Answers `{"machine": "<id>", "key": "dkm_..."}`. The token is spent.
 
 ### `POST /report`
 
-The main door. The body is newline-delimited JSON, one item per line, optionally gzip-compressed (`Content-Encoding: gzip`). The header `Docket-Batch: <uuid>` names the batch; sending the same batch again stores nothing twice.
+The main door. The body is newline-delimited JSON, one item per line, optionally gzip-compressed (`Content-Encoding: gzip`). The header `Dokkit-Batch: <uuid>` names the batch; sending the same batch again stores nothing twice.
 
 The answer:
 
@@ -110,14 +110,14 @@ Every line has `type` and `at`. With a machine key the machine is known. With an
 
 | `type` | Fields | From |
 |---|---|---|
-| `state` | `service`, `check`, `state`, `note`, `value` | Davit |
-| `inventory` | `os`, `davit`, `uptime_seconds`, `services` (each with `id`, `name`, `version`, `listens`, `how_found`) | Davit |
-| `metric` | `name`, `value`, `unit`, and `service` if it is not a machine-wide number | Davit, app |
+| `state` | `service`, `check`, `state`, `note`, `value` | `dokkit` |
+| `inventory` | `os`, `dokkit`, `uptime_seconds`, `services` (each with `id`, `name`, `version`, `listens`, `how_found`) | `dokkit` |
+| `metric` | `name`, `value`, `unit`, and `service` if it is not a machine-wide number | `dokkit`, app |
 | `beat` | `service`, `name`, `every_seconds` | App |
-| `job` | `service`, `run`, `event` (`start`, `progress`, `ok`, `fail`), and by event: `exit_code`, `duration_ms`, `done`, `total`, `tail` | Davit, app |
-| `stats` | `service`, `document` (see `stats-v1.md`) | Davit, app |
-| `log` | The fields in `log-lines.md` | Davit, app |
-| `deploy` | `service`, `version`, `commit`, `by` | Davit, app |
+| `job` | `service`, `run`, `event` (`start`, `progress`, `ok`, `fail`), and by event: `exit_code`, `duration_ms`, `done`, `total`, `tail` | `dokkit`, app |
+| `stats` | `service`, `document` (see `stats-v1.md`) | `dokkit`, app |
+| `log` | The fields in `log-lines.md` | `dokkit`, app |
+| `deploy` | `service`, `version`, `commit`, `by` | `dokkit`, app |
 | `custom` | `service`, `check`, `state`, `value`, `note` | App |
 
 An app key may not send `state` or `inventory`.
@@ -136,7 +136,7 @@ A POST body, if there is one, is kept as the last lines of output. `?run=<id>` t
 
 ### `PUT /declare`
 
-The contents of a `docket.toml`, sent as JSON with the same structure. Sending the same file twice changes nothing. Checks, jobs, logs and stats become active. Tasks become proposals. See `docket-toml.md`.
+The contents of a `dokkit.toml`, sent as JSON with the same structure. Sending the same file twice changes nothing. Checks, jobs, logs and stats become active. Tasks become proposals. See `dokkit-toml.md`.
 
 ### `POST /proposals`
 
@@ -156,7 +156,7 @@ For CI. A deploy is also recorded automatically whenever a service's reported ve
 GET /work?wait=50
 ```
 
-Davit asks for work and the server holds the request for up to 50 seconds. `204` means nothing to do; ask again. Otherwise:
+`dokkit` asks for work and the server holds the request for up to 50 seconds. `204` means nothing to do; ask again. Otherwise:
 
 ```json
 {"run": "<id>", "task": "security-scan"}
@@ -169,14 +169,14 @@ POST /work/<run>/output     a chunk of output
 POST /work/<run>/result     {"exit_code": 0, "duration_ms": 81234}
 ```
 
-Davit only runs a task that is defined on its machine and has been accepted. Anything else is answered with a refusal result.
+`dokkit` only runs a task that is defined on its machine and has been accepted. Anything else is answered with a refusal result.
 
 ### Errors
 
 Two doors, both described in `errors.md`:
 
 ```
-POST /errors                        Docket's own format
+POST /errors                        Dokkit's own format
 POST /api/<project>/envelope/       reports from Sentry's open-source SDKs
 ```
 
