@@ -1,6 +1,6 @@
 # The Dokkit API (v1)
 
-This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Nothing here is built yet.
+This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state` and `custom` lines, and the ping URLs.
 
 ## One rule
 
@@ -114,7 +114,7 @@ Every line has `type` and `at`. With a machine key the machine is known. With an
 | `inventory` | `os`, `dokkit`, `uptime_seconds`, `services` (each with `id`, `name`, `version`, `listens`, `how_found`) | `dokkit` |
 | `metric` | `name`, `value`, `unit`, and `service` if it is not a machine-wide number | `dokkit`, app |
 | `beat` | `service`, `name`, `every_seconds` | App |
-| `job` | `service`, `run`, `event` (`start`, `progress`, `ok`, `fail`), and by event: `exit_code`, `duration_ms`, `done`, `total`, `tail` | `dokkit`, app |
+| `job` | `service`, `name` (the job, when a service has more than one; otherwise the service itself), `run`, `event` (`start`, `progress`, `ok`, `fail`), and by event: `exit_code`, `duration_ms`, `done`, `total`, `tail` | `dokkit`, app |
 | `stats` | `service`, `document` (see `stats-v1.md`) | `dokkit`, app |
 | `log` | The fields in `log-lines.md` | `dokkit`, app |
 | `deploy` | `service`, `version`, `commit`, `by` | `dokkit`, app |
@@ -127,9 +127,9 @@ An app key may not send `state` or `inventory`.
 For anything that can only make a web request, such as a cron job on a storage box.
 
 ```
-GET or POST /in/<app key>/job/<name>/start
-GET or POST /in/<app key>/job/<name>/ok
-GET or POST /in/<app key>/job/<name>/fail
+GET or POST /api/v1/in/<app key>/job/<name>/start
+GET or POST /api/v1/in/<app key>/job/<name>/ok
+GET or POST /api/v1/in/<app key>/job/<name>/fail
 ```
 
 A POST body, if there is one, is kept as the last lines of output. `?run=<id>` ties a start to its finish.

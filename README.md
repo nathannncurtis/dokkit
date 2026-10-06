@@ -104,7 +104,8 @@ Four kinds of key: one to enrol a machine, one per machine, one per app that can
 | `gallery/`, `gallery/v2/` to `gallery/v5/` | Earlier explorations, kept for reference. |
 | `spec/` | The contract: the API, `dokkit.toml`, alerts, log lines, errors, the `dokkit` program, the library, the MCP, and the stats document two applications already implement. |
 | `docs/` | Wiring an app in, running the server, moving over from other tools, and the note on Sentry's SDKs. |
-| `questions.json`, `answers.jsonl`, `index.html`, `server.py` | The requirements interview, and the small board it was answered on. |
+| `interview/` | The requirements interview, and the small board it was answered on. |
+| `server/` | The server: Phoenix on Postgres. |
 
 To look at the mock:
 
@@ -120,7 +121,7 @@ The current mock in `gallery/app/` runs on invented data. Everything older is fi
 
 - `gallery/demo/data.js`: real machine names, services, versions and ports.
 - Every page under `gallery/` that names those machines and services.
-- `answers.jsonl` and `questions.json`: the interview refers to the same install.
+- `interview/`: the interview refers to the same install.
 - `spec/stats-v1.md`: written for two specific applications.
 - The interface was built with another product's layout as the reference. It mostly stays as it is; the parts that are recognisably theirs get changed, and the description under "The look" is reworded to match.
 - The mocks and this repo's own name still say Docket in places: the older galleries, the interview files, and the repo itself.
