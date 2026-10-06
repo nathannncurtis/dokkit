@@ -1,16 +1,18 @@
 # Dokkit with its own Postgres. Copy to the host, set the three values marked below, then:
 #   docker compose up -d
 #   docker compose logs dokkit     # the setup code for the first visit is in here
+# Nothing is published to the host. For a proxy of your own, put the port in a compose.override.yml:
+#   services: { dokkit: { ports: ["127.0.0.1:4000:4000"] } }
+# install.sh uses this file with the "caddy" profile, which adds https on its own certificate.
 services:
   dokkit:
     build: .
+    # DOKKIT_IMAGE names a published image to pull instead of building one here.
+    image: ${DOKKIT_IMAGE:-dokkit}
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
-    # On this machine only, for a proxy here. For a proxy on another machine, use "4000:4000".
-    ports:
-      - "127.0.0.1:4000:4000"
     environment:
       # POSTGRES_PASSWORD goes into an address, so letters and digits only: openssl rand -hex 24
       DATABASE_URL: ecto://dokkit:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db/dokkit
@@ -31,5 +33,19 @@ services:
       test: ["CMD", "pg_isready", "-U", "dokkit"]
       interval: 5s
       retries: 10
+  # Gets and renews the certificate for PHX_HOST itself. Needs ports 80 and 443 reachable.
+  caddy:
+    profiles: [caddy]
+    image: caddy:2
+    restart: unless-stopped
+    command: ["caddy", "reverse-proxy", "--from", "${PHX_HOST}", "--to", "dokkit:4000"]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+    depends_on:
+      - dokkit
 volumes:
   dokkit-db:
+  caddy-data:

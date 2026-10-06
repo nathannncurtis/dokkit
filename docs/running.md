@@ -43,6 +43,30 @@ Dokkit cannot page about itself when it is down, so two things cover it:
 - Docker: pull the newer image.
 - A server works with the `dokkit` program one version behind it, so machines do not have to be updated at the same moment.
 
+## On a cloud VPS
+
+On a fresh Debian or Ubuntu machine whose domain already points at it:
+
+```
+curl -fsSL https://dokkit.dev/install.sh | sudo sh -s -- dokkit.example.com
+```
+
+That form applies once the image (`ghcr.io/nathannncurtis/dokkit:latest`) and the site are published. Neither is yet. What works today is the same script from a checkout of this repository, which builds the image from the checkout:
+
+```
+sudo sh server/install.sh dokkit.example.com
+```
+
+It installs Docker and the compose plugin if they are missing and makes `/opt/dokkit/.env`. Piped, it fetches `compose.yml` from `https://dokkit.dev/compose.yml` (`DOKKIT_COMPOSE_URL` changes the address) and pulls the image, which `DOKKIT_IMAGE` can name instead; from a checkout it uses `server/compose.yml` there. It starts three containers: Postgres 17, the Dokkit server, and Caddy, which gets and renews the certificate for the domain by itself. It waits until the server answers over https, then prints the address and the setup code for the first visit.
+
+- **Ports.** Only 80 and 443 are published. The server and Postgres are reachable inside the compose network only. Ports 80 and 443 must be open to the internet for the certificate.
+- **Secrets.** `/opt/dokkit/.env`, readable by root only, holds the Postgres password, the key that signs sessions and the domain. They are made once and never changed.
+- **Data.** The Postgres volume `dokkit_dokkit-db` and Caddy's certificates in `dokkit_caddy-data`, both under `/var/lib/docker/volumes`.
+- **Upgrading.** Run the same command again. Piped, it fetches `compose.yml` again and pulls the image; from a checkout, update it first (`git pull`) and it rebuilds. The server restarts and brings the database up to date as it starts. The secrets and the volumes are left alone. An image named with `DOKKIT_IMAGE` is remembered in `.env` and pulled from then on, even from a checkout.
+- **Backups.** Backing up the Postgres volume is the owner's job; see Backups above.
+
+It refuses to run without root, without a domain, or on a system that is not Debian or Ubuntu, and says what to do by hand.
+
 ## Reaching it
 
 Its own usernames and passwords. It is meant for a local network or a private overlay network, and is not meant to be exposed to the internet.
@@ -51,7 +75,9 @@ Its own usernames and passwords. It is meant for a local network or a private ov
 
 **The packaged server.** `mix release` in `server/` builds it, and it has been started and stopped on Windows that way. It reads `DATABASE_URL`, `SECRET_KEY_BASE`, `PHX_HOST` and `PORT`, and `bin/dokkit eval Dokkit.Release.migrate` brings the database up to date before a start.
 
-**Docker.** `server/Dockerfile` and `server/compose.yml`, with Postgres 17 beside it. Neither has been built or run yet: this was written on a machine with no Docker. The base images are pinned by digest, the image has a health check that speaks plain HTTP, so it reports unhealthy when `DOKKIT_CERT` makes the server serve https, and the server listens on plain HTTP on port 4000 for a proxy that holds the certificate. Compose publishes the port on this machine only; `PHX_HOST` and a Postgres password of letters and digits (`openssl rand -hex 24`) are required.
+**Docker.** `server/Dockerfile` and `server/compose.yml`, with Postgres 17 beside it. Neither has been built or run yet: this was written on a machine with no Docker. The base images are pinned by digest, the image has a health check that speaks plain HTTP, so it reports unhealthy when `DOKKIT_CERT` makes the server serve https, and the server listens on plain HTTP on port 4000 for a proxy that holds the certificate. Compose publishes no port unless a `compose.override.yml` adds one; its `caddy` profile adds a Caddy container that holds the certificate. `PHX_HOST` and a Postgres password of letters and digits (`openssl rand -hex 24`) are required.
+
+**VPS installer.** `server/install.sh` is described under "On a cloud VPS". It has had `bash -n` run on it and nothing else: it has not been run, in either form, Docker is not installed on the machine it was written on, and neither the Dockerfile nor the compose file has been built or validated. The image and dokkit.dev are not published.
 
 **Windows.** `install.ps1` ships in the release folder and is run from an administrator PowerShell. It copies the server to `Program Files\Dokkit`, writes its settings to `ProgramData\Dokkit\settings.env` where only administrators and the system account can read them, brings the database up to date, and registers and starts a Windows service. The server reads that settings file itself, because a Windows service is not started through a script that could set variables.
 
