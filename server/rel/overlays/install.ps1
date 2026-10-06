@@ -46,7 +46,9 @@ if (-not $PSScriptRoot -or -not (Test-Path (Join-Path $PSScriptRoot 'bin\dokkit.
         Write-Host "Fetching $Url"
         $zip = Join-Path $work "$Name.zip"
         Invoke-WebRequest -Uri $Url -OutFile $zip -UseBasicParsing
-        $got = (Get-FileHash $zip -Algorithm SHA256).Hash
+        $stream = [IO.File]::OpenRead($zip)
+        try { $got = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($stream)) -replace '-' }
+        finally { $stream.Dispose() }
         if ($got -ne $Sha256) { throw "$Url is not the file expected: its SHA-256 is $got, not $Sha256. Nothing was installed." }
         Expand-Archive -Path $zip -DestinationPath (Join-Path $work $Name)
     }
