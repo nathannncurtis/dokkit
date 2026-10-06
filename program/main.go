@@ -33,6 +33,7 @@ dokkit enrol <address> <token>
 dokkit watch
 dokkit status
 dokkit doctor
+dokkit service install|uninstall|start|stop
 
 Reads DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key),
 or the address and machine key that dokkit enrol saved.
@@ -44,7 +45,11 @@ It runs their checks and sends the log files they name.`
 // How often watch tells the server this machine is alive.
 var beatEvery = time.Minute
 
-func main() { os.Exit(cli(os.Args[1:])) }
+func main() {
+	if !asService() {
+		os.Exit(cli(os.Args[1:]))
+	}
+}
 
 func cli(args []string) int {
 	if len(args) == 0 {
@@ -63,6 +68,13 @@ func cli(args []string) int {
 	}
 	if args[0] == "init" {
 		return initFile("dokkit.toml", os.Stdin)
+	}
+	if args[0] == "service" {
+		if len(args) != 2 || !strings.Contains(" install uninstall start stop ", " "+args[1]+" ") {
+			fmt.Fprintln(os.Stderr, usage)
+			return 2
+		}
+		return serviceCommand(args[1])
 	}
 	c, err := load()
 	if err != nil {
@@ -145,6 +157,12 @@ func load() (*client, error) {
 	if p, err := configPath(); err == nil {
 		if b, err := os.ReadFile(p); err == nil {
 			json.Unmarshal(b, &s)
+		}
+	}
+	// An installed service's configuration wins for whoever is allowed to read it.
+	if dir := machineDir(); dir != "" && os.Getenv("DOKKIT_CONFIG") == "" {
+		if b, err := os.ReadFile(filepath.Join(dir, "config.json")); err == nil && json.Unmarshal(b, &s) == nil && c.spool == "" {
+			c.spool = filepath.Join(dir, "spool")
 		}
 	}
 	c.folders = s.Folders
