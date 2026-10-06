@@ -17,6 +17,12 @@ defmodule DokkitWeb.InboxLiveTest do
     %{service: service}
   end
 
+  setup %{conn: conn}, do: %{conn: signed_in(conn)}
+
+  test "nobody gets in without signing in" do
+    assert redirected_to(get(build_conn(), "/")) == "/login"
+  end
+
   test "the inbox shows a failed job as it happens and clears when it recovers", %{
     conn: conn,
     service: service

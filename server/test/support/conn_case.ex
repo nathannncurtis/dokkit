@@ -35,4 +35,9 @@ defmodule DokkitWeb.ConnCase do
     Dokkit.DataCase.setup_sandbox(tags)
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
+
+  def signed_in(conn) do
+    user = Dokkit.Repo.insert!(%Dokkit.User{name: "sam", password_hash: "-", role: :owner})
+    Plug.Test.init_test_session(conn, %{"user_id" => user.id})
+  end
 end

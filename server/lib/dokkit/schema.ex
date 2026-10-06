@@ -126,6 +126,17 @@ defmodule Dokkit.JobRun do
   end
 end
 
+defmodule Dokkit.User do
+  use Dokkit.Schema
+
+  schema "users" do
+    field :name, :string
+    field :password_hash, :string, redact: true
+    field :role, Ecto.Enum, values: [:owner, :member, :viewer]
+    timestamps()
+  end
+end
+
 defmodule Dokkit.Batch do
   use Dokkit.Schema
 

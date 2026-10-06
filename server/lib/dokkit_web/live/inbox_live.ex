@@ -16,7 +16,7 @@ defmodule DokkitWeb.InboxLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app active={:inbox} machines={@machines} open={length(@issues)}>
+    <Layouts.app active={:inbox} machines={@machines} open={length(@issues)} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Inbox</h1>
       </div>

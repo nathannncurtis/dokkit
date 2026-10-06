@@ -1,5 +1,6 @@
 defmodule DokkitWeb.Router do
   use DokkitWeb, :router
+  import DokkitWeb.Auth, only: [fetch_user: 2, require_user: 2]
 
   pipeline :browser do
     plug :accepts, ["html"]
@@ -8,6 +9,7 @@ defmodule DokkitWeb.Router do
     plug :put_root_layout, html: {DokkitWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug :fetch_user
   end
 
   pipeline :api do
@@ -17,7 +19,19 @@ defmodule DokkitWeb.Router do
   scope "/", DokkitWeb do
     pipe_through :browser
 
-    live "/", InboxLive
+    get "/login", SessionController, :new
+    post "/login", SessionController, :create
+    post "/logout", SessionController, :delete
+    get "/setup", SessionController, :setup
+    post "/setup", SessionController, :claim
+  end
+
+  scope "/", DokkitWeb do
+    pipe_through [:browser, :require_user]
+
+    live_session :user, on_mount: {DokkitWeb.Auth, :user} do
+      live "/", InboxLive
+    end
   end
 
   scope "/api/v1", DokkitWeb do

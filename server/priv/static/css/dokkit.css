@@ -556,3 +556,17 @@ input, select { accent-color: var(--brand); caret-color: var(--brand); }
 
 /* server: the inbox list without selection or charts, until those exist */
 .li.cols-inbox.plain, .lh.cols-inbox.plain { grid-template-columns: minmax(0, 1fr) 72px 150px; min-width: 0; }
+
+/* server: the sign-in and setup pages */
+.door { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; }
+.door .card { width: min(100%, 400px); padding: 24px; display: grid; gap: 16px; }
+.door h1 { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; }
+.door .mark { width: 30px; height: 30px; border-radius: 8px; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; flex: none; }
+.door .mark svg { width: 22px; height: 22px; display: block; }
+.door label { display: grid; gap: 6px; font-weight: 500; }
+.door label small { font-weight: 400; font-size: 13px; }
+.door p { text-wrap: pretty; }
+.door .bad { display: flex; gap: 8px; color: var(--bad); }
+.door .bad i { line-height: 20px; }
+.me form { margin-left: auto; }
+.me .btn { color: var(--side-mute); }
