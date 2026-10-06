@@ -49,6 +49,12 @@ defmodule DokkitWeb.EnrolLive do
           <p class="lead">
             Put the dokkit program on the machine and run the two commands below there. The first trades a token for the machine's own key. The second stays running and tells Dokkit the machine is alive once a minute; three minutes of silence opens an issue.
           </p>
+          <p class="lead">
+            If the machine does not have the program yet, get it first. On Linux or macOS:
+          </p>
+          <pre class="logbox" id="get-unix">curl -fsSL https://dokkit.dev/get.sh | sh</pre>
+          <p class="lead">On Windows, in PowerShell:</p>
+          <pre class="logbox" id="get-windows">irm https://dokkit.dev/get.ps1 | iex</pre>
           <p :if={!@token and @current_user.role != :owner} class="lead">
             Only the owner can make a token.
           </p>

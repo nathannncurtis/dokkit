@@ -1,0 +1,132 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tags
+        id: tags
+        run: |
+          image=ghcr.io/nathannncurtis/dokkit
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            echo "list=${image}:${GITHUB_REF_NAME#v},${image}:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "list=${image}:test" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/build-push-action@v6
+        with:
+          context: server
+          push: ${{ github.ref_type == 'tag' }}
+          tags: ${{ steps.tags.outputs.list }}
+
+  program:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - { os: windows, arch: amd64, ext: .exe }
+          - { os: windows, arch: arm64, ext: .exe }
+          - { os: linux, arch: amd64, ext: '' }
+          - { os: linux, arch: arm64, ext: '' }
+          - { os: darwin, arch: amd64, ext: '' }
+          - { os: darwin, arch: arm64, ext: '' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: program/go.mod
+      - name: Build
+        working-directory: program
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -p ../out
+          name=dokkit-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
+          go build -trimpath -o "../out/$name" .
+          cd ../out
+          sha256sum "$name" > "$name.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: program-${{ matrix.os }}-${{ matrix.arch }}
+          path: out/*
+
+  windows-server:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: server
+    env:
+      MIX_ENV: prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '29.1.1'
+          elixir-version: '1.20.4'
+      - name: Build
+        shell: pwsh
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get --only prod
+          mix assets.setup
+          mix compile
+          mix assets.deploy
+          mix release
+      - name: Check the release holds what the installer needs
+        shell: pwsh
+        run: |
+          foreach ($f in 'bin\dokkit.bat', 'install.ps1') {
+            if (-not (Test-Path "_build\prod\rel\dokkit\$f")) { throw "$f is not in the release" }
+          }
+      - name: Zip
+        shell: bash
+        run: |
+          mkdir -p ../out
+          pwsh -Command "Compress-Archive -Path '_build/prod/rel/dokkit/*' -DestinationPath '../out/dokkit-windows-x64.zip'"
+          cd ../out
+          sha256sum dokkit-windows-x64.zip > dokkit-windows-x64.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-server
+          path: out/*
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [image, program, windows-server]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Dokkit $GITHUB_REF_NAME"

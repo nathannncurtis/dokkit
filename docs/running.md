@@ -67,6 +67,40 @@ It installs Docker and the compose plugin if they are missing and makes `/opt/do
 
 It refuses to run without root, without a domain, or on a system that is not Debian or Ubuntu, and says what to do by hand.
 
+## Releases
+
+Pushing a tag that starts with `v` runs `.github/workflows/release.yml`. It builds and publishes:
+
+- The server image, as `ghcr.io/nathannncurtis/dokkit:<version>` and `:latest`.
+- The `dokkit` program for Windows, Linux and macOS, each on amd64 and arm64, as release assets named `dokkit-<os>-<arch>` (`.exe` on Windows), each with a `.sha256` file beside it.
+- The Windows server as `dokkit-windows-x64.zip` with its `.sha256`, holding `bin\dokkit.bat` and `install.ps1` at the top.
+
+The release is created with a one-line note. Builds are not signed. `.github/workflows/test.yml` runs the server and program tests on every push.
+
+None of this has been run yet.
+
+## Getting the program
+
+On a machine to watch, Linux or macOS:
+
+```
+curl -fsSL https://dokkit.dev/get.sh | sh
+```
+
+Windows, in PowerShell, no administrator needed:
+
+```
+irm https://dokkit.dev/get.ps1 | iex
+```
+
+Each downloads the right file from the latest release, checks its SHA-256 and installs it: `/usr/local/bin/dokkit` as root or `~/.local/bin/dokkit` otherwise, and `%LOCALAPPDATA%\Programs\dokkit\dokkit.exe` on Windows, which is added to the user's Path. Then `dokkit enrol <address> <token>`. `DOKKIT_RELEASE_BASE` names another place to download from. The Add a machine page shows both commands.
+
+Neither script has been run.
+
+## Serving the scripts
+
+`install.sh`, `install.ps1`, `compose.yml`, `get.sh` and `get.ps1` must be served from the root of dokkit.dev. The site deploy does not exist yet, so none of the commands above work until it does.
+
 ## Reaching it
 
 Its own usernames and passwords. It is meant for a local network or a private overlay network, and is not meant to be exposed to the internet.
