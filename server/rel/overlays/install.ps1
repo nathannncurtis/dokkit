@@ -55,7 +55,10 @@ if (-not $PSScriptRoot -or -not (Test-Path (Join-Path $PSScriptRoot 'bin\dokkit.
     $releaseUrl = 'https://github.com/nathannncurtis/dokkit/releases/latest/download/dokkit-windows-x64.zip'
     if ($env:DOKKIT_RELEASE_URL) { $releaseUrl = $env:DOKKIT_RELEASE_URL }
     # A release is published with its SHA-256 beside it, in a file of the same name plus .sha256.
-    $releaseSha = (-split [string](Invoke-WebRequest -Uri "$releaseUrl.sha256" -UseBasicParsing).Content)[0]
+    # A release file arrives as bytes on Windows PowerShell 5.1.
+    $shaFile = (Invoke-WebRequest -Uri "$releaseUrl.sha256" -UseBasicParsing).Content
+    if ($shaFile -is [byte[]]) { $shaFile = [Text.Encoding]::ASCII.GetString($shaFile) }
+    $releaseSha = (-split [string]$shaFile)[0]
     & $fetch $releaseUrl 'dokkit' $releaseSha
     $again = @{}
     foreach ($name in $PSBoundParameters.Keys) { $again[$name] = $PSBoundParameters[$name] }
