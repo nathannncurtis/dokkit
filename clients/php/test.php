@@ -41,6 +41,46 @@ $want = [
     '"event":"fail","exit_code":1', '/api/v1/errors Bearer dka_test', '"type":"DomainException","handled":false', '"function":"purge","line":28,"own":true}]',
 ];
 $missing = array_filter($want, fn ($w) => !str_contains($all, $w));
+// What the library does with its own pieces, and when the server cannot be reached.
+$call = fn (string $name, ...$args) => (new ReflectionMethod('Dokkit', $name))->invoke(null, ...$args);
+$bad = [];
+if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $call('uuid'))) {
+    $bad[] = 'batch id is not a dashed uuid';
+}
+if (!preg_match('/\.\d{3}Z$/', $call('now'))) {
+    $bad[] = 'times carry no milliseconds';
+}
+if (!str_contains($call('encode', ['msg' => "bad ± byte"]), '"msg"')) {
+    $bad[] = 'a line with invalid UTF-8 vanished';
+}
+if (str_contains($all, '"type":"deploy"') !== (PHP_SAPI === 'cli')) {
+    $bad[] = 'deploy line is for the command line only';
+}
+$on = new ReflectionProperty('Dokkit', 'on');
+$state = $on->getValue();
+$on->setValue(null, ['url' => 'http://127.0.0.1:1'] + $state);
+Dokkit::beat('a');
+Dokkit::beat('b');
+$began = microtime(true);
+Dokkit::flush();
+$retry = (new ReflectionProperty('Dokkit', 'retry'))->getValue();
+if (!$retry || count($retry['lines']) !== 2 || microtime(true) - $began > 3) {
+    $bad[] = 'a failed batch is not kept for one more try, or the flush did not stop';
+}
+Dokkit::flush();
+if ((new ReflectionProperty('Dokkit', 'retry'))->getValue() !== null || Dokkit::$dropped !== 2) {
+    $bad[] = 'a batch that failed twice is not counted as dropped';
+}
+if (str_contains($all, trim(json_encode(__DIR__), '"'))) {
+    $bad[] = 'a stack frame carries an absolute path';
+}
+if ($bad) {
+    echo "FAIL
+" . implode("
+", $bad) . "
+";
+    exit(1);
+}
 if ($missing || str_contains($all, '4411') || str_contains($all, 'ignored')) {
     echo "FAIL\nmissing: " . implode(' | ', $missing) . "\n$all";
     exit(1);
