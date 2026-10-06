@@ -13,10 +13,13 @@ defmodule Dokkit.Self do
   end
 
   defp beat(url) do
-    Req.get(
-      url,
-      [retry: false, receive_timeout: 10_000] ++ Application.get_env(:dokkit, :req_options, [])
-    )
+    with :ok <- Dokkit.Alerts.check_url(url) do
+      Req.get(
+        url,
+        [retry: false, redirect: false, receive_timeout: 10_000] ++
+          Application.get_env(:dokkit, :req_options, [])
+      )
+    end
   rescue
     _ -> nil
   end

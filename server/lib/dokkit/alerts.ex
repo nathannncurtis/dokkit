@@ -19,6 +19,7 @@ defmodule Dokkit.Alerts do
   @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user smtp_password)
   @plain ~w(disk_limit memory_limit ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to text_to digest_at heartbeat_url)
   @max_attempts 5
+  @kept_blank ~w(disk_limit memory_limit)
   @channels [
     {"Page", "page"},
     {"Push", "push"},
@@ -35,19 +36,23 @@ defmodule Dokkit.Alerts do
   def secrets, do: @secrets
 
   def config do
-    Map.merge(@defaults, (Repo.get(Setting, "alerts") || %Setting{value: %{}}).value)
+    Map.merge(@defaults, unblank((Repo.get(Setting, "alerts") || %Setting{value: %{}}).value))
   end
+
+  # A blank value falls back to its default; a blank limit switches that limit off.
+  defp unblank(map),
+    do: Map.reject(map, fn {k, v} -> v == "" and k not in @secrets and k not in @kept_blank end)
 
   @doc "Saves what was filled in. A secret left blank keeps its stored value."
   def save(params) do
     old = config()
 
     new =
-      for {k, v} <- Map.take(params, Map.keys(@defaults) ++ @secrets ++ @plain),
-          into: old do
+      for({k, v} <- Map.take(params, Map.keys(@defaults) ++ @secrets ++ @plain), into: old) do
         v = String.trim(v)
         {k, if(v == "" and k in @secrets, do: old[k], else: v)}
       end
+      |> unblank()
 
     Repo.insert!(%Setting{key: "alerts", value: new},
       on_conflict: {:replace, [:value, :updated_at]},
@@ -186,6 +191,13 @@ defmodule Dokkit.Alerts do
       do: Repo.insert!(%Alert{issue_id: issue.id, channel: channel})
   end
 
+  @doc "An alert that never went out is sent after all when its issue comes back."
+  def reopened(%Issue{id: id}) do
+    Repo.update_all(from(a in Alert, where: a.issue_id == ^id and a.status == :skipped),
+      set: [status: :pending]
+    )
+  end
+
   def closing(%Issue{id: id}) do
     Repo.update_all(
       from(a in Alert, where: a.issue_id == ^id and a.status in [:pending, :failed]),
@@ -213,7 +225,9 @@ defmodule Dokkit.Alerts do
     Repo.all(
       from a in Alert,
         where:
-          a.status in [:pending, :closing] or (a.status == :failed and a.attempts < @max_attempts),
+          a.status == :pending or (a.status == :closing and a.attempts == 0) or
+            (a.status in [:failed, :closing] and a.attempts < @max_attempts and
+               a.updated_at < ago(1, "minute")),
         # A digest alert waits for the day's one mail.
         where: a.channel != "digest",
         preload: [issue: [:machine, :check]]
@@ -363,15 +377,49 @@ defmodule Dokkit.Alerts do
 
   defp summary(about), do: "#{about.title} (#{about.machine}, #{about.short})"
 
+  @doc "`:ok` for an https address that is not this machine or a link-local one."
+  def check_url(url) do
+    %URI{scheme: scheme, host: host} = URI.parse(url)
+
+    cond do
+      scheme != "https" or host in [nil, ""] -> {:error, "The address must start with https://."}
+      local?(host) -> {:error, "The address points at this machine or its own network."}
+      true -> :ok
+    end
+  end
+
+  # ponytail: literal addresses only; a name that resolves to one is not checked.
+  defp local?(host) do
+    host = String.downcase(host)
+
+    host == "localhost" or String.ends_with?(host, ".localhost") or
+      case :inet.parse_address(String.to_charlist(host)) do
+        {:ok, ip} -> local_ip?(ip)
+        _ -> false
+      end
+  end
+
+  defp local_ip?({127, _, _, _}), do: true
+  defp local_ip?({169, 254, _, _}), do: true
+  defp local_ip?({0, 0, 0, 0, 0, 0, 0, 1}), do: true
+
+  defp local_ip?({0, 0, 0, 0, 0, 65535, a, b}),
+    do: local_ip?({div(a, 256), rem(a, 256), div(b, 256), rem(b, 256)})
+
+  defp local_ip?({first, _, _, _, _, _, _, _}), do: first in 0xFE80..0xFEBF
+  defp local_ip?(_), do: false
+
   defp post(url, opts) do
     opts =
-      [retry: :transient, max_retries: 2, receive_timeout: 10_000] ++
+      [retry: :transient, max_retries: 2, receive_timeout: 10_000, redirect: false] ++
         opts ++ Application.get_env(:dokkit, :req_options, [])
 
-    case Req.post(url, opts) do
-      {:ok, %{status: s}} when s in 200..299 -> :ok
-      {:ok, %{status: s}} -> {:error, "#{URI.parse(url).host} answered #{s}."}
-      {:error, e} -> {:error, "#{URI.parse(url).host}: #{Exception.message(e)}"}
+    with :ok <- check_url(url) do
+      case Req.post(url, opts) do
+        {:ok, %{status: s}} when s in 200..299 -> :ok
+        {:ok, %{status: s}} -> {:error, "#{URI.parse(url).host} answered #{s}."}
+        {:error, e} -> {:error, "#{URI.parse(url).host}: #{Exception.message(e)}"}
+      end
     end
   rescue
     e -> {:error, Exception.message(e)}

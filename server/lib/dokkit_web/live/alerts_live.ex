@@ -81,9 +81,11 @@ defmodule DokkitWeb.AlertsLive do
       <div class="head">
         <h1 tabindex="-1">Alerts</h1>
       </div>
+
       <div :if={@suggestions != []} class="body set" style="padding-bottom: 0">
         <div class="card">
           <h2>Suggestions<span class="cnt">{length(@suggestions)}</span></h2>
+
           <div
             :for={i <- @suggestions}
             class="li slim"
@@ -93,6 +95,7 @@ defmodule DokkitWeb.AlertsLive do
             <span>
               {i.service.name} has needed a look {i.count} times this month and is snoozed. Send it to the daily digest instead?
             </span>
+
             <button
               class="btn sm"
               type="button"
@@ -102,6 +105,7 @@ defmodule DokkitWeb.AlertsLive do
             >
               Send to the digest
             </button>
+
             <button
               class="btn sm"
               type="button"
@@ -114,12 +118,15 @@ defmodule DokkitWeb.AlertsLive do
           </div>
         </div>
       </div>
+
       <form class="body set" phx-submit="save" phx-change="changed" id="alerts-form">
         <fieldset disabled={!@owner} style="display: contents">
           <div class="card">
             <h2>Who is told</h2>
+
             <dl class="kv">
               <dt>When something stops</dt>
+
               <dd>
                 <.pick
                   name="down"
@@ -128,7 +135,9 @@ defmodule DokkitWeb.AlertsLive do
                   label="When something stops"
                 />
               </dd>
+
               <dt>When something is struggling</dt>
+
               <dd>
                 <.pick
                   name="degraded"
@@ -142,10 +151,13 @@ defmodule DokkitWeb.AlertsLive do
               </dd>
             </dl>
           </div>
+
           <div class="card">
             <h2>Channels</h2>
+
             <dl class="kv">
               <dt>Page</dt>
+
               <dd>
                 <.secret name="pagerduty_key" config={@config} label="PagerDuty routing key" />
                 <.send_test channel="page" tests={@tests} />
@@ -153,24 +165,27 @@ defmodule DokkitWeb.AlertsLive do
                   Through PagerDuty, for what cannot wait until morning. The key is the integration key of an Events API v2 integration. The page is resolved when the issue closes.
                 </span>
               </dd>
+
               <dt>Push</dt>
+
               <dd>
                 <.pick
                   name="push_with"
                   value={@config["push_with"]}
                   options={@push}
                   label="Push goes through"
-                />
-                <.send_test channel="push" tests={@tests} />
+                /> <.send_test channel="push" tests={@tests} />
                 <span class="hint">A quiet notification on your phone, for what should be seen today.</span>
               </dd>
+
               <dt>ntfy</dt>
+
               <dd>
                 <input
                   class="inp"
                   style="flex: 1 1 260px"
                   name="alerts[ntfy_url]"
-                  value={@config["ntfy_url"]}
+                  value={@owner && @config["ntfy_url"]}
                   placeholder="https://ntfy.sh/your-topic"
                   aria-label="ntfy topic address"
                 />
@@ -180,25 +195,30 @@ defmodule DokkitWeb.AlertsLive do
                   label="Access token, if the topic needs one"
                 />
               </dd>
+
               <dt>Pushover</dt>
+
               <dd>
                 <.secret name="pushover_token" config={@config} label="Application token" />
                 <.secret name="pushover_user" config={@config} label="User key" />
               </dd>
+
               <dt>Webhook</dt>
+
               <dd>
                 <input
                   class="inp"
                   style="flex: 1 1 260px"
                   name="alerts[webhook_url]"
-                  value={@config["webhook_url"]}
+                  value={@owner && @config["webhook_url"]}
                   placeholder="https://example.com/hook"
                   aria-label="Webhook address"
-                />
-                <.send_test channel="webhook" tests={@tests} />
+                /> <.send_test channel="webhook" tests={@tests} />
                 <span class="hint">A JSON request when an issue opens and another when it closes.</span>
               </dd>
+
               <dt>Mail server</dt>
+
               <dd>
                 <input
                   :for={
@@ -211,11 +231,10 @@ defmodule DokkitWeb.AlertsLive do
                   class="inp"
                   style={"flex: 1 1 #{width}px"}
                   name={"alerts[#{name}]"}
-                  value={@config[name]}
+                  value={(@owner || name != "smtp_user") && @config[name]}
                   placeholder={label}
                   aria-label={label}
-                />
-                <.secret name="smtp_password" config={@config} label="Password" />
+                /> <.secret name="smtp_password" config={@config} label="Password" />
                 <input
                   class="inp"
                   style="flex: 1 1 240px"
@@ -223,10 +242,11 @@ defmodule DokkitWeb.AlertsLive do
                   value={@config["mail_from"]}
                   placeholder="Sent from, such as dokkit@example.com"
                   aria-label="Sent from"
-                />
-                <span class="hint">Used for email, text and the daily digest.</span>
+                /> <span class="hint">Used for email, text and the daily digest.</span>
               </dd>
+
               <dt>Email</dt>
+
               <dd>
                 <input
                   class="inp"
@@ -235,11 +255,12 @@ defmodule DokkitWeb.AlertsLive do
                   value={@config["email_to"]}
                   placeholder="you@example.com"
                   aria-label="Email goes to"
-                />
-                <.send_test channel="email" tests={@tests} />
+                /> <.send_test channel="email" tests={@tests} />
                 <span class="hint">More than one address, with commas between them.</span>
               </dd>
+
               <dt>Text</dt>
+
               <dd>
                 <input
                   class="inp"
@@ -248,11 +269,12 @@ defmodule DokkitWeb.AlertsLive do
                   value={@config["text_to"]}
                   placeholder="5551234567@your-carrier.example"
                   aria-label="Text goes to"
-                />
-                <.send_test channel="text" tests={@tests} />
+                /> <.send_test channel="text" tests={@tests} />
                 <span class="hint">An address that turns a mail into a text message.</span>
               </dd>
+
               <dt>A machine's disk</dt>
+
               <dd>
                 <input
                   class="inp"
@@ -264,7 +286,9 @@ defmodule DokkitWeb.AlertsLive do
                 />
                 <span class="hint">Percent used, on any disk, that needs a look. Blank switches it off.</span>
               </dd>
+
               <dt>A machine's memory</dt>
+
               <dd>
                 <input
                   class="inp"
@@ -276,13 +300,15 @@ defmodule DokkitWeb.AlertsLive do
                 />
                 <span class="hint">Percent used that needs a look, three minutes running. Blank switches it off.</span>
               </dd>
+
               <dt>Outside heartbeat</dt>
+
               <dd>
                 <input
                   class="inp"
                   style="flex: 1 1 260px"
                   name="alerts[heartbeat_url]"
-                  value={@config["heartbeat_url"]}
+                  value={@owner && @config["heartbeat_url"]}
                   placeholder="https://example.com/ping/your-check"
                   aria-label="Outside heartbeat address"
                 />
@@ -290,7 +316,9 @@ defmodule DokkitWeb.AlertsLive do
                   Dokkit calls this address every minute. Point it at a service that alerts when the calls stop, because Dokkit cannot tell anyone that it is down.
                 </span>
               </dd>
+
               <dt>Daily digest</dt>
+
               <dd>
                 <input
                   class="inp mono"
@@ -305,6 +333,7 @@ defmodule DokkitWeb.AlertsLive do
                 </span>
               </dd>
             </dl>
+
             <div class="foot">
               <span :if={!@owner}>Only the owner can change these.</span>
               <span :if={@saved} role="status">Saved.</span>
@@ -313,13 +342,16 @@ defmodule DokkitWeb.AlertsLive do
           </div>
         </fieldset>
       </form>
+
       <form class="body set" phx-submit="rule" id="rule-form" style="padding-top: 0">
         <fieldset disabled={!@owner} style="display: contents">
           <div class="card">
             <h2>Rules<span :if={@rules != []} class="cnt">{length(@rules)}</span></h2>
+
             <p :if={@rules == []} class="lead">
               No rules. Every issue follows the two choices under Who is told, unless its service says otherwise.
             </p>
+
             <div
               :for={r <- @rules}
               class="li slim"
@@ -330,12 +362,15 @@ defmodule DokkitWeb.AlertsLive do
               <button class="btn sm" type="button" phx-click="rule" phx-value-toggle={r["id"]}>
                 {if r["on"], do: "Switch off", else: "Switch on"}
               </button>
+
               <button class="btn sm" type="button" phx-click="rule" phx-value-remove={r["id"]}>
                 Remove
               </button>
             </div>
+
             <dl class="kv">
               <dt>New rule</dt>
+
               <dd>
                 <span :for={{field, options} <- [{"kind", @kinds}, {"state", @states}]} class="dd">
                   <select class="inp" name={"rule[#{field}]"} aria-label={"Rule " <> field}>
@@ -343,6 +378,7 @@ defmodule DokkitWeb.AlertsLive do
                   </select>
                   <i class="ph ph-caret-down" aria-hidden="true"></i>
                 </span>
+
                 <input
                   class="inp"
                   style="flex: 1 1 160px"
@@ -433,6 +469,7 @@ defmodule DokkitWeb.AlertsLive do
     >
       Send a test
     </button>
+
     <span :if={@result} class={["hint", elem(@result, 0) == :error && "bad"]} role="status">{elem(
       @result,
       1

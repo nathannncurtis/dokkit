@@ -34,25 +34,7 @@ defmodule Dokkit.Mail do
          [{"text", "plain", [], utf8, text}, {"text", "html", [], utf8, html}]}
       )
 
-    user = config["smtp_user"]
-
-    options =
-      [
-        relay: host,
-        port: String.to_integer(config["smtp_port"] || "587"),
-        tls: :if_available,
-        tls_options: [
-          verify: :verify_peer,
-          cacerts: :public_key.cacerts_get(),
-          server_name_indication: String.to_charlist(host),
-          depth: 99
-        ],
-        auth: if(user in [nil, ""], do: :never, else: :always),
-        username: user || "",
-        password: config["smtp_password"] || ""
-      ]
-
-    case :gen_smtp_client.send_blocking({from, to, mail}, options) do
+    case :gen_smtp_client.send_blocking({from, to, mail}, smtp_options(host, config)) do
       receipt when is_binary(receipt) -> :ok
       error -> {:error, "The mail server refused it: #{inspect(error) |> String.slice(0, 200)}"}
     end
@@ -61,11 +43,34 @@ defmodule Dokkit.Mail do
   end
 
   defp smtp(_, _, _, _, _), do: {:error, "The mail server has no address yet."}
+
+  @doc false
+  # Port 465 is TLS from the first byte; any other port must upgrade with STARTTLS or fail.
+  def smtp_options(host, config) do
+    user = config["smtp_user"]
+    port = String.to_integer(config["smtp_port"] || "587")
+
+    [
+      relay: host,
+      port: port,
+      tls: :always,
+      tls_options: [
+        verify: :verify_peer,
+        cacerts: :public_key.cacerts_get(),
+        server_name_indication: String.to_charlist(host),
+        depth: 99
+      ],
+      auth: if(user in [nil, ""], do: :never, else: :always),
+      username: user || "",
+      password: config["smtp_password"] || ""
+    ] ++ if(port == 465, do: [ssl: true], else: [])
+  end
 end
 
 defmodule Dokkit.Digest do
   @moduledoc "One mail a day with what did not page. A day with nothing to say sends nothing."
   import Ecto.Query
+  require Logger
   alias Dokkit.{Alert, Check, ErrorGroup, Issue, Repo, Setting}
 
   @doc "Sends today's digest once the set time has passed. Returns :sent, :nothing or :not_yet."
@@ -81,7 +86,14 @@ defmodule Dokkit.Digest do
   end
 
   defp send(now, today, config) do
-    lines = lines(DateTime.add(now, -86_400))
+    waiting =
+      Repo.all(
+        from a in Alert,
+          where: a.channel == "digest" and a.status == :pending,
+          select: {a.id, a.issue_id}
+      )
+
+    lines = lines(DateTime.add(now, -86_400), Enum.map(waiting, &elem(&1, 1)))
 
     result =
       if lines == [],
@@ -94,22 +106,23 @@ defmodule Dokkit.Digest do
         conflict_target: :key
       )
 
-      Repo.update_all(from(a in Alert, where: a.channel == "digest" and a.status == :pending),
-        set: [status: :sent]
-      )
+      ids = Enum.map(waiting, &elem(&1, 0))
+      Repo.update_all(from(a in Alert, where: a.id in ^ids), set: [status: :sent])
+    else
+      Logger.warning("The daily digest was not sent: #{elem(result, 1)}")
     end
 
     if result == :ok, do: :sent, else: result
   end
 
-  @doc "What the digest says about the time since `since`."
-  def lines(since) do
+  @doc "What the digest says about the time since `since`, and about `also` issues, however old."
+  def lines(since, also \\ []) do
     paged = from a in Alert, where: a.channel == "page", select: a.issue_id
 
     issues =
       Repo.all(
         from i in Issue,
-          where: i.since >= ^since and i.id not in subquery(paged),
+          where: (i.since >= ^since or i.id in ^also) and i.id not in subquery(paged),
           order_by: i.since,
           preload: :machine
       )
@@ -126,8 +139,10 @@ defmodule Dokkit.Digest do
       Repo.all(
         from c in Check,
           where: c.type == :threshold and c.state == :ok and not is_nil(c.value),
-          where: fragment("? >= 0.9 * (?->>'limit')::float", c.value, c.config),
           preload: :service
+      )
+      |> Enum.filter(
+        &(is_number(Dokkit.Numbers.limit(&1)) and &1.value >= 0.9 * Dokkit.Numbers.limit(&1))
       )
 
     section("Opened without paging", for(i <- issues, do: "#{i.title} (#{i.machine.name})")) ++
@@ -144,7 +159,7 @@ defmodule Dokkit.Digest do
         for(
           c <- close,
           do:
-            "#{c.service.name}: #{c.name} is at #{Float.round(c.value, 1)} of #{c.config["limit"]}"
+            "#{c.service.name}: #{c.name} is at #{Float.round(c.value, 1)} of #{Dokkit.Numbers.limit(c)}"
         )
       )
   end

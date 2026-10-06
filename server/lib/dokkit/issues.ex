@@ -206,6 +206,8 @@ defmodule Dokkit.Issues do
       )
 
     if recent do
+      Dokkit.Alerts.reopened(recent)
+
       Repo.update!(
         Ecto.Changeset.change(recent, closed_at: nil, state: state, count: recent.count + 1)
       )

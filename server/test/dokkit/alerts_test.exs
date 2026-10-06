@@ -64,6 +64,7 @@ defmodule Dokkit.AlertsTest do
     Alerts.save(%{"pagerduty_key" => ""})
     assert Alerts.config()["pagerduty_key"] == "R0UTE"
 
+    Repo.update_all(Alert, set: [updated_at: DateTime.add(DateTime.utc_now(), -120)])
     Alerts.deliver_pending()
     assert_received {:sent, "events.pagerduty.com", _, _}
     assert [%{alert: %Alert{status: :sent}}] = Issues.open_list()
@@ -163,5 +164,107 @@ defmodule Dokkit.AlertsTest do
     Repo.update_all(Dokkit.Machine, set: [last_seen_at: now])
     Dokkit.Self.tick(now, %{})
     assert %{state: :ok} = Repo.get_by!(Service, slug: "dokkit")
+  end
+
+  test "a failed alert waits a minute before it is tried again" do
+    machine = Repo.insert!(%Machine{name: "alerts-retry-box"})
+
+    issue =
+      Repo.insert!(%Dokkit.Issue{
+        machine_id: machine.id,
+        kind: "machine",
+        state: :down,
+        title: "x",
+        since: DateTime.utc_now()
+      })
+
+    Repo.insert!(%Alert{issue_id: issue.id, channel: "webhook", status: :failed, attempts: 1})
+    assert Alerts.deliver_pending() == 0
+    Repo.update_all(Alert, set: [updated_at: DateTime.add(DateTime.utc_now(), -120)])
+    assert Alerts.deliver_pending() >= 1
+  end
+
+  test "blank settings fall back to their defaults and a blank limit stays off" do
+    Alerts.save(%{"smtp_port" => "  ", "mail_from" => "", "digest_at" => "", "disk_limit" => ""})
+    config = Alerts.config()
+    refute Map.has_key?(config, "smtp_port")
+    refute Map.has_key?(config, "digest_at")
+    assert config["disk_limit"] == ""
+    Alerts.save(%{"disk_limit" => "90"})
+  end
+
+  test "an alert skipped on a brief recovery is pending again when the issue reopens" do
+    machine = Repo.insert!(%Machine{name: "alerts-reopen-box"})
+
+    issue =
+      Repo.insert!(%Dokkit.Issue{
+        machine_id: machine.id,
+        kind: "machine",
+        state: :down,
+        title: "x",
+        since: DateTime.utc_now()
+      })
+
+    alert = Repo.insert!(%Alert{issue_id: issue.id, channel: "webhook"})
+    Alerts.closing(issue)
+    assert Repo.reload!(alert).status == :skipped
+    Alerts.reopened(issue)
+    assert Repo.reload!(alert).status == :pending
+  end
+
+  test "mail needs TLS, and port 465 is TLS from the start" do
+    opts = Dokkit.Mail.smtp_options("mail.example", %{"smtp_port" => "587"})
+    assert opts[:tls] == :always
+    refute opts[:ssl]
+    assert Dokkit.Mail.smtp_options("mail.example", %{"smtp_port" => "465"})[:ssl]
+  end
+
+  test "alert addresses must be https and not local" do
+    assert Alerts.check_url("https://ntfy.example/ops") == :ok
+
+    for url <- [
+          "http://ntfy.example/x",
+          "https://127.0.0.1/x",
+          "https://[::1]/x",
+          "https://169.254.169.254/x",
+          "https://[fe80::1]/x",
+          "https://localhost/x",
+          "https://[::ffff:127.0.0.1]/x"
+        ] do
+      assert {:error, _} = Alerts.check_url(url), url
+    end
+  end
+
+  test "the digest marks only what it mailed, and counts built-in thresholds" do
+    Alerts.save(%{"disk_limit" => "90"})
+    machine = Repo.insert!(%Machine{name: "alerts-digest-box"})
+
+    service =
+      Repo.insert!(%Service{machine_id: machine.id, slug: "machine", name: "The machine itself"})
+
+    Repo.insert!(%Dokkit.Check{
+      service_id: service.id,
+      name: "disk.used_percent.Q",
+      type: :threshold,
+      state: :ok,
+      value: 85.0,
+      config: %{"limit_from" => "disk_limit"}
+    })
+
+    old =
+      Repo.insert!(%Dokkit.Issue{
+        machine_id: machine.id,
+        kind: "machine",
+        state: :down,
+        title: "alerts-old-digest",
+        since: DateTime.add(DateTime.utc_now(), -3 * 86_400)
+      })
+
+    alert = Repo.insert!(%Alert{issue_id: old.id, channel: "digest"})
+    body = Enum.join(Dokkit.Digest.lines(DateTime.add(DateTime.utc_now(), -86_400), [old.id]), "
+")
+    assert body =~ "alerts-old-digest"
+    assert body =~ "disk.used_percent.Q is at 85.0 of 90.0"
+    assert Repo.reload!(alert).status == :pending
   end
 end
