@@ -95,3 +95,27 @@ test("plain http to another host keeps it off", async () => {
   assert.strictEqual(r.stderr.trim().split("\n").length, 1);
   assert.match(r.stderr, /^dokkit: http:\/\//);
 });
+
+test("a control character in the type or message still gives valid JSON", async () => {
+  const r = await snippet(`. ./dokkit.sh; dokkit_capture "$(printf 'Up\\rload\\001Err')"; dokkit_log info "$(printf 'a\\rb\\037c\\013d')"`);
+  assert.strictEqual(r.got.length, 2);
+  assert.strictEqual(r.got[0].type, "UploadErr");
+  assert.strictEqual(r.got[1].msg, "abcd");
+});
+
+test("an error report is sent once even when the answer is a failure; a log line is tried twice", async () => {
+  let posts = [];
+  const server = http.createServer((req, res) => {
+    posts.push(req.url);
+    req.resume();
+    res.statusCode = 500;
+    res.end();
+  });
+  await new Promise((done) => server.listen(0, "127.0.0.1", done));
+  const dir = new URL(".", import.meta.url).pathname.replace(/^\/(\w:)/, "$1");
+  await new Promise((done) =>
+    execFile("sh", ["-c", `cd "${dir}" && . ./dokkit.sh; dokkit_capture UploadError; dokkit_log info x`], { env: { ...process.env, DOKKIT_URL: `http://127.0.0.1:${server.address().port}`, DOKKIT_KEY: "k" } }, done),
+  );
+  server.close();
+  assert.deepStrictEqual(posts, ["/api/v1/errors", "/api/v1/report", "/api/v1/report"]);
+});

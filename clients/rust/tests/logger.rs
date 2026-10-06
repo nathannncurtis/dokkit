@@ -1,15 +1,16 @@
 #![cfg(feature = "log")]
-// cargo test --features log
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
+// At debug level the HTTP client logs about every request. Those lines must not be queued.
 #[test]
-fn the_log_crate_sends_through_log() {
+fn the_logger_does_not_feed_on_its_own_sending() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = format!("http://{}/", listener.local_addr().unwrap());
-    let got = Arc::new(Mutex::new(String::new()));
-    let seen = got.clone();
+    let posts = Arc::new(AtomicUsize::new(0));
+    let seen = posts.clone();
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             let mut stream = stream.unwrap();
@@ -25,23 +26,19 @@ fn the_log_crate_sends_through_log() {
                     break;
                 }
             }
-            let mut body = vec![0; length];
-            reader.read_exact(&mut body).unwrap();
-            seen.lock().unwrap().push_str(&String::from_utf8(body).unwrap());
-            stream
-                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\n{}")
-                .unwrap();
+            reader.read_exact(&mut vec![0; length]).unwrap();
+            seen.fetch_add(1, Ordering::SeqCst);
+            stream.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\n{}").unwrap();
         }
     });
 
-    dokkit::start_with("", &address, "dka_test");
     log::set_logger(&dokkit::Logger).unwrap();
-    log::set_max_level(log::LevelFilter::Info);
-    log::warn!("slow {}", "query");
-    log::debug!("not sent");
+    log::set_max_level(log::LevelFilter::Debug);
+    dokkit::start_with("1.0.0", &address, "dka_test");
+    log::info!("one app line");
     dokkit::flush();
-
-    let all = got.lock().unwrap();
-    assert!(all.contains(r#""level":"warn","msg":"slow query""#), "{all}");
-    assert!(!all.contains("not sent"), "{all}");
+    assert_eq!(posts.load(Ordering::SeqCst), 1);
+    dokkit::flush();
+    dokkit::flush();
+    assert_eq!(posts.load(Ordering::SeqCst), 1);
 }

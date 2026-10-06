@@ -18,6 +18,15 @@ for ($i = 0; $i < 50 && !@fsockopen('127.0.0.1', $port); $i++) {
 }
 
 Dokkit::beat('ignored');
+$probe = new class {
+    public int $n = 0;
+    public function __toString(): string
+    {
+        $this->n++;
+        return 'x';
+    }
+};
+(new DokkitLogger())->info($probe, ['k' => $probe]);
 Dokkit::start('2.3.0', "http://127.0.0.1:$port/", 'dka_test');
 Dokkit::beat('worker', 30);
 Dokkit::check('queue-age', 'degraded', 14, 'oldest item is "14" minutes old');
@@ -39,7 +48,7 @@ $all = file_get_contents(__DIR__ . '/out/got.txt');
 $want = [
     '/api/v1/report Bearer dka_test', '"type":"deploy","version":"2.3.0"', '"every_seconds":30', '"state":"degraded","value":14',
     'oldest item is \"14\" minutes old', '"level":"error","msg":"Upload failed"', '"level":"warn","msg":"Slow query"', '"event":"start"', '"event":"progress","done":4000,"total":9000',
-    '"event":"fail","exit_code":1', '/api/v1/errors Bearer dka_test', '"type":"DomainException","handled":false', '"function":"purge","line":29,"own":true}]',
+    '"event":"fail","exit_code":1', '/api/v1/errors Bearer dka_test', '"type":"DomainException","handled":false', '"function":"purge","line":38,"own":true}]',
 ];
 $missing = array_filter($want, fn ($w) => !str_contains($all, $w));
 // What the library does with its own pieces, and when the server cannot be reached.
@@ -67,7 +76,18 @@ Dokkit::flush();
 if (Dokkit::$dropped !== 2 || microtime(true) - $began > 5) {
     $bad[] = 'a batch that failed twice is not counted as dropped in one flush';
 }
+$sending = new ReflectionProperty('Dokkit', 'sending');
+$sending->setValue(null, true);
+Dokkit::beat('while sending');
+(new DokkitLogger())->error('while sending');
+$sending->setValue(null, false);
+if ((new ReflectionProperty('Dokkit', 'lines'))->getValue()) {
+    $bad[] = 'a line logged while sending was queued';
+}
 $on->setValue(null, null);
+if ($probe->n !== 0) {
+    $bad[] = 'the logger did work while off';
+}
 Dokkit::start('1', 'http://example.com', 'k');
 if ($on->getValue() !== null) {
     $bad[] = 'plain http to a non-local host is not refused';

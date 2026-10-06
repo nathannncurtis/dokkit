@@ -85,6 +85,23 @@ class Library(unittest.TestCase):
         dokkit.log("warn", "slow query")
         self.assertIn('"level":"warn"', dokkit._state.lines[-1].replace(" ", ""))
 
+    def test_log_never_raises_when_str_of_the_message_does(self):
+        class Bad:
+            def __str__(self):
+                raise ValueError("no")
+
+        dokkit.log("info", Bad())
+        self.assertEqual(len(dokkit._state.lines), 0)
+
+    def test_nothing_logged_while_sending_is_queued(self):
+        dokkit._sending.on = True
+        try:
+            dokkit.log("debug", "from the sender")
+            dokkit.handler().emit(logging.LogRecord("urllib", logging.ERROR, "f", 1, "x", (), None))
+        finally:
+            dokkit._sending.on = False
+        self.assertEqual(len(dokkit._state.lines), 0)
+
     def test_a_bad_format_string_does_not_raise_into_the_app(self):
         record = logging.LogRecord("app", logging.ERROR, "f", 1, "%d items", ("x",), None)
         dokkit.handler().emit(record)

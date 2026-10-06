@@ -4,7 +4,13 @@ One file, standard library only. `beat`, `job`, `check`, `capture`, `log`. See `
 
 ## Install
 
-Nothing is published to a registry yet. Install from the repo:
+Nothing is published to a registry yet. Install from a clone of the repo:
+
+```
+pip install path/to/dokkit/clients/python
+```
+
+Once the repository is public, this also works:
 
 ```
 pip install "git+https://github.com/nathannncurtis/dokkit#subdirectory=clients/python"

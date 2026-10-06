@@ -20,6 +20,7 @@ final class Dokkit
     private static array $lines = [];
     private static array $errors = [];
     private static int $bytes = 0;
+    private static bool $sending = false;
     /** How many lines were dropped because the list was full. */
     public static int $dropped = 0;
 
@@ -207,13 +208,25 @@ final class Dokkit
     {
         $headers = ['Authorization: Bearer ' . self::$on['key'], "Content-Type: $kind", "Dokkit-Batch: $batch"];
         $context = stream_context_create(['http' => ['method' => 'POST', 'header' => implode("\r\n", $headers), 'content' => $body, 'timeout' => 2, 'ignore_errors' => true]]);
-        $reply = @file_get_contents(self::$on['url'] . $path, false, $context);
+        // An error handler that logs the warning from a failed send must not feed it back in.
+        self::$sending = true;
+        try {
+            $reply = @file_get_contents(self::$on['url'] . $path, false, $context);
+        } finally {
+            self::$sending = false;
+        }
         return $reply !== false && !preg_match('#^HTTP/\S+ [45]#', $http_response_header[0] ?? '');
+    }
+
+    /** Whether the library is on. */
+    public static function active(): bool
+    {
+        return self::$on !== null;
     }
 
     private static function add(array $line): void
     {
-        if (!self::$on) {
+        if (!self::$on || self::$sending) {
             return;
         }
         $text = self::encode(array_filter($line + ['at' => self::now(), 'host' => self::$on['host']], fn ($v) => $v !== null));
@@ -255,6 +268,9 @@ class DokkitLoggerMethods
     public function log($level, $message, array $context = []): void
     {
         try {
+            if (!Dokkit::active()) {
+                return;
+            }
             $text = (string) $message;
             foreach ($context as $key => $value) {
                 if (is_scalar($value) || $value === null || $value instanceof Stringable) {

@@ -32,6 +32,7 @@ import uuid
 QUEUE = 1000
 MAX_BYTES = 4_000_000
 _state = None
+_sending = threading.local()
 
 
 class _State:
@@ -122,7 +123,11 @@ class _State:
         request.add_header("Content-Type", kind)
         for name, value in (headers or {}).items():
             request.add_header(name, value)
-        urllib.request.urlopen(request, timeout=10).close()
+        _sending.on = True
+        try:
+            urllib.request.urlopen(request, timeout=10).close()
+        finally:
+            _sending.on = False
 
 
 def _now():
@@ -171,7 +176,8 @@ def flush():
 
 def _add(line):
     try:
-        if _state:
+        # Nothing logged while this thread is sending is fed back in.
+        if _state and not getattr(_sending, "on", False):
             _state.add(line)
     except Exception:
         pass
@@ -197,7 +203,11 @@ def metric(name, value, unit=None):
 
 def log(level, msg, fields=None):
     """level is trace, debug, info, warn, error or fatal."""
-    _add({"type": "log", "t": _now(), "level": level, "msg": str(msg), "fields": fields})
+    try:
+        if _state:
+            _add({"type": "log", "t": _now(), "level": level, "msg": str(msg), "fields": fields})
+    except Exception:
+        pass
 
 
 def stats(document):

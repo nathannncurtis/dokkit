@@ -1,6 +1,6 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>dokkit</groupId>
+  <groupId>dev.dokkit</groupId>
   <artifactId>dokkit</artifactId>
   <version>0.1.0</version>
   <packaging>jar</packaging>
@@ -16,15 +16,4 @@
     <maven.compiler.release>11</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
-  <build>
-    <sourceDirectory>.</sourceDirectory>
-    <plugins>
-      <plugin>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <includes><include>Dokkit.java</include></includes>
-        </configuration>
-      </plugin>
-    </plugins>
-  </build>
 </project>

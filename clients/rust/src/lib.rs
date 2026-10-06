@@ -53,6 +53,9 @@ static HOOKED: AtomicBool = AtomicBool::new(false);
 
 static STATE: OnceLock<Mutex<State>> = OnceLock::new();
 
+#[cfg(feature = "log")]
+thread_local!(static SENDING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) });
+
 /// One value in a line. `None` is left out of the line.
 #[derive(Clone)]
 enum J<'a> {
@@ -219,6 +222,11 @@ impl ::log::Log for Logger {
     }
 
     fn log(&self, record: &::log::Record) {
+        // The sender and this crate log about their own requests; never feed those back.
+        let target = record.target();
+        if STATE.get().is_none() || SENDING.with(|s| s.get()) || ["ureq", "rustls", "dokkit"].iter().any(|t| target.starts_with(t)) {
+            return;
+        }
         let level = match record.level() {
             ::log::Level::Error => "error",
             ::log::Level::Warn => "warn",
@@ -371,12 +379,16 @@ pub fn flush() {
             return;
         }
         let (kind, body) = if batch.path == "/api/v1/errors" { ("application/json", batch.items[0].clone()) } else { ("application/x-ndjson", batch.items.join("\n")) };
+        #[cfg(feature = "log")]
+        SENDING.with(|s| s.set(true));
         let sent = ureq::post(&format!("{url}{}", batch.path))
             .timeout(Duration::from_secs(10))
             .set("Authorization", &format!("Bearer {key}"))
             .set("Content-Type", kind)
             .set("Dokkit-Batch", &batch.id)
             .send_string(&body);
+        #[cfg(feature = "log")]
+        SENDING.with(|s| s.set(false));
         // A refusal is counted and not retried. An unreachable server or a server error is retried
         // once, except an error post, which the server would count twice.
         if let Err(ureq::Error::Status(code, _)) = &sent {

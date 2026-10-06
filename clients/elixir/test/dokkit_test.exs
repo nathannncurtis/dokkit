@@ -109,6 +109,17 @@ defmodule DokkitTest do
     assert state.count == 1 and state.dropped == 2 and state.errors == []
   end
 
+  test "what the sender and the TLS library log about our own requests is not queued" do
+    Dokkit.start(url: "http://127.0.0.1:1", key: "dka_test")
+    event = fn meta -> %{level: :notice, msg: {:string, "x"}, meta: meta} end
+    Dokkit.log(event.(%{domain: [:otp, :ssl, :handshake]}), %{})
+    Dokkit.log(event.(%{mfa: {:httpc_handler, :init, 1}}), %{})
+    Task.async(fn -> Process.put(:dokkit_sending, true) && Dokkit.log(event.(%{}), %{}) end) |> Task.await()
+    assert :sys.get_state(Dokkit).count == 0
+    Dokkit.log(event.(%{mfa: {MyApp, :run, 0}}), %{})
+    assert :sys.get_state(Dokkit).count == 1
+  end
+
   test "a throw or an exit in a job is a failure" do
     Dokkit.start(url: mock(), key: "dka_test")
     assert catch_throw(Dokkit.job("t", fn _ -> throw(:oops) end)) == :oops

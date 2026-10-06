@@ -1,6 +1,7 @@
-// The Dokkit client library for Java. One file, no packages. Java 11 or later.
+// The Dokkit client library for Java. One file, no dependencies. Java 11 or later.
 //
-//     Dokkit.start("2.3.0");                 // reads DOKKIT_URL and DOKKIT_KEY; blank means off
+//     import dev.dokkit.Dokkit;
+//     Dokkit.start("2.3.0");               // reads DOKKIT_URL and DOKKIT_KEY; blank means off
 //     Dokkit.beat("worker");                 // from the main loop
 //     Dokkit.job("nightly-purge", run -> { run.progress(4000, 9000); });
 //     Dokkit.check("queue-age", "degraded", 14.0, "oldest item is 14 minutes old");
@@ -10,6 +11,8 @@
 // Nothing here throws into the app or waits on the network. Lines wait in a queue of fixed
 // size and a background thread sends them. Error message text is never sent. An http:// address
 // to another machine keeps the library off unless DOKKIT_INSECURE=1.
+
+package dev.dokkit;
 
 import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
@@ -45,6 +48,8 @@ public final class Dokkit {
     private static HttpClient http;
     private static String url, key, version, environment, host;
     private static int dropped;
+    // True on a thread that is sending: whatever it logs is not fed back in.
+    private static final ThreadLocal<Boolean> sendingNow = ThreadLocal.withInitial(() -> false);
 
     /** Frames of classes whose names start with this are the app's own. Blank means every frame that is not the JDK's or this library's; set it to the app's package to be exact. */
     public static String own = "";
@@ -182,7 +187,7 @@ public final class Dokkit {
                 boolean jdk = type.startsWith("java.") || type.startsWith("javax.") || type.startsWith("jdk.") || type.startsWith("sun.");
                 frames.add(pairs("file", type, "function", stack[i].getMethodName(),
                         "line", stack[i].getLineNumber() > 0 ? stack[i].getLineNumber() : null,
-                        "own", mine.isEmpty() ? !jdk && !type.equals("Dokkit") : type.startsWith(mine)));
+                        "own", mine.isEmpty() ? !jdk && !type.startsWith("dev.dokkit.Dokkit") : type.startsWith(mine)));
             }
             Map<String, Object> report = pairs("at", Instant.now().toString(), "type", error.getClass().getSimpleName(),
                     "handled", handled, "release", version, "environment", environment, "host", host,
@@ -211,8 +216,13 @@ public final class Dokkit {
     public static Handler handler() {
         return new Handler() {
             @Override public void publish(LogRecord r) {
-                int n = r.getLevel().intValue();
-                log(n >= 1000 ? "error" : n >= 900 ? "warn" : n >= 800 ? "info" : "debug", String.valueOf(r.getMessage()));
+                try {
+                    if (http == null || sendingNow.get()) return;
+                    int n = r.getLevel().intValue();
+                    log(n >= 1000 ? "error" : n >= 900 ? "warn" : n >= 800 ? "info" : "debug", String.valueOf(r.getMessage()));
+                } catch (Exception e) {
+                    // A log line never causes an error.
+                }
             }
             @Override public void flush() {}
             @Override public void close() {}
@@ -222,6 +232,7 @@ public final class Dokkit {
     /** Sends what is waiting. Called for you when the app exits. */
     public static void flush() {
         synchronized (sending) {
+            sendingNow.set(true);
             try {
                 while (http != null) {
                     Batch batch = retry != null ? retry : next();
@@ -238,6 +249,8 @@ public final class Dokkit {
                 }
             } catch (Exception e) {
                 // What could not be sent is dropped. The app is never told.
+            } finally {
+                sendingNow.set(false);
             }
         }
     }
@@ -284,7 +297,7 @@ public final class Dokkit {
     }
 
     private static void add(Map<String, Object> line) {
-        if (http == null) return;
+        if (http == null || sendingNow.get()) return;
         line.put("host", host);
         String text = json(line);
         synchronized (gate) {

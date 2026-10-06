@@ -95,40 +95,54 @@ export const check = (name, state, value, note) => add({ type: "custom", check: 
 export const metric = (name, value, unit) => add({ type: "metric", name, value, unit });
 
 /** level is trace, debug, info, warn, error or fatal. */
-export const log = (level, msg, fields) => add({ type: "log", t: now(), level, msg: String(msg), fields });
+export function log(level, msg, fields) {
+  try {
+    if (state) add({ type: "log", t: now(), level, msg: String(msg), fields });
+  } catch {}
+}
 
 const LEVELS = { log: "info", debug: "debug", info: "info", warn: "warn", error: "error", trace: "trace" };
 
 const text = (a) => {
-  if (typeof a === "string") return a;
   try {
-    return a instanceof Error ? a.name : JSON.stringify(a) ?? String(a);
+    if (typeof a === "string") return a.slice(0, 2000);
+    return (a instanceof Error ? a.name : JSON.stringify(a) ?? String(a)).slice(0, 2000);
   } catch {
-    return String(a);
+    try {
+      return String(a).slice(0, 2000);
+    } catch {
+      return "";
+    }
   }
 };
 
 /** A console that also sends each call through log. Pass a console to wrap it; the default is the global one. */
 export function consoleLogger(target = globalThis.console) {
-  const out = {};
-  for (const k in target) if (typeof target[k] === "function") out[k] = target[k].bind(target);
+  const out = Object.create(target);
   for (const [k, level] of Object.entries(LEVELS))
     out[k] = (...args) => {
-      try {
-        log(level, args.map(text).join(" "));
-      } catch {}
-      return target[k](...args);
+      if (state)
+        try {
+          log(level, args.map(text).join(" "));
+        } catch {}
+      return target[k]?.(...args);
     };
   return out;
 }
 
+let restoreConsole = null;
+
 /** Makes the global console send through log too. Returns a function that puts it back. */
 export function patchConsole() {
+  if (restoreConsole) return restoreConsole;
   const original = globalThis.console;
   globalThis.console = consoleLogger(original);
-  return () => {
+  const restore = () => {
+    if (restoreConsole !== restore) return;
     globalThis.console = original;
+    restoreConsole = null;
   };
+  return (restoreConsole = restore);
 }
 
 /** Sends a stats document, for an app dokkit cannot reach. */

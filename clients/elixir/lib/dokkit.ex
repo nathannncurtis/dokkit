@@ -150,7 +150,9 @@ defmodule Dokkit do
   def log(level, msg) when is_binary(level), do: add(%{type: "log", t: now(), level: level, msg: msg})
 
   # The :logger handler. Its lines go to the Logs page.
-  def log(%{level: level, msg: msg}, _config) do
+  def log(%{level: level, msg: msg} = event, _config) do
+    if GenServer.whereis(__MODULE__) == nil or from_sending?(event), do: throw(:skip)
+
     text =
       case msg do
         {:string, s} -> IO.chardata_to_string(s)
@@ -170,6 +172,19 @@ defmodule Dokkit do
     add(%{type: "log", t: now(), level: level, msg: text})
   rescue
     _ -> :ok
+  catch
+    :skip -> :ok
+  end
+
+  # What the sender, the HTTP client and the TLS library log about our own requests is never fed back in.
+  defp from_sending?(event) do
+    meta = Map.get(event, :meta, %{})
+    prefixes = ["httpc", "http_", "inets", "ssl", "tls_", "dtls_"]
+
+    Process.get(:dokkit_sending) == true or meta[:pid] == Process.whereis(__MODULE__) or
+      match?([:otp, d | _] when d in [:ssl, :inets], meta[:domain]) or
+      match?({m, _, _} when is_atom(m), meta[:mfa]) and
+        String.starts_with?(Atom.to_string(elem(meta[:mfa], 0)), prefixes)
   end
 
   defp add(line), do: cast({:line, Map.put_new(line, :at, now())})
@@ -310,7 +325,10 @@ defmodule Dokkit do
       conf = %{url: s.url, key: s.key}
 
       {pid, ref} =
-        spawn_monitor(fn -> exit({:sent, for(b <- batches, (r = post(conf, b)) != :ok, do: {r, b})}) end)
+        spawn_monitor(fn ->
+          Process.put(:dokkit_sending, true)
+          exit({:sent, for(b <- batches, (r = post(conf, b)) != :ok, do: {r, b})})
+        end)
 
       %{s | sender: {pid, ref, batches}}
     end

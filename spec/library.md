@@ -55,13 +55,13 @@ Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift
 
 `clients/rust/src/lib.rs`: one file and one package, `ureq`, for HTTPS. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture` and `catch_unhandled` for panics. With the `log` cargo feature, off by default, `Logger` implements the `log` crate's `Log` trait. A report carries one frame, the file and line that reported it, and lines carry no time of their own: the server stamps them when they arrive.
 
-`clients/java/Dokkit.java`: one file, no packages, Java 11 or later. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture`, `catchUnhandled`, and `handler` for `java.util.logging`. Kotlin and Scala use it as it is.
+`clients/java/src/main/java/dev/dokkit/Dokkit.java`: one file in the package `dev.dokkit`, no dependencies, Java 11 or later. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture`, `catchUnhandled`, and `handler` for `java.util.logging`. Kotlin and Scala use it as it is.
 
 `clients/php/Dokkit.php`: one file, no packages or extensions, PHP 8.0 or later. `Dokkit::start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture` and `catchUnhandled`. `DokkitLogger` has the PSR-3 methods and implements `Psr\Log\LoggerInterface` when `psr/log` is loaded. PHP has no background thread, so lines are sent when the request or script ends, after the response has gone out where PHP allows it.
 
 `clients/powershell/Dokkit.psm1`: one file, for Windows PowerShell 5.1 and PowerShell 7. `Start-Dokkit`, `Send-DokkitBeat`, `Invoke-DokkitJob`, `Send-DokkitProgress`, `Send-DokkitCheck`, `Send-DokkitMetric`, `Write-DokkitLog`, `Send-DokkitError` and `Send-Dokkit`. Lines are sent when a job ends or when `Send-Dokkit` is called.
 
-`clients/shell/dokkit.sh`: one file to source, needing only curl. `dokkit_beat`, `dokkit_job`, `dokkit_check`, `dokkit_metric`, `dokkit_log` and `dokkit_capture <type> <message>`, which sends an error with no message text and no stack. Each call sends its one line straight away and waits at most five seconds. A failed job carries its exit code.
+`clients/shell/dokkit.sh`: one file to source, needing only curl. `dokkit_beat`, `dokkit_job`, `dokkit_check`, `dokkit_metric`, `dokkit_log` and `dokkit_capture <type> <message>`, which sends an error with no message text and no stack. Each call sends its one line straight away and waits at most five seconds, ten if the first try fails. An error report is sent once, because the server cannot tell a repeat from a new error. A failed job carries its exit code.
 
 `clients/swift/Dokkit.swift`: one file, Foundation only, for iOS 13 and macOS 10.15 or later. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture` and `flush`. Swift keeps no stack with an error, so a report carries the stack of the place that reported it. It has not been compiled or run yet. It has no log handler, because Swift's logging frameworks are packages.
 
@@ -81,6 +81,8 @@ Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift
 | PowerShell | yes | yes | yes | yes | yes | none: no logging framework |
 | Shell | yes | yes | yes | yes | yes | none: no logging framework |
 
-Each library folder has a manifest and a README with install steps. Nothing is published to a registry yet; they install from the repo or a path.
+Each library folder has a README with install steps, and a manifest except the shell one, which is a single file to source. Nothing is published to a registry yet; they install from a clone of the repo by path. The install-from-git lines in the READMEs work once the repository is public.
+
+A log handler never queues what is logged while the library is sending, and the Rust one also ignores its HTTP client's own records, so sending cannot feed itself.
 
 All of them send the host name, and the server records that host as a machine that was seen. When that host is not the machine the service lives on, the version the app starts with is kept for that host and is not a deploy, and the Versions page lists each such app with how many hosts are on each version.

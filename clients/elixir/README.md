@@ -4,7 +4,13 @@ One file, no packages, Elixir 1.18 or later. `Dokkit.beat`, `job`, `check`, `cap
 
 ## Install
 
-Nothing is published to a registry yet. In `mix.exs`:
+Nothing is published to a registry yet. In `mix.exs`, point at a clone of the repo:
+
+```
+{:dokkit, path: "path/to/dokkit/clients/elixir"}
+```
+
+Once the repository is public, this also works:
 
 ```
 {:dokkit, git: "https://github.com/nathannncurtis/dokkit", sparse: "clients/elixir"}

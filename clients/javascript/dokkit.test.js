@@ -138,3 +138,35 @@ test("patchConsole sends console calls through log and can be undone", async () 
   assert.deepStrictEqual(r.got[0].lines.map((l) => [l.level, l.msg]), [["warn", 'careful {"a":1}']]);
   assert.match(r.stderr, /careful/);
 });
+
+test("with Dokkit off the console wrapper serialises nothing, and log never throws", async () => {
+  const r = await scenario(`
+    let n = 0;
+    const restore = dokkit.patchConsole();
+    console.log({ toJSON() { n++; return 1; } });
+    dokkit.log("info", { toString() { throw new Error("no"); } });
+    restore();
+    console.log(n);`);
+  assert.strictEqual(r.stdout.trim().split("\n").pop(), "0");
+});
+
+test("consoleLogger tolerates a target with a missing method", () => {
+  const seen = [];
+  const c = dokkit.consoleLogger({ log: (x) => seen.push(x) });
+  assert.doesNotThrow(() => c.trace("x"));
+  c.log("y");
+  assert.deepStrictEqual(seen, ["y"]);
+});
+
+test("patchConsole keeps console properties, and a second patch restores fully", async () => {
+  const r = await scenario(`
+    const original = console;
+    const had = original._stdout !== undefined;
+    const r1 = dokkit.patchConsole();
+    const r2 = dokkit.patchConsole();
+    const kept = console._stdout === original._stdout;
+    r1();
+    r2();
+    process.stdout.write(JSON.stringify([had, kept, console === original]));`);
+  assert.strictEqual(r.stdout.trim(), "[true,true,true]");
+});

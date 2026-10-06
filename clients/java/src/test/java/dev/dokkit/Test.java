@@ -1,5 +1,7 @@
 // Runs the library against a small local server and exits 1 when something is wrong.
-//     javac -d out Dokkit.java Test.java && java -cp out Test
+//     javac -d out src/main/java/dev/dokkit/Dokkit.java src/test/java/dev/dokkit/Test.java && java -cp out dev.dokkit.Test
+
+package dev.dokkit;
 
 import com.sun.net.httpserver.HttpServer;
 import java.io.InputStream;
@@ -42,9 +44,17 @@ public class Test {
             });
         } catch (IllegalStateException expected) {
         }
-        Dokkit.own = "Test";
+        Dokkit.own = "dev.dokkit.Test";
         try { Integer.parseInt("x"); } catch (NumberFormatException e) { Dokkit.capture(e); }
         Dokkit.own = "";
+        // Whatever is logged on a thread that is sending is not queued.
+        java.lang.reflect.Field flag = Dokkit.class.getDeclaredField("sendingNow");
+        flag.setAccessible(true);
+        @SuppressWarnings("unchecked") ThreadLocal<Boolean> sendingNow = (ThreadLocal<Boolean>) flag.get(null);
+        sendingNow.set(true);
+        Dokkit.handler().publish(new java.util.logging.LogRecord(java.util.logging.Level.SEVERE, "from the sender"));
+        sendingNow.set(false);
+
         Dokkit.stats("{\n  \"stat\": 7\n}");
         Dokkit.flush();
         Dokkit.flush();
@@ -60,7 +70,7 @@ public class Test {
             "/api/v1/report {\"type\":\"deploy\"", "\"type\":\"beat\"", "\"every_seconds\":30", "\"state\":\"degraded\",\"value\":14.0",
             "oldest item is \\\"14\\\" minutes old", "\"level\":\"error\",\"msg\":\"Upload failed\"", "\"event\":\"start\"",
             "\"event\":\"progress\",\"done\":4000,\"total\":9000", "\"event\":\"fail\",\"exit_code\":1", "/api/v1/errors {",
-            "\"type\":\"IllegalStateException\"", "\"handled\":false", "\"file\":\"Test\"", "\"own\":true",
+            "\"type\":\"IllegalStateException\"", "\"handled\":false", "\"file\":\"dev.dokkit.Test\"", "\"own\":true",
         };
         List<String> missing = new ArrayList<>();
         for (String w : want) if (!all.contains(w)) missing.add(w);
@@ -68,7 +78,7 @@ public class Test {
         if (!java.util.regex.Pattern.compile("\"java.lang.Integer\"[^}]*\"own\":false").matcher(all).find()) missing.add("jdk frame not own");
         if (!guarded) missing.add("http to another machine refused");
         if (Dokkit.dropped() != 0) missing.add("nothing dropped, got " + Dokkit.dropped());
-        if (!missing.isEmpty() || all.contains("4411") || all.contains("BAD KEY") || all.contains("ignored")) {
+        if (!missing.isEmpty() || all.contains("4411") || all.contains("BAD KEY") || all.contains("ignored") || all.contains("from the sender")) {
             System.out.println("FAIL\nmissing: " + missing + "\n" + all);
             System.exit(1);
         }

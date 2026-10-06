@@ -8,12 +8,13 @@
 #     dokkit_log error "Upload failed"
 #     dokkit_capture UploadError "Upload failed"
 #
-# Each call sends one line and waits at most five seconds, twice if the first try fails. A line
+# Each call sends one line and waits at most five seconds, twice if the first try fails (an error report is sent once). A line
 # that cannot be sent is dropped and the script carries on. A machine with the dokkit program on
 # it can use `dokkit run` instead, which also keeps the last lines of output.
 
-# Newlines and tabs become spaces first: BSD sed adds a newline of its own.
-_dokkit_text() { printf '%s' "$1" | tr '\n\t' '  ' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+# Newlines and tabs become spaces first: BSD sed adds a newline of its own. Other control
+# characters (U+0001 to U+001F) are dropped so the line is always valid JSON.
+_dokkit_text() { printf '%s' "$1" | tr '\n\t' '  ' | tr -d '\000-\010\013-\037' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
 
 # A number as JSON: -?digits[.digits], no leading zero; anything else would break the line or add fields.
 _dokkit_num() { case $1 in '' | *[!0-9.-]* | ?*-* | *.*.* | - | .* | -.* | *. | 0[0-9]* | -0[0-9]*) return 1 ;; esac; }
@@ -44,7 +45,9 @@ _dokkit_send() {
   _dokkit_on || return 0
   _dokkit_line="{$1,\"host\":\"$(_dokkit_text "$(hostname)")\"}"
   _dokkit_id=$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' | sed 's/^\(........\)\(....\)\(....\)\(....\)\(............\)$/\1-\2-\3-\4-\5/')
-  _dokkit_post "$_dokkit_line" "$_dokkit_id" "" "${2:-}" "${3:-}" || _dokkit_post "$_dokkit_line" "$_dokkit_id" "" "${2:-}" "${3:-}" || true
+  _dokkit_post "$_dokkit_line" "$_dokkit_id" "" "${2:-}" "${3:-}" && return 0
+  # An error report has no id the server can match, so a second try could count it twice.
+  [ "${2:-}" = /api/v1/errors ] || _dokkit_post "$_dokkit_line" "$_dokkit_id" "" "${2:-}" "${3:-}" || true
 }
 
 # dokkit_beat <name> [every seconds]
