@@ -3,10 +3,17 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -468,5 +475,46 @@ func TestStatsVitalsAndExpiry(t *testing.T) {
 	}
 	if !found["memory"] || !found["cpu"] || !found["disk"] {
 		t.Fatalf("vitals: %v", found)
+	}
+}
+
+func TestAPinnedServerIsTheOnlyOneTrusted(t *testing.T) {
+	defer func() { toServer = http.DefaultTransport }()
+	hello := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{"key":"dkm_new"}`)) })
+	// The test servers all share one built-in certificate, so the other one gets its own.
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	about := &x509.Certificate{SerialNumber: big.NewInt(1), NotAfter: time.Now().Add(time.Hour), IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}}
+	der, _ := x509.CreateCertificate(rand.Reader, about, about, &key.PublicKey, key)
+	real, other := httptest.NewTLSServer(hello), httptest.NewUnstartedServer(hello)
+	other.TLS = &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}}
+	other.StartTLS()
+	defer real.Close()
+	defer other.Close()
+	sum := sha256.Sum256(real.Certificate().Raw)
+	pin := "sha256:" + hex.EncodeToString(sum[:])
+	t.Setenv("DOKKIT_CONFIG", filepath.Join(t.TempDir(), "config.json"))
+	t.Setenv("DOKKIT_URL", "")
+	t.Setenv("DOKKIT_KEY", "")
+	t.Setenv("DOKKIT_SPOOL", t.TempDir())
+
+	if code := enrol(real.URL, "dke_token", ""); code != 1 {
+		t.Fatal("without a pin, a certificate nobody vouches for is refused")
+	}
+	if code := enrol(other.URL, "dke_token", pin); code != 1 {
+		t.Fatal("another server must be refused")
+	}
+	if code := enrol(real.URL, "dke_token", pin); code != 0 {
+		t.Fatal("the pinned server must be accepted")
+	}
+	c, err := load()
+	if err != nil || c.pin != pin {
+		t.Fatalf("the pin is saved: %v %+v", err, c)
+	}
+	if status, err := c.call("GET", "/api/v1/ping", "", nil, nil); err != nil || status != 200 {
+		t.Fatalf("later requests use the pin: %d %v", status, err)
+	}
+	c.url = other.URL
+	if _, err := c.call("GET", "/api/v1/ping", "", nil, nil); err == nil {
+		t.Fatal("and refuse any other server")
 	}
 }

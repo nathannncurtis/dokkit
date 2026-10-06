@@ -333,7 +333,7 @@ func (c *client) declare(d *declaration) error {
 	req, _ := http.NewRequest("PUT", c.url+"/api/v1/declare", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+c.key)
 	req.Header.Set("Content-Type", "application/json")
-	res, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	res, err := (&http.Client{Timeout: 15 * time.Second, Transport: toServer}).Do(req)
 	if err != nil {
 		return err
 	}

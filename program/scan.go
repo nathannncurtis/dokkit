@@ -363,7 +363,7 @@ func (c *client) call(method, path, kind string, body []byte, into any) (int, er
 	if kind != "" {
 		req.Header.Set("Content-Type", kind)
 	}
-	res, err := (&http.Client{Timeout: 70 * time.Second}).Do(req)
+	res, err := (&http.Client{Timeout: 70 * time.Second, Transport: toServer}).Do(req)
 	if err != nil {
 		return 0, err
 	}

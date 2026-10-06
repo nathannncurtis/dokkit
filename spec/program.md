@@ -98,10 +98,12 @@ In `program/`: `dokkit init`, `run`, `ping`, `check`, `apply`, `enrol`, `watch`,
 
 `dokkit watch` holds a request open to the server and runs the task runs it is given, one at a time, sending output every three seconds. It refuses a task whose command in the file is not the one that was accepted. A task runs as whoever runs `dokkit watch`. The installed service runs as the system account, so it does not take work until a task can be given an ordinary account.
 
+`dokkit enrol` takes the server certificate's fingerprint as a third argument, saves it, and from then on trusts the certificate with that fingerprint and no other. The enrol page shows the fingerprint when the server is started with `DOKKIT_CERT` and `DOKKIT_CERT_KEY` and so serves TLS itself.
+
 `dokkit propose` sends the file a scan wrote. Each minute `dokkit watch` asks the server for the checks added in the interface for its machine and runs them beside the ones in files.
 
 Each minute `dokkit watch` reads the first line of the file a `version_from` names and reports it as that service's version. A `version_from` that is a command is not run: nothing has accepted that command.
 
 Each minute it also sends the machine's processor, memory and disk use as `metric` lines and fetches the stats document of each service with a `[stats]` section, sending the key from the variable `key_env` names as `X-Stats-Key`. An `expiry` check reads its date from `date_from`: an `https` address or `host:port` for a certificate, or a file whose first line is a date. It is degraded inside 30 days and down once past.
 
-Not built yet: `dokkit task list` showing what is accepted, the account tasks run under, certificate pinning, and the built-in update task.
+Not built yet: `dokkit task list` showing what is accepted, the account tasks run under, and the built-in update task.

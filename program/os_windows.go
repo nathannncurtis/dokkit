@@ -116,7 +116,7 @@ func install(m *mgr.Mgr) error {
 	if out, err := exec.Command("icacls", dir, "/inheritance:r", "/grant:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F").CombinedOutput(); err != nil {
 		return fmt.Errorf("could not lock down %s: %s", dir, out)
 	}
-	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Folders: c.folders})
+	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders})
 	if err := os.WriteFile(filepath.Join(dir, "config.json"), b, 0o600); err != nil {
 		return err
 	}

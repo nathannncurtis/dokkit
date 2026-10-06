@@ -23,6 +23,17 @@ defmodule DokkitWeb.EnrolLive do
     end
   end
 
+  # The fingerprint of the certificate this server serves, when it serves one itself.
+  defp pin do
+    with path when is_binary(path) <- Application.get_env(:dokkit, :cert),
+         {:ok, pem} <- File.read(path),
+         [{:Certificate, der, _} | _] <- :public_key.pem_decode(pem) do
+      " sha256:" <> Base.encode16(:crypto.hash(:sha256, der), case: :lower)
+    else
+      _ -> ""
+    end
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.app active={:all} shell={@shell} user={@current_user}>
@@ -41,7 +52,7 @@ defmodule DokkitWeb.EnrolLive do
           <p :if={!@token and @current_user.role != :owner} class="lead">
             Only the owner can make a token.
           </p>
-          <pre :if={@token} class="logbox" id="enrol-commands">dokkit enrol {DokkitWeb.Endpoint.url()} {@token}
+          <pre :if={@token} class="logbox" id="enrol-commands">dokkit enrol {DokkitWeb.Endpoint.url()} {@token}{pin()}
     dokkit watch</pre>
           <div class="foot">
             <span :if={@token}>The token works once and runs out in an hour. It is shown only now.</span>

@@ -6,6 +6,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,7 +33,7 @@ dokkit ping <name> [start|ok|fail]
 dokkit init
 dokkit check [dokkit.toml]
 dokkit apply [dokkit.toml]
-dokkit enrol <address> <token>
+dokkit enrol <address> <token> [sha256:<certificate fingerprint>]
 dokkit watch [--background]
 dokkit startup on|off
 dokkit status
@@ -64,11 +68,11 @@ func cli(args []string) int {
 		return 2
 	}
 	if args[0] == "enrol" {
-		if len(args) != 3 {
+		if len(args) != 3 && len(args) != 4 {
 			fmt.Fprintln(os.Stderr, usage)
 			return 2
 		}
-		return enrol(args[1], args[2])
+		return enrol(args[1], args[2], strings.Join(args[3:], ""))
 	}
 	if args[0] == "check" {
 		return checkOnce(fileArg(args))
@@ -146,7 +150,33 @@ func cli(args []string) int {
 	return 2
 }
 
+// toServer is how every request to the Dokkit server travels. Checks of other things do not use it.
+var toServer http.RoundTripper = http.DefaultTransport
+
+// pinTo makes the server's certificate the only thing trusted: the one with this fingerprint
+// and no other, whatever name or authority it carries. With no pin, the usual checks apply.
+func pinTo(pin string) {
+	if pin == "" {
+		return
+	}
+	want := strings.ToLower(strings.TrimPrefix(pin, "sha256:"))
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.TLSClientConfig = &tls.Config{
+		InsecureSkipVerify: true,
+		VerifyPeerCertificate: func(certificates [][]byte, _ [][]*x509.Certificate) error {
+			if len(certificates) > 0 {
+				if sum := sha256.Sum256(certificates[0]); hex.EncodeToString(sum[:]) == want {
+					return nil
+				}
+			}
+			return errors.New("the server's certificate is not the one this machine enrolled with")
+		},
+	}
+	toServer = t
+}
+
 type client struct {
+	pin             string
 	url, key, spool string
 	folders         []string
 	http            *http.Client
@@ -174,6 +204,7 @@ type line struct {
 type saved struct {
 	URL     string   `json:"url"`
 	Key     string   `json:"key"`
+	Pin     string   `json:"pin,omitempty"`
 	Folders []string `json:"folders,omitempty"`
 }
 
@@ -187,6 +218,7 @@ func configPath() (string, error) {
 
 func load() (*client, error) {
 	c := &client{url: os.Getenv("DOKKIT_URL"), key: os.Getenv("DOKKIT_KEY"), spool: os.Getenv("DOKKIT_SPOOL"), http: &http.Client{}}
+	defer func() { c.http.Transport = toServer }()
 	var s saved
 	if p, err := configPath(); err == nil {
 		if b, err := os.ReadFile(p); err == nil {
@@ -199,7 +231,8 @@ func load() (*client, error) {
 			c.spool = filepath.Join(dir, "spool")
 		}
 	}
-	c.folders = s.Folders
+	c.folders, c.pin = s.Folders, s.Pin
+	pinTo(s.Pin)
 	if f := os.Getenv("DOKKIT_FOLDERS"); f != "" {
 		c.folders = filepath.SplitList(f)
 	}
@@ -221,11 +254,12 @@ func load() (*client, error) {
 }
 
 // enrol trades a one-use token for this machine's key and saves it for this user only.
-func enrol(address, token string) int {
+func enrol(address, token, pin string) int {
 	address = strings.TrimRight(address, "/")
+	pinTo(pin)
 	host, _ := os.Hostname()
 	body, _ := json.Marshal(map[string]string{"token": token, "hostname": host, "os": runtime.GOOS, "arch": runtime.GOARCH, "dokkit": version})
-	res, err := (&http.Client{Timeout: 15 * time.Second}).Post(address+"/api/v1/enrol", "application/json", bytes.NewReader(body))
+	res, err := (&http.Client{Timeout: 15 * time.Second, Transport: toServer}).Post(address+"/api/v1/enrol", "application/json", bytes.NewReader(body))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "dokkit: cannot reach the server:", err)
 		return 1
@@ -245,7 +279,7 @@ func enrol(address, token string) int {
 		err = os.MkdirAll(filepath.Dir(p), 0o700)
 	}
 	if err == nil {
-		b, _ := json.Marshal(saved{URL: address, Key: a.Key})
+		b, _ := json.Marshal(saved{URL: address, Key: a.Key, Pin: pin})
 		err = os.WriteFile(p, b, 0o600)
 	}
 	if err != nil {
