@@ -1,6 +1,6 @@
 defmodule DokkitWeb.ServiceLive do
   use DokkitWeb, :live_view
-  alias Dokkit.{Alerts, Estate, Issue}
+  alias Dokkit.{Alerts, Estate, Issue, Issues}
 
   @cols "150px 110px 90px 90px minmax(0,1fr) 16px;--ncols:96px 72px 84px 56px minmax(0,1fr) 16px;--minw:426px"
   @routes [{"Page", "page"}, {"Push", "push"}, {"Webhook", "webhook"}, {"Nobody", "none"}]
@@ -20,6 +20,25 @@ defmodule DokkitWeb.ServiceLive do
 
     {:noreply, load(socket)}
   end
+
+  def handle_event(event, _, socket) when event in ~w(seen snooze back) do
+    id = socket.assigns.issue && socket.assigns.issue.id
+
+    if id && socket.assigns.current_user.role != :viewer do
+      case event do
+        "seen" -> Issues.acknowledge(id)
+        "snooze" -> Issues.snooze(id, 86_400)
+        "back" -> Issues.unsnooze(id)
+      end
+    end
+
+    {:noreply, load(socket)}
+  end
+
+  defp snoozed?(issue),
+    do:
+      issue.snoozed_until != nil and
+        DateTime.compare(issue.snoozed_until, DateTime.utc_now()) == :gt
 
   defp load(socket) do
     service = Estate.service(socket.assigns.id)
@@ -46,15 +65,31 @@ defmodule DokkitWeb.ServiceLive do
         <h1 tabindex="-1">
           <.lvl state={@service.state} /> {(@issue && @issue.title) || @service.name}
         </h1>
+        <div :if={@issue} class="end">
+          <button :if={!@issue.acknowledged_at} class="btn" type="button" phx-click="seen">
+            <.ic name="eye" />Mark as seen
+          </button>
+          <button :if={!snoozed?(@issue)} class="btn" type="button" phx-click="snooze">
+            <.ic name="clock" />Snooze for a day
+          </button>
+          <button :if={snoozed?(@issue)} class="btn" type="button" phx-click="back">
+            <.ic name="arrow-u-up-left" />Bring back
+          </button>
+        </div>
       </div>
       <div class="filters" style="padding-top:10px">
         <span class={[
           "tag",
           @service.state in [:degraded, :down] && "warn",
           @service.state == :ok && "ok"
-        ]}>{say(@service.state)}</span>
-        <span :if={@issue} class="st"><span class="mono">{Issue.short_id(@issue)}</span>
-        since {at(@issue.since)} UTC</span>
+        ]}>
+          {say(@service.state)}
+        </span>
+        <span :if={@issue} class="st">
+          <span class="mono">{Issue.short_id(@issue)}</span> since {at(@issue.since)} UTC
+        </span>
+        <span :if={@issue && snoozed?(@issue)} class="tag">Snoozed until {at(@issue.snoozed_until)} UTC</span>
+        <span :if={@issue && @issue.acknowledged_at} class="tag">Seen</span>
       </div>
       <div class="body rail">
         <div class="col">

@@ -58,16 +58,35 @@ defmodule Dokkit.Issues do
     check
   end
 
-  def open_list do
-    Repo.all(
-      from i in Issue,
-        where: is_nil(i.closed_at),
-        order_by: [desc: i.since],
-        preload: [:machine, :service, :check, :alert]
-    )
+  @doc "Open issues that are not snoozed: what needs someone."
+  def open_list(now \\ DateTime.utc_now()) do
+    Repo.all(from i in listed(), where: is_nil(i.snoozed_until) or i.snoozed_until <= ^now)
   end
 
-  def open_count, do: Repo.aggregate(from(i in Issue, where: is_nil(i.closed_at)), :count)
+  def snoozed_list(now \\ DateTime.utc_now()) do
+    Repo.all(from i in listed(), where: i.snoozed_until > ^now)
+  end
+
+  defp listed do
+    from i in Issue,
+      where: is_nil(i.closed_at),
+      order_by: [desc: i.since],
+      preload: [:machine, :service, :check, :alert]
+  end
+
+  def snooze(ids, seconds) when is_integer(seconds) and seconds > 0,
+    do: set(ids, snoozed_until: DateTime.add(DateTime.utc_now(), seconds))
+
+  def unsnooze(ids), do: set(ids, snoozed_until: nil)
+  def acknowledge(ids), do: set(ids, acknowledged_at: DateTime.utc_now())
+
+  defp set(ids, change) do
+    ids = for id <- List.wrap(ids), match?({:ok, _}, Ecto.UUID.cast(id)), do: id
+    Repo.update_all(from(i in Issue, where: i.id in ^ids and is_nil(i.closed_at)), set: change)
+    changed(false)
+  end
+
+  def open_count, do: length(open_list())
 
   def subscribe, do: Phoenix.PubSub.subscribe(Dokkit.PubSub, "issues")
   @doc "Call after the change is committed: pages reload, and alerts waiting to go are sent."

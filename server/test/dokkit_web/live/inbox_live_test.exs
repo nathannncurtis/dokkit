@@ -71,4 +71,33 @@ defmodule DokkitWeb.InboxLiveTest do
     assert Watch.seconds("2h", 0) == 7200
     assert Watch.seconds("soon", 5) == 5
   end
+
+  test "snoozing takes an issue out of the inbox until it is brought back", %{
+    conn: conn,
+    service: service
+  } do
+    {_, key} = Keys.mint(:app, %{service_id: service.id})
+    Intake.ping(key, "backup", "fail", nil, "")
+    {:ok, view, _} = live(conn, "/")
+    [issue] = Dokkit.Issues.open_list()
+
+    view |> element("#issue-#{issue.id} input.chk") |> render_click()
+    html = view |> element("button", "Snooze selected") |> render_click()
+    assert html =~ "Nothing needs you"
+    assert Dokkit.Issues.open_count() == 0
+    assert [%{id: id}] = Dokkit.Issues.snoozed_list()
+    assert id == issue.id
+
+    html = view |> element("button[phx-value-tab=snoozed]") |> render_click()
+    assert html =~ "Nightly backup failed"
+    html = view |> element("#issue-#{issue.id} button[phx-click=back]") |> render_click()
+    assert html =~ "Nothing is snoozed"
+    assert Dokkit.Issues.open_count() == 1
+
+    {:ok, page, html} = live(conn, "/s/#{service.id}")
+    assert html =~ "Mark as seen"
+    assert render_click(page, "seen") =~ "Seen"
+    assert render_click(page, "snooze") =~ "Snoozed until"
+    assert render_click(page, "back") =~ "Snooze for a day"
+  end
 end

@@ -554,9 +554,6 @@ input, select { accent-color: var(--brand); caret-color: var(--brand); }
 .cols-inbox .meta { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
 .cols-inbox .ti > i { margin-top: 3px; }
 
-/* server: the inbox list without selection or charts, until those exist */
-.li.cols-inbox.plain, .lh.cols-inbox.plain { grid-template-columns: minmax(0, 1fr) 72px 150px; min-width: 0; }
-
 /* server: the sign-in and setup pages */
 .door { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; }
 .door .card { width: min(100%, 400px); padding: 24px; display: grid; gap: 16px; }
