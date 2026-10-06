@@ -43,6 +43,19 @@ defmodule DokkitWeb.ServiceLive do
     service = Estate.service(socket.assigns.id)
     job = Enum.find(service.checks, &(&1.type == :job))
 
+    now = DateTime.utc_now()
+
+    numbers =
+      for name <- Dokkit.Numbers.names(socket.assigns.id) do
+        points =
+          Dokkit.Numbers.series(socket.assigns.id, name, DateTime.add(now, -86_400), now, 24)
+
+        values = Enum.map(points, & &1.value)
+        {name, values, values |> Enum.reject(&is_nil/1) |> List.last()}
+      end
+
+    socket = assign(socket, numbers: numbers)
+
     assign(socket,
       service: service,
       job: job,
@@ -124,6 +137,18 @@ defmodule DokkitWeb.ServiceLive do
                   c.source == :file
                 }> · from dokkit.toml</span>
               </span>
+            </div>
+          </div>
+          <div :if={@numbers != []} class="card">
+            <h2>Numbers<span class="end">The last 24 hours</span></h2>
+            <div
+              :for={{name, values, last} <- @numbers}
+              class="li slim"
+              style="--cols: minmax(0,1fr) 120px 90px"
+            >
+              <span class="mono">{name}</span>
+              <.spark values={values} />
+              <span class="mono r">{last && Float.round(last, 2)}</span>
             </div>
           </div>
           <div class="card">

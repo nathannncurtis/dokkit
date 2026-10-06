@@ -19,7 +19,8 @@ defmodule DokkitWeb.ApiController do
               :task_runs,
               :deploys,
               :errors,
-              :error
+              :error,
+              :series
             ]
 
   plug :scope, "read-logs" when action in [:logs]
@@ -54,6 +55,13 @@ defmodule DokkitWeb.ApiController do
     case Read.service(id) do
       nil -> missing(conn)
       service -> json(conn, service)
+    end
+  end
+
+  def series(conn, %{"id" => id} = params) do
+    case Read.series(id, params) do
+      nil -> missing(conn)
+      series -> json(conn, series)
     end
   end
 

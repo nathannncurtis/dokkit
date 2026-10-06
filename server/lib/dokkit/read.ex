@@ -17,6 +17,7 @@ defmodule Dokkit.Read do
       m
       |> Map.take([:id, :name, :kind, :os, :last_seen_at, :down])
       |> Map.put(:needs_a_look, m.bad)
+      |> Map.put(:vitals, Dokkit.Numbers.vitals()[m.id] || %{})
     end
   end
 
@@ -41,6 +42,8 @@ defmodule Dokkit.Read do
       Map.merge(service_row(s, s.machine), %{
         checks: checks,
         routing: %{down: s.route_down, degraded: s.route_degraded},
+        stats: s.stats,
+        stats_at: s.stats_at,
         open_issue: open && issue(Repo.preload(open, [:machine, :service, :check, :alert]))
       })
     end
@@ -141,6 +144,35 @@ defmodule Dokkit.Read do
     g
     |> Map.take([:id, :type, :top, :count, :first_seen, :last_seen, :release, :host, :handled])
     |> Map.merge(%{service: g.service_id, name: g.service.name, machine: g.service.machine.name})
+  end
+
+  @doc "Chart data for one service. nil when the service or the times are not there."
+  def series(id, params) do
+    now = DateTime.utc_now()
+
+    with %{} = s <- Estate.service(id),
+         {:ok, to} <- time(params["to"], now),
+         {:ok, from} <- time(params["from"], DateTime.add(to, -86_400)),
+         :lt <- DateTime.compare(from, to) do
+      points =
+        case Integer.parse(params["points"] || "") do
+          {n, ""} when n in 1..500 -> n
+          _ -> 24
+        end
+
+      case params["metric"] do
+        nil -> %{metrics: Dokkit.Numbers.names(s.id)}
+        name -> %{metric: name, points: Dokkit.Numbers.series(s.id, name, from, to, points)}
+      end
+    else
+      _ -> nil
+    end
+  end
+
+  defp time(nil, default), do: {:ok, default}
+
+  defp time(text, _) do
+    with {:ok, at, _} <- DateTime.from_iso8601(text), do: {:ok, at}
   end
 
   def tasks do

@@ -149,6 +149,26 @@ defmodule Dokkit.Intake do
     end
   end
 
+  defp line(key, "metric", line, at) do
+    service =
+      case {key, line} do
+        {%Key{kind: :machine}, line} when not is_map_key(line, "service") -> {:ok, nil}
+        _ -> service(key, line)
+      end
+
+    with {:ok, service} <- service,
+         do:
+           Dokkit.Numbers.record(machine(key, service), service, line["name"], line["value"], at)
+  end
+
+  defp line(key, "stats", line, at) do
+    with {:ok, service} <- service(key, line),
+         :ok <- Dokkit.Numbers.stats(service, line["document"], at) do
+      Issues.record(check(service, "stats", :stats, 3), :ok, at: at)
+      :ok
+    end
+  end
+
   defp line(key, "deploy", line, _at) do
     with {:ok, service} <- service(key, line),
          version when is_binary(version) <- line["version"] do
@@ -197,10 +217,6 @@ defmodule Dokkit.Intake do
 
     :ok
   end
-
-  # The other types are added with the features that read them.
-  defp line(_, type, _, _) when type in ~w(metric stats),
-    do: {:error, "not_yet", "This server does not store #{type} lines yet."}
 
   defp line(_, type, _, _), do: {:error, "unknown_type", "Unknown type #{inspect(type)}."}
 

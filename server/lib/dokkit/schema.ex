@@ -39,6 +39,8 @@ defmodule Dokkit.Service do
     field :route_down, :string
     field :route_degraded, :string
     field :declared, :map
+    field :stats, :map
+    field :stats_at, :utc_datetime_usec
     belongs_to :machine, Dokkit.Machine
     has_many :checks, Dokkit.Check
     timestamps()
@@ -211,6 +213,19 @@ defmodule Dokkit.ErrorEvent do
     field :frames, {:array, :map}, default: []
     field :tags, :map, default: %{}
     belongs_to :group, Dokkit.ErrorGroup
+  end
+end
+
+defmodule Dokkit.Metric do
+  use Ecto.Schema
+  @foreign_key_type :binary_id
+
+  schema "metrics" do
+    field :name, :string
+    field :value, :float
+    field :at, :utc_datetime_usec
+    belongs_to :machine, Dokkit.Machine
+    belongs_to :service, Dokkit.Service
   end
 end
 

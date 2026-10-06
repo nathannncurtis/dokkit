@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
@@ -167,6 +168,31 @@ func startup(on bool) error {
 		return err
 	}
 	return k.SetStringValue("Dokkit", `"`+exe+`" watch --background`)
+}
+
+var (
+	kernel32    = windows.NewLazySystemDLL("kernel32.dll")
+	memoryCall  = kernel32.NewProc("GlobalMemoryStatusEx")
+	cpuTimeCall = kernel32.NewProc("GetSystemTimes")
+)
+
+func memoryUsed() (float64, bool) {
+	var m struct {
+		length, load uint32
+		rest         [7]uint64
+	}
+	m.length = uint32(unsafe.Sizeof(m))
+	r, _, _ := memoryCall.Call(uintptr(unsafe.Pointer(&m)))
+	return float64(m.load), r != 0
+}
+
+// cpuTimes gives the idle and total time the processors have spent since Windows started.
+func cpuTimes() (idle, total uint64, ok bool) {
+	var i, k, u windows.Filetime
+	r, _, _ := cpuTimeCall.Call(uintptr(unsafe.Pointer(&i)), uintptr(unsafe.Pointer(&k)), uintptr(unsafe.Pointer(&u)))
+	ticks := func(f windows.Filetime) uint64 { return uint64(f.HighDateTime)<<32 | uint64(f.LowDateTime) }
+	// Kernel time includes idle time.
+	return ticks(i), ticks(k) + ticks(u), r != 0
 }
 
 func findDisks() (all []found) {

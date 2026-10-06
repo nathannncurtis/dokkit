@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -55,6 +56,64 @@ func initFile(path string, in io.Reader) int {
 	}
 	fmt.Printf("Wrote %s. Run dokkit check to try it.\n", path)
 	return 0
+}
+
+var lastIdle, lastTotal uint64
+
+// vitals reads this machine's processor, memory and disk use as metric lines.
+func vitals() (lines []any) {
+	add := func(name string, value float64) {
+		lines = append(lines, map[string]any{"type": "metric", "at": now(), "name": name, "value": value, "unit": "percent"})
+	}
+	if used, ok := memoryUsed(); ok {
+		add("memory.used_percent", used)
+	}
+	if idle, total, ok := cpuTimes(); ok {
+		// Use since the last look. The first look has nothing to compare with.
+		if lastTotal != 0 && total > lastTotal {
+			add("cpu.percent", 100*(1-float64(idle-lastIdle)/float64(total-lastTotal)))
+		}
+		lastIdle, lastTotal = idle, total
+	}
+	for _, d := range findDisks() {
+		total, _ := strconv.ParseFloat(d["total_gb"], 64)
+		free, _ := strconv.ParseFloat(d["free_gb"], 64)
+		if total > 0 {
+			add("disk.used_percent."+strings.TrimSuffix(d["mount"], `:\`), 100*(total-free)/total)
+		}
+	}
+	return
+}
+
+// stats fetches the stats document of each service whose file says where it is.
+func (w *watcher) stats() (lines []any) {
+	for _, d := range w.files {
+		if d.Stats.URL == "" {
+			continue
+		}
+		var document map[string]any
+		req, err := http.NewRequest("GET", d.Stats.URL, nil)
+		if err == nil {
+			if d.Stats.KeyEnv != "" {
+				req.Header.Set("X-Stats-Key", os.Getenv(d.Stats.KeyEnv))
+			}
+			var res *http.Response
+			if res, err = (&http.Client{Timeout: 5 * time.Second}).Do(req); err == nil {
+				if res.StatusCode != 200 {
+					err = fmt.Errorf("answered %d", res.StatusCode)
+				} else {
+					err = json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&document)
+				}
+				res.Body.Close()
+			}
+		}
+		if err != nil {
+			lines = append(lines, map[string]any{"type": "state", "at": now(), "service": d.Service.ID, "check": "stats", "state": "down", "note": "stats: " + short(err)})
+			continue
+		}
+		lines = append(lines, map[string]any{"type": "stats", "at": now(), "service": d.Service.ID, "document": document})
+	}
+	return
 }
 
 // What dokkit watch writes down each minute for dokkit status to read.

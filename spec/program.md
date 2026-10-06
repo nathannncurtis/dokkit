@@ -102,4 +102,6 @@ In `program/`: `dokkit init`, `run`, `ping`, `check`, `apply`, `enrol`, `watch`,
 
 Each minute `dokkit watch` reads the first line of the file a `version_from` names and reports it as that service's version. A `version_from` that is a command is not run: nothing has accepted that command.
 
-Not built yet: stats, `dokkit task list` showing what is accepted, the account tasks run under, certificate pinning, and the built-in update task.
+Each minute it also sends the machine's processor, memory and disk use as `metric` lines and fetches the stats document of each service with a `[stats]` section, sending the key from the variable `key_env` names as `X-Stats-Key`. An `expiry` check reads its date from `date_from`: an `https` address or `host:port` for a certificate, or a file whose first line is a date. It is degraded inside 30 days and down once past.
+
+Not built yet: `dokkit task list` showing what is accepted, the account tasks run under, certificate pinning, and the built-in update task.

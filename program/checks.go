@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,6 +30,10 @@ type declaration struct {
 		VersionFrom string `toml:"version_from"`
 	}
 	Logs  struct{ Path string }
+	Stats struct {
+		URL    string
+		KeyEnv string `toml:"key_env"`
+	}
 	Task  []task
 	Check []check
 }
@@ -36,12 +42,14 @@ type check struct {
 	Type, Name, URL, Host string
 	Port                  int
 	Every, Timeout        string
-	name                  string
+	DateFrom              string `toml:"date_from"`
+	name, dir             string
 	next                  time.Time
 }
 
 type result struct {
 	ok    bool
+	state string
 	note  string
 	value float64
 }
@@ -69,7 +77,7 @@ func readDeclaration(path string) (*declaration, error) {
 			base = c.Name
 		}
 		seen[base]++
-		c.name = base
+		c.name, c.dir = base, filepath.Dir(path)
 		if seen[base] > 1 {
 			c.name = base + "-" + strconv.Itoa(seen[base])
 		}
@@ -102,7 +110,10 @@ func (c *check) problem() (runs bool, err error) {
 		if c.Name == "" {
 			return false, errors.New("needs a name")
 		}
-	case "beat", "stats", "threshold", "expiry", "custom":
+	case "expiry":
+		// With nothing to read the date from, the app reports it.
+		return c.DateFrom != "", nil
+	case "beat", "stats", "threshold", "custom":
 		return false, nil
 	default:
 		return false, fmt.Errorf("unknown type %q", c.Type)
@@ -114,7 +125,42 @@ func (c *check) every() time.Duration {
 	if d, err := time.ParseDuration(c.Every); err == nil && d >= time.Second {
 		return d
 	}
+	if c.Type == "expiry" {
+		return time.Hour
+	}
 	return 30 * time.Second
+}
+
+// expires reads a date from a certificate (an https address or host:port) or from a file's first line.
+func (c *check) expires() (time.Time, error) {
+	from := c.DateFrom
+	if u, err := url.Parse(from); err == nil && u.Scheme == "https" {
+		from = u.Host
+		if u.Port() == "" {
+			from += ":443"
+		}
+	}
+	if _, _, err := net.SplitHostPort(from); err == nil {
+		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: c.timeout()}, "tcp", from, nil)
+		if err != nil {
+			return time.Time{}, err
+		}
+		defer conn.Close()
+		return conn.ConnectionState().PeerCertificates[0].NotAfter, nil
+	}
+	if !filepath.IsAbs(from) {
+		from = filepath.Join(c.dir, from)
+	}
+	b, err := os.ReadFile(from)
+	if err != nil {
+		return time.Time{}, err
+	}
+	line, _, _ := strings.Cut(strings.TrimSpace(string(b)), "\n")
+	line = strings.TrimSpace(line)
+	if t, err := time.Parse(time.RFC3339, line); err == nil {
+		return t, nil
+	}
+	return time.Parse("2006-01-02", line)
 }
 
 func (c *check) timeout() time.Duration {
@@ -146,6 +192,18 @@ func (c *check) run() result {
 		conn, err = net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(c.Port)), c.timeout())
 		if err == nil {
 			conn.Close()
+		}
+	case "expiry":
+		var until time.Time
+		if until, err = c.expires(); err == nil {
+			days := float64(int(time.Until(until).Hours() / 24))
+			switch {
+			case days < 0:
+				return result{state: "down", value: days, note: "ran out on " + until.Format("Jan 2 2006")}
+			case days < 30:
+				return result{state: "degraded", value: days, note: fmt.Sprintf("runs out in %.0f days, on %s", days, until.Format("Jan 2 2006"))}
+			}
+			return result{ok: true, value: days}
 		}
 	case "process":
 		err = processRunning(c.Name)
@@ -208,6 +266,8 @@ func (c *check) target() string {
 		return c.URL
 	case "tcp":
 		return "port " + strconv.Itoa(c.Port)
+	case "expiry":
+		return c.DateFrom
 	}
 	return c.Name
 }
@@ -218,6 +278,9 @@ func stateLine(d *declaration, c *check, r result) map[string]any {
 		l["value"] = r.value
 	} else {
 		l["state"], l["note"] = "down", r.note
+		if r.state != "" {
+			l["state"], l["value"] = r.state, r.value
+		}
 	}
 	return l
 }
@@ -419,6 +482,9 @@ func (c *client) watch() int {
 			beat = at
 			w.refresh()
 			c.beat(w.versions())
+			if lines := w.stats(); len(lines) > 0 {
+				c.report(lines...)
+			}
 			ran++
 		}
 		ran += w.tick(at)

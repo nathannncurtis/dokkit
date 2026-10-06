@@ -421,3 +421,52 @@ func TestWorkRunsOnlyTheAcceptedCommand(t *testing.T) {
 		}
 	}
 }
+
+func TestStatsVitalsAndExpiry(t *testing.T) {
+	app := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Stats-Key") != "s3cret" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Write([]byte(`{"schema":1,"version":"2.3.0"}`))
+	}))
+	defer app.Close()
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "licence"), []byte(time.Now().Add(10*24*time.Hour+time.Hour).Format("2006-01-02")+"\n"), 0o600)
+	file := filepath.Join(dir, "dokkit.toml")
+	os.WriteFile(file, []byte("schema = 1\n[service]\nid = \"portal\"\n[stats]\nurl = \""+app.URL+"\"\nkey_env = \"TEST_STATS_KEY\"\n[[check]]\ntype = \"expiry\"\ndate_from = \"licence\"\n"), 0o600)
+	d, err := readDeclaration(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &watcher{files: map[string]*declaration{file: d}}
+
+	lines := w.stats()
+	if len(lines) != 1 || lines[0].(map[string]any)["state"] != "down" {
+		t.Fatalf("without the key the fetch fails: %v", lines)
+	}
+	t.Setenv("TEST_STATS_KEY", "s3cret")
+	lines = w.stats()
+	if got := lines[0].(map[string]any); got["type"] != "stats" || got["document"].(map[string]any)["version"] != "2.3.0" {
+		t.Fatalf("stats: %v", lines)
+	}
+
+	r := d.Check[0].run()
+	if l := stateLine(d, &d.Check[0], r); l["state"] != "degraded" || l["value"].(float64) > 10 || l["value"].(float64) < 9 {
+		t.Fatalf("expiry: %v", l)
+	}
+
+	vitals()
+	time.Sleep(500 * time.Millisecond)
+	found := map[string]bool{}
+	for _, l := range vitals() {
+		m := l.(map[string]any)
+		if v := m["value"].(float64); v < 0 || v > 100 {
+			t.Fatalf("out of range: %v", m)
+		}
+		found[strings.SplitN(m["name"].(string), ".", 2)[0]] = true
+	}
+	if !found["memory"] || !found["cpu"] || !found["disk"] {
+		t.Fatalf("vitals: %v", found)
+	}
+}

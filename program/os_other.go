@@ -22,6 +22,38 @@ func startup(bool) error {
 	return errors.New("starting at sign-in is built for Windows so far. Elsewhere, add dokkit watch --background to your desktop's startup programs")
 }
 
+func memoryUsed() (float64, bool) {
+	b, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0, false
+	}
+	kb := map[string]float64{}
+	for _, l := range strings.Split(string(b), "\n") {
+		if f := strings.Fields(l); len(f) >= 2 {
+			kb[f[0]], _ = strconv.ParseFloat(f[1], 64)
+		}
+	}
+	total := kb["MemTotal:"]
+	return 100 * (total - kb["MemAvailable:"]) / total, total > 0
+}
+
+func cpuTimes() (idle, total uint64, ok bool) {
+	b, err := os.ReadFile("/proc/stat")
+	if err != nil {
+		return 0, 0, false
+	}
+	line, _, _ := strings.Cut(string(b), "\n")
+	for i, f := range strings.Fields(line) {
+		n, _ := strconv.ParseUint(f, 10, 64)
+		total += n
+		// The fourth and fifth numbers are idle and waiting on a disk.
+		if i == 4 || i == 5 {
+			idle += n
+		}
+	}
+	return idle, total, total > 0
+}
+
 func findDisks() (all []found) {
 	for _, l := range output("df", "-P", "-k") {
 		f := strings.Fields(l)

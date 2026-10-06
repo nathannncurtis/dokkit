@@ -7,7 +7,7 @@ defmodule DokkitWeb.EverythingLive do
 
   defp load(socket) do
     down = for m <- Dokkit.Issues.machines(), m.down, do: m.id
-    assign(socket, machines: Estate.machines(), down: down)
+    assign(socket, machines: Estate.machines(), down: down, vitals: Dokkit.Numbers.vitals())
   end
 
   def render(assigns) do
@@ -40,6 +40,15 @@ defmodule DokkitWeb.EverythingLive do
                   count(m.services, :bad)
                 )}</span>
                 <span :if={count(m.services, :ok) > 0} class="tag">{count(m.services, :ok)} fine</span>
+                <span :if={@vitals[m.id]} class="vits">
+                  <span
+                    :for={{name, label} <- [{"cpu.percent", "cpu"}, {"memory.used_percent", "mem"}]}
+                    :if={v = @vitals[m.id][name]}
+                    class={["vit", v >= 90 && "hot"]}
+                  >
+                    {label} <u style={"--v:#{round(v)}%"}><i></i></u> {round(v)}%
+                  </span>
+                </span>
               </span>
             </div>
             <.link :for={s <- m.services} class="li slim cols-all" navigate={~p"/s/#{s.id}"}>
