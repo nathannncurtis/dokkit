@@ -18,7 +18,7 @@ Working, with tests:
 - **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Alerts and Settings. People sign in; the first one claims the server with a setup code.
 - **The API and the MCP**, for user tokens made in Settings.
 
-Not built yet: errors, deploys and versions, stats, beats and metrics, email, text and the digest, alert rules and suggestions, found-and-not-watched, tasks, scanning, the libraries, running as a Windows service, the installer and the Docker image.
+Not built yet: errors, deploys and versions, stats, beats and metrics, email, text and the digest, alert rules and suggestions, found-and-not-watched, proposals and running tasks from the server, the libraries, the installer and the Docker image.
 
 To run it for development, with Postgres on localhost:
 

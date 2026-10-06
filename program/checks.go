@@ -25,6 +25,7 @@ type declaration struct {
 	Schema  int
 	Service struct{ ID, Name string }
 	Logs    struct{ Path string }
+	Task    []task
 	Check   []check
 }
 
@@ -292,10 +293,8 @@ type watcher struct {
 // refresh re-reads files that are new or changed, declares them, and forgets files that are gone.
 func (w *watcher) refresh() {
 	found := map[string]bool{}
-	for _, folder := range w.folders {
-		paths, _ := filepath.Glob(filepath.Join(folder, "dokkit.toml"))
-		more, _ := filepath.Glob(filepath.Join(folder, "*", "dokkit.toml"))
-		for _, p := range append(paths, more...) {
+	{
+		for _, p := range declarations(w.folders) {
 			found[p] = true
 			info, err := os.Stat(p)
 			if err != nil || info.ModTime().Equal(w.modified[p]) {

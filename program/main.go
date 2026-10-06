@@ -34,6 +34,9 @@ dokkit watch
 dokkit status
 dokkit doctor
 dokkit service install|uninstall|start|stop
+dokkit scan [--no-services] [--no-ports] [--no-tasks] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]
+dokkit task list
+dokkit task run <name>
 
 Reads DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key),
 or the address and machine key that dokkit enrol saved.
@@ -77,6 +80,17 @@ func cli(args []string) int {
 		return serviceCommand(args[1])
 	}
 	c, err := load()
+	// These two need no server, only the folders when there are any.
+	if args[0] == "scan" || args[0] == "task" {
+		var folders []string
+		if c != nil {
+			folders = c.folders
+		}
+		if args[0] == "scan" {
+			return scan(args[1:], folders)
+		}
+		return taskCommand(args[1:], folders)
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "dokkit:", err)
 		return 2

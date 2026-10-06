@@ -1,0 +1,32 @@
+//go:build !windows
+
+package main
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+)
+
+func machineDir() string { return "" }
+
+func asService() bool { return false }
+
+func findDisks() (all []found) {
+	for _, l := range output("df", "-P", "-k") {
+		f := strings.Fields(l)
+		if len(f) < 6 || !strings.HasPrefix(f[0], "/dev/") {
+			continue
+		}
+		total, _ := strconv.ParseInt(f[1], 10, 64)
+		free, _ := strconv.ParseInt(f[3], 10, 64)
+		all = append(all, found{"mount": f[5], "total_gb": fmt.Sprint(total >> 20), "free_gb": fmt.Sprint(free >> 20)})
+	}
+	return
+}
+
+func serviceCommand(string) int {
+	fmt.Fprintln(os.Stderr, "dokkit: installing as a service is built for Windows so far. Elsewhere, run dokkit watch from a systemd unit.")
+	return 1
+}

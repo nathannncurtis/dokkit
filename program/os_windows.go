@@ -145,6 +145,19 @@ func install(m *mgr.Mgr) error {
 	return s.Start()
 }
 
+func findDisks() (all []found) {
+	mask, _ := windows.GetLogicalDrives()
+	for i := range 26 {
+		root := string(rune('A'+i)) + `:\`
+		p, _ := windows.UTF16PtrFromString(root)
+		var free, total uint64
+		if mask&(1<<i) != 0 && windows.GetDriveType(p) == windows.DRIVE_FIXED && windows.GetDiskFreeSpaceEx(p, &free, &total, nil) == nil {
+			all = append(all, found{"mount": root, "total_gb": fmt.Sprint(total >> 30), "free_gb": fmt.Sprint(free >> 30)})
+		}
+	}
+	return
+}
+
 func sameFile(a, b string) bool {
 	x, err1 := os.Stat(a)
 	y, err2 := os.Stat(b)

@@ -84,8 +84,12 @@ A listener on localhost. Earlier notes had `dokkit` listening on localhost so ap
 
 ## Built so far
 
-In `program/`: `dokkit init`, `run`, `ping`, `check`, `apply`, `enrol`, `watch`, `status` and `doctor`. With `DOKKIT_URL` and `DOKKIT_KEY` set they use that key; otherwise they use the address and machine key that `dokkit enrol` saved in the user's configuration folder.
+In `program/`: `dokkit init`, `run`, `ping`, `check`, `apply`, `enrol`, `watch`, `status`, `doctor`, `service`, `scan` and `task`. With `DOKKIT_URL` and `DOKKIT_KEY` set they use that key; otherwise they use the address and machine key that `dokkit enrol` saved in the user's configuration folder.
 
 `dokkit watch` reads `dokkit.toml` files from the folders in `DOKKIT_FOLDERS` or in the saved configuration, and from the folders directly inside them. It declares each file, runs its `http`, `tcp`, `process` and `windows-service` checks on their own timing, sends the log files it names, says the machine is alive once a minute, and re-reads a file when it changes. `dokkit status` shows what `watch` last wrote down: the files it reads, when the spool was last emptied, and how much is waiting.
 
-Not built yet: stats, tasks, scanning, certificate pinning, and running as a service.
+`dokkit service install` is for Windows. It copies the program to `Program Files\Dokkit` and the saved address, key and folders to `ProgramData\dokkit`, which only administrators and the system account can read, then registers a service that starts with Windows and restarts a minute after a failure. From an administrator prompt, `dokkit status` and `dokkit doctor` read that configuration. On other systems, `dokkit watch` runs from a systemd unit.
+
+`dokkit scan` writes `dokkit-proposal.json` in the current folder, and each part has a `--no-` flag. `dokkit task list` and `dokkit task run` read the tasks in the current folder's `dokkit.toml` and in the folders the machine reads. A task runs in its file's folder and stops at its `timeout`, an hour when none is given.
+
+Not built yet: stats, `dokkit propose`, taking work from the server, whether a task is accepted, certificate pinning, and the built-in update task.

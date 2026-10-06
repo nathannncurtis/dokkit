@@ -332,3 +332,34 @@ func TestInitWritesAFileThatChecks(t *testing.T) {
 		t.Fatal("init must not overwrite")
 	}
 }
+
+func TestScanWritesAFileAndTasksRunWhereTheirFileIs(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	t.Setenv("DOKKIT_CONFIG", filepath.Join(dir, "none.json"))
+	t.Setenv("DOKKIT_URL", "")
+	os.WriteFile("dokkit.toml", []byte("schema = 1\n[service]\nid = \"portal\"\n[[task]]\nid = \"mark\"\nrun = \"echo done > marked.txt\"\n[[task]]\nid = \"bad\"\nrun = \"exit 4\"\n"), 0o600)
+
+	if code := cli([]string{"scan", "--no-tasks", "--no-services", "--no-ports", "--no-containers", "--no-sites"}); code != 0 {
+		t.Fatal(code)
+	}
+	var p struct{ Found map[string][]found }
+	b, _ := os.ReadFile(proposalFile)
+	json.Unmarshal(b, &p)
+	if _, there := p.Found["services"]; there || len(p.Found["disks"]) == 0 {
+		t.Fatalf("proposal: %s", b)
+	}
+
+	if cli([]string{"task", "list"}) != 0 || cli([]string{"task", "run", "nope"}) != 1 {
+		t.Fatal("list works and an unknown task is refused")
+	}
+	if code := cli([]string{"task", "run", "mark"}); code != 0 {
+		t.Fatal(code)
+	}
+	if _, err := os.Stat("marked.txt"); err != nil {
+		t.Fatal("the task did not run in its file's folder")
+	}
+	if code := cli([]string{"task", "run", "bad"}); code != 4 {
+		t.Fatalf("a task exits as its command did, got %d", code)
+	}
+}
