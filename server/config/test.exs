@@ -21,7 +21,7 @@ config :dokkit, DokkitWeb.Endpoint,
   server: false
 
 # Print only warnings and errors during test
-config :dokkit, watch: false
+config :dokkit, watch: false, req_options: [plug: {Req.Test, Dokkit.Alerts}, retry: false]
 
 config :logger, level: :warning
 

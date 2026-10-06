@@ -34,12 +34,24 @@ defmodule Dokkit.Issues do
     service = Repo.get!(Service, check.service_id)
 
     case {confirmed, open_for(check)} do
-      {:ok, %Issue{} = issue} -> Repo.update!(Ecto.Changeset.change(issue, closed_at: at))
-      {:ok, nil} -> nil
-      {bad, %Issue{state: bad}} -> nil
-      {bad, %Issue{} = issue} -> Repo.update!(Ecto.Changeset.change(issue, state: bad))
-      {:unknown, nil} -> nil
-      {bad, nil} -> open(check, service, bad, at, opts[:title])
+      {:ok, %Issue{} = issue} ->
+        Repo.update!(Ecto.Changeset.change(issue, closed_at: at))
+        Dokkit.Alerts.closing(issue)
+
+      {:ok, nil} ->
+        nil
+
+      {bad, %Issue{state: bad}} ->
+        nil
+
+      {bad, %Issue{} = issue} ->
+        Repo.update!(Ecto.Changeset.change(issue, state: bad))
+
+      {:unknown, nil} ->
+        nil
+
+      {bad, nil} ->
+        open(check, service, bad, at, opts[:title])
     end
 
     refresh(service)
@@ -51,12 +63,16 @@ defmodule Dokkit.Issues do
       from i in Issue,
         where: is_nil(i.closed_at),
         order_by: [desc: i.since],
-        preload: [:machine, :service, :check]
+        preload: [:machine, :service, :check, :alert]
     )
   end
 
   def subscribe, do: Phoenix.PubSub.subscribe(Dokkit.PubSub, "issues")
-  def changed, do: Phoenix.PubSub.broadcast(Dokkit.PubSub, "issues", :issues_changed)
+  @doc "Call after the change is committed: pages reload, and alerts waiting to go are sent."
+  def changed(send \\ true) do
+    if send, do: Dokkit.Alerts.flush()
+    Phoenix.PubSub.broadcast(Dokkit.PubSub, "issues", :issues_changed)
+  end
 
   @doc "Each machine with how many of its services need a look."
   def machines do
@@ -92,15 +108,19 @@ defmodule Dokkit.Issues do
         Ecto.Changeset.change(recent, closed_at: nil, state: state, count: recent.count + 1)
       )
     else
-      Repo.insert!(%Issue{
-        machine_id: service.machine_id,
-        service_id: service.id,
-        check_id: check.id,
-        kind: to_string(check.type),
-        state: state,
-        title: title || "#{service.name}: #{check.name} is #{state}",
-        since: at
-      })
+      issue =
+        Repo.insert!(%Issue{
+          machine_id: service.machine_id,
+          service_id: service.id,
+          check_id: check.id,
+          kind: to_string(check.type),
+          state: state,
+          title: title || "#{service.name}: #{check.name} is #{state}",
+          since: at
+        })
+
+      Dokkit.Alerts.plan(issue, service)
+      issue
     end
   end
 

@@ -40,9 +40,16 @@ defmodule DokkitWeb.InboxLive do
               </div>
               <div :if={i.check.note} class="sub">{i.check.note}</div>
               <div class="meta">
-                <span class="tag">{kind(i)}</span><span class="mono">{Issue.short_id(i)}</span><span>Since {since(
-                  i.since
-                )}</span>
+                <span class="tag">{kind(i)}</span>
+                <span class="mono">{Issue.short_id(i)}</span>
+                <span>Since {since(i.since)}</span>
+                <span
+                  :if={told(i.alert)}
+                  class={["tag", i.alert.status == :failed && "warn"]}
+                  title={i.alert.error}
+                >
+                  {told(i.alert)}
+                </span>
               </div>
             </div>
             <div class="num">
@@ -63,6 +70,12 @@ defmodule DokkitWeb.InboxLive do
     </Layouts.app>
     """
   end
+
+  defp told(%{status: :sent, channel: "page"}), do: "Paged"
+  defp told(%{status: :sent, channel: "push"}), do: "Pushed"
+  defp told(%{status: :sent}), do: "Webhook called"
+  defp told(%{status: :failed}), do: "Alert not sent"
+  defp told(_), do: nil
 
   defp kind(%Issue{kind: "job"}), do: "Job"
   defp kind(_), do: "Check"

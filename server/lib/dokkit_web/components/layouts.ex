@@ -25,6 +25,10 @@ defmodule DokkitWeb.Layouts do
         >
           <i class="ph ph-tray" aria-hidden="true"></i>Inbox<span :if={@open > 0} class="n">{@open}</span>
         </.link>
+        <h3>Manage</h3>
+        <.link class={["nav", @active == :alerts && "on"]} navigate={~p"/alerts"}>
+          <i class="ph ph-bell" aria-hidden="true"></i>Alerts
+        </.link>
         <h3 :if={@machines != []}>Machines</h3>
         <span :for={m <- @machines} class="nav">
           <span class={["dot", m.state]}></span>{m.name}<span :if={m.bad > 0} class="q">{m.bad}</span>

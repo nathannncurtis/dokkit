@@ -54,7 +54,8 @@ defmodule Dokkit.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
-      {:crontab, "~> 1.1"}
+      {:crontab, "~> 1.1"},
+      {:req, "~> 0.5"}
     ]
   end
 

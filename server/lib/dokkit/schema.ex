@@ -40,6 +40,8 @@ defmodule Dokkit.Service do
     field :watched, :boolean, default: true
     field :state, Ecto.Enum, values: @states, default: :unknown
     field :note, :string
+    field :route_down, :string
+    field :route_degraded, :string
     belongs_to :machine, Dokkit.Machine
     has_many :checks, Dokkit.Check
     timestamps()
@@ -84,6 +86,7 @@ defmodule Dokkit.Issue do
     belongs_to :machine, Dokkit.Machine
     belongs_to :service, Dokkit.Service
     belongs_to :check, Dokkit.Check
+    has_one :alert, Dokkit.Alert
     timestamps()
   end
 
@@ -134,6 +137,33 @@ defmodule Dokkit.User do
     field :password_hash, :string, redact: true
     field :role, Ecto.Enum, values: [:owner, :member, :viewer]
     timestamps()
+  end
+end
+
+defmodule Dokkit.Alert do
+  use Dokkit.Schema
+
+  schema "alerts" do
+    field :channel, :string
+
+    field :status, Ecto.Enum,
+      values: [:pending, :sent, :failed, :skipped, :closing, :closed],
+      default: :pending
+
+    field :attempts, :integer, default: 0
+    field :error, :string
+    belongs_to :issue, Dokkit.Issue
+    timestamps()
+  end
+end
+
+defmodule Dokkit.Setting do
+  use Ecto.Schema
+  @primary_key {:key, :string, autogenerate: false}
+
+  schema "settings" do
+    field :value, :map
+    timestamps(type: :utc_datetime_usec)
   end
 end
 

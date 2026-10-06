@@ -51,3 +51,7 @@ Dokkit notices patterns in how alerts are handled, for example an alert that fir
 ## Not now
 
 Learning what normal looks like and flagging the unusual. Limits are fixed numbers that a person sets.
+
+## Built so far
+
+Page, push (ntfy, Pushover, or PagerDuty at low urgency) and webhook, with one server-wide choice for `down` and one for `degraded`. An alert is written with its issue and sent afterwards, and a send that fails is tried again each minute, five times. Email, text, the digest, rules, per-service routing in the interface, machine-down quieting and suggestions are not built yet.

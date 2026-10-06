@@ -16,7 +16,8 @@ defmodule Dokkit.Application do
     ]
 
     children =
-      children ++ if Application.get_env(:dokkit, :watch, true), do: [Dokkit.Watch], else: []
+      children ++
+        if Application.get_env(:dokkit, :watch, true), do: [Dokkit.Alerts, Dokkit.Watch], else: []
 
     # See https://elixir.hexdocs.pm/Supervisor.html
     # for other strategies and supported options

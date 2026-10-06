@@ -16,7 +16,8 @@ defmodule Dokkit.Watch do
 
   def handle_info(:sweep, state) do
     Process.send_after(self(), :sweep, @every)
-    if sweep() > 0, do: Issues.changed()
+    sweep()
+    Issues.changed()
     {:noreply, state}
   end
 
