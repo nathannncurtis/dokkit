@@ -73,12 +73,14 @@ defmodule DokkitWeb.TasksLive do
             do: "Found, waiting for you",
             else: @page_title}
         </h1>
+        
         <div :if={@live_action == :tasks and @waiting != []} class="end">
           <.link class="btn" navigate={~p"/found"}>
             <.ic name="binoculars" />{length(@waiting)} waiting to be accepted
           </.link>
         </div>
       </div>
+      
       <div :if={@live_action == :found} class="body">
         <form class="card" id="found-form" phx-submit="sweep">
           <h2>
@@ -90,21 +92,26 @@ defmodule DokkitWeb.TasksLive do
               <button class="btn sm primary" name="do" value="watch" disabled={@viewer}>
                 <.ic name="plus" />Watch selected
               </button>
+              
               <button class="btn sm" name="do" value="dismiss" disabled={@viewer}>
                 Dismiss selected
               </button>
             </span>
           </h2>
+          
           <div :if={@found == %{}} class="empty">
             <.ic name="check-circle" />Nothing a scan found is waiting. On a machine, dokkit scan looks and dokkit propose sends what it saw.
           </div>
+          
           <div :if={@found != %{}} class="lh cols-found">
             <span></span><span>Found</span><span>How it was found</span><span>What Dokkit saw</span><span></span>
           </div>
+          
           <%= for {machine, items} <- @found do %>
             <div class="grp">
               {machine.name}<span class="end"><span class="tag">{length(items)} found</span></span>
             </div>
+            
             <label :for={f <- items} class="li slim hov cols-found">
               <input
                 class="chk"
@@ -114,22 +121,26 @@ defmodule DokkitWeb.TasksLive do
                 aria-label={"Select " <> f.detail["label"]}
               />
               <div class="ti"><span>{f.detail["label"]}</span></div>
+              
               <span class="how">{if f.kind == "port", do: "Listening port", else: "Running service"}</span>
-              <span class="mute">{f.detail["saw"]}</span>
-              <span></span>
+              <span class="mute">{f.detail["saw"]}</span> <span></span>
             </label>
           <% end %>
+          
           <div :if={@found != %{}} class="foot">
             Nothing here is watched until you say so. Watching one adds a check that dokkit watch runs on that machine.
           </div>
         </form>
+        
         <div class="card">
           <h2>
             Tasks waiting to be accepted<span :if={@waiting != []} class="cnt">{length(@waiting)}</span>
           </h2>
+          
           <div :if={@waiting == []} class="empty">
             <.ic name="check-circle" />No task is waiting to be accepted.
           </div>
+          
           <div
             :for={t <- @waiting}
             class="li hov cols-act"
@@ -138,12 +149,13 @@ defmodule DokkitWeb.TasksLive do
           >
             <div>
               <div class="ti"><.ic name="terminal-window" /><span>{t.name}</span></div>
-              <code class="cmd">{t.command}</code>
+               <code class="cmd">{t.command}</code>
               <div class="meta">
                 <span class="tag">{t.machine.name}</span>
                 <span :if={t.accepted}>The command changed since it was accepted</span>
               </div>
             </div>
+            
             <div style="display:flex; gap:6px">
               <button
                 :for={
@@ -165,19 +177,23 @@ defmodule DokkitWeb.TasksLive do
               </button>
             </div>
           </div>
+          
           <div :if={@waiting != []} class="foot">
-            Nothing here is run until the owner says so. A task runs only the command shown, on its own machine, under an ordinary account with no rights of its own unless it is accepted as the system account.
+            Nothing here is run until the owner says so. A task runs only the command shown, on its own machine, under an ordinary account with no rights of its own unless it is accepted as the system account, and the machine must also allow that in its own configuration.
           </div>
         </div>
       </div>
+      
       <div :if={@live_action == :tasks} class="body">
         <div class="card">
           <div :if={@tasks == []} class="empty">
             <.ic name="terminal-window" />No task has been accepted yet. Tasks that are waiting are under Found.
           </div>
+          
           <div :if={@tasks != []} class="lh cols-task" style={"--cols:" <> @cols}>
             <span>Task</span><span>Machine</span><span>Last run</span><span>Result</span><span></span>
           </div>
+          
           <div
             :for={%{task: t, last: last} <- @tasks}
             class="li hov cols-task"
@@ -185,12 +201,14 @@ defmodule DokkitWeb.TasksLive do
           >
             <div>
               <div class="ti"><.ic name="terminal-window" /><span>{t.name}</span></div>
-              <code class="cmd">{t.command}</code>
+               <code class="cmd">{t.command}</code>
             </div>
+            
             <span>
               <span class="tag">{t.machine.name}</span>
               <span :if={t.as_system} class="tag warn">System account</span>
             </span>
+            
             <span class={["mono", !last && "mute"]}>{(last && at(last.inserted_at)) || "Never"}</span>
             <.state :if={last} run={last} /><span :if={!last}></span>
             <button class="btn" type="button" phx-click="run" phx-value-id={t.id} disabled={@viewer}>
@@ -198,25 +216,27 @@ defmodule DokkitWeb.TasksLive do
             </button>
           </div>
         </div>
+        
         <div class="card runs">
           <h2>Recent runs<span :if={@runs != []} class="cnt">{length(@runs)}</span></h2>
+          
           <div :if={@runs == []} class="empty">
             <.ic name="clock-countdown" />No task has run yet.
           </div>
+          
           <div :if={@runs != []} class="lh" style={"--cols:" <> @run_cols}>
             <span>Task</span><span>Machine</span><span>Started</span><span>Result</span><span class="r">Took</span><span class="r">Exit code</span><span></span>
           </div>
+          
           <details :for={r <- @runs} class="run" style={"--cols:" <> @run_cols} id={"run-#{r.id}"}>
             <summary class="li slim" style={"--cols:" <> @run_cols}>
               <div class="ti"><span>{r.task.name}</span></div>
-              <span class="tag">{r.task.machine.name}</span>
-              <span class="mono">{at(r.started_at || r.inserted_at)}</span>
-              <.state run={r} />
+               <span class="tag">{r.task.machine.name}</span>
+              <span class="mono">{at(r.started_at || r.inserted_at)}</span> <.state run={r} />
               <span class="mono r">{took(r.duration_ms)}</span>
-              <span class="mono r">{r.exit_code}</span>
-              <.ic name="caret-down" />
+              <span class="mono r">{r.exit_code}</span> <.ic name="caret-down" />
             </summary>
-            <pre class="logbox">{if r.output == "", do: "No output yet.", else: r.output}</pre>
+             <pre class="logbox">{if r.output == "", do: "No output yet.", else: r.output}</pre>
           </details>
         </div>
       </div>

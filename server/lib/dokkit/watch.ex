@@ -31,6 +31,7 @@ defmodule Dokkit.Watch do
         else: []
       ) ++
         [
+          fn -> Dokkit.Tasks.expire() end,
           fn -> prune(now) end,
           fn -> Dokkit.Digest.tick(now, Dokkit.Alerts.config()) end,
           fn -> Dokkit.Self.tick(now, Dokkit.Alerts.config(), booted) end,
