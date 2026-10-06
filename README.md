@@ -25,7 +25,7 @@ Working, with tests:
 - **Libraries.** For Python, .NET, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift, one file each: beats, job progress, an app's own checks, errors, logs.
 - **The API and the MCP**, for user tokens made in Settings. Every read and act call in `spec/api.md` is there, and a token with the `admin` scope manages keys and people.
 
-Written and not yet run on a real machine: the Windows install script for the server, the Docker image, installing the program as a service, and sending mail through a real mail server. Not built yet: a Postgres installed with the server, an ordinary account for tasks under the installed service, and the program updating itself.
+Written and not yet run on a real machine: the Windows install script for the server, the Docker image, installing the program as a service, and sending mail through a real mail server. Not built yet: a Postgres installed with the server.
 
 To run it for development, with Postgres on localhost:
 
@@ -94,8 +94,8 @@ go build -o dokkit.exe .
 
 - A scan is a command. It writes a proposal, and nothing is watched until the proposal is accepted.
 - Every part of a scan can be switched off, and a scan never reads file contents, credentials, browser data or another program's memory.
-- It never updates itself. The interface says when a newer one is out and the update is started from there.
-- Releases are signed. It must never require antivirus to be turned off.
+- It never updates itself and never replaces its own file. The interface says when a machine is behind and can ask it to fetch the newer copy; someone finishes the update on that machine, as an administrator.
+- Whoever builds it signs it with their own certificate; the project hands out no builds signed with anyone's. It must never require antivirus to be turned off.
 
 ### The API
 

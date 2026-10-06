@@ -65,11 +65,11 @@ A scan never reads file contents, credentials, browser data, or another program'
 
 ## Updates
 
-`dokkit` never updates itself. The interface shows when a machine is behind. The update is started from there by a person, and runs as a built-in task that checks the release's signature before replacing anything.
+`dokkit` never updates itself, and never replaces its own file. The interface shows when a machine is behind the copy the server holds. A person can ask that machine to fetch the newer copy, which is a built-in task: the file is left in an `update` folder beside the spool, and the run says where it is and who signed it, or that it is not signed. The update is finished on the machine by a person, as an administrator: `"<that file>" service update` stops the service, puts the newer copy in its place and starts it. A program that swaps itself for whatever a server sends it, while running as the system account, is the thing this avoids.
 
 ## Signing
 
-Every Windows release is signed with a code-signing certificate, and is not packed or compressed into a self-extracting file.
+The project does not hand out builds signed with anyone's certificate. Whoever builds `dokkit` for their own machines signs it with their own code-signing certificate if they have one, which is what keeps antivirus quiet about it; an unsigned build works the same. A build is never packed or compressed into a self-extracting file.
 
 ## Configuration
 
@@ -96,7 +96,7 @@ In `program/`: `dokkit init`, `run`, `ping`, `check`, `apply`, `enrol`, `watch`,
 
 `dokkit scan` writes `dokkit-proposal.json` in the current folder, and each part has a `--no-` flag. `dokkit task list` and `dokkit task run` read the tasks in the current folder's `dokkit.toml` and in the folders the machine reads. A task runs in its file's folder and stops at its `timeout`, an hour when none is given.
 
-`dokkit watch` holds a request open to the server and runs the task runs it is given, one at a time, sending output every three seconds. It refuses a task whose command in the file is not the one that was accepted. A task runs as whoever runs `dokkit watch`. The installed service runs as the system account, so it does not take work until a task can be given an ordinary account.
+`dokkit watch` holds a request open to the server and runs the task runs it is given, one at a time, sending output every three seconds. It refuses a task whose command in the file is not the one that was accepted. Under a login a task runs as that person. The installed service is the system account, so it runs a task as Local Service, the account Windows keeps for programs that need no rights, unless the task was accepted with "Accept, as the system account". If it cannot get that account the task is not run. Running as Local Service has not been tried on a real machine yet.
 
 `dokkit enrol` takes the server certificate's fingerprint as a third argument, saves it, and from then on trusts the certificate with that fingerprint and no other. The enrol page shows the fingerprint when the server is started with `DOKKIT_CERT` and `DOKKIT_CERT_KEY` and so serves TLS itself.
 
@@ -109,5 +109,3 @@ Each minute it also sends the machine's processor, memory and disk use as `metri
 The installed service starts a stopped Windows service again when its service page allows that, at most once in ten minutes, and says so on the check. `dokkit watch` under a login never does. This has not been run against a real service yet.
 
 `dokkit task list` asks the server which commands were accepted for this machine and says of each task whether it is accepted, not accepted yet, or changed since it was accepted, and which account tasks run as.
-
-Not built yet: giving a task an ordinary account to run under, so that the installed service can take work, and the built-in update task, which needs a signing key for releases first.

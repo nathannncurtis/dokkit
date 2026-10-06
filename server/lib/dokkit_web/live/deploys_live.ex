@@ -12,6 +12,12 @@ defmodule DokkitWeb.DeploysLive do
 
   def handle_info(:issues_changed, socket), do: {:noreply, load(socket)}
 
+  def handle_event("fetch", %{"machine" => id}, socket) do
+    user = socket.assigns.current_user
+    if user.role == :owner, do: Dokkit.Tasks.update(id, user.name)
+    {:noreply, assign(load(socket), asked: [id | socket.assigns[:asked] || []])}
+  end
+
   defp load(socket) do
     machines = Enum.filter(Dokkit.Estate.machines(), &(&1.kind != :group))
 
@@ -28,7 +34,13 @@ defmodule DokkitWeb.DeploysLive do
           {name, Map.new(on, fn {id, s} -> {id, s.version} end), on |> Map.values() |> hd()}
         end
 
+    held = Dokkit.Tasks.program_version()
+
     assign(socket,
+      held: held,
+      behind:
+        for(m <- machines, held, m.kind == :enrolled, m.program_version not in [nil, held], do: m),
+      asked: socket.assigns[:asked] || [],
       deploys: Dokkit.Deploys.list(),
       apps: Dokkit.Deploys.apps(),
       machines: machines,
@@ -81,6 +93,34 @@ defmodule DokkitWeb.DeploysLive do
           </div>
           <div :if={@rows != []} class="foot">
             <span class="tag warn">Behind the newest</span><span>Empty: not installed there</span>
+          </div>
+        </div>
+      </div>
+      <div :if={@live_action == :versions and @behind != []} class="body" style="padding-top: 0">
+        <div class="card">
+          <h2>The dokkit program<span class="end">This server holds {@held}</span></h2>
+          <div
+            :for={m <- @behind}
+            class="li slim"
+            style="--cols: minmax(0,1fr) 110px auto"
+            id={"behind-#{m.id}"}
+          >
+            <div class="ti"><span>{m.name}</span></div>
+            <span class="tag warn">{m.program_version}</span>
+            <button
+              :if={m.id not in @asked}
+              class="btn sm"
+              type="button"
+              phx-click="fetch"
+              phx-value-machine={m.id}
+              disabled={@current_user.role != :owner}
+            >
+              Fetch the newer copy
+            </button>
+            <.link :if={m.id in @asked} class="st" navigate={~p"/tasks"}>Asked. The run says where it is.</.link>
+          </div>
+          <div class="foot">
+            A machine only fetches the file. Someone finishes the update on that machine, as an administrator; the program never replaces itself.
           </div>
         </div>
       </div>

@@ -68,6 +68,7 @@ defmodule DokkitWeb.IntakeController do
           json(conn, %{
             run: run.id,
             task: run.task.name,
+            as: Dokkit.Tasks.account(run.task),
             command_sha256: Dokkit.Tasks.sha256(run.task.command)
           })
       end
@@ -159,6 +160,19 @@ defmodule DokkitWeb.IntakeController do
   @doc "The checks added in the interface, for the program on that machine to run."
   def checks(conn, _params) do
     with {:ok, machine} <- machine(conn), do: json(conn, %{items: Dokkit.Found.checks(machine)})
+  end
+
+  @doc "The newer program, for a machine asked to fetch it."
+  def program(conn, %{"target" => target}) do
+    with {:ok, _machine} <- machine(conn) do
+      case Dokkit.Tasks.program(target) do
+        nil ->
+          fail(conn, 404, "not_found", "This server holds no program for that kind of machine.")
+
+        path ->
+          send_file(conn, 200, path)
+      end
+    end
   end
 
   @doc "The tasks accepted for this machine, so `dokkit task list` can say which they are."

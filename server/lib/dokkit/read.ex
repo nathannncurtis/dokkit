@@ -261,6 +261,7 @@ defmodule Dokkit.Read do
         name: t.name,
         command: t.command,
         machine: t.machine.name,
+        as: Dokkit.Tasks.account(t),
         last_run: last && task_run(last)
       }
     end

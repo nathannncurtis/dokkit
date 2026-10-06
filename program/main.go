@@ -38,7 +38,7 @@ dokkit watch [--background]
 dokkit startup on|off
 dokkit status
 dokkit doctor
-dokkit service install|uninstall|start|stop
+dokkit service install|uninstall|update|start|stop
 dokkit scan [--no-services] [--no-ports] [--no-tasks] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]
 dokkit propose
 dokkit task list
@@ -81,7 +81,7 @@ func cli(args []string) int {
 		return initFile("dokkit.toml", os.Stdin)
 	}
 	if args[0] == "service" {
-		if len(args) != 2 || !strings.Contains(" install uninstall start stop ", " "+args[1]+" ") {
+		if len(args) != 2 || !strings.Contains(" install uninstall update start stop ", " "+args[1]+" ") {
 			fmt.Fprintln(os.Stderr, usage)
 			return 2
 		}

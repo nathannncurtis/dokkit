@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -31,7 +32,7 @@ func asService() bool {
 	if out, err := openLog(filepath.Join(machineDir(), "dokkit.log")); err == nil {
 		os.Stdout, os.Stderr = out, out
 	}
-	takesWork = false
+	ordinary = asLocalService
 	startService = func(name string) error {
 		m, err := mgr.Connect()
 		if err != nil {
@@ -89,6 +90,8 @@ func serviceCommand(action string) int {
 		}
 		defer s.Close()
 		switch action {
+		case "update":
+			return updateService(s)
 		case "start":
 			return s.Start()
 		case "stop":
@@ -245,4 +248,114 @@ func copyFile(from, to string) error {
 		return err
 	}
 	return out.Close()
+}
+
+var (
+	advapi32         = windows.NewLazySystemDLL("advapi32.dll")
+	logonUser        = advapi32.NewProc("LogonUserW")
+	crypt32          = windows.NewLazySystemDLL("crypt32.dll")
+	cryptMsgGetParam = crypt32.NewProc("CryptMsgGetParam")
+	cryptMsgClose    = crypt32.NewProc("CryptMsgClose")
+)
+
+// asLocalService makes a command run as Local Service, the account Windows keeps for
+// programs that need no rights: it is not an administrator and has no password.
+func asLocalService(cmd *exec.Cmd) (func(), error) {
+	name, _ := windows.UTF16PtrFromString("LocalService")
+	domain, _ := windows.UTF16PtrFromString("NT AUTHORITY")
+	const logonService, providerDefault = 5, 0
+	var token windows.Token
+	ok, _, err := logonUser.Call(uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(domain)), 0, logonService, providerDefault, uintptr(unsafe.Pointer(&token)))
+	if ok == 0 {
+		return nil, err
+	}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Token: syscall.Token(token)}
+	return func() { token.Close() }, nil
+}
+
+// signer says who signed a program, and only when Windows trusts the signature and the
+// file has not changed since it was signed.
+func signer(path string) (string, error) {
+	file, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return "", err
+	}
+	trust := &windows.WinTrustData{
+		Size:             uint32(unsafe.Sizeof(windows.WinTrustData{})),
+		UIChoice:         windows.WTD_UI_NONE,
+		RevocationChecks: windows.WTD_REVOKE_NONE,
+		UnionChoice:      windows.WTD_CHOICE_FILE,
+		StateAction:      windows.WTD_STATEACTION_VERIFY,
+		FileOrCatalogOrBlobOrSgnrOrCert: unsafe.Pointer(&windows.WinTrustFileInfo{
+			Size:     uint32(unsafe.Sizeof(windows.WinTrustFileInfo{})),
+			FilePath: file,
+		}),
+	}
+	err = windows.WinVerifyTrustEx(windows.InvalidHWND, &windows.WINTRUST_ACTION_GENERIC_VERIFY_V2, trust)
+	trust.StateAction = windows.WTD_STATEACTION_CLOSE
+	windows.WinVerifyTrustEx(windows.InvalidHWND, &windows.WINTRUST_ACTION_GENERIC_VERIFY_V2, trust)
+	if err != nil {
+		return "", errors.New("it has no signature Windows trusts")
+	}
+
+	// Trusted. Now read whose signature it is.
+	var store, msg windows.Handle
+	err = windows.CryptQueryObject(windows.CERT_QUERY_OBJECT_FILE, unsafe.Pointer(file),
+		windows.CERT_QUERY_CONTENT_FLAG_PKCS7_SIGNED_EMBED, windows.CERT_QUERY_FORMAT_FLAG_BINARY, 0,
+		nil, nil, nil, &store, &msg, nil)
+	if err != nil {
+		return "", err
+	}
+	defer windows.CertCloseStore(store, 0)
+	defer cryptMsgClose.Call(uintptr(msg))
+	const signerCertInfo = 7
+	var size uint32
+	cryptMsgGetParam.Call(uintptr(msg), signerCertInfo, 0, 0, uintptr(unsafe.Pointer(&size)))
+	if size == 0 {
+		return "", errors.New("its signature names nobody")
+	}
+	info := make([]byte, size)
+	if ok, _, err := cryptMsgGetParam.Call(uintptr(msg), signerCertInfo, 0, uintptr(unsafe.Pointer(&info[0])), uintptr(unsafe.Pointer(&size))); ok == 0 {
+		return "", err
+	}
+	cert, err := windows.CertFindCertificateInStore(store, windows.X509_ASN_ENCODING|windows.PKCS_7_ASN_ENCODING, 0,
+		windows.CERT_FIND_SUBJECT_CERT, unsafe.Pointer(&info[0]), nil)
+	if err != nil {
+		return "", err
+	}
+	defer windows.CertFreeCertificateContext(cert)
+	name := make([]uint16, 256)
+	windows.CertGetNameString(cert, windows.CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, nil, &name[0], uint32(len(name)))
+	if who := windows.UTF16ToString(name); who != "" {
+		return who, nil
+	}
+	return "", errors.New("its signature names nobody")
+}
+
+func finishUpdate(path string) string {
+	return "To finish, on that machine, from an administrator prompt: \"" + path + "\" service update"
+}
+
+// updateService puts this copy in the installed one's place. It is run by a person, from
+// the newer copy, as an administrator: the service never replaces itself.
+func updateService(s *mgr.Service) error {
+	from, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	to := filepath.Join(os.Getenv("ProgramFiles"), "Dokkit", "dokkit.exe")
+	if sameFile(from, to) {
+		return errors.New("run this from the newer copy, not from the installed one")
+	}
+	s.Control(svc.Stop)
+	for range 30 {
+		if st, err := s.Query(); err != nil || st.State == svc.Stopped {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if err := copyFile(from, to); err != nil {
+		return err
+	}
+	return s.Start()
 }

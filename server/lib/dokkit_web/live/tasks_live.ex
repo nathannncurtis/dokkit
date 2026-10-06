@@ -16,10 +16,10 @@ defmodule DokkitWeb.TasksLive do
   def handle_info(:issues_changed, socket), do: {:noreply, load(socket)}
 
   # Accepting a command to run on a machine is the owner's call.
-  def handle_event(event, %{"id" => id, "command" => command}, socket)
+  def handle_event(event, %{"id" => id, "command" => command} = params, socket)
       when event in ~w(accepted dismissed) do
     if socket.assigns.current_user.role == :owner,
-      do: Tasks.decide(id, command, String.to_existing_atom(event))
+      do: Tasks.decide(id, command, String.to_existing_atom(event), params["system"] == "true")
 
     {:noreply, load(socket)}
   end
@@ -142,12 +142,19 @@ defmodule DokkitWeb.TasksLive do
             </div>
             <div style="display:flex; gap:6px">
               <button
-                :for={{event, label} <- [{"accepted", "Accept"}, {"dismissed", "Dismiss"}]}
+                :for={
+                  {event, system, label} <- [
+                    {"accepted", "false", "Accept"},
+                    {"accepted", "true", "Accept, as the system account"},
+                    {"dismissed", "false", "Dismiss"}
+                  ]
+                }
                 class="btn"
                 type="button"
                 phx-click={event}
                 phx-value-id={t.id}
                 phx-value-command={t.command}
+                phx-value-system={system}
                 disabled={!@owner}
               >
                 {label}
@@ -155,7 +162,7 @@ defmodule DokkitWeb.TasksLive do
             </div>
           </div>
           <div :if={@waiting != []} class="foot">
-            Nothing here is run until the owner says so. A task runs only the command shown, on its own machine.
+            Nothing here is run until the owner says so. A task runs only the command shown, on its own machine, under an ordinary account with no rights of its own unless it is accepted as the system account.
           </div>
         </div>
       </div>
@@ -176,7 +183,10 @@ defmodule DokkitWeb.TasksLive do
               <div class="ti"><.ic name="terminal-window" /><span>{t.name}</span></div>
               <code class="cmd">{t.command}</code>
             </div>
-            <span class="tag">{t.machine.name}</span>
+            <span>
+              <span class="tag">{t.machine.name}</span>
+              <span :if={t.as_system} class="tag warn">System account</span>
+            </span>
             <span class={["mono", !last && "mute"]}>{(last && at(last.inserted_at)) || "Never"}</span>
             <.state :if={last} run={last} /><span :if={!last}></span>
             <button class="btn" type="button" phx-click="run" phx-value-id={t.id} disabled={@viewer}>

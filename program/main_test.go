@@ -553,3 +553,31 @@ func TestATaskIsAcceptedOnlyAsItWasWritten(t *testing.T) {
 		t.Fatal("a machine that is not enrolled has nobody to ask")
 	}
 }
+
+func TestAnUpdateIsFetchedAndNothingIsReplaced(t *testing.T) {
+	said := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/api/v1/program/"):
+			w.Write([]byte("the newer copy"))
+		case strings.HasSuffix(r.URL.Path, "/output"):
+			b, _ := io.ReadAll(r.Body)
+			said += string(b)
+		}
+	}))
+	defer server.Close()
+	dir := t.TempDir()
+	c := &client{url: server.URL, key: "dkm_test", spool: filepath.Join(dir, "spool")}
+	c.update("run-1")
+	fetched, _ := filepath.Glob(filepath.Join(dir, "update", "dokkit*"))
+	if len(fetched) != 1 {
+		t.Fatalf("one file is left beside the spool: %v", fetched)
+	}
+	b, err := os.ReadFile(fetched[0])
+	if err != nil || string(b) != "the newer copy" {
+		t.Fatalf("the copy is left beside the spool: %q %v", b, err)
+	}
+	if !strings.Contains(said, "The newer copy is at") || !strings.Contains(said, "not signed") || !strings.Contains(said, "To finish") {
+		t.Fatalf("the run says where it is and how to finish: %q", said)
+	}
+}

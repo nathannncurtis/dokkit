@@ -309,11 +309,12 @@ func taskCommand(args []string, folders []string, c *client) int {
 		fmt.Fprintln(os.Stderr, "dokkit: no task called", args[1])
 		return 1
 	}
-	return t.run(os.Stdout, os.Stderr)
+	return t.run(os.Stdout, os.Stderr, nil)
 }
 
-// run runs a task where its file is and exits as it did.
-func (t task) run(stdout, stderr io.Writer) int {
+// run runs a task where its file is and exits as it did. prepare, when there is one,
+// sets the account it runs as, and the task does not run if that cannot be done.
+func (t task) run(stdout, stderr io.Writer, prepare func(*exec.Cmd) (func(), error)) int {
 	run := t.Run
 	limit, err := time.ParseDuration(t.Timeout)
 	if err != nil || limit <= 0 {
@@ -331,6 +332,14 @@ func (t task) run(stdout, stderr io.Writer) int {
 	// On Windows the time limit stops the shell; what the shell started may outlive it.
 	cmd := exec.CommandContext(ctx, shell[0], shell[1:]...)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = t.dir, stdout, stderr
+	if prepare != nil {
+		after, err := prepare(cmd)
+		if err != nil {
+			fmt.Fprintln(stderr, "dokkit: not run, because an ordinary account could not be used:", err)
+			return 126
+		}
+		defer after()
+	}
 	err = cmd.Run()
 	var exit *exec.ExitError
 	switch {
@@ -346,16 +355,64 @@ func (t task) run(stdout, stderr io.Writer) int {
 	return 0
 }
 
-// The installed service runs as the system account, and a task must not until it can
-// be given an ordinary account. So only dokkit watch under a login takes work.
-var takesWork = true
+// ordinary makes a command run under an ordinary account instead of this program's own.
+// The installed service sets it, because it is the system account. Under a login it is
+// nil and a task runs as that person.
+var ordinary func(*exec.Cmd) (func(), error)
+
+const updateTask = "dokkit:update"
+
+// update is the one built-in task. It fetches the newer copy the server holds and leaves
+// it beside the spool. It replaces nothing: a person finishes the update on the machine.
+func (c *client) update(run string) {
+	said, code := "", 0
+	path, err := c.fetchUpdate()
+	if err != nil {
+		said, code = "Not fetched: "+err.Error(), 1
+	} else {
+		said = "The newer copy is at " + path + ", " + signedBy(path) + ".\n" + finishUpdate(path)
+	}
+	fmt.Println(time.Now().Format("15:04:05"), "", said)
+	c.call("POST", "/api/v1/work/"+run+"/output", "text/plain", []byte(said+"\n"), nil)
+	body, _ := json.Marshal(map[string]any{"exit_code": code, "duration_ms": 0})
+	c.call("POST", "/api/v1/work/"+run+"/result", "application/json", body, nil)
+}
+
+func (c *client) fetchUpdate() (string, error) {
+	name := "dokkit"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	dir := filepath.Join(filepath.Dir(c.spool), "update")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, name)
+	file, err := os.OpenFile(path+".part", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
+	if err != nil {
+		return "", err
+	}
+	status, err := c.call("GET", "/api/v1/program/"+runtime.GOOS+"-"+runtime.GOARCH, "", nil, io.Writer(file))
+	file.Close()
+	if err != nil || status != 200 {
+		return "", fmt.Errorf("the server has no newer copy for this kind of machine (%d)", status)
+	}
+	return path, os.Rename(path+".part", path)
+}
+
+func signedBy(path string) string {
+	if who, err := signer(path); err == nil {
+		return "signed by " + who
+	}
+	return "not signed"
+}
 
 // work asks the server for task runs, holding each request open, and runs them one at a time.
 func (c *client) work() {
 	for {
 		var job struct {
-			Run, Task string
-			Sha       string `json:"command_sha256"`
+			Run, Task, As string
+			Sha           string `json:"command_sha256"`
 		}
 		status, err := c.call("GET", "/api/v1/work?wait=50", "", nil, &job)
 		if status == 204 {
@@ -363,6 +420,10 @@ func (c *client) work() {
 		}
 		if err != nil || status != 200 {
 			time.Sleep(15 * time.Second)
+			continue
+		}
+		if job.Task == updateTask {
+			c.update(job.Run)
 			continue
 		}
 		result := "/api/v1/work/" + job.Run + "/result"
@@ -393,7 +454,12 @@ func (c *client) work() {
 			}
 		}()
 		started := time.Now()
-		code := t.run(out, out)
+		// A task runs as the system account only when it was accepted to.
+		var account func(*exec.Cmd) (func(), error)
+		if job.As != "system" {
+			account = ordinary
+		}
+		code := t.run(out, out, account)
 		close(done)
 		<-sent
 		body, _ := json.Marshal(map[string]any{"exit_code": code, "duration_ms": time.Since(started).Milliseconds()})
@@ -416,6 +482,11 @@ func (c *client) call(method, path, kind string, body []byte, into any) (int, er
 		return 0, err
 	}
 	defer res.Body.Close()
+	if file, ok := into.(io.Writer); ok && res.StatusCode == 200 {
+		// A file, not an answer to read.
+		_, err = io.Copy(file, res.Body)
+		return res.StatusCode, err
+	}
 	if into != nil && res.StatusCode == 200 {
 		json.NewDecoder(res.Body).Decode(into)
 	}

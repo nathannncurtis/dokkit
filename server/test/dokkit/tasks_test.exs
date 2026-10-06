@@ -32,7 +32,12 @@ defmodule Dokkit.TasksTest do
     # The command the person saw is the one that is accepted.
     [task] = Tasks.waiting()
     assert Tasks.decide(task.id, "rm -rf /", :accepted) == :error
-    html = view |> element("#task-#{task.id} button", "Accept") |> render_click()
+
+    html =
+      view
+      |> element(~s(#task-#{task.id} button[phx-click="accepted"][phx-value-system="false"]))
+      |> render_click()
+
     assert html =~ "No task is waiting"
 
     {:ok, view, html} = live(conn, "/tasks")
@@ -91,5 +96,53 @@ defmodule Dokkit.TasksTest do
 
     assert %{"items" => [%{"id" => ^run, "state" => "queued"}]} =
              json_response(get(as(read), "/api/v1/task-runs"), 200)
+  end
+
+  @tag :tmp_dir
+  test "a task is ordinary unless accepted as the system account, and an update is only fetched",
+       %{
+         conn: conn,
+         key: key,
+         tmp_dir: dir
+       } do
+    declare(key, "true")
+    [task] = Tasks.waiting()
+    :ok = Tasks.decide(task.id, "true", :accepted)
+    {:ok, run} = {:ok, Tasks.run(task.id, "sam")}
+
+    assert %{"run" => id, "as" => "ordinary"} =
+             json_response(get(as(key), "/api/v1/work?wait=0"), 200)
+
+    assert id == run.id
+
+    :ok = Tasks.decide(task.id, "true", :accepted, true)
+    Tasks.run(task.id, "sam")
+    assert %{"as" => "system"} = json_response(get(as(key), "/api/v1/work?wait=0"), 200)
+
+    # A file cannot take one of Dokkit's own names.
+    put(as(key), "/api/v1/declare", %{
+      schema: 1,
+      service: %{id: "portal", name: "Upload portal"},
+      task: [%{id: "dokkit:update", run: "format c:"}]
+    })
+
+    assert Tasks.waiting() == []
+
+    machine = Dokkit.Repo.get_by!(Dokkit.Machine, name: "vault")
+    assert Tasks.update(machine.id, "sam") == nil
+    assert json_response(get(as(key), "/api/v1/program/windows-amd64"), 404)
+
+    Application.put_env(:dokkit, :programs, dir)
+    on_exit(fn -> Application.delete_env(:dokkit, :programs) end)
+    File.write!(Path.join(dir, "version.txt"), "0.2.0\n")
+    File.write!(Path.join(dir, "dokkit-windows-amd64.exe"), "the newer copy")
+    assert json_response(get(as(key), "/api/v1/program/..%2Fversion.txt"), 404)
+    assert response(get(as(key), "/api/v1/program/windows-amd64"), 200) == "the newer copy"
+
+    Dokkit.Repo.update_all(Dokkit.Machine, set: [kind: :enrolled, program_version: "0.1.0"])
+    {:ok, view, html} = live(signed_in(conn), "/versions")
+    assert html =~ "This server holds 0.2.0"
+    assert render_click(view, "fetch", %{"machine" => machine.id}) =~ "The run says where it is"
+    assert %{"task" => "dokkit:update"} = json_response(get(as(key), "/api/v1/work?wait=0"), 200)
   end
 end

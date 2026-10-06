@@ -57,6 +57,8 @@ Its own usernames and passwords. It is meant for a local network or a private ov
 
 **Who watches Dokkit.** The outside heartbeat is a setting on the Alerts page. Dokkit's own row is a service called Dokkit with a check that the database answers, a chart of the database's size, a check that goes bad when every enrolled machine has been quiet for ten minutes at once, and, when an archive folder is set, a check that the folder can be written to. It routes to a quiet push.
 
+**The program for machines to fetch.** With `DOKKIT_PROGRAMS` set to a folder holding `version.txt` and files named like `dokkit-windows-amd64.exe`, the Versions page lists the machines behind that version and can ask each to fetch the newer copy.
+
 **Archiving.** With `DOKKIT_ARCHIVE` set to a folder, each log month older than a year is written there as `logs-YYYY-MM.ndjson.gz` and dropped from the database, checked once an hour. `Dokkit.Logs.restore/1` loads a file back. Without the setting every month stays.
 
 Not built yet: a Postgres of its own, installed with it.

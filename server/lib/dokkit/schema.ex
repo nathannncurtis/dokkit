@@ -141,6 +141,7 @@ defmodule Dokkit.Task do
     field :command, :string
     field :accepted, :string
     field :dismissed, :string
+    field :as_system, :boolean, default: false
     belongs_to :machine, Dokkit.Machine
     belongs_to :service, Dokkit.Service
     timestamps()

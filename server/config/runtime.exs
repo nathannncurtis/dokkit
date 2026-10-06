@@ -35,6 +35,7 @@ end
 
 # The folder old log months are archived to. Without it, every month stays in the database.
 config :dokkit, archive: System.get_env("DOKKIT_ARCHIVE")
+config :dokkit, programs: System.get_env("DOKKIT_PROGRAMS")
 
 if config_env() == :prod do
   database_url =

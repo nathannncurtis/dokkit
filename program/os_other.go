@@ -71,3 +71,9 @@ func serviceCommand(string) int {
 	fmt.Fprintln(os.Stderr, "dokkit: installing as a service is built for Windows so far. Elsewhere, run dokkit watch from a systemd unit.")
 	return 1
 }
+
+func signer(string) (string, error) { return "", errors.New("signatures are read on Windows only") }
+
+func finishUpdate(path string) string {
+	return "To finish: stop dokkit, put that file in its place, and start it again."
+}

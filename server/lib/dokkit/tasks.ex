@@ -14,6 +14,8 @@ defmodule Dokkit.Tasks do
       for %{"id" => id, "run" => run} <- List.wrap(tasks),
           is_binary(id),
           is_binary(run),
+          # Names that start this way are Dokkit's own.
+          not String.starts_with?(id, "dokkit:"),
           do: {id, run}
 
     names = for {id, _} <- tasks, do: id
@@ -58,7 +60,7 @@ defmodule Dokkit.Tasks do
               where: t.machine_id == ^machine_id and not is_nil(t.accepted),
               order_by: t.name
           ),
-        do: %{task: t.name, command_sha256: sha256(t.accepted)}
+        do: %{task: t.name, command_sha256: sha256(t.accepted), as: account(t)}
   end
 
   def waiting, do: Repo.all(from t in offered(), order_by: t.name, preload: :machine)
@@ -87,11 +89,66 @@ defmodule Dokkit.Tasks do
     )
   end
 
+  @doc "The account a machine runs a task under: an ordinary one, unless it was accepted otherwise."
+  def account(%Task{as_system: true}), do: "system"
+  def account(%Task{}), do: "ordinary"
+
+  @update "dokkit:update"
+
+  @doc "The version of the program this server holds for machines to fetch, or nil."
+  def program_version do
+    with dir when is_binary(dir) <- Application.get_env(:dokkit, :programs),
+         {:ok, text} <- File.read(Path.join(dir, "version.txt")),
+         version when version != "" <- String.trim(text) do
+      version
+    else
+      _ -> nil
+    end
+  end
+
+  @doc "The file for one kind of machine, such as windows-amd64, or nil."
+  def program(target) do
+    with dir when is_binary(dir) <- Application.get_env(:dokkit, :programs),
+         true <- target =~ ~r/^[a-z0-9]+-[a-z0-9]+$/,
+         path =
+           Path.join(dir, "dokkit-" <> target <> if(target =~ "windows", do: ".exe", else: "")),
+         true <- File.regular?(path) do
+      path
+    else
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Asks a machine to fetch the newer program. It only fetches: a person finishes the update
+  on the machine. nil when the server holds no program.
+  """
+  def update(machine_id, by) do
+    if program_version() do
+      task =
+        Repo.get_by(Task, machine_id: machine_id, name: @update) ||
+          Repo.insert!(%Task{
+            machine_id: machine_id,
+            name: @update,
+            command: @update,
+            accepted: @update
+          })
+
+      run(task.id, by)
+    end
+  end
+
   @doc "Accepts or dismisses the command the person was shown, and nothing newer."
-  def decide(id, command, field) when field in [:accepted, :dismissed] do
+  def decide(id, command, field, as_system \\ false) when field in [:accepted, :dismissed] do
     with {:ok, id} <- Ecto.UUID.cast(id),
          %Task{command: ^command} = task <- Repo.get(Task, id) do
-      Repo.update!(Ecto.Changeset.change(task, [{field, command}]))
+      Repo.update!(
+        Ecto.Changeset.change(task, [
+          {field, command},
+          {:as_system, field == :accepted and as_system}
+        ])
+      )
+
       Dokkit.Issues.changed(false)
       :ok
     else
