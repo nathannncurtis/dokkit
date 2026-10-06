@@ -54,4 +54,45 @@ defmodule Dokkit.DeploysTest do
     assert html =~ "<span>2.10.0</span>"
     assert html =~ "dokkit"
   end
+
+  test "an app on many PCs keeps a version for each, and none of it is a deploy", %{conn: conn} do
+    # Its own machine name: tests run side by side and a shared name makes them wait on each other.
+    machine = Repo.insert!(%Machine{name: "desks", kind: :group})
+
+    service =
+      Repo.insert!(%Service{machine_id: machine.id, slug: "scanner", name: "Scanner", kind: :app})
+
+    {app, _} = Keys.mint(:app, %{service_id: service.id})
+
+    for {host, version} <- [
+          {"PC-014", "3.9.0"},
+          {"PC-020", "3.10.0"},
+          {"PC-031", "3.10.0"},
+          {"PC-014", "3.9.1"}
+        ] do
+      report(app, [%{type: "deploy", version: version, host: host}])
+    end
+
+    assert Dokkit.Deploys.list(service: service.id) == []
+    assert Repo.get!(Service, service.id).version == nil
+
+    assert [
+             %{
+               name: "Scanner",
+               hosts: 3,
+               versions: [
+                 %{version: "3.10.0", hosts: two},
+                 %{version: "3.9.1", hosts: ["PC-014"]}
+               ]
+             }
+           ] =
+             Read.apps()
+
+    assert Enum.sort(two) == ["PC-020", "PC-031"]
+
+    {:ok, _, html} = live(signed_in(conn), "/versions")
+    assert html =~ "Desktop apps"
+    assert html =~ "3 machines"
+    assert html =~ "PC-014"
+  end
 end

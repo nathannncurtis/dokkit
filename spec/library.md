@@ -62,4 +62,4 @@ Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift
 
 `clients/swift/Dokkit.swift`: one file, Foundation only, for iOS 13 and macOS 10.15 or later. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture` and `flush`. Swift keeps no stack with an error, so a report carries the stack of the place that reported it. It has not been compiled or run yet.
 
-All of them send the host name, and the server records that host as a machine that was seen. The app's version on each host is not kept per host yet.
+All of them send the host name, and the server records that host as a machine that was seen. When that host is not the machine the service lives on, the version the app starts with is kept for that host and is not a deploy, and the Versions page lists each such app with how many hosts are on each version.

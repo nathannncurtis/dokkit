@@ -176,6 +176,19 @@ defmodule Dokkit.Finding do
   end
 end
 
+defmodule Dokkit.Install do
+  use Ecto.Schema
+  @primary_key false
+  @foreign_key_type :binary_id
+
+  schema "installs" do
+    field :version, :string
+    field :seen_at, :utc_datetime_usec
+    belongs_to :service, Dokkit.Service, primary_key: true
+    belongs_to :machine, Dokkit.Machine, primary_key: true
+  end
+end
+
 defmodule Dokkit.Deploy do
   use Dokkit.Schema
 

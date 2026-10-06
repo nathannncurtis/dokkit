@@ -170,14 +170,20 @@ defmodule Dokkit.Intake do
     end
   end
 
-  defp line(key, "deploy", line, _at) do
+  defp line(key, "deploy", line, at) do
     with {:ok, service} <- service(key, line),
          version when is_binary(version) <- line["version"] do
-      Dokkit.Deploys.record(service, version,
-        how: "reported",
-        commit: label_text(line["commit"]),
-        by: label_text(line["by"])
-      )
+      case elsewhere(key, service, line["host"]) do
+        nil ->
+          Dokkit.Deploys.record(service, version,
+            how: "reported",
+            commit: label_text(line["commit"]),
+            by: label_text(line["by"])
+          )
+
+        machine_id ->
+          Dokkit.Deploys.installed(service, machine_id, version, at)
+      end
     else
       {:error, _, _} = refusal -> refusal
       _ -> {:error, "bad_line", "A deploy needs a version."}
@@ -220,6 +226,16 @@ defmodule Dokkit.Intake do
   end
 
   defp line(_, type, _, _), do: {:error, "unknown_type", "Unknown type #{inspect(type)}."}
+
+  # The host an app reports from, when that is not the machine its service lives on.
+  defp elsewhere(%Key{kind: :app}, service, host) when is_binary(host) and host != "" do
+    case Repo.get_by(Machine, name: String.slice(host, 0, 100)) do
+      %Machine{id: id} when id != service.machine_id -> id
+      _ -> nil
+    end
+  end
+
+  defp elsewhere(_, _, _), do: nil
 
   # An app says which host it runs on. That host becomes a machine that was seen, with no dokkit on it.
   defp hosts(%Key{kind: :app}, hosts, now) do

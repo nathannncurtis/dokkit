@@ -203,7 +203,7 @@ A login session, or a user token with `read`. Log contents need `read-logs`.
 | `GET /logs` | Log search. Takes `q`, `level`, `machine`, `service`, `from`, `to`. |
 | `GET /errors`, `GET /errors/<id>` | Errors grouped by type and place; then the individual reports. |
 | `GET /deploys` | Deploy history. |
-| `GET /versions` | Which version of each service is on which machine. |
+| `GET /versions` | Which version of each service is on which machine, and under `apps`, each app that runs on many hosts with the hosts on each version. |
 | `GET /rules` | Alert rules. |
 | `GET /proposals` | Things waiting to be accepted. |
 | `GET /tasks`, `GET /task-runs` | Accepted tasks and their runs. |

@@ -28,14 +28,17 @@ defmodule DokkitWeb.DeploysLive do
           {name, Map.new(on, fn {id, s} -> {id, s.version} end), on |> Map.values() |> hd()}
         end
 
-    assign(socket, deploys: Dokkit.Deploys.list(), machines: machines, rows: rows)
+    assign(socket,
+      deploys: Dokkit.Deploys.list(),
+      apps: Dokkit.Deploys.apps(),
+      machines: machines,
+      rows: rows
+    )
   end
 
   # Versions are compared by their numbers, so 2.10 is newer than 2.9.
   defp newest(on) do
-    on
-    |> Map.values()
-    |> Enum.max_by(fn v -> for [n] <- Regex.scan(~r/\d+/, v), do: String.to_integer(n) end)
+    on |> Map.values() |> Enum.max_by(&Dokkit.Deploys.number/1)
   end
 
   def render(assigns) do
@@ -78,6 +81,31 @@ defmodule DokkitWeb.DeploysLive do
           </div>
           <div :if={@rows != []} class="foot">
             <span class="tag warn">Behind the newest</span><span>Empty: not installed there</span>
+          </div>
+        </div>
+      </div>
+      <div :if={@live_action == :versions and @apps != []} class="body" style="padding-top: 0">
+        <div class="card">
+          <h2>Desktop apps<span class="end">Which version is on how many machines</span></h2>
+          <div :for={a <- @apps} id={"app-#{a.service.id}"}>
+            <.link
+              class="li slim"
+              style="--cols: minmax(0,1fr) auto 16px"
+              navigate={~p"/s/#{a.service.id}"}
+            >
+              <div class="ti"><span>{a.service.name}</span></div>
+              <span class="st">{a.hosts} {if a.hosts == 1, do: "machine", else: "machines"}</span>
+              <.ic name="caret-right" />
+            </.link>
+            <div
+              :for={{{version, hosts}, n} <- Enum.with_index(a.versions)}
+              class="li slim"
+              style="--cols: 120px 60px minmax(0,1fr)"
+            >
+              <span class={["tag", n > 0 && "warn"]}>{version}</span>
+              <span class="st">{length(hosts)}</span>
+              <span class="mute">{if n > 0, do: Enum.join(Enum.sort(hosts), ", "), else: "The newest"}</span>
+            </div>
           </div>
         </div>
       </div>

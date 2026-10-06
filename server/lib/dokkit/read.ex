@@ -50,6 +50,19 @@ defmodule Dokkit.Read do
     end)
   end
 
+  @doc "Apps that run on many hosts, with the hosts on each version."
+  def apps do
+    for a <- Dokkit.Deploys.apps() do
+      %{
+        id: a.service.id,
+        slug: a.service.slug,
+        name: a.service.name,
+        hosts: a.hosts,
+        versions: for({version, hosts} <- a.versions, do: %{version: version, hosts: hosts})
+      }
+    end
+  end
+
   @doc "One issue, open or closed, with its notes."
   def one_issue(id) do
     with {:ok, id} <- Ecto.UUID.cast(id),

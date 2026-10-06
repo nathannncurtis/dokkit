@@ -121,7 +121,7 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
-  def versions(conn, _), do: list(conn, Read.versions())
+  def versions(conn, _), do: json(conn, %{items: Read.versions(), apps: Read.apps(), next: nil})
   def proposals(conn, _), do: list(conn, Read.proposals())
   def machine(conn, %{"id" => id}), do: one(conn, Read.machine(id))
   def issue(conn, %{"id" => id}), do: one(conn, Read.one_issue(id))
