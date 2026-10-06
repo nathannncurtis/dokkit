@@ -51,7 +51,16 @@ Its own usernames and passwords. It is meant for a local network or a private ov
 
 **Docker.** `server/Dockerfile` and `server/compose.yml`, with Postgres 17 beside it. Neither has been built or run yet: this was written on a machine with no Docker. It listens on plain HTTP on port 4000 for a proxy that holds the certificate.
 
-**Windows.** `install.ps1` ships in the release folder. From an administrator PowerShell, `.\install.ps1 -DatabaseUrl 'ecto://user:password@host/dokkit'` copies the server to `Program Files\Dokkit`, writes its settings to `ProgramData\Dokkit\settings.env` where only administrators and the system account can read them, brings the database up to date, and registers and starts a Windows service. Run again with no arguments from a newer release, it stops the service, copies, updates the database and starts it. The server reads that settings file itself, because a Windows service is not started through a script that could set variables. The script has not been run yet, and it needs a Postgres that is already there.
+**Windows.** `install.ps1` ships in the release folder and is run from an administrator PowerShell. It copies the server to `Program Files\Dokkit`, writes its settings to `ProgramData\Dokkit\settings.env` where only administrators and the system account can read them, brings the database up to date, and registers and starts a Windows service. The server reads that settings file itself, because a Windows service is not started through a script that could set variables.
+
+The database is one of two, chosen the first time:
+
+- `.\install.ps1 -Postgres <folder>` sets up a Postgres for Dokkit alone. The folder is Postgres's unpacked Windows binaries, the one holding `bin\initdb.exe`. It becomes a Windows service called `dokkit-postgres` that runs as Network Service, keeps its data in `ProgramData\Dokkit\pgdata`, and listens on this machine only, on port 54329.
+- `.\install.ps1 -DatabaseUrl 'ecto://user:password@host/dokkit'` uses a Postgres that is already there.
+
+Run again from a newer release with no arguments, it stops the service, copies, updates the database and starts it. Given `-Postgres` again with a newer folder, it also stops Dokkit's Postgres, puts the newer binaries in place and starts it, which is right for a minor version and not for a major one.
+
+The script has not been run yet. The Postgres commands in it were tried by hand, apart from registering the service.
 
 **Its own TLS.** With `DOKKIT_CERT` and `DOKKIT_CERT_KEY` set to a certificate and its key, the server serves HTTPS itself and the enrol page shows the fingerprint for machines to pin.
 
@@ -60,5 +69,3 @@ Its own usernames and passwords. It is meant for a local network or a private ov
 **The program for machines to fetch.** With `DOKKIT_PROGRAMS` set to a folder holding `version.txt` and files named like `dokkit-windows-amd64.exe`, the Versions page lists the machines behind that version and can ask each to fetch the newer copy.
 
 **Archiving.** With `DOKKIT_ARCHIVE` set to a folder, each log month older than a year is written there as `logs-YYYY-MM.ndjson.gz` and dropped from the database, checked once an hour. `Dokkit.Logs.restore/1` loads a file back. Without the setting every month stays.
-
-Not built yet: a Postgres of its own, installed with it.

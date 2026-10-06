@@ -159,6 +159,7 @@ For CI. A deploy is also recorded automatically whenever a service's reported ve
 ### Taking work
 
 ```
+GET /program/<os>-<arch>           the newer dokkit this server holds, for a machine asked to fetch it
 GET /work?wait=50
 ```
 

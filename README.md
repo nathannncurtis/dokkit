@@ -25,7 +25,7 @@ Working, with tests:
 - **Libraries.** For Python, .NET, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift, one file each: beats, job progress, an app's own checks, errors, logs.
 - **The API and the MCP**, for user tokens made in Settings. Every read and act call in `spec/api.md` is there, and a token with the `admin` scope manages keys and people.
 
-Written and not yet run on a real machine: the Windows install script for the server, the Docker image, installing the program as a service, and sending mail through a real mail server. Not built yet: a Postgres installed with the server.
+Written and not yet run on a real machine: the Windows install script for the server, the Docker image, installing the program as a service, and sending mail through a real mail server.
 
 To run it for development, with Postgres on localhost:
 
