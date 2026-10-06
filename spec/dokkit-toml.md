@@ -17,6 +17,7 @@ type = "http"
 url = "http://localhost:8080/healthz"
 every = "30s"
 timeout = "5s"
+slow = "2s"                     # an answer slower than this is degraded, not down
 
 [stats]
 url = "http://localhost:8080/internal/stats"
@@ -47,7 +48,7 @@ degraded = "push"
 |---|---|
 | `schema` | The version of this file format. `1`. |
 | `[service]` | What the app is. `id` is unique on its machine and never changes. |
-| `[[check]]` | One per check. `type` is one of the check types in `api.md`. Each type has its own fields: `url` for `http`, `port` for `tcp`, `name` for `process` and `windows-service`, `metric` and `limit` for `threshold` (bad when the metric is over the limit), `date_from` for `expiry` (an `https` address or `host:port` for a certificate, or a file whose first line is a date). All take `every`. |
+| `[[check]]` | One per check. `type` is one of the check types in `api.md`. Each type has its own fields: `url` for `http`, `port` for `tcp`, `name` for `process`, `windows-service` and `systemd` (the unit), `metric` and `limit` for `threshold` (bad when the metric is over the limit), `date_from` for `expiry` (an `https` address or `host:port` for a certificate, or a file whose first line is a date). All take `every`. `http` also takes `slow`: an answer that comes back successfully but takes longer is `degraded`, with the time as its value, and the server opens an issue only after its usual run of bad results. |
 | `[stats]` | Where the stats document is and which environment variable holds its key. |
 | `[logs]` | Files to read. Paths are relative to the file and must stay inside its folder. Lines follow `log-lines.md`. |
 | `[[job]]` | A scheduled job: when it should run, how late it may be, and how long it may take. `schedule` is a five-field cron line read as UTC, and `@reboot` is refused. |

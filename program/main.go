@@ -654,6 +654,8 @@ func (c *client) doctor() int {
 	fmt.Println("The server is reachable and knows this key.")
 	if off := a.Time.Sub(sent).Round(time.Second); off > 30*time.Second || off < -30*time.Second {
 		fmt.Printf("This machine's clock is %s away from the server's.\n", off)
+	} else {
+		fmt.Println("The clock agrees with the server's, within 30 seconds.")
 	}
 	if left, _ := c.flush(10 * time.Second); left > 0 {
 		fmt.Println(left, "report(s) are still waiting in", c.spool)

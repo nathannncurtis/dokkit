@@ -45,7 +45,7 @@ type declaration struct {
 type check struct {
 	Type, Name, URL, Host string
 	Port                  int
-	Every, Timeout        string
+	Every, Timeout, Slow    string
 	DateFrom              string `toml:"date_from"`
 	name, dir             string
 	next                  time.Time
@@ -84,7 +84,7 @@ func parallel(n int, f func(i int)) {
 	wg.Wait()
 }
 
-// startService starts a stopped Windows service. Only the installed service can.
+// startService starts a stopped Windows service. Only the installed service can. A systemd unit is restarted by restartUnit.
 var startService func(name string) error
 
 // restarted is when each service was last started here, so one that will not stay up is
@@ -97,11 +97,15 @@ var (
 func (c *check) tryRestart() bool {
 	restartedMu.Lock()
 	defer restartedMu.Unlock()
-	if !c.restart || startService == nil || time.Since(restarted[c.Name]) < 10*time.Minute {
+	start := startService
+	if c.Type == "systemd" {
+		start = restartUnit
+	}
+	if !c.restart || start == nil || time.Since(restarted[c.Name]) < 10*time.Minute {
 		return false
 	}
 	restarted[c.Name] = time.Now()
-	return startService(c.Name) == nil
+	return start(c.Name) == nil
 }
 
 type result struct {
@@ -120,7 +124,7 @@ func readDeclaration(path string) (*declaration, error) {
 		return nil, err
 	}
 	if d.Schema != 1 {
-		return nil, errors.New("schema must be 1")
+		return nil, errors.New("add schema = 1 as the first line.")
 	}
 	if d.Service.ID == "" {
 		return nil, errors.New("[service] needs an id")
@@ -130,7 +134,7 @@ func readDeclaration(path string) (*declaration, error) {
 	for i := range d.Check {
 		c := &d.Check[i]
 		base := c.Type
-		if c.Name != "" && c.Type != "process" && c.Type != "windows-service" {
+		if c.Name != "" && c.Type != "process" && c.Type != "windows-service" && c.Type != "systemd" {
 			base = c.Name
 		}
 		seen[base]++
@@ -147,7 +151,7 @@ func readDeclaration(path string) (*declaration, error) {
 
 // problem says what is wrong with a check's own fields, and whether this program can run it.
 func (c *check) problem() (runs bool, err error) {
-	for _, d := range []string{c.Every, c.Timeout} {
+	for _, d := range []string{c.Every, c.Timeout, c.Slow} {
 		if d != "" {
 			if _, err := time.ParseDuration(d); err != nil {
 				return false, fmt.Errorf("%q is not a time such as 30s or 5m", d)
@@ -163,7 +167,7 @@ func (c *check) problem() (runs bool, err error) {
 		if c.Port == 0 {
 			return false, errors.New("needs a port")
 		}
-	case "process", "windows-service":
+	case "process", "windows-service", "systemd":
 		if c.Name == "" {
 			return false, errors.New("needs a name")
 		}
@@ -301,6 +305,10 @@ func (c *check) run() result {
 				err = fmt.Errorf("answered %d", res.StatusCode)
 			}
 		}
+		if slow, perr := time.ParseDuration(c.Slow); err == nil && perr == nil && time.Since(started) > slow {
+			took := time.Since(started)
+			return result{state: "degraded", value: float64(took.Milliseconds()), note: fmt.Sprintf("answered in %.1f s, slower than %s", took.Seconds(), seconds(slow))}
+		}
 	case "tcp":
 		host := c.Host
 		if host == "" {
@@ -318,8 +326,13 @@ func (c *check) run() result {
 		}
 	case "process":
 		err = processRunning(c.Name)
-	case "windows-service":
-		if err = serviceRunning(c.Name); err != nil {
+	case "windows-service", "systemd":
+		if c.Type == "systemd" {
+			err = systemdActive(c.Name)
+		} else {
+			err = serviceRunning(c.Name)
+		}
+		if err != nil {
 			if c.tryRestart() {
 				return result{ok: true, note: "had stopped; started it again"}
 			}
@@ -333,6 +346,9 @@ func (c *check) run() result {
 	}
 	return result{ok: true, value: float64(time.Since(started).Milliseconds())}
 }
+
+// seconds writes a duration as "2 s" or "0.5 s".
+func seconds(d time.Duration) string { return strconv.FormatFloat(d.Seconds(), 'f', -1, 64) + " s" }
 
 // expiryResult is down once the time has passed, and shows whole days left, rounded up while any remain.
 func expiryResult(until, at time.Time) result {

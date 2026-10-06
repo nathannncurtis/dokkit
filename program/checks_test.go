@@ -126,3 +126,29 @@ func TestChecksRunAtOnce(t *testing.T) {
 		t.Fatalf("four 300 ms checks one after another took %v", took)
 	}
 }
+
+func TestASlowAnswerIsDegradedNotDown(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { time.Sleep(150 * time.Millisecond) }))
+	defer srv.Close()
+	r := (&check{Type: "http", URL: srv.URL, Slow: "50ms"}).run()
+	if r.ok || r.state != "degraded" || r.value < 150 || !strings.Contains(r.note, "slower than 0.05 s") {
+		t.Fatalf("a slow answer is degraded and keeps its time: %+v", r)
+	}
+	if r := (&check{Type: "http", URL: srv.URL, Slow: "5s"}).run(); !r.ok {
+		t.Fatalf("a quick enough answer is fine: %+v", r)
+	}
+	if r := (&check{Type: "http", URL: srv.URL}).run(); !r.ok {
+		t.Fatalf("with no slow, nothing changes: %+v", r)
+	}
+	if _, err := (&check{Type: "http", URL: srv.URL, Slow: "soon"}).problem(); err == nil {
+		t.Fatal("slow must be a time such as 2s")
+	}
+}
+
+func TestADeclarationWithoutSchemaSaysWhatToDo(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "dokkit.toml")
+	os.WriteFile(file, []byte("[service]\nid = \"app\"\n"), 0o600)
+	if _, err := readDeclaration(file); err == nil || err.Error() != "add schema = 1 as the first line." {
+		t.Fatalf("got %v", err)
+	}
+}

@@ -127,11 +127,3 @@ func findDisks() (all []found) {
 	return
 }
 
-func serviceCommand(string) int {
-	fmt.Fprintln(os.Stderr, "dokkit: installing as a service is built for Windows so far. Elsewhere, run dokkit watch from a systemd unit.")
-	return 1
-}
-
-func finishUpdate(path string) string {
-	return "To finish: stop dokkit, put that file in its place, and start it again."
-}
