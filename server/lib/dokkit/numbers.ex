@@ -33,11 +33,12 @@ defmodule Dokkit.Numbers do
 
     # A threshold in a service's file reads that service's number, or the machine's.
     all = Repo.all(thresholds)
-    declared? = Enum.any?(all, &(&1.source == :file))
+    limit_of = &(&1.config["limit"] || machine_limit(&1.config["limit_from"]))
+    declared? = Enum.any?(all, &(&1.source == :file and is_number(limit_of.(&1))))
 
     for check <- all,
         is_nil(service) or check.service_id == service.id,
-        limit = check.config["limit"] || machine_limit(check.config["limit_from"]),
+        limit = limit_of.(check),
         is_number(limit) do
       # A declared threshold replaces the built-in one, which then reads as fine.
       if value > limit and not (declared? and check.source != :file),

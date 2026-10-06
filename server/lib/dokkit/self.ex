@@ -6,11 +6,11 @@ defmodule Dokkit.Self do
   import Ecto.Query, only: [from: 2]
   alias Dokkit.{Check, Issues, Machine, Repo, Service}
 
-  def tick(now, config) do
+  def tick(now, config, booted \\ nil) do
     url = config["heartbeat_url"]
     # A database that does not answer cannot record it, so the outside call stops instead.
     if url not in [nil, ""] and match?({:ok, _}, Repo.query("SELECT 1")), do: beat(url)
-    row(now)
+    row(now, booted)
   end
 
   defp beat(url) do
@@ -23,7 +23,7 @@ defmodule Dokkit.Self do
   end
 
   # The database answering and its size. A full disk shows here before it stops intake.
-  defp row(now) do
+  defp row(now, booted) do
     machine =
       Repo.get_by(Machine, name: "Dokkit") || Repo.insert!(%Machine{name: "Dokkit", kind: :group})
 
@@ -51,15 +51,16 @@ defmodule Dokkit.Self do
         )
     end
 
-    reports(service, now)
+    reports(service, now, booted)
     archive(service, now)
   end
 
   @quiet_minutes 10
 
   # One quiet machine is that machine's news. Every machine quiet at once is more likely Dokkit's.
-  defp reports(service, now) do
+  defp reports(service, now, booted) do
     newest = Repo.one(from m in Machine, where: m.kind == :enrolled, select: max(m.last_seen_at))
+    newest = if newest && booted, do: Enum.max([newest, booted], DateTime), else: newest
     quiet = newest && DateTime.diff(now, newest, :minute) * 1.0
 
     if quiet && quiet >= @quiet_minutes,

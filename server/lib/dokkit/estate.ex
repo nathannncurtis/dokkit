@@ -173,9 +173,9 @@ defmodule Dokkit.Estate do
       Enum.any?(
         List.wrap(doc["check"]),
         &(is_map(&1) and
-              (not positive?(&1["fail_after"]) or not positive?(&1["every_seconds"])))
+              not (is_nil(&1["fail_after"]) or &1["fail_after"] in 1..100//1))
       ) ->
-        {:error, "fail_after and every_seconds are whole numbers above zero."}
+        {:error, "fail_after is a whole number from 1 to 100."}
 
       true ->
         Repo.transaction(fn ->
@@ -203,7 +203,7 @@ defmodule Dokkit.Estate do
           wanted =
             for(
               {name, c} <- checks,
-              do: {name, c["type"], Map.drop(c, ~w(type name fail_after)), c["fail_after"] || 3}
+              do: {name, c["type"], Map.drop(c, config_drop(c["type"])), c["fail_after"] || 3}
             ) ++
               for(j <- jobs, do: {j["id"], "job", Map.drop(j, ["id"]), 1})
 
@@ -253,8 +253,9 @@ defmodule Dokkit.Estate do
 
   def declare(_, _), do: {:error, "A declaration needs [service] with an id."}
 
-  defp positive?(nil), do: true
-  defp positive?(n), do: is_integer(n) and n > 0
+  # Process and service checks are named by type, so their own name stays in the config.
+  defp config_drop(type) when type in ~w(process windows-service), do: ~w(type fail_after)
+  defp config_drop(_), do: ~w(type name fail_after)
 
   # Named as the program names them: by the type for process and windows-service, otherwise
   # by the name or the type, numbered when a base repeats.

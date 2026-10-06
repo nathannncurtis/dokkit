@@ -23,18 +23,17 @@ defmodule Dokkit.Watch do
   def handle_info(:sweep, booted) do
     Process.send_after(self(), :sweep, @every)
     now = DateTime.utc_now()
-    config = Dokkit.Alerts.config()
     archive = Application.get_env(:dokkit, :archive)
 
     steps =
       if(settled?(booted, now),
-        do: [fn -> Issues.machines_sweep(now) end, fn -> sweep(now) end],
+        do: [fn -> Issues.machines_sweep(now) end, fn -> sweep(now, booted) end],
         else: []
       ) ++
         [
           fn -> prune(now) end,
-          fn -> Dokkit.Digest.tick(now, config) end,
-          fn -> Dokkit.Self.tick(now, config) end,
+          fn -> Dokkit.Digest.tick(now, Dokkit.Alerts.config()) end,
+          fn -> Dokkit.Self.tick(now, Dokkit.Alerts.config(), booted) end,
           fn -> if archive && now.minute == 0, do: Dokkit.Logs.archive(archive) end,
           fn -> Issues.changed() end,
           fn ->
@@ -51,6 +50,8 @@ defmodule Dokkit.Watch do
     fun.()
   rescue
     e -> Logger.error("Watch step failed: " <> Exception.message(e))
+  catch
+    :exit, reason -> Logger.error("Watch step failed: " <> inspect(reason))
   end
 
   @keep_batches_hours 24
@@ -75,12 +76,12 @@ defmodule Dokkit.Watch do
   end
 
   @doc "Returns how many jobs and beats it flagged."
-  def sweep(now \\ DateTime.utc_now()) do
+  def sweep(now \\ DateTime.utc_now(), booted \\ nil) do
     Repo.all(
       from c in Check, where: c.type in [:job, :beat] and c.state != :down, preload: :service
     )
     |> Enum.count(fn check ->
-      case safe_verdict(check, now) do
+      case safe_verdict(check, now, booted) do
         nil -> false
         {title, note} -> Issues.record(check, :down, at: now, title: title, note: note)
       end
@@ -88,8 +89,8 @@ defmodule Dokkit.Watch do
   end
 
   # One check with a schedule that cannot be read must not stop the others.
-  defp safe_verdict(check, now) do
-    verdict(check, now)
+  defp safe_verdict(check, now, booted) do
+    verdict(check, now, booted)
   rescue
     e ->
       Logger.error("Watch could not judge #{check.id}: " <> Exception.message(e))
@@ -97,9 +98,13 @@ defmodule Dokkit.Watch do
   end
 
   # Two beats late and a minute more, so one slow loop is not an alarm.
-  defp verdict(%Check{type: :beat, checked_at: %DateTime{} = last, config: config} = check, now) do
+  defp verdict(
+         %Check{type: :beat, checked_at: %DateTime{} = last, config: config} = check,
+         now,
+         booted
+       ) do
     every = config["every_seconds"] || 60
-    quiet = DateTime.diff(now, last)
+    quiet = DateTime.diff(now, later(last, booted))
 
     if quiet > every * 2 + 60,
       do:
@@ -107,31 +112,42 @@ defmodule Dokkit.Watch do
          "No beat for #{div(quiet, 60)} min. One was expected every #{every} s."}
   end
 
-  defp verdict(%Check{type: :beat}, _), do: nil
-  defp verdict(check, now), do: missed(check, now) || overran(check, now)
+  defp verdict(%Check{type: :beat}, _, _), do: nil
+  defp verdict(check, now, booted), do: missed(check, now, booted) || overran(check, now)
+
+  # Time the server was down is not time the app was quiet.
+  defp later(time, nil), do: time
+  defp later(time, booted), do: Enum.max([time, booted], DateTime)
 
   # Schedules are read as UTC until jobs carry a timezone.
-  defp missed(%Check{config: %{"schedule" => cron} = config} = check, now) do
+  defp missed(%Check{config: %{"schedule" => cron} = config} = check, now, booted)
+       when is_binary(cron) do
     with {:ok, expr} <- Crontab.CronExpression.Parser.parse(cron),
          {:ok, due} <- Crontab.Scheduler.get_previous_run_date(expr, DateTime.to_naive(now)),
+         {:ok, before} <-
+           Crontab.Scheduler.get_previous_run_date(expr, NaiveDateTime.add(due, -1)),
+         early = min(60, div(NaiveDateTime.diff(due, before), 2)),
          due = DateTime.from_naive!(due, "Etc/UTC"),
          true <- DateTime.compare(check.inserted_at, due) == :lt,
+         true <- is_nil(booted) or DateTime.compare(booted, due) == :lt,
          true <- DateTime.diff(now, due) > seconds(config["grace"], 1800),
          false <-
            Repo.exists?(
              from r in JobRun,
                where:
                  r.check_id == ^check.id and
-                   coalesce(r.started_at, r.finished_at) >= ^DateTime.add(due, -60)
+                   coalesce(r.started_at, r.finished_at) >= ^DateTime.add(due, -early)
            ) do
       {"#{Dokkit.Intake.label(check.service, check.name)} did not run",
        "Expected at #{Calendar.strftime(due, "%H:%M")} UTC"}
     else
       _ -> nil
     end
+  rescue
+    _ -> nil
   end
 
-  defp missed(_, _), do: nil
+  defp missed(_, _, _), do: nil
 
   defp overran(%Check{config: %{"max_runtime" => max}} = check, now) do
     limit = DateTime.add(now, -seconds(max, 3600))
