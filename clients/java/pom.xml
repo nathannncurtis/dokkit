@@ -1,0 +1,30 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>dokkit</groupId>
+  <artifactId>dokkit</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+  <name>dokkit</name>
+  <description>The Dokkit client library</description>
+  <licenses>
+    <license>
+      <name>Apache-2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+    </license>
+  </licenses>
+  <properties>
+    <maven.compiler.release>11</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+  <build>
+    <sourceDirectory>.</sourceDirectory>
+    <plugins>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <includes><include>Dokkit.java</include></includes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

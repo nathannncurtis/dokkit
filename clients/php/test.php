@@ -22,6 +22,7 @@ Dokkit::start('2.3.0', "http://127.0.0.1:$port/", 'dka_test');
 Dokkit::beat('worker', 30);
 Dokkit::check('queue-age', 'degraded', 14, 'oldest item is "14" minutes old');
 Dokkit::log('error', 'Upload failed');
+(new DokkitLogger())->warning('Slow {what}', ['what' => 'query']);
 function purge(callable $progress): void
 {
     $progress(4000, 9000);
@@ -37,8 +38,8 @@ proc_terminate($server);
 $all = file_get_contents(__DIR__ . '/out/got.txt');
 $want = [
     '/api/v1/report Bearer dka_test', '"type":"deploy","version":"2.3.0"', '"every_seconds":30', '"state":"degraded","value":14',
-    'oldest item is \"14\" minutes old', '"level":"error","msg":"Upload failed"', '"event":"start"', '"event":"progress","done":4000,"total":9000',
-    '"event":"fail","exit_code":1', '/api/v1/errors Bearer dka_test', '"type":"DomainException","handled":false', '"function":"purge","line":28,"own":true}]',
+    'oldest item is \"14\" minutes old', '"level":"error","msg":"Upload failed"', '"level":"warn","msg":"Slow query"', '"event":"start"', '"event":"progress","done":4000,"total":9000',
+    '"event":"fail","exit_code":1', '/api/v1/errors Bearer dka_test', '"type":"DomainException","handled":false', '"function":"purge","line":29,"own":true}]',
 ];
 $missing = array_filter($want, fn ($w) => !str_contains($all, $w));
 // What the library does with its own pieces, and when the server cannot be reached.

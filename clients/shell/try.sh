@@ -7,5 +7,6 @@ dokkit_beat worker 30
 dokkit_check queue-age degraded 14 'oldest item is "14" minutes \ old'
 dokkit_metric queue.depth 7
 dokkit_log error "Upload failed"
+dokkit_capture UploadError "Upload failed"
 dokkit_job nightly-purge sh -c 'exit 3'
 echo "code=$?"

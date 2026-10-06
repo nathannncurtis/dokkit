@@ -23,6 +23,12 @@ export function log(
   fields?: Record<string, unknown>,
 ): void;
 
+/** A console that also sends each call through log. Pass a console to wrap it; the default is the global one. */
+export function consoleLogger(target?: Console): Console;
+
+/** Makes the global console send through log too. Returns a function that puts it back. */
+export function patchConsole(): () => void;
+
 /** Sends a stats document, for an app dokkit cannot reach. */
 export function stats(document: Record<string, unknown>): void;
 

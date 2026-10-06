@@ -6,6 +6,7 @@
 //     await dokkit.job("nightly-purge", async (run) => { run.progress(4000, 9000); });
 //     dokkit.check("queue-age", "degraded", 14, "oldest item is 14 minutes old");
 //     dokkit.capture(error);
+//     const restore = dokkit.patchConsole();   // optional: console.* also goes to the log
 //
 // Nothing here throws into the app or waits on the network. Lines wait in a queue of fixed
 // size and a timer sends them. Error message text is never sent.
@@ -95,6 +96,40 @@ export const metric = (name, value, unit) => add({ type: "metric", name, value, 
 
 /** level is trace, debug, info, warn, error or fatal. */
 export const log = (level, msg, fields) => add({ type: "log", t: now(), level, msg: String(msg), fields });
+
+const LEVELS = { log: "info", debug: "debug", info: "info", warn: "warn", error: "error", trace: "trace" };
+
+const text = (a) => {
+  if (typeof a === "string") return a;
+  try {
+    return a instanceof Error ? a.name : JSON.stringify(a) ?? String(a);
+  } catch {
+    return String(a);
+  }
+};
+
+/** A console that also sends each call through log. Pass a console to wrap it; the default is the global one. */
+export function consoleLogger(target = globalThis.console) {
+  const out = {};
+  for (const k in target) if (typeof target[k] === "function") out[k] = target[k].bind(target);
+  for (const [k, level] of Object.entries(LEVELS))
+    out[k] = (...args) => {
+      try {
+        log(level, args.map(text).join(" "));
+      } catch {}
+      return target[k](...args);
+    };
+  return out;
+}
+
+/** Makes the global console send through log too. Returns a function that puts it back. */
+export function patchConsole() {
+  const original = globalThis.console;
+  globalThis.console = consoleLogger(original);
+  return () => {
+    globalThis.console = original;
+  };
+}
 
 /** Sends a stats document, for an app dokkit cannot reach. */
 export const stats = (document) => add({ type: "stats", document });

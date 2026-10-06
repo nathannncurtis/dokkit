@@ -208,6 +208,30 @@ pub fn log(level: &str, msg: &str) {
     add("log", &[("level", J::S(level)), ("msg", J::S(msg))]);
 }
 
+/// For the `log` crate, with the `log` feature: `log::set_logger(&dokkit::Logger)`, then `log::set_max_level(...)`.
+#[cfg(feature = "log")]
+pub struct Logger;
+
+#[cfg(feature = "log")]
+impl ::log::Log for Logger {
+    fn enabled(&self, _: &::log::Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &::log::Record) {
+        let level = match record.level() {
+            ::log::Level::Error => "error",
+            ::log::Level::Warn => "warn",
+            ::log::Level::Info => "info",
+            ::log::Level::Debug => "debug",
+            ::log::Level::Trace => "trace",
+        };
+        log(level, &record.args().to_string());
+    }
+
+    fn flush(&self) {}
+}
+
 /// Sends a stats document already written as JSON, for an app dokkit cannot reach.
 pub fn stats(document_json: &str) {
     add("stats", &[("document", J::Raw(document_json.replace(['\r', '\n'], " ")))]);

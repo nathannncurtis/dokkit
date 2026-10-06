@@ -22,15 +22,18 @@ test("off when blank, then one line per call", async () => {
   server.close();
 
   assert.match(out, /code=3/);
-  assert.ok(got.every(([path, auth]) => path === "/api/v1/report" && auth === "Bearer dka_test"));
+  assert.ok(got.every(([path, auth]) => auth === "Bearer dka_test" && path === (path.endsWith("errors") ? "/api/v1/errors" : "/api/v1/report")));
+  assert.strictEqual(got[4][0], "/api/v1/errors");
   const lines = got.map(([, , l]) => l);
-  assert.deepStrictEqual(lines.map((l) => l.type), ["beat", "custom", "metric", "log", "job", "job"]);
+  assert.deepStrictEqual(lines.map((l) => l.type), ["beat", "custom", "metric", "log", "UploadError", "job", "job"]);
+  assert.deepStrictEqual([lines[4].handled, lines[4].frames, lines[4].message], [true, [], undefined]);
+  assert.match(lines[4].at, /^\d{4}-\d\d-\d\dT[\d:]+Z$/);
   assert.ok(got.every((g) => /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(g[3])));
   assert.strictEqual(lines[0].every_seconds, 30);
   assert.strictEqual(lines[1].note, 'oldest item is "14" minutes \\ old');
   assert.strictEqual(lines[1].value, 14);
-  assert.deepStrictEqual([lines[5].event, lines[5].exit_code], ["fail", 3]);
-  assert.strictEqual(lines[4].run, lines[5].run);
+  assert.deepStrictEqual([lines[6].event, lines[6].exit_code], ["fail", 3]);
+  assert.strictEqual(lines[5].run, lines[6].run);
   assert.ok(lines.every((l) => l.host));
 });
 

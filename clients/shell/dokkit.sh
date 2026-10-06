@@ -6,6 +6,7 @@
 #     dokkit_check queue-age degraded 14 "oldest item is 14 minutes old"
 #     dokkit_metric queue.depth 7
 #     dokkit_log error "Upload failed"
+#     dokkit_capture UploadError "Upload failed"
 #
 # Each call sends one line and waits at most five seconds, twice if the first try fails. A line
 # that cannot be sent is dropped and the script carries on. A machine with the dokkit program on
@@ -33,16 +34,17 @@ _dokkit_on() {
 
 # The key and the body go to curl on its standard input, so ps never shows them.
 _dokkit_post() {
-  printf 'url = "%s/api/v1/report"\nheader = "Authorization: Bearer %s"\nheader = "Content-Type: application/x-ndjson"\nheader = "Dokkit-Batch: %s"\ndata-binary = "%s"\n' \
-    "$(_dokkit_text "${DOKKIT_URL%/}")" "$(_dokkit_text "$DOKKIT_KEY")" "$2" "$(_dokkit_text "$1")" |
+  printf 'url = "%s%s"\nheader = "Authorization: Bearer %s"\nheader = "Content-Type: %s"\nheader = "Dokkit-Batch: %s"\ndata-binary = "%s"\n' \
+    "$(_dokkit_text "${DOKKIT_URL%/}")" "${4:-/api/v1/report}" "$(_dokkit_text "$DOKKIT_KEY")" "${5:-application/x-ndjson}" "$2" "$(_dokkit_text "$1")" |
     curl -s -f -o /dev/null --max-time 5 -K -
 }
 
+# _dokkit_send <fields> [path] [content type]
 _dokkit_send() {
   _dokkit_on || return 0
   _dokkit_line="{$1,\"host\":\"$(_dokkit_text "$(hostname)")\"}"
   _dokkit_id=$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' | sed 's/^\(........\)\(....\)\(....\)\(....\)\(............\)$/\1-\2-\3-\4-\5/')
-  _dokkit_post "$_dokkit_line" "$_dokkit_id" || _dokkit_post "$_dokkit_line" "$_dokkit_id" || true
+  _dokkit_post "$_dokkit_line" "$_dokkit_id" "" "${2:-}" "${3:-}" || _dokkit_post "$_dokkit_line" "$_dokkit_id" "" "${2:-}" "${3:-}" || true
 }
 
 # dokkit_beat <name> [every seconds]
@@ -66,6 +68,12 @@ dokkit_metric() {
 
 # dokkit_log <level> <message>
 dokkit_log() { _dokkit_send "\"type\":\"log\",\"level\":\"$(_dokkit_text "$1")\",\"msg\":\"$(_dokkit_text "${2:-}")\""; }
+
+# dokkit_capture <type> <message>   Sends an error. The type is its name, such as UploadError.
+# The message is not sent; a shell script has no stack, so the report carries none.
+dokkit_capture() {
+  _dokkit_send "\"at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"type\":\"$(_dokkit_text "${1:-Error}")\",\"handled\":true,\"frames\":[]${DOKKIT_ENV:+,\"environment\":\"$(_dokkit_text "$DOKKIT_ENV")\"}" /api/v1/errors application/json
+}
 
 # dokkit_job <name> <command...>   Returns what the command returns.
 dokkit_job() {

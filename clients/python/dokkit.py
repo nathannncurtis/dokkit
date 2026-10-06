@@ -195,6 +195,11 @@ def metric(name, value, unit=None):
     _add({"type": "metric", "name": name, "value": value, "unit": unit})
 
 
+def log(level, msg, fields=None):
+    """level is trace, debug, info, warn, error or fatal."""
+    _add({"type": "log", "t": _now(), "level": level, "msg": str(msg), "fields": fields})
+
+
 def stats(document):
     """Sends a stats document, for an app dokkit cannot reach."""
     _add({"type": "stats", "document": document})

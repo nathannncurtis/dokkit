@@ -235,3 +235,44 @@ final class Dokkit
         return gmdate('Y-m-d\TH:i:s', (int) $t) . sprintf('.%03dZ', (int) (fmod($t, 1) * 1000));
     }
 }
+
+// A PSR-3 logger that sends through Dokkit::log. It has PSR-3's methods without needing psr/log,
+// and implements Psr\Log\LoggerInterface when that package is loaded.
+//     $logger = new DokkitLogger();
+class DokkitLoggerMethods
+{
+    private const LEVELS = ['emergency' => 'fatal', 'alert' => 'fatal', 'critical' => 'fatal', 'error' => 'error', 'warning' => 'warn', 'notice' => 'info', 'info' => 'info', 'debug' => 'debug'];
+
+    public function emergency($message, array $context = []): void { $this->log('emergency', $message, $context); }
+    public function alert($message, array $context = []): void { $this->log('alert', $message, $context); }
+    public function critical($message, array $context = []): void { $this->log('critical', $message, $context); }
+    public function error($message, array $context = []): void { $this->log('error', $message, $context); }
+    public function warning($message, array $context = []): void { $this->log('warning', $message, $context); }
+    public function notice($message, array $context = []): void { $this->log('notice', $message, $context); }
+    public function info($message, array $context = []): void { $this->log('info', $message, $context); }
+    public function debug($message, array $context = []): void { $this->log('debug', $message, $context); }
+
+    public function log($level, $message, array $context = []): void
+    {
+        try {
+            $text = (string) $message;
+            foreach ($context as $key => $value) {
+                if (is_scalar($value) || $value === null || $value instanceof Stringable) {
+                    $text = str_replace('{' . $key . '}', (string) $value, $text);
+                }
+            }
+            Dokkit::log(self::LEVELS[$level] ?? 'info', $text);
+        } catch (Throwable) {
+        }
+    }
+}
+
+if (interface_exists('Psr\Log\LoggerInterface')) {
+    class DokkitLogger extends DokkitLoggerMethods implements Psr\Log\LoggerInterface
+    {
+    }
+} else {
+    class DokkitLogger extends DokkitLoggerMethods
+    {
+    }
+}

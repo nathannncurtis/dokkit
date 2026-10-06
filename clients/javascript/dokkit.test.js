@@ -126,3 +126,15 @@ test("Firefox and Safari stack lines are read", async () => {
   assert.ok(r.got[0], r.stderr);
   assert.deepStrictEqual(r.got[0].lines[0].frames.map((f) => [f.function, f.line]), [["(anonymous)", 5], ["run", 3]]);
 });
+
+test("patchConsole sends console calls through log and can be undone", async () => {
+  const r = await scenario(`
+    dokkit.start({ url, key: "k" });
+    const restore = dokkit.patchConsole();
+    console.warn("careful", { a: 1 });
+    restore();
+    console.error("not sent");
+    await dokkit.flush();`);
+  assert.deepStrictEqual(r.got[0].lines.map((l) => [l.level, l.msg]), [["warn", 'careful {"a":1}']]);
+  assert.match(r.stderr, /careful/);
+});

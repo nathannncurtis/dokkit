@@ -1,0 +1,10 @@
+{
+  "name": "dokkit/dokkit",
+  "description": "The Dokkit client library",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "library",
+  "require": { "php": ">=8.0" },
+  "suggest": { "psr/log": "DokkitLogger implements Psr\\Log\\LoggerInterface when this is installed" },
+  "autoload": { "files": ["Dokkit.php"] }
+}

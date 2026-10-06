@@ -81,6 +81,10 @@ class Library(unittest.TestCase):
         dokkit.beat("b")
         self.assertEqual(len(dokkit._state.lines), 2)
 
+    def test_log_sends_a_line(self):
+        dokkit.log("warn", "slow query")
+        self.assertIn('"level":"warn"', dokkit._state.lines[-1].replace(" ", ""))
+
     def test_a_bad_format_string_does_not_raise_into_the_app(self):
         record = logging.LogRecord("app", logging.ERROR, "f", 1, "%d items", ("x",), None)
         dokkit.handler().emit(record)
