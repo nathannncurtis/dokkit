@@ -5,6 +5,7 @@ defmodule Dokkit.Application do
   @impl true
   def start(_type, _args) do
     Dokkit.LoginThrottle.init()
+    Dokkit.Slots.init()
     watch = Application.get_env(:dokkit, :watch, true)
 
     children =

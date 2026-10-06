@@ -34,6 +34,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `rules` | `read` | Lists the alert rules. |
 | `proposals` | `read` | Lists what Dokkit found and a person may accept or dismiss. |
 | `series` | `read` | Shows numbers over time for a service. |
+| `day` | `read` | Shows the last 24 hours in half hours: for each machine whether something was down, needed a look, or nothing happened, or it was not heard from, and the issues that opened. |
 | `logs` | `read-logs` | Searches log lines. |
 | `snooze` | `act` | Snoozes an issue until a time. |
 | `unsnooze` | `act` | Wakes a snoozed issue. |
@@ -69,4 +70,4 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 
 ## Built so far
 
-`POST /mcp` with a user token: every tool in the table, 42 in all, one for each call of the API. A tool the token may not use is not listed.
+`POST /mcp` with a user token: every tool in the table, 43 in all, one for each call of the API. A tool the token may not use is not listed.

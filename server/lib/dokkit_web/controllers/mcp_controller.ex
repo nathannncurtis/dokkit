@@ -77,6 +77,9 @@ defmodule DokkitWeb.McpController do
        "to" => @text,
        "points" => %{"type" => "integer", "minimum" => 1, "maximum" => 500}
      }, ["id"]},
+    {"day", "read",
+     "The last 24 hours in half hours: for each machine, which half hours had something down, something that needed a look, nothing, or no signal, and the issues that opened. to is RFC 3339 and defaults to now.",
+     %{"to" => @text}, []},
     {"unsnooze", "act", "Wake a snoozed issue.", %{"id" => @text}, ["id"]},
     {"note", "act", "Add a note to an issue.", %{"id" => @text, "text" => @text}, ["id", "text"]},
     {"bulk", "act",
@@ -289,6 +292,7 @@ defmodule DokkitWeb.McpController do
   defp tool("series", %{"id" => id} = args),
     do: seen(Read.series(id, Map.update(args, "points", nil, &to_string/1)))
 
+  defp tool("day", args), do: Api.the_day(args) |> r()
   defp tool("unsnooze", %{"id" => id}), do: known(Issues.unsnooze(id))
   defp tool("note", args), do: Api.add_note(args, "an AI tool") |> r()
   defp tool("bulk", args), do: Api.bulk_issues(args) |> r()

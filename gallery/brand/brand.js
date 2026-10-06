@@ -96,7 +96,7 @@ $("#told").addEventListener("input", say);
 
 // What an agent is offered follows its token.
 const TOOLS = {
-  read: ["attention", "find", "service", "since_deploy", "jobs", "job_runs", "errors", "tasks", "task_runs", "machines", "machine", "issues", "issue", "deploys", "versions", "rules", "proposals", "series"],
+  read: ["attention", "find", "service", "since_deploy", "jobs", "job_runs", "errors", "tasks", "task_runs", "day", "machines", "machine", "issues", "issue", "deploys", "versions", "rules", "proposals", "series"],
   "read-logs": ["logs"],
   act: ["snooze", "unsnooze", "acknowledge", "note", "bulk", "watch", "unwatch", "routing", "hold", "accept_proposal", "dismiss_proposal", "run_task"],
   admin: ["add_rule", "update_rule", "delete_rule", "set_checks", "allow_restart", "keys", "make_key", "revoke_key", "people", "add_person", "remove_person"],
@@ -106,7 +106,7 @@ function offer() {
   const on = { read: true, "read-logs": all || $("#scLogs").checked, act: all || $("#scAct").checked, admin: all };
   let n = 0;
   $("#tools").innerHTML = Object.entries(TOOLS).map(([s, names]) => names.map((t) => { n += on[s]; return `<code class="${on[s] ? (s === "admin" ? "adm" : "") : "off"}">${t}</code>`; }).join("")).join("");
-  $("#toolSay").textContent = `This token is offered ${n} of 42 tools. ` + (all ? "It can do anything you can, keys and people included." : (on.act ? "It can act on issues and run tasks you accepted. It cannot touch keys, people or rules." : "It cannot change anything.") + (on["read-logs"] ? "" : " Log contents are left out of every answer."));
+  $("#toolSay").textContent = `This token is offered ${n} of 43 tools. ` + (all ? "It can do anything you can, keys and people included." : (on.act ? "It can act on issues and run tasks you accepted. It cannot touch keys, people or rules." : "It cannot change anything.") + (on["read-logs"] ? "" : " Log contents are left out of every answer."));
 }
 // Full control is not a switch you can just flip.
 let sure = false;

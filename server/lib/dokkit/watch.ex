@@ -66,6 +66,7 @@ defmodule Dokkit.Watch do
   @doc "Drops numbers past their keep time, spent batch ids, and app hosts never seen again."
   def prune(now) do
     Dokkit.Numbers.prune(now)
+    Dokkit.Slots.prune(now)
 
     Repo.delete_all(
       from b in Dokkit.Batch,

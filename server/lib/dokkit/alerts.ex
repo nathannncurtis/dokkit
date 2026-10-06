@@ -36,6 +36,17 @@ defmodule Dokkit.Alerts do
   def channels, do: @channels
   def sends?(channel), do: channel != "none" and List.keymember?(@channels, channel, 1)
 
+  @sent %{
+    "page" => "Paged",
+    "push" => "Pushed",
+    "email" => "Emailed",
+    "text" => "Texted",
+    "webhook" => "Webhook called"
+  }
+
+  @doc "What is said of an alert that went out by this channel, or nil."
+  def sent_word(channel), do: @sent[channel]
+
   def secrets, do: @secrets
 
   def config do

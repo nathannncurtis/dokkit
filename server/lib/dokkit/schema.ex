@@ -197,6 +197,17 @@ defmodule Dokkit.Install do
   end
 end
 
+defmodule Dokkit.MachineSlot do
+  use Ecto.Schema
+  @primary_key false
+  @foreign_key_type :binary_id
+
+  schema "machine_slots" do
+    field :slot, :utc_datetime, primary_key: true
+    belongs_to :machine, Dokkit.Machine, primary_key: true
+  end
+end
+
 defmodule Dokkit.Deploy do
   use Dokkit.Schema
 

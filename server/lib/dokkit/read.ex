@@ -1,7 +1,7 @@
 defmodule Dokkit.Read do
   @moduledoc "What the API and the MCP answer with, as plain maps."
   import Ecto.Query, only: [from: 2]
-  alias Dokkit.{Estate, Issue, Issues, Logs, Repo}
+  alias Dokkit.{Estate, Issue, Issues, Logs, Machine, MachineSlot, Repo, Slots}
 
   def inbox do
     %{needs_you: needs_you, soon: soon, other: other} = Issues.groups()
@@ -16,6 +16,121 @@ defmodule Dokkit.Read do
           %{environment: env, issues: Enum.map(list, &issue/1)}
         end,
       fine: Issues.fine()
+    }
+  end
+
+  @cells 48
+  @states %{0 => "quiet", 1 => "degraded", 2 => "down"}
+
+  @doc """
+  The 48 half hours that end with the one holding `to`: for each machine a cell that is down,
+  degraded, quiet or none (not heard from), and the issues that opened. An issue keeps its
+  last state for its whole life. Soon issues and other environments are left out.
+  """
+  def day(to \\ DateTime.utc_now()) do
+    step = Slots.step()
+    last = Slots.slot(to)
+    from = DateTime.add(last, -(@cells - 1) * step)
+    edge = DateTime.add(last, step)
+    us = step * 1_000_000
+    index = &Integer.floor_div(DateTime.diff(&1, from, :microsecond), us)
+
+    machines =
+      Repo.all(
+        from m in Machine,
+          where: m.kind != :group,
+          order_by: m.name,
+          select: %{id: m.id, name: m.name, kind: m.kind}
+      )
+
+    issues =
+      Repo.all(
+        from i in Issue,
+          left_join: s in assoc(i, :service),
+          left_join: a in assoc(i, :alert),
+          where: not i.soon and i.since < ^edge,
+          where: is_nil(i.closed_at) or i.closed_at > ^from,
+          where: is_nil(s.id) or s.environment == "production",
+          order_by: i.since,
+          select: %{
+            machine_id: i.machine_id,
+            state: i.state,
+            since: i.since,
+            closed_at: i.closed_at,
+            title: i.title,
+            channel: a.channel,
+            status: a.status
+          }
+      )
+
+    heard =
+      MapSet.new(
+        Repo.all(
+          from s in MachineSlot,
+            where: s.slot >= ^from and s.slot <= ^last,
+            select: {s.machine_id, s.slot}
+        ),
+        fn {id, slot} -> {id, index.(slot)} end
+      )
+
+    worst =
+      Enum.reduce(issues, %{}, fn i, acc ->
+        first = index.(i.since)
+
+        stop =
+          if i.closed_at,
+            do:
+              max(
+                first,
+                -Integer.floor_div(-DateTime.diff(i.closed_at, from, :microsecond), us) - 1
+              ),
+            else: @cells - 1
+
+        rank = if i.state == :down, do: 2, else: 1
+
+        Enum.reduce(max(first, 0)..min(stop, @cells - 1)//1, acc, fn n, acc ->
+          Map.update(acc, {i.machine_id, n}, rank, &max(&1, rank))
+        end)
+      end)
+
+    rows =
+      for m <- machines do
+        cells =
+          for n <- 0..(@cells - 1) do
+            cond do
+              rank = worst[{m.id, n}] -> @states[rank]
+              {m.id, n} in heard -> "quiet"
+              true -> "none"
+            end
+          end
+
+        %{id: m.id, name: m.name, kind: m.kind, cells: cells}
+      end
+
+    names = Map.new(machines, &{&1.id, &1.name})
+
+    %{
+      from: from,
+      to: edge,
+      machines:
+        for(
+          m <- rows,
+          m.kind == :enrolled or Enum.any?(m.cells, &(&1 != "none")),
+          do: Map.delete(m, :kind)
+        ),
+      events:
+        for i <- issues,
+            DateTime.compare(i.since, from) != :lt,
+            DateTime.compare(i.since, to) != :gt do
+          %{
+            at: i.since,
+            title: i.title,
+            machine: names[i.machine_id],
+            state: i.state,
+            sent: (i.status == :sent && Dokkit.Alerts.sent_word(i.channel)) || nil,
+            closed_at: i.closed_at
+          }
+        end
     }
   end
 

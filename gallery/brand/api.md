@@ -97,9 +97,9 @@ Ping a job with a web request. For anything that can only make a web request, su
 }
 ```
 
-`404` Not found.
-
 `401` Missing or bad key.
+
+`404` Not found.
 
 `413` Too large.
 
@@ -132,9 +132,9 @@ Done.
 }
 ```
 
-`404` Not found.
-
 `401` Missing or bad key.
+
+`404` Not found.
 
 `413` Too large.
 
@@ -589,6 +589,205 @@ List error groups. Error groups by type and place, newest first, at most 200. Ta
 
 `403` The key may not do this.
 
+### GET /api/v1/day
+
+The last day. The last 24 hours in 48 half hours, for each machine, and the issues that opened in that time. The last cell is the half hour that holds `to`. A cell is `down` if an issue that was down overlapped it, else `degraded` if any issue overlapped it, else `quiet` if the machine was heard from, else `none` (no signal). An issue counts in the state it has now, for its whole life. Soon issues and issues of services that are not in production colour nothing. Takes a user token (`dku_`) with the `read` scope.
+
+- `to` (query, optional): The end of the window, RFC 3339. Defaults to now.
+
+`200` OK.
+
+```json
+{
+  "from": "2026-01-09T12:30:00Z",
+  "to": "2026-01-10T12:30:00Z",
+  "machines": [
+    {
+      "id": "6f1c2a3e-0b7d-4c55-9a11-2d3f4e5a6b70",
+      "name": "db-01",
+      "cells": [
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "down",
+        "down",
+        "quiet",
+        "quiet",
+        "quiet"
+      ]
+    },
+    {
+      "id": "0a9e8d7c-1b2a-4f33-8c44-5d6e7f809a1b",
+      "name": "web-02",
+      "cells": [
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "degraded",
+        "degraded"
+      ]
+    },
+    {
+      "id": "3c4d5e6f-7a8b-4c9d-a0b1-c2d3e4f50617",
+      "name": "nas",
+      "cells": [
+        "none",
+        "none",
+        "none",
+        "none",
+        "none",
+        "none",
+        "none",
+        "none",
+        "none",
+        "none",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet",
+        "quiet"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-01-10T10:05:00Z",
+      "title": "db-01: Postgres is down",
+      "machine": "db-01",
+      "state": "down",
+      "sent": "Paged",
+      "closed_at": "2026-01-10T10:50:00Z"
+    },
+    {
+      "at": "2026-01-10T11:40:00Z",
+      "title": "web-02: Disk C is nearly full",
+      "machine": "web-02",
+      "state": "degraded",
+      "sent": "Pushed",
+      "closed_at": null
+    }
+  ]
+}
+```
+
+`422` to is not an RFC 3339 time.
+
 ### GET /api/v1/inbox
 
 What needs a look. What needs a look, what will soon, what was found and is not watched, what is snoozed, issues in other environments, and how many things are fine. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
@@ -871,7 +1070,7 @@ Get one service. One service with its checks, facts, routing, version and open i
       "type": "http",
       "state": "ok",
       "note": null,
-      "value": 38.0,
+      "value": 38,
       "checked_at": "2026-10-05T21:14:00Z",
       "source": "file",
       "config": {
@@ -914,7 +1113,7 @@ Get chart data for a service. Without `metric`, the names of the metrics the ser
   "points": [
     {
       "at": "2026-10-05T20:00:00Z",
-      "value": 4.0
+      "value": 4
     }
   ]
 }
@@ -1402,7 +1601,7 @@ Stop watching a service. Stops watching a service. Open issues close and what th
 
 ### PUT /api/v1/services/{id}/routing
 
-Set who is told about a service. Sets the channel for `down` and for `degraded`. A value that is not a channel clears that route. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Set who is told about a service. Sets the channel for `down` and for `degraded`. A value that is not a channel clears that route. `night` is optional; false holds the alerts of a night until it ends. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 - `id` (path): The id of the service.
 
@@ -1411,7 +1610,8 @@ Send:
 ```
 {
   "down": "page",
-  "degraded": "digest"
+  "degraded": "digest",
+  "night": false
 }
 ```
 
@@ -1420,7 +1620,8 @@ Send:
 ```json
 {
   "down": "page",
-  "degraded": "digest"
+  "degraded": "digest",
+  "night": false
 }
 ```
 
@@ -1904,9 +2105,9 @@ The MCP server for AI tools. User token.
 Not served. Answers 405. The MCP server takes POST only. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
-`405` Method not allowed.
-
 `401` Missing or bad key.
+
+`405` Method not allowed.
 
 ### POST /mcp
 

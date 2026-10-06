@@ -98,6 +98,7 @@ defmodule DokkitWeb.Router do
     post "/work/:run/result", IntakeController, :work_result
 
     get "/inbox", ApiController, :inbox
+    get "/day", ApiController, :day
     get "/issues", ApiController, :issues
     get "/machines", ApiController, :machines
     get "/services", ApiController, :services

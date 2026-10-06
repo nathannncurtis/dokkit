@@ -2353,6 +2353,322 @@
         ]
       }
     },
+    "/api/v1/day": {
+      "get": {
+        "operationId": "getDay",
+        "summary": "The last day",
+        "tags": [
+          "Read"
+        ],
+        "description": "The last 24 hours in 48 half hours, for each machine, and the issues that opened in that time. The last cell is the half hour that holds `to`. A cell is `down` if an issue that was down overlapped it, else `degraded` if any issue overlapped it, else `quiet` if the machine was heard from, else `none` (no signal). An issue counts in the state it has now, for its whole life. Soon issues and issues of services that are not in production colour nothing. Takes a user token (`dku_`) with the `read` scope.",
+        "parameters": [
+          {
+            "name": "to",
+            "in": "query",
+            "description": "The end of the window, RFC 3339. Defaults to now.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "The start of the first cell."
+                    },
+                    "to": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "The end of the last cell."
+                    },
+                    "machines": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "cells": {
+                            "type": "array",
+                            "description": "48 states, oldest first.",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "quiet",
+                                "degraded",
+                                "down",
+                                "none"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "events": {
+                      "type": "array",
+                      "description": "Issues that opened in the window, oldest first.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "machine": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "degraded",
+                              "down"
+                            ]
+                          },
+                          "sent": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "What was done to tell someone: Paged, Pushed, Emailed, Texted or Webhook called. Null if nothing was sent."
+                          },
+                          "closed_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "from": "2026-01-09T12:30:00Z",
+                  "to": "2026-01-10T12:30:00Z",
+                  "machines": [
+                    {
+                      "id": "6f1c2a3e-0b7d-4c55-9a11-2d3f4e5a6b70",
+                      "name": "db-01",
+                      "cells": [
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "down",
+                        "down",
+                        "quiet",
+                        "quiet",
+                        "quiet"
+                      ]
+                    },
+                    {
+                      "id": "0a9e8d7c-1b2a-4f33-8c44-5d6e7f809a1b",
+                      "name": "web-02",
+                      "cells": [
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "degraded",
+                        "degraded"
+                      ]
+                    },
+                    {
+                      "id": "3c4d5e6f-7a8b-4c9d-a0b1-c2d3e4f50617",
+                      "name": "nas",
+                      "cells": [
+                        "none",
+                        "none",
+                        "none",
+                        "none",
+                        "none",
+                        "none",
+                        "none",
+                        "none",
+                        "none",
+                        "none",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet",
+                        "quiet"
+                      ]
+                    }
+                  ],
+                  "events": [
+                    {
+                      "at": "2026-01-10T10:05:00Z",
+                      "title": "db-01: Postgres is down",
+                      "machine": "db-01",
+                      "state": "down",
+                      "sent": "Paged",
+                      "closed_at": "2026-01-10T10:50:00Z"
+                    },
+                    {
+                      "at": "2026-01-10T11:40:00Z",
+                      "title": "web-02: Disk C is nearly full",
+                      "machine": "web-02",
+                      "state": "degraded",
+                      "sent": "Pushed",
+                      "closed_at": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "to is not an RFC 3339 time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read"
+            ]
+          }
+        ]
+      }
+    },
     "/api/v1/inbox": {
       "get": {
         "operationId": "inbox",

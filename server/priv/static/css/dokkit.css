@@ -571,3 +571,14 @@ input, select { accent-color: var(--brand); caret-color: var(--brand); }
 .door .bad i { line-height: 20px; }
 .me form { margin-left: auto; }
 .me .btn { color: var(--side-mute); }
+
+/* server: the last day */
+.day { padding: 14px 16px; display: grid; gap: 14px; }
+.lanes { display: grid; grid-template-columns: minmax(0, 7rem) minmax(0, 1fr); gap: 8px 10px; align-items: end; }
+.ln { display: contents; }
+.ln > :first-child { font: 12px var(--mono); color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ticks { display: grid; grid-template-columns: repeat(6, 1fr); font: 11px var(--mono); color: var(--mute); }
+.lane { display: grid; grid-template-columns: repeat(48, minmax(0, 1fr)); gap: 1px; align-items: end; height: 22px; }
+.lane i { height: 10px; border-radius: 2px; background: var(--chip); } .lane .warn { height: 16px; background: var(--warn); } .lane .bad { height: 22px; background: var(--bad); }
+.lane .none { background: none; border: 1px dashed var(--mute); }
+.evs { display: grid; gap: 4px; font-size: 13px; } .evs b { margin-right: 6px; }

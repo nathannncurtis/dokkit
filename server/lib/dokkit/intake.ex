@@ -328,6 +328,8 @@ defmodule Dokkit.Intake do
         from(m in Machine, where: m.kind == :seen, update: [set: [last_seen_at: ^now]]),
       conflict_target: :name
     )
+
+    Dokkit.Slots.touch_named(Enum.map(rows, & &1.name), now)
   end
 
   defp hosts(_, _, _), do: nil
@@ -444,10 +446,7 @@ defmodule Dokkit.Intake do
   defp failure(%JobRun{tail: tail}) when is_binary(tail),
     do:
       tail
-      |> String.split("
-",
-        trim: true
-      )
+      |> String.split(["\r\n", "\n"], trim: true)
       |> List.last()
 
   defp failure(%JobRun{exit_code: code}) when is_integer(code), do: "Exit code #{code}"
@@ -511,8 +510,10 @@ defmodule Dokkit.Intake do
     service = key.service_id && Repo.get!(Service, key.service_id)
     machine = key.machine_id || (service && service.machine_id)
 
-    if key.kind == :machine,
-      do: Repo.update_all(from(m in Machine, where: m.id == ^machine), set: [last_seen_at: now])
+    if key.kind == :machine do
+      Repo.update_all(from(m in Machine, where: m.id == ^machine), set: [last_seen_at: now])
+      Dokkit.Slots.touch(machine, now)
+    end
 
     Repo.update_all(from(k in Key, where: k.id == ^key.id), set: [used_at: now])
     service

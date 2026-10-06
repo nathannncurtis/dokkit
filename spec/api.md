@@ -198,6 +198,7 @@ A login session, or a user token with `read`. Log contents need `read-logs`: wit
 | Call | Gives |
 |---|---|
 | `GET /inbox` | `needs_you`, `soon`, `not_watched`, `snoozed`, `other_environments` (grouped by environment, never counted as needing you) and `fine` (`services` and `machines` with nothing open). |
+| `GET /day` | The last 24 hours in 48 half hours: `from`, `to`, `machines` (each with `cells`, 48 states of `down`, `degraded`, `quiet` or `none` for no signal) and `events` (the issues that opened, oldest first, with `sent` and `closed_at`). The last cell is the half hour that holds `to`. Takes `to` (RFC 3339), default now. An issue counts in its last state. Soon issues and other environments colour nothing. |
 | `GET /machines`, `GET /machines/<id>` | Machines, their vitals and thresholds. |
 | `GET /services`, `GET /services/<id>` | Services. One service includes its checks, facts, routing, version on each machine, recent deploys and open issues. |
 | `GET /services/<id>/series` | Chart data. Takes `metric`, `from`, `to` and `points`. |

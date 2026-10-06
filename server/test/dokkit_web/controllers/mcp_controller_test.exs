@@ -47,7 +47,7 @@ defmodule DokkitWeb.McpControllerTest do
     tools = json_response(rpc(read, "tools/list"), 200)["result"]["tools"]
 
     assert Enum.map(tools, & &1["name"]) ==
-             ~w(attention find service jobs job_runs errors since_deploy tasks machines machine issues issue deploys versions rules proposals task_runs series)
+             ~w(attention find service jobs job_runs errors since_deploy tasks machines machine issues issue deploys versions rules proposals task_runs series day)
 
     assert Enum.all?(tools, & &1["annotations"]["readOnlyHint"])
 
@@ -87,7 +87,7 @@ defmodule DokkitWeb.McpControllerTest do
 
   @acting ~w(snooze acknowledge run_task unsnooze note bulk watch unwatch routing hold accept_proposal dismiss_proposal)
   @admin ~w(add_rule update_rule delete_rule set_checks allow_restart keys make_key revoke_key people add_person remove_person)
-  @everything ~w(attention find service jobs job_runs logs snooze acknowledge errors since_deploy tasks run_task machines machine issues issue deploys versions rules proposals task_runs series unsnooze note bulk watch unwatch routing hold accept_proposal dismiss_proposal add_rule update_rule delete_rule set_checks allow_restart keys make_key revoke_key people add_person remove_person)
+  @everything ~w(attention find service jobs job_runs logs snooze acknowledge errors since_deploy tasks run_task machines machine issues issue deploys versions rules proposals task_runs series day unsnooze note bulk watch unwatch routing hold accept_proposal dismiss_proposal add_rule update_rule delete_rule set_checks allow_restart keys make_key revoke_key people add_person remove_person)
 
   test "a token with only read is offered no act or admin tool and cannot call one", %{read: read} do
     names = Enum.map(json_response(rpc(read, "tools/list"), 200)["result"]["tools"], & &1["name"])

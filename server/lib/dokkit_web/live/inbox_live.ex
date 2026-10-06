@@ -62,6 +62,8 @@ defmodule DokkitWeb.InboxLive do
       found: Found.list(),
       snoozed: Issues.snoozed_list(),
       fine: Issues.fine(),
+      day: Dokkit.Read.day(),
+      linked: Enum.map(socket.assigns.shell.machines, & &1.id),
       picked: MapSet.intersection(socket.assigns.picked, MapSet.new(now ++ soon, & &1.id))
     )
   end
@@ -188,6 +190,39 @@ defmodule DokkitWeb.InboxLive do
           </div>
         </div>
 
+        <div :if={@tab == :now} class="card wide" id="day">
+          <h2>The last day<span class="end">UTC</span></h2>
+          <div class="day">
+            <div :if={@day.machines == []} class="empty">No machines yet.</div>
+            <div :if={@day.machines != []} class="lanes">
+              <span></span>
+              <div class="ticks" aria-hidden="true">
+                <span :for={n <- 0..5}>{hm(DateTime.add(@day.from, n * 8 * 1800))}</span>
+              </div>
+              <div :for={m <- @day.machines} class="ln">
+                <.link :if={m.id in @linked} navigate={~p"/all" <> "#m-#{m.id}"}>{m.name}</.link>
+                <span :if={m.id not in @linked}>{m.name}</span>
+                <div class="lane">
+                  <i
+                    :for={{c, n} <- Enum.with_index(m.cells)}
+                    class={cell_class(c)}
+                    role="img"
+                    title={cell_title(m.name, @day.from, n, c)}
+                    aria-label={cell_title(m.name, @day.from, n, c)}
+                  ></i>
+                </div>
+              </div>
+            </div>
+            <div class="evs">
+              <p :if={@day.events == []} class="mute">Nothing opened in the last day.</p>
+              <p :for={e <- @day.events}>
+                <b class="mono">{hm(e.at)}</b> {e.title}
+                <span class="mute">{event_tail(e)}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div class="card">
           <h2>Estate</h2>
 
@@ -283,6 +318,35 @@ defmodule DokkitWeb.InboxLive do
     """
   end
 
+  defp hm(time), do: Calendar.strftime(time, "%H:%M")
+
+  defp event_tail(e) do
+    [
+      "on " <> e.machine,
+      e.sent && String.downcase(e.sent),
+      e.closed_at && "closed itself " <> hm(e.closed_at)
+    ]
+    |> Enum.filter(& &1)
+    |> Enum.join(", ")
+  end
+
+  defp cell_class("down"), do: "bad"
+  defp cell_class("degraded"), do: "warn"
+  defp cell_class("none"), do: "none"
+  defp cell_class(_), do: nil
+
+  defp cell_title(name, from, n, cell) do
+    say =
+      %{
+        "down" => "something was down",
+        "degraded" => "something needed a look",
+        "quiet" => "all quiet",
+        "none" => "no signal"
+      }[cell]
+
+    "#{name} at #{hm(DateTime.add(from, n * 1800))}: #{say}"
+  end
+
   defp fine(%{services: n, machines: m}) do
     "#{n} more #{if n == 1, do: "is", else: "are"} fine, on #{m} #{if m == 1, do: "machine", else: "machines"}."
   end
@@ -293,15 +357,7 @@ defmodule DokkitWeb.InboxLive do
 
   # An alert is sent once per issue, so there is no count; its update time is when it went.
   defp told(%{status: :sent, channel: channel, updated_at: at}) do
-    verb =
-      %{
-        "page" => "Paged",
-        "push" => "Pushed",
-        "email" => "Emailed",
-        "text" => "Texted",
-        "webhook" => "Webhook called"
-      }[channel]
-
+    verb = Dokkit.Alerts.sent_word(channel)
     verb && "#{verb} at #{DokkitWeb.Show.at(at)}"
   end
 

@@ -7,6 +7,17 @@ defmodule DokkitWeb.ApiController do
   plug :scope
 
   def inbox(conn, _), do: json(conn, clean(conn, Read.inbox()))
+  def day(conn, params), do: reply(conn, the_day(params))
+
+  def the_day(%{"to" => text}) when is_binary(text) do
+    case DateTime.from_iso8601(text) do
+      {:ok, to, _} -> Read.day(to)
+      _ -> {:error, "bad_time", "to must be a time, in RFC 3339."}
+    end
+  end
+
+  def the_day(_), do: Read.day()
+
   def issues(conn, _), do: list(conn, Read.issues())
   def machines(conn, _), do: list(conn, Read.machines())
   def services(conn, params), do: list(conn, Read.services(params))
