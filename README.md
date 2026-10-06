@@ -4,7 +4,7 @@ One place that watches everything I run and tells me what needs my attention.
 
 This is a personal project. It is private while it is in development and will be open source once the install-specific material listed at the bottom is out of it and there is a proper demo.
 
-Nothing here is the product yet. This repo holds the design work so far: the decisions, a clickable mock of the interface, and the explorations that led to it.
+Nothing here is the product yet. This repo holds the design work so far: the decisions, the contract every piece will be built against, a clickable mock of the interface, and the explorations that led to it.
 
 ## The pieces
 
@@ -13,7 +13,8 @@ Nothing here is the product yet. This repo holds the design work so far: the dec
 | **Docket** | The server and the web interface. | Phoenix on Postgres |
 | **Davit** | Runs on each machine. Watches what is on it, reports to Docket, and can run named tasks. | Go, one file |
 | **CLI** | Part of Davit. Wraps a command and reports how it went. | Go |
-| **Libraries** | For things only an app knows about itself. | Sentry's own client libraries for errors |
+| **Libraries** | For things only an app knows about itself: that it is alive inside, job progress, its own checks, errors. | Python and C# first |
+| **MCP** | Lets an AI tool ask Docket questions and take a few everyday actions. | Served by Docket |
 
 ## Decisions
 
@@ -43,7 +44,7 @@ Nothing here is the product yet. This repo holds the design work so far: the dec
 
 ### Davit, on each machine
 
-- **No open network port on a privileged process.** It keeps one outbound connection to Docket and receives work over it. It listens on localhost so apps and the CLI on that machine can hand it data, and it buffers when Docket is unreachable. A network listener is an option, off by default.
+- **No open network port on a privileged process.** It only makes outbound requests and receives work over one it holds open. Everything it has to send goes to a folder on disk first, so nothing is lost when Docket is unreachable. It listens on nothing, not even localhost.
 - **Docket can only ask for a named task defined on that machine.** Never an arbitrary command. A security scan or a report is a named task.
 - **Scanning is an option, never a requirement.** Three levels, each a choice:
 
@@ -58,13 +59,25 @@ Nothing here is the product yet. This repo holds the design work so far: the dec
 
 ### The API
 
-Docket, Davit, the CLI and any library meet at one HTTP API. It has five jobs, and designing it is the next step:
+Docket, Davit, the CLI, the libraries and the MCP meet at one HTTP API. The interface is a thin layer over the same server code, so nothing can be seen or done in it that the API cannot do. The full contract is in `spec/`.
 
-1. **Enrol**: a machine introduces itself and gets a key.
-2. **Propose**: a scan sends what it found, to be accepted.
-3. **Report**: state, heartbeats, job runs, metrics and log lines come in.
-4. **Take work**: Davit holds a connection open and receives named tasks.
-5. **Errors**: an intake that accepts what Sentry's client libraries send.
+- **Intake**: a machine enrols, state and logs and job runs come in as batches, a `docket.toml` is declared, a scan is proposed, deploys are marked, errors arrive, and Davit asks for work.
+- **Read**: everything the interface shows.
+- **Act**: snooze, acknowledge, watch, route, accept, run a task.
+
+Four kinds of key: one to enrol a machine, one per machine, one per app that can only write, and one per person with scopes.
+
+### How an app joins
+
+- It declares itself in a `docket.toml` in its own repo: what it is, how to check it, its jobs, its log files. No code change.
+- It adds the library only for what it alone knows.
+- A task in that file is only a proposal until it is accepted in the interface, and the server can ask for a task by name and nothing else.
+- Steps are in `docs/integrating.md`.
+
+### Errors
+
+- Docket's own library and its own error format are the front door.
+- Docket also accepts reports from Sentry's open-source SDKs, so a language without a Docket library can still report. How the project behaves about that is in `docs/sentry-compatibility.md`.
 
 ### The look
 
@@ -81,7 +94,8 @@ Docket, Davit, the CLI and any library meet at one HTTP API. It has five jobs, a
 | `gallery/app/logos/` | The generated logo images. The mock uses a vector traced from `d2.png`. |
 | `gallery/demo/` | An earlier clickable demo, and `data.js`, the inventory the mocks are filled from. |
 | `gallery/`, `gallery/v2/` to `gallery/v5/` | Earlier explorations, kept for reference. |
-| `STATS-SPEC.md` | The stats document and error-reporting contract two applications already implement. Docket will read it. |
+| `spec/` | The contract: the API, `docket.toml`, log lines, errors, Davit and the CLI, the library, the MCP, and the stats document two applications already implement. |
+| `docs/` | Wiring an app in, and the note on Sentry's SDKs. |
 | `questions.json`, `answers.jsonl`, `index.html`, `server.py` | The requirements interview, and the small board it was answered on. |
 
 To look at the mock:
@@ -99,4 +113,6 @@ The mocks are filled with one real install's inventory. All of it has to be repl
 - `gallery/demo/data.js`: real machine names, services, versions and ports.
 - Every page under `gallery/` that names those machines and services.
 - `answers.jsonl` and `questions.json`: the interview refers to the same install.
-- `STATS-SPEC.md`: written for two specific applications.
+- `spec/stats-v1.md`: written for two specific applications.
+- The interface needs its own identity. The mock was built with another product's layout as the reference; one pass to change whatever is recognisably theirs, and the description under "The look" reworded to match.
+- `docs/sentry-compatibility.md` is followed everywhere the project describes itself.
