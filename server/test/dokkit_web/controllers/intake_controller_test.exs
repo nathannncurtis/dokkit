@@ -18,15 +18,6 @@ defmodule DokkitWeb.IntakeControllerTest do
     %{service: service, app: app, mkey: mkey}
   end
 
-  defp report(conn, key, lines, headers \\ []) do
-    body = Enum.map_join(lines, "\n", &Jason.encode!/1)
-
-    Enum.reduce(headers, conn, fn {k, v}, c -> put_req_header(c, k, v) end)
-    |> put_req_header("authorization", "Bearer " <> key)
-    |> put_req_header("content-type", "application/x-ndjson")
-    |> post("/api/v1/report", body)
-  end
-
   test "a ping records a run; a failed one opens an issue and a good one closes it", %{
     conn: conn,
     app: app,
@@ -57,11 +48,10 @@ defmodule DokkitWeb.IntakeControllerTest do
 
   test "a bad key is refused", %{conn: conn} do
     assert json_response(get(conn, "/api/v1/in/dka_nope/job/backup/ok"), 401)
-    assert json_response(report(conn, "dkm_nope", []), 401)
+    assert json_response(report("dkm_nope", []), 401)
   end
 
   test "a report takes good lines, refuses bad ones, and is stored once", %{
-    conn: conn,
     mkey: mkey
   } do
     lines = [
@@ -72,7 +62,7 @@ defmodule DokkitWeb.IntakeControllerTest do
     ]
 
     batch = Ecto.UUID.generate()
-    answer = json_response(report(conn, mkey, lines, [{"dokkit-batch", batch}]), 200)
+    answer = json_response(report(mkey, lines, [{"dokkit-batch", batch}]), 200)
     assert answer["accepted"] == 2
 
     assert [%{"line" => 3, "code" => "unknown_service"}, %{"line" => 4, "code" => "unknown_type"}] =
@@ -80,33 +70,27 @@ defmodule DokkitWeb.IntakeControllerTest do
 
     assert %JobRun{result: :ok, duration_ms: 1200} = Repo.get_by!(JobRun, run: "a")
 
-    assert json_response(report(conn, mkey, lines, [{"dokkit-batch", batch}]), 200) == answer
+    assert json_response(report(mkey, lines, [{"dokkit-batch", batch}]), 200) == answer
     assert Repo.aggregate(JobRun, :count) == 1
   end
 
-  test "a check opens an issue after three failures in a row", %{conn: conn, mkey: mkey} do
+  test "a check opens an issue after three failures in a row", %{mkey: mkey} do
     bad = %{type: "state", service: "backup", check: "http", state: "down"}
-    report(conn, mkey, [bad, bad])
+    report(mkey, [bad, bad])
     assert Issues.open_list() == []
-    report(conn, mkey, [bad])
+    report(mkey, [bad])
     assert [%Issue{state: :down}] = Issues.open_list()
   end
 
-  test "gzip is accepted and an app key may not send state", %{conn: conn, app: app} do
+  test "gzip is accepted and an app key may not send state", %{app: app} do
     body = :zlib.gzip(Jason.encode!(%{type: "state", check: "x", state: "ok"}))
 
-    answer =
-      conn
-      |> put_req_header("authorization", "Bearer " <> app)
-      |> put_req_header("content-type", "application/x-ndjson")
-      |> put_req_header("content-encoding", "gzip")
-      |> post("/api/v1/report", body)
-      |> json_response(200)
+    answer = json_response(report(app, [body], [{"content-encoding", "gzip"}]), 200)
 
     assert [%{"code" => "not_allowed"}] = answer["refused"]
   end
 
-  test "what the dokkit program sends for a wrapped job", %{conn: conn, app: app} do
+  test "what the dokkit program sends for a wrapped job", %{app: app} do
     run = Ecto.UUID.generate()
 
     lines = [
@@ -135,12 +119,7 @@ rsync: disk full
 ")
 
     answer =
-      conn
-      |> put_req_header("authorization", "Bearer " <> app)
-      |> put_req_header("content-type", "application/x-ndjson")
-      |> put_req_header("content-encoding", "gzip")
-      |> put_req_header("dokkit-batch", Ecto.UUID.generate())
-      |> post("/api/v1/report", body)
+      report(app, [body], [{"content-encoding", "gzip"}, {"dokkit-batch", Ecto.UUID.generate()}])
       |> json_response(200)
 
     assert answer == %{"accepted" => 2, "refused" => []}

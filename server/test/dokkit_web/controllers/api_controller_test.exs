@@ -12,12 +12,7 @@ defmodule DokkitWeb.ApiControllerTest do
       "disk full"
     )
 
-    log = Jason.encode!(%{type: "log", level: "error", msg: "rsync: disk full"})
-
-    build_conn()
-    |> put_req_header("authorization", "Bearer " <> job.key)
-    |> put_req_header("content-type", "application/x-ndjson")
-    |> post("/api/v1/report", log)
+    report(job.key, [%{type: "log", level: "error", msg: "rsync: disk full"}])
 
     {read, _} = Keys.mint(:user, %{scopes: ["read"]})
     {all, _} = Keys.mint(:user, %{scopes: ["read", "read-logs", "act"]})

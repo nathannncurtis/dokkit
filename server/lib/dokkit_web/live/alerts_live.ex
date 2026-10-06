@@ -2,7 +2,6 @@ defmodule DokkitWeb.AlertsLive do
   use DokkitWeb, :live_view
   alias Dokkit.Alerts
 
-  @channels [{"Page", "page"}, {"Push", "push"}, {"Webhook", "webhook"}, {"Nobody", "none"}]
   @push [{"ntfy", "ntfy"}, {"Pushover", "pushover"}, {"PagerDuty low urgency", "pagerduty"}]
 
   def mount(_params, _session, socket) do
@@ -21,9 +20,8 @@ defmodule DokkitWeb.AlertsLive do
 
   def handle_event("changed", _, socket), do: {:noreply, assign(socket, saved: false)}
 
-  def handle_event("test", %{"channel" => channel}, socket)
-      when channel in ~w(page push webhook) do
-    if owner?(socket) do
+  def handle_event("test", %{"channel" => channel}, socket) do
+    if owner?(socket) and Alerts.sends?(channel) do
       result =
         case Alerts.test(channel) do
           :ok -> {:ok, "Sent. Check that it arrived."}
@@ -41,7 +39,7 @@ defmodule DokkitWeb.AlertsLive do
   def render(assigns) do
     assigns =
       assign(assigns,
-        channels: @channels,
+        channels: Alerts.channels(),
         push: @push,
         owner: assigns.current_user.role == :owner
       )

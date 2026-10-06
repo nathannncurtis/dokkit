@@ -27,7 +27,6 @@ defmodule Dokkit.Repo.Migrations.CreateCore do
       add :environment, :text, null: false, default: "production"
       add :version, :text
       add :listens, :text
-      add :watched, :boolean, null: false, default: true
       add :state, :text, null: false, default: "unknown"
       add :note, :text
       timestamps(type: :utc_datetime_usec)
@@ -43,7 +42,7 @@ defmodule Dokkit.Repo.Migrations.CreateCore do
 
       add :name, :text, null: false
       add :type, :text, null: false
-      add :source, :text, null: false, default: "interface"
+      add :source, :text, null: false, default: "reported"
       add :config, :map, null: false, default: %{}
       add :fail_after, :integer, null: false, default: 3
       add :state, :text, null: false, default: "unknown"

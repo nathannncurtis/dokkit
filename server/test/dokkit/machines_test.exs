@@ -8,14 +8,6 @@ defmodule Dokkit.MachinesTest do
     :ok
   end
 
-  defp report(key, lines) do
-    build_conn()
-    |> put_req_header("authorization", "Bearer " <> key)
-    |> put_req_header("content-type", "application/x-ndjson")
-    |> post("/api/v1/report", Enum.map_join(lines, "\n", &Jason.encode!/1))
-    |> json_response(200)
-  end
-
   test "a machine enrols once, reports, goes quiet, and comes back", %{conn: conn} do
     {:ok, view, _} = live(signed_in(conn), "/machines/new")
     html = render_click(view, "token")
@@ -32,7 +24,10 @@ defmodule Dokkit.MachinesTest do
              Repo.get!(Machine, id)
 
     assert %{"accepted" => 1} =
-             report(key, [%{type: "inventory", os: "windows", dokkit: "0.1.1"}])
+             json_response(
+               report(key, [%{type: "inventory", os: "windows", dokkit: "0.1.1"}]),
+               200
+             )
 
     assert Repo.get!(Machine, id).program_version == "0.1.1"
 

@@ -3,8 +3,6 @@ defmodule Dokkit.Estate do
   import Ecto.Query
   alias Dokkit.{Check, Issue, JobRun, Keys, Machine, Repo, Service}
 
-  @routes ~w(page push webhook none)
-
   def machines do
     Repo.all(
       from m in Machine,
@@ -249,14 +247,13 @@ defmodule Dokkit.Estate do
     |> Enum.reverse()
   end
 
-  defp route(value), do: Enum.find(@routes, &(&1 == value))
-
-  def routes, do: @routes
+  defp route(value),
+    do: Enum.find_value(Dokkit.Alerts.channels(), fn {_, v} -> v == value && v end)
 
   def set_routing(%Service{} = service, params) do
     change =
       for {field, key} <- [route_down: "down", route_degraded: "degraded"],
-          do: {field, Enum.find(@routes, &(&1 == params[key]))}
+          do: {field, route(params[key])}
 
     Repo.update!(Ecto.Changeset.change(service, change))
   end

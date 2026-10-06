@@ -89,8 +89,4 @@ defmodule DokkitWeb.ApiController do
       do: conn,
       else: conn |> fail(403, "no_scope", "This token may not #{scope}.") |> halt()
   end
-
-  defp fail(conn, status, code, message) do
-    conn |> put_status(status) |> json(%{error: %{code: code, message: message}})
-  end
 end

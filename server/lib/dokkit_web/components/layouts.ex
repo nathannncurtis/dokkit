@@ -16,30 +16,20 @@ defmodule DokkitWeb.Layouts do
           <.mark />
           <span><b>Dokkit</b></span>
         </.link>
-        <h3>Watch</h3>
-        <.link
-          class={["nav", @active == :inbox && "on"]}
-          navigate={~p"/"}
-          aria-label={"Inbox" <> if(@shell.open > 0, do: ", #{@shell.open}", else: "")}
-        >
-          <i class="ph ph-tray" aria-hidden="true"></i>Inbox<span :if={@shell.open > 0} class="n">{@shell.open}</span>
-        </.link>
-        <.link class={["nav", @active == :all && "on"]} navigate={~p"/all"}>
-          <i class="ph ph-squares-four" aria-hidden="true"></i>Everything
-        </.link>
-        <.link class={["nav", @active == :jobs && "on"]} navigate={~p"/jobs"}>
-          <i class="ph ph-clock-countdown" aria-hidden="true"></i>Jobs
-        </.link>
-        <.link class={["nav", @active == :logs && "on"]} navigate={~p"/logs"}>
-          <i class="ph ph-scroll" aria-hidden="true"></i>Logs
-        </.link>
-        <h3>Manage</h3>
-        <.link class={["nav", @active == :alerts && "on"]} navigate={~p"/alerts"}>
-          <i class="ph ph-bell" aria-hidden="true"></i>Alerts
-        </.link>
-        <.link class={["nav", @active == :settings && "on"]} navigate={~p"/settings"}>
-          <i class="ph ph-gear" aria-hidden="true"></i>Settings
-        </.link>
+        <%= for {heading, items} <- nav() do %>
+          <h3>{heading}</h3>
+          <.link
+            :for={{id, icon, label, path} <- items}
+            class={["nav", @active == id && "on"]}
+            navigate={path}
+            aria-label={id == :inbox && @shell.open > 0 && "Inbox, #{@shell.open}"}
+          >
+            <i class={"ph ph-#{icon}"} aria-hidden="true"></i>{label}<span
+              :if={id == :inbox && @shell.open > 0}
+              class="n"
+            >{@shell.open}</span>
+          </.link>
+        <% end %>
         <h3 :if={@shell.machines != []}>Machines</h3>
         <.link :for={m <- @shell.machines} class="nav" navigate={~p"/all" <> "#m-#{m.id}"}>
           <span class={["dot", m.state]}></span>{m.name}<span :if={m.bad > 0} class="q">{m.bad}</span>
@@ -61,6 +51,20 @@ defmodule DokkitWeb.Layouts do
       </main>
     </div>
     """
+  end
+
+  defp nav do
+    [
+      {"Watch",
+       [
+         {:inbox, "tray", "Inbox", ~p"/"},
+         {:all, "squares-four", "Everything", ~p"/all"},
+         {:jobs, "clock-countdown", "Jobs", ~p"/jobs"},
+         {:logs, "scroll", "Logs", ~p"/logs"}
+       ]},
+      {"Manage",
+       [{:alerts, "bell", "Alerts", ~p"/alerts"}, {:settings, "gear", "Settings", ~p"/settings"}]}
+    ]
   end
 
   def mark(assigns) do

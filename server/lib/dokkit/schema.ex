@@ -27,9 +27,6 @@ end
 defmodule Dokkit.Service do
   use Dokkit.Schema
 
-  @states [:ok, :degraded, :down, :unknown, :unwatched]
-  def states, do: @states
-
   schema "services" do
     field :slug, :string
     field :name, :string
@@ -37,8 +34,7 @@ defmodule Dokkit.Service do
     field :environment, :string, default: "production"
     field :version, :string
     field :listens, :string
-    field :watched, :boolean, default: true
-    field :state, Ecto.Enum, values: @states, default: :unknown
+    field :state, Ecto.Enum, values: [:ok, :degraded, :down, :unknown], default: :unknown
     field :note, :string
     field :route_down, :string
     field :route_degraded, :string
@@ -57,7 +53,7 @@ defmodule Dokkit.Check do
   schema "checks" do
     field :name, :string
     field :type, Ecto.Enum, values: @types
-    field :source, Ecto.Enum, values: [:file, :interface, :reported], default: :interface
+    field :source, Ecto.Enum, values: [:file, :reported], default: :reported
     field :config, :map, default: %{}
     field :fail_after, :integer, default: 3
     field :state, Ecto.Enum, values: [:ok, :degraded, :down, :unknown], default: :unknown

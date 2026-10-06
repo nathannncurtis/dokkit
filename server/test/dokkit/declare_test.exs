@@ -55,10 +55,7 @@ defmodule Dokkit.DeclareTest do
         note: "connection refused"
       })
 
-    build_conn()
-    |> put_req_header("authorization", "Bearer " <> key)
-    |> put_req_header("content-type", "application/x-ndjson")
-    |> post("/api/v1/report", Enum.join([bad, bad, bad], "\n"))
+    report(key, [bad, bad, bad])
 
     assert [%{title: "Upload portal: http is down"}] = Issues.open_list()
     assert Repo.get_by!(Check, service_id: id, name: "http").type == :http

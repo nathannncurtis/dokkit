@@ -14,15 +14,6 @@ defmodule Dokkit.LogsTest do
     %{service: service, app: app, mkey: mkey}
   end
 
-  defp report(key, lines) do
-    build_conn()
-    |> put_req_header("authorization", "Bearer " <> key)
-    |> put_req_header("content-type", "application/x-ndjson")
-    |> post("/api/v1/report", Enum.map_join(lines, "
-", &Jason.encode!/1))
-    |> json_response(200)
-  end
-
   test "log lines come in as Dokkit lines or CLEF, and can be searched", %{
     conn: conn,
     service: service,
@@ -50,10 +41,16 @@ defmodule Dokkit.LogsTest do
         %{type: "log", level: "info"}
       ])
 
-    assert %{"accepted" => 2, "refused" => [%{"line" => 3, "code" => "bad_line"}]} = answer
+    assert %{"accepted" => 2, "refused" => [%{"line" => 3, "code" => "bad_line"}]} =
+             json_response(answer, 200)
 
     assert %{"accepted" => 1} =
-             report(mkey, [%{type: "log", level: "nonsense", msg: String.duplicate("x", 70_000)}])
+             json_response(
+               report(mkey, [
+                 %{type: "log", level: "nonsense", msg: String.duplicate("x", 70_000)}
+               ]),
+               200
+             )
 
     [machine_line, clef, plain] = Logs.list()
     assert machine_line.cut and machine_line.level == "info" and machine_line.service_id == nil

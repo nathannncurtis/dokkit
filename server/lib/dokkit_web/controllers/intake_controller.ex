@@ -120,8 +120,4 @@ defmodule DokkitWeb.IntakeController do
       _ -> :bad_batch
     end
   end
-
-  defp fail(conn, status, code, message) do
-    conn |> put_status(status) |> json(%{error: %{code: code, message: message}})
-  end
 end

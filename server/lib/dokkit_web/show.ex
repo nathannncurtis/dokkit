@@ -20,12 +20,10 @@ defmodule DokkitWeb.Show do
 
   def lvl_class(:ok), do: ""
   def lvl_class(state) when state in [:degraded, :down], do: "warn"
-  def lvl_class(:unwatched), do: "none"
   def lvl_class(_), do: "away"
 
   def say(:ok), do: "Fine"
   def say(state) when state in [:degraded, :down], do: "Needs a look"
-  def say(:unwatched), do: "Not watched"
   def say(_), do: "No signal yet"
 
   def at(nil), do: nil

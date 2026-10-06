@@ -3,7 +3,6 @@ defmodule DokkitWeb.ServiceLive do
   alias Dokkit.{Alerts, Estate, Issue, Issues}
 
   @cols "150px 110px 90px 90px minmax(0,1fr) 16px;--ncols:96px 72px 84px 56px minmax(0,1fr) 16px;--minw:426px"
-  @routes [{"Page", "page"}, {"Push", "push"}, {"Webhook", "webhook"}, {"Nobody", "none"}]
 
   def mount(%{"id" => id}, _session, socket) do
     case Estate.service(id) do
@@ -56,7 +55,7 @@ defmodule DokkitWeb.ServiceLive do
   end
 
   def render(assigns) do
-    assigns = assign(assigns, cols: @cols, routes: @routes)
+    assigns = assign(assigns, cols: @cols, routes: Dokkit.Alerts.channels())
 
     ~H"""
     <Layouts.app active={:all} shell={@shell} user={@current_user}>

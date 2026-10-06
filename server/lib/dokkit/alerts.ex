@@ -12,6 +12,10 @@ defmodule Dokkit.Alerts do
   @defaults %{"down" => "page", "degraded" => "push", "push_with" => "ntfy"}
   @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user)
   @max_attempts 5
+  @channels [{"Page", "page"}, {"Push", "push"}, {"Webhook", "webhook"}, {"Nobody", "none"}]
+
+  def channels, do: @channels
+  def sends?(channel), do: channel != "none" and List.keymember?(@channels, channel, 1)
 
   def secrets, do: @secrets
 
@@ -48,7 +52,7 @@ defmodule Dokkit.Alerts do
   def plan(_, _), do: nil
 
   defp insert(issue, channel) do
-    if channel in ~w(page push webhook),
+    if sends?(channel),
       do: Repo.insert!(%Alert{issue_id: issue.id, channel: channel})
   end
 

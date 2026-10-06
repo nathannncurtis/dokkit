@@ -126,7 +126,7 @@ Four kinds of key: one to enrol a machine, one per machine, one per app that can
 | `gallery/app/` | The current mock, filled with an invented company's data. Open `index.html` through a web server. Settings switches theme, dark base and accent. `node check.js` renders every route. |
 | `spec/` | The contract: the API, `dokkit.toml`, alerts, log lines, errors, the `dokkit` program, the library, the MCP, and the stats document two applications already implement. |
 | `docs/` | Wiring an app in, running the server, moving over from other tools, and the note on Sentry's SDKs. |
-| `server/` | The server: Phoenix on Postgres. Its pages use the mock's stylesheet, copied to `server/priv/static/css/dokkit.css`. |
+| `server/` | The server: Phoenix on Postgres. Its stylesheet and fonts, in `server/priv/static/`, are the ones the mock loads. |
 | `program/` | The `dokkit` program, in Go. |
 
 To look at the mock:
