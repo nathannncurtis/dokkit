@@ -10,7 +10,11 @@ defmodule DokkitWeb.JobsLive do
     {:noreply, load(assign(socket, page_title: title))}
   end
 
-  def handle_info(:issues_changed, socket), do: {:noreply, load(socket)}
+  def handle_info(:issues_changed, socket),
+    do: {:noreply, DokkitWeb.Auth.debounce(socket, :page, &load/1)}
+
+  def handle_info({:settled, :page}, socket),
+    do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
 
   def handle_event("add", %{"job" => params}, socket) do
     with true <- socket.assigns.current_user.role != :viewer,

@@ -13,7 +13,11 @@ defmodule DokkitWeb.TasksLive do
     {:noreply, load(assign(socket, page_title: title))}
   end
 
-  def handle_info(:issues_changed, socket), do: {:noreply, load(socket)}
+  def handle_info(:issues_changed, socket),
+    do: {:noreply, DokkitWeb.Auth.debounce(socket, :page, &load/1)}
+
+  def handle_info({:settled, :page}, socket),
+    do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
 
   # Accepting a command to run on a machine is the owner's call.
   def handle_event(event, %{"id" => id, "command" => command} = params, socket)

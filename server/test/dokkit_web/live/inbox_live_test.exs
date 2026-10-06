@@ -36,6 +36,7 @@ defmodule DokkitWeb.InboxLiveTest do
     assert render(view) =~ "1 needs a look"
 
     Intake.ping(key, "backup", "ok", nil, "")
+    send(view.pid, {:settled, :page})
     assert render(view) =~ "Nothing needs you"
   end
 
@@ -137,5 +138,13 @@ defmodule DokkitWeb.InboxLiveTest do
     html = view |> form("#note-form", text: " Disk was full; cleared it ") |> render_submit()
     assert html =~ "Disk was full; cleared it"
     assert html =~ "sam,"
+  end
+
+  test "a burst of changes on the inbox is coalesced into one pending reload", %{conn: conn} do
+    {:ok, view, _} = live(signed_in(conn), "/")
+    for _ <- 1..5, do: send(view.pid, :issues_changed)
+    render(view)
+    {:dictionary, dict} = Process.info(view.pid, :dictionary)
+    assert List.keyfind(dict, {:debounce, :page}, 0) == {{:debounce, :page}, :pending}
   end
 end

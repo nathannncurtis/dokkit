@@ -74,5 +74,7 @@ if config_env() == :prod do
       url: [host: host, port: 443, scheme: "https"],
       http: [ip: {0, 0, 0, 0, 0, 0, 0, 0}],
       secret_key_base: secret_key_base
+
+    config :dokkit, behind_proxy: true
   end
 end

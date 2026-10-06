@@ -63,6 +63,7 @@ defmodule Dokkit.TasksTest do
              404
            )
 
+    send(view.pid, {:settled, :page})
     html = render(view)
     assert html =~ "Finished"
     assert html =~ "Started portal"
@@ -108,7 +109,8 @@ defmodule Dokkit.TasksTest do
     declare(key, "true")
     [task] = Tasks.waiting()
     :ok = Tasks.decide(task.id, "true", :accepted)
-    {:ok, run} = {:ok, Tasks.run(task.id, "sam")}
+    run = Tasks.run(task.id, "sam")
+    assert run
 
     assert %{"run" => id, "as" => "ordinary"} =
              json_response(get(as(key), "/api/v1/work?wait=0"), 200)

@@ -140,4 +140,39 @@ rsync: disk full
 
     assert json_response(get(conn, "/api/v1/ping"), 401)
   end
+
+  test "app key addresses answer a browser preflight and carry CORS headers", %{
+    conn: conn,
+    app: app
+  } do
+    for path <- ["/api/v1/report", "/api/v1/errors", "/api/v1/in/#{app}/job/backup/ok"] do
+      pre = options(conn, path)
+      assert response(pre, 204)
+      assert get_resp_header(pre, "access-control-allow-origin") == ["*"]
+    end
+
+    assert get_resp_header(
+             get(conn, "/api/v1/in/#{app}/job/backup/ok"),
+             "access-control-allow-origin"
+           ) ==
+             ["*"]
+  end
+
+  test "a start cuts short only an earlier run", %{app: app} do
+    line = fn run, event, at ->
+      %{type: "job", service: "backup", run: run, event: event, at: at}
+    end
+
+    report(app, [
+      line.("a", "start", "2026-10-06T01:00:00Z"),
+      line.("b", "start", "2026-10-06T01:05:00Z"),
+      line.("c", "start", "2026-10-06T00:30:00Z"),
+      line.("b", "ok", "2026-10-06T01:06:00Z")
+    ])
+
+    assert %JobRun{result: :fail, finished_at: %DateTime{}} = Repo.get_by!(JobRun, run: "a")
+    assert %JobRun{result: :ok} = Repo.get_by!(JobRun, run: "b")
+    assert %JobRun{result: :running} = Repo.get_by!(JobRun, run: "c")
+    assert Issues.open_list() == []
+  end
 end

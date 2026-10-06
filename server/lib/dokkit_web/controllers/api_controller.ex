@@ -6,7 +6,7 @@ defmodule DokkitWeb.ApiController do
   plug :token
   plug :scope
 
-  def inbox(conn, _), do: json(conn, Read.inbox())
+  def inbox(conn, _), do: json(conn, clean(conn, Read.inbox()))
   def issues(conn, _), do: list(conn, Read.issues())
   def machines(conn, _), do: list(conn, Read.machines())
   def services(conn, params), do: list(conn, Read.services(params))
@@ -26,7 +26,11 @@ defmodule DokkitWeb.ApiController do
 
     if scopes == [] or blank?(p["label"]),
       do: fail(conn, 422, "bad_key", "A token needs a label and scopes."),
-      else: minted(conn, Keys.mint(:user, %{label: p["label"], scopes: scopes}))
+      else:
+        minted(
+          conn,
+          Keys.mint(:user, %{label: p["label"], scopes: scopes, user_id: conn.assigns.key.user_id})
+        )
   end
 
   def add_key(conn, %{"kind" => "app", "service" => id}) do
@@ -36,9 +40,10 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
-  def add_key(conn, %{"kind" => "enrol"}) do
+  def add_key(conn, %{"kind" => "enrol"} = p) do
     expires = DateTime.add(DateTime.utc_now(), 3600)
-    minted(conn, Keys.mint(:enrol, %{expires_at: expires}))
+    label = if is_binary(p["machine"]) and p["machine"] != "", do: String.trim(p["machine"])
+    minted(conn, Keys.mint(:enrol, %{expires_at: expires, label: label}))
   end
 
   def add_key(conn, _),
@@ -173,7 +178,7 @@ defmodule DokkitWeb.ApiController do
   end
 
   defp one(conn, nil), do: missing(conn)
-  defp one(conn, thing), do: json(conn, thing)
+  defp one(conn, thing), do: json(conn, clean(conn, thing))
 
   def error(conn, %{"id" => id}), do: one(conn, Read.error(id))
 
@@ -197,8 +202,7 @@ defmodule DokkitWeb.ApiController do
   def snooze(conn, %{"id" => id, "until" => until}) do
     case seconds_until(until) do
       {:ok, seconds} ->
-        Issues.snooze(id, seconds)
-        json(conn, %{ok: true})
+        known(conn, fn -> Issues.snooze(id, seconds) end)
 
       :error ->
         fail(conn, 422, "bad_time", "until must be a time in the future, in RFC 3339.")
@@ -207,14 +211,11 @@ defmodule DokkitWeb.ApiController do
 
   def snooze(conn, _), do: fail(conn, 422, "bad_time", "Needs until.")
 
-  def unsnooze(conn, %{"id" => id}) do
-    Issues.unsnooze(id)
-    json(conn, %{ok: true})
-  end
+  def unsnooze(conn, %{"id" => id}), do: known(conn, fn -> Issues.unsnooze(id) end)
+  def acknowledge(conn, %{"id" => id}), do: known(conn, fn -> Issues.acknowledge(id) end)
 
-  def acknowledge(conn, %{"id" => id}) do
-    Issues.acknowledge(id)
-    json(conn, %{ok: true})
+  defp known(conn, act) do
+    if act.() > 0, do: json(conn, %{ok: true}), else: missing(conn)
   end
 
   def seconds_until(text) do
@@ -228,7 +229,11 @@ defmodule DokkitWeb.ApiController do
   end
 
   defp list(conn, nil), do: missing(conn)
-  defp list(conn, items), do: json(conn, %{items: items, next: nil})
+  defp list(conn, items), do: json(conn, %{items: clean(conn, items), next: nil})
+
+  defp clean(conn, data),
+    do: if("read-logs" in conn.assigns.key.scopes, do: data, else: Read.without_logs(data))
+
   defp missing(conn), do: fail(conn, 404, "not_found", "No such thing.")
 
   def token(conn, _) do
@@ -242,14 +247,18 @@ defmodule DokkitWeb.ApiController do
   end
 
   # What a call needs follows from the call: reading needs read, log contents need
-  # read-logs, keys and people need admin, and anything else changes something.
+  # read-logs, keys, people, rules, checks and restart need admin, and anything else
+  # changes something.
   defp scope(conn, _) do
+    path = Enum.map(conn.path_info, &URI.decode/1)
+
     scope =
-      case {conn.method, Enum.at(conn.path_info, 2)} do
+      case {conn.method, Enum.at(path, 2)} do
         {_, area} when area in ["keys", "users"] -> "admin"
         {"GET", "logs"} -> "read-logs"
         {"GET", _} -> "read"
-        _ -> "act"
+        {_, "rules"} -> "admin"
+        _ -> if List.last(path) in ["checks", "restart"], do: "admin", else: "act"
       end
 
     if scope in conn.assigns.key.scopes,

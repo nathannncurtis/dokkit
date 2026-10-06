@@ -18,8 +18,7 @@ defmodule DokkitWeb.SessionHTML do
         <p :if={@error} class="bad" role="alert">
           <i class="ph ph-warning" aria-hidden="true"></i>{@error}
         </p>
-        {render_slot(@inner_block)}
-        <button class="btn primary" type="submit">{@button}</button>
+         {render_slot(@inner_block)} <button class="btn primary" type="submit">{@button}</button>
       </form>
     </main>
     """
@@ -40,6 +39,37 @@ defmodule DokkitWeb.SessionHTML do
           required
         />
       </label>
+    </.door>
+    """
+  end
+
+  def password(assigns) do
+    ~H"""
+    <.door title="Change your password" error={@error} action={~p"/password"} button="Change password">
+      <:lead :if={@done}>Your password is changed. Other devices are signed out.</:lead>
+
+      <label>
+        Current password<input
+          class="inp"
+          type="password"
+          name="old"
+          autocomplete="current-password"
+          required
+          autofocus
+        />
+      </label>
+
+      <label>
+        New password<input
+          class="inp"
+          type="password"
+          name="new"
+          autocomplete="new-password"
+          minlength={Dokkit.Accounts.min_password()}
+          required
+        /> <small class="mute">At least {Dokkit.Accounts.min_password()} characters.</small>
+      </label>
+       <a href={~p"/settings"}>Back to settings</a>
     </.door>
     """
   end
@@ -71,8 +101,7 @@ defmodule DokkitWeb.SessionHTML do
           autocomplete="new-password"
           minlength={Dokkit.Accounts.min_password()}
           required
-        />
-        <small class="mute">At least {Dokkit.Accounts.min_password()} characters.</small>
+        /> <small class="mute">At least {Dokkit.Accounts.min_password()} characters.</small>
       </label>
     </.door>
     """

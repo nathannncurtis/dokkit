@@ -37,13 +37,25 @@ defmodule DokkitWeb.Endpoint do
   end
 
   plug Plug.RequestId
-  plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
+  plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint], log: {__MODULE__, :log_level, []}
 
-  plug Plug.Parsers,
-    parsers: [:urlencoded, :multipart, :json],
-    pass: ["*/*"],
-    body_reader: {DokkitWeb.IntakeController, :read_body, []},
-    json_decoder: Phoenix.json_library()
+  @parsers Plug.Parsers.init(
+             parsers: [:urlencoded, :multipart, :json],
+             pass: ["*/*"],
+             body_reader: {DokkitWeb.IntakeController, :read_body, []},
+             json_decoder: Phoenix.json_library()
+           )
+
+  plug :parse
+
+  # Ping URLs carry an app key in the path, and their body is output, so the controller reads it raw.
+  def log_level(%{path_info: ["api", "v1", "in" | _]}), do: false
+  def log_level(_), do: :info
+
+  defp parse(%{path_info: ["api", "v1", "in" | _]} = conn, _),
+    do: Plug.Conn.fetch_query_params(conn)
+
+  defp parse(conn, _), do: Plug.Parsers.call(conn, @parsers)
 
   plug Plug.MethodOverride
   plug Plug.Head
