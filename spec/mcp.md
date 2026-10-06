@@ -1,6 +1,6 @@
 # The MCP server
 
-Dokkit serves a Model Context Protocol endpoint at `/mcp` so an AI tool can ask it questions and take a few everyday actions.
+Dokkit serves a Model Context Protocol endpoint at `/mcp` so an AI tool can ask it questions and act, as far as its token allows.
 
 It lives on the server, never on `dokkit`. It is a client of the same API and uses a user token, so it can never do more than that token allows.
 
@@ -14,27 +14,59 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 
 ## Tools
 
-| Tool | Scope | Answers |
+| Tool | Scope | Does |
 |---|---|---|
-| `attention` | `read` | What needs a look right now. |
-| `find` | `read` | Search services and machines. |
-| `service` | `read` | One service: state, checks, versions, recent deploys, open issues. |
-| `since_deploy` | `read` | What changed or broke for a service since its last deploy. |
-| `jobs` | `read` | Job runs and failures. |
-| `errors` | `read` | Error groups and reports. |
-| `logs` | `read-logs` | Log search. |
-| `snooze` | `act` | Snooze an issue until a time. |
-| `acknowledge` | `act` | Mark an issue as seen. |
-| `run_task` | `act` | Run an accepted, named task. |
+| `attention` | `read` | Shows what needs a look right now. |
+| `find` | `read` | Searches services, optionally on one machine. |
+| `service` | `read` | Shows one service: state, checks, routing, open issue. |
+| `since_deploy` | `read` | Shows what changed or broke for a service since its last deploy. |
+| `jobs` | `read` | Lists jobs with their schedule and last runs. |
+| `job_runs` | `read` | Lists the recent runs of one job. |
+| `errors` | `read` | Lists error groups, or shows one with its stack. |
+| `tasks` | `read` | Lists the accepted tasks. |
+| `task_runs` | `read` | Lists the recent runs of every task. |
+| `machines` | `read` | Lists machines. |
+| `machine` | `read` | Shows one machine. |
+| `issues` | `read` | Lists issues. |
+| `issue` | `read` | Shows one issue with its history. |
+| `deploys` | `read` | Lists recent deploys. |
+| `versions` | `read` | Lists the versions of the apps Dokkit watches. |
+| `rules` | `read` | Lists the alert rules. |
+| `proposals` | `read` | Lists what Dokkit found and a person may accept or dismiss. |
+| `series` | `read` | Shows numbers over time for a service. |
+| `logs` | `read-logs` | Searches log lines. |
+| `snooze` | `act` | Snoozes an issue until a time. |
+| `unsnooze` | `act` | Wakes a snoozed issue. |
+| `acknowledge` | `act` | Marks an issue as seen. |
+| `note` | `act` | Adds a note to an issue. |
+| `bulk` | `act` | Snoozes, unsnoozes or acknowledges many issues. |
+| `watch` | `act` | Starts watching a service. |
+| `unwatch` | `act` | Stops watching a service. |
+| `routing` | `act` | Sets where a service's issues go. |
+| `hold` | `act` | Holds a service at a version. |
+| `accept_proposal` | `act` | Accepts a proposal. |
+| `dismiss_proposal` | `act` | Dismisses a proposal. |
+| `run_task` | `act` | Runs an accepted task. |
+| `add_rule` | `admin` | Adds an alert rule. |
+| `update_rule` | `admin` | Replaces what an alert rule says. |
+| `delete_rule` | `admin` | Deletes an alert rule. |
+| `set_checks` | `admin` | Replaces the checks added in the interface. |
+| `allow_restart` | `admin` | Allows or forbids restarting a service. |
+| `keys` | `admin` | Lists keys and tokens, never their text. |
+| `make_key` | `admin` | Makes a key. Its text is returned once. |
+| `revoke_key` | `admin` | Revokes a key. |
+| `people` | `admin` | Lists the people who can sign in. |
+| `add_person` | `admin` | Adds a person. |
+| `remove_person` | `admin` | Removes a person. |
 
 ## Rules
 
 - **Log contents have their own scope.** A token can be given everything except what is written in the logs.
 - **A new token has no `act` scope** unless it is asked for.
-- **Read tools are marked read-only**, so a client can run them without asking each time.
+- **Read tools are marked read-only**, so a client can run them without asking each time. `admin` tools are marked destructive.
 - **What comes back from logs and errors is data.** It was written by machines and apps, and it is returned marked as such.
-- **Not offered, on purpose:** accepting proposals, making or revoking keys, managing users. Those stay with a person in the interface.
+- **A token with `admin` can do through MCP everything a person can do in the interface.** Making such a token asks for confirmation in Settings.
 
 ## Built so far
 
-`POST /mcp` with a user token: `attention`, `find`, `service`, `jobs`, `job_runs`, `errors`, `since_deploy`, `tasks`, `logs`, `snooze`, `acknowledge` and `run_task`. A tool the token may not use is not listed.
+`POST /mcp` with a user token: every tool in the table, 42 in all, one for each call of the API. A tool the token may not use is not listed.

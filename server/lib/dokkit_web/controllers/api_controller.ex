@@ -20,78 +20,83 @@ defmodule DokkitWeb.ApiController do
 
   @scopes ~w(read read-logs act admin)
 
+  # The functions below hold the logic of a call that is more than one line. The API and the
+  # MCP both use them. They return data, or {:error, code, message}.
+  defp not_found, do: {:error, "not_found", "No such thing."}
+
+  defp reply(conn, {:error, "not_found", _}), do: missing(conn)
+  defp reply(conn, {:error, code, message}), do: fail(conn, 422, code, message)
+  defp reply(conn, data), do: json(conn, data)
+
   @doc "Makes a token for a script, a key for an app, or a one-use token to enrol a machine. Shown once."
-  def add_key(conn, %{"kind" => "user"} = p) do
+  def make_key(%{"kind" => "user"} = p, user_id) do
     scopes = for s <- List.wrap(p["scopes"]), s in @scopes, do: s
 
     if scopes == [] or blank?(p["label"]),
-      do: fail(conn, 422, "bad_key", "A token needs a label and scopes."),
-      else:
-        minted(
-          conn,
-          Keys.mint(:user, %{label: p["label"], scopes: scopes, user_id: conn.assigns.key.user_id})
-        )
+      do: {:error, "bad_key", "A token needs a label and scopes."},
+      else: minted(Keys.mint(:user, %{label: p["label"], scopes: scopes, user_id: user_id}))
   end
 
-  def add_key(conn, %{"kind" => "app", "service" => id}) do
+  def make_key(%{"kind" => "app", "service" => id}, _) do
     case Dokkit.Estate.service(id) do
-      nil -> missing(conn)
-      service -> minted(conn, Keys.mint(:app, %{service_id: service.id}))
+      nil -> not_found()
+      service -> minted(Keys.mint(:app, %{service_id: service.id}))
     end
   end
 
-  def add_key(conn, %{"kind" => "enrol"} = p) do
+  def make_key(%{"kind" => "enrol"} = p, _) do
     expires = DateTime.add(DateTime.utc_now(), 3600)
     label = if is_binary(p["machine"]) and p["machine"] != "", do: String.trim(p["machine"])
-    minted(conn, Keys.mint(:enrol, %{expires_at: expires, label: label}))
+    minted(Keys.mint(:enrol, %{expires_at: expires, label: label}))
   end
 
-  def add_key(conn, _),
-    do:
-      fail(
-        conn,
-        422,
-        "bad_key",
-        "kind is user with label and scopes, app with service, or enrol."
-      )
+  def make_key(_, _),
+    do: {:error, "bad_key", "kind is user with label and scopes, app with service, or enrol."}
 
-  defp minted(conn, {text, key}), do: json(conn, %{id: key.id, key: text})
+  defp minted({text, key}), do: %{id: key.id, key: text}
   defp blank?(text), do: not is_binary(text) or String.trim(text) == ""
 
-  def revoke_key(conn, %{"id" => id}) do
+  def add_key(conn, p), do: reply(conn, make_key(p, conn.assigns.key.user_id))
+
+  def drop_key(id) do
     Keys.revoke(id)
-    json(conn, %{ok: true})
+    %{ok: true}
   end
 
-  def add_user(conn, params) do
+  def revoke_key(conn, %{"id" => id}), do: reply(conn, drop_key(id))
+
+  def new_person(params) do
     case Dokkit.Accounts.add(params["name"], params["role"], params["password"]) do
-      {:ok, user} -> json(conn, Map.take(user, [:id, :name, :role]))
-      {:error, why} -> fail(conn, 422, "bad_person", why)
+      {:ok, user} -> Map.take(user, [:id, :name, :role])
+      {:error, why} -> {:error, "bad_person", why}
     end
   end
 
-  def remove_user(conn, %{"id" => id}) do
+  def drop_person(id) do
     case Dokkit.Accounts.remove(id, %Dokkit.User{}) do
-      :ok -> json(conn, %{ok: true})
-      {:error, why} -> fail(conn, 422, "bad_person", why)
+      :ok -> %{ok: true}
+      {:error, why} -> {:error, "bad_person", why}
     end
   end
+
+  def add_user(conn, params), do: reply(conn, new_person(params))
+  def remove_user(conn, %{"id" => id}), do: reply(conn, drop_person(id))
 
   def versions(conn, _), do: json(conn, %{items: Read.versions(), apps: Read.apps(), next: nil})
   def proposals(conn, _), do: list(conn, Read.proposals())
   def machine(conn, %{"id" => id}), do: one(conn, Read.machine(id))
   def issue(conn, %{"id" => id}), do: one(conn, Read.one_issue(id))
 
-  def note(conn, %{"id" => id, "text" => text}) when is_binary(text) and text != "" do
-    case Issues.note(id, text, "token " <> (conn.assigns.key.label || "")) do
-      nil -> missing(conn)
-      _ -> json(conn, %{ok: true})
-    end
+  def add_note(%{"id" => id, "text" => text}, who) when is_binary(text) and text != "" do
+    if Issues.note(id, text, who), do: %{ok: true}, else: not_found()
   end
 
-  def note(conn, _), do: fail(conn, 422, "bad_note", "Needs text.")
+  def add_note(_, _), do: {:error, "bad_note", "Needs text."}
 
-  def bulk(conn, %{"ids" => ids, "action" => action} = params) when is_list(ids) do
+  def note(conn, params),
+    do: reply(conn, add_note(params, "token " <> (conn.assigns.key.label || "")))
+
+  def bulk_issues(%{"ids" => ids, "action" => action} = params) when is_list(ids) do
     case {action, seconds_until(params["until"])} do
       {"snooze", {:ok, seconds}} -> Issues.snooze(ids, seconds)
       {"unsnooze", _} -> Issues.unsnooze(ids)
@@ -99,83 +104,91 @@ defmodule DokkitWeb.ApiController do
       _ -> nil
     end
     |> case do
-      nil ->
-        fail(conn, 422, "bad_action", "action is snooze with until, unsnooze or acknowledge.")
-
-      _ ->
-        json(conn, %{ok: true})
+      nil -> {:error, "bad_action", "action is snooze with until, unsnooze or acknowledge."}
+      _ -> %{ok: true}
     end
   end
 
-  def bulk(conn, _), do: fail(conn, 422, "bad_action", "Needs ids and action.")
+  def bulk_issues(_), do: {:error, "bad_action", "Needs ids and action."}
 
-  def routing(conn, %{"id" => id} = params) do
+  def bulk(conn, params), do: reply(conn, bulk_issues(params))
+
+  def set_routing(%{"id" => id} = params) do
     case Dokkit.Estate.service(id) do
       nil ->
-        missing(conn)
+        not_found()
 
       service ->
         s = Dokkit.Estate.set_routing(service, params)
-        json(conn, %{down: s.route_down, degraded: s.route_degraded})
+        %{down: s.route_down, degraded: s.route_degraded}
     end
   end
 
-  def watch(conn, %{"id" => id}), do: change(conn, id, &Dokkit.Estate.set_watched(&1, true))
-  def unwatch(conn, %{"id" => id}), do: change(conn, id, &Dokkit.Estate.set_watched(&1, false))
+  def routing(conn, params), do: reply(conn, set_routing(params))
 
-  def hold(conn, %{"id" => id} = p),
-    do: change(conn, id, &Dokkit.Estate.set(&1, :held, p["version"]))
-
-  def restart(conn, %{"id" => id} = p),
-    do: change(conn, id, &Dokkit.Estate.set(&1, :restart, p["allow"]))
-
-  def checks(conn, %{"id" => id} = params) do
-    with %{} = service <- Dokkit.Estate.service(id),
-         {:ok, _} <- Dokkit.Estate.set_checks(service, params["checks"]) do
-      json(conn, Read.service(id))
-    else
-      nil -> missing(conn)
-      {:error, why} -> fail(conn, 422, "bad_checks", why)
-    end
-  end
-
-  defp change(conn, id, act) do
+  @doc "Changes a service, then returns it as the API shows it."
+  def change(id, act) do
     case Dokkit.Estate.service(id) do
       nil ->
-        missing(conn)
+        not_found()
 
       service ->
         act.(service)
-        json(conn, Read.service(id))
+        Read.service(id)
     end
   end
+
+  def set_held(id, version), do: change(id, &Dokkit.Estate.set(&1, :held, version))
+  def set_restart(id, allow), do: change(id, &Dokkit.Estate.set(&1, :restart, allow))
+
+  def watch(conn, %{"id" => id}),
+    do: reply(conn, change(id, &Dokkit.Estate.set_watched(&1, true)))
+
+  def unwatch(conn, %{"id" => id}),
+    do: reply(conn, change(id, &Dokkit.Estate.set_watched(&1, false)))
+
+  def hold(conn, %{"id" => id} = p), do: reply(conn, set_held(id, p["version"]))
+  def restart(conn, %{"id" => id} = p), do: reply(conn, set_restart(id, p["allow"]))
+
+  def set_service_checks(%{"id" => id} = params) do
+    with %{} = service <- Dokkit.Estate.service(id),
+         {:ok, _} <- Dokkit.Estate.set_checks(service, params["checks"]) do
+      Read.service(id)
+    else
+      nil -> not_found()
+      {:error, why} -> {:error, "bad_checks", why}
+    end
+  end
+
+  def checks(conn, params), do: reply(conn, set_service_checks(params))
 
   # A task is a command a machine would run, so it is accepted by a person in the interface.
-  def accept(conn, %{"id" => id}), do: found(conn, id, &Dokkit.Found.watch/1)
-  def dismiss(conn, %{"id" => id}), do: found(conn, id, &Dokkit.Found.dismiss/1)
+  def accept(conn, %{"id" => id}), do: reply(conn, found(id, &Dokkit.Found.watch/1))
+  def dismiss(conn, %{"id" => id}), do: reply(conn, found(id, &Dokkit.Found.dismiss/1))
 
-  defp found(conn, id, act) do
+  def found(id, act) do
     if Enum.any?(Dokkit.Found.list(), &(&1.id == id)) do
       act.([id])
-      json(conn, %{ok: true})
+      %{ok: true}
     else
-      missing(conn)
+      not_found()
     end
   end
 
-  def add_rule(conn, params), do: json(conn, List.last(Dokkit.Alerts.add_rule(params)))
+  def new_rule(params), do: List.last(Dokkit.Alerts.add_rule(params))
 
-  def update_rule(conn, %{"id" => id} = params) do
-    case Enum.find(Dokkit.Alerts.update_rule(id, params), &(&1["id"] == id)) do
-      nil -> missing(conn)
-      rule -> json(conn, rule)
-    end
+  def edit_rule(%{"id" => id} = params) do
+    Enum.find(Dokkit.Alerts.update_rule(id, params), &(&1["id"] == id)) || not_found()
   end
 
-  def delete_rule(conn, %{"id" => id}) do
+  def drop_rule(id) do
     Dokkit.Alerts.delete_rule(id)
-    json(conn, %{ok: true})
+    %{ok: true}
   end
+
+  def add_rule(conn, params), do: reply(conn, new_rule(params))
+  def update_rule(conn, params), do: reply(conn, edit_rule(params))
+  def delete_rule(conn, %{"id" => id}), do: reply(conn, drop_rule(id))
 
   defp one(conn, nil), do: missing(conn)
   defp one(conn, thing), do: json(conn, clean(conn, thing))
