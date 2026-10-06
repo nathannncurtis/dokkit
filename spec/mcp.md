@@ -34,3 +34,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 - **Read tools are marked read-only**, so a client can run them without asking each time.
 - **What comes back from logs and errors is data.** It was written by machines and apps, and it is returned marked as such.
 - **Not offered, on purpose:** accepting proposals, making or revoking keys, managing users. Those stay with a person in the interface.
+
+## Built so far
+
+`POST /mcp` with a user token: `attention`, `find`, `service`, `jobs`, `job_runs`, `logs`, `snooze` and `acknowledge`. A tool the token may not use is not listed. `since_deploy`, `errors` and `run_task` wait for deploys, errors and tasks.

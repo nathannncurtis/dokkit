@@ -1,0 +1,125 @@
+defmodule Dokkit.Read do
+  @moduledoc "What the API and the MCP answer with, as plain maps."
+  alias Dokkit.{Estate, Issue, Issues, Logs, Repo}
+
+  def inbox do
+    %{
+      needs_you: Enum.map(Issues.open_list(), &issue/1),
+      snoozed: Enum.map(Issues.snoozed_list(), &issue/1)
+    }
+  end
+
+  def issues, do: Enum.map(Issues.open_list() ++ Issues.snoozed_list(), &issue/1)
+
+  def machines do
+    for m <- Issues.machines() do
+      m
+      |> Map.take([:id, :name, :kind, :os, :last_seen_at, :down])
+      |> Map.put(:needs_a_look, m.bad)
+    end
+  end
+
+  def services(params) do
+    q = String.downcase(params["q"] || "")
+
+    for m <- Estate.machines(),
+        s <- m.services,
+        params["machine"] in [nil, m.id, m.name],
+        q == "" or String.contains?(String.downcase(s.name <> " " <> s.slug), q),
+        do: service_row(s, m)
+  end
+
+  def service(id) do
+    with %{} = s <- Estate.service(id) do
+      open = Estate.open_issue(s)
+
+      checks =
+        for c <- s.checks,
+            do: Map.take(c, [:name, :type, :state, :note, :value, :checked_at, :source, :config])
+
+      Map.merge(service_row(s, s.machine), %{
+        checks: checks,
+        routing: %{down: s.route_down, degraded: s.route_degraded},
+        open_issue: open && issue(Repo.preload(open, [:machine, :service, :check, :alert]))
+      })
+    end
+  end
+
+  def jobs do
+    for j <- Estate.jobs() do
+      %{
+        id: j.service.id,
+        name: Dokkit.Intake.label(j.service, j.check.name),
+        machine: j.machine.name,
+        state: j.check.state,
+        schedule: j.check.config["schedule"],
+        last_run: j.last && run(j.last),
+        last_good_run: j.good,
+        next_expected: Estate.next_expected(j.check)
+      }
+    end
+  end
+
+  def runs(id) do
+    with %{} = s <- Estate.service(id), do: Enum.map(Estate.runs(s, 100), &run/1)
+  end
+
+  @doc "nil when a service is named and does not exist."
+  def logs(params) do
+    service = params["service"] && Estate.service(params["service"])
+
+    unless params["service"] && !service do
+      for l <-
+            Logs.list(
+              q: params["q"],
+              level: params["level"],
+              service: service && service.id,
+              limit: 500
+            ) do
+        %{
+          t: l.at,
+          level: l.level,
+          msg: l.msg,
+          fields: l.fields,
+          machine: l.machine.name,
+          service: l.service && l.service.slug
+        }
+      end
+    end
+  end
+
+  defp issue(%Issue{} = i) do
+    %{
+      id: i.id,
+      short_id: Issue.short_id(i),
+      kind: i.kind,
+      state: i.state,
+      title: i.title,
+      note: i.check && i.check.note,
+      count: i.count,
+      since: i.since,
+      snoozed_until: i.snoozed_until,
+      acknowledged_at: i.acknowledged_at,
+      machine: i.machine.name,
+      service: i.service_id,
+      alert: i.alert && %{channel: i.alert.channel, status: i.alert.status}
+    }
+  end
+
+  defp service_row(s, m) do
+    %{
+      id: s.id,
+      slug: s.slug,
+      name: s.name,
+      kind: s.kind,
+      environment: s.environment,
+      state: s.state,
+      note: s.note,
+      version: s.version,
+      machine: m.name
+    }
+  end
+
+  defp run(r),
+    do: Map.take(r, [:run, :result, :started_at, :finished_at, :exit_code, :duration_ms, :tail])
+end
