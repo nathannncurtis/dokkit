@@ -95,8 +95,62 @@ defmodule Dokkit.Issues do
     Phoenix.PubSub.broadcast(Dokkit.PubSub, "issues", :issues_changed)
   end
 
-  @doc "Each machine with how many of its services need a look."
+  @silent_seconds 180
+
+  @doc "Opens an issue for each enrolled machine that has gone quiet, and closes it when the machine is back."
+  def machines_sweep(now) do
+    quiet = DateTime.add(now, -@silent_seconds)
+
+    down =
+      from i in Issue, where: i.kind == "machine" and is_nil(i.closed_at), select: i.machine_id
+
+    gone =
+      Repo.all(
+        from m in Dokkit.Machine,
+          where: m.kind == :enrolled and m.last_seen_at < ^quiet and m.id not in subquery(down)
+      )
+
+    for m <- gone do
+      issue =
+        Repo.insert!(%Issue{
+          machine_id: m.id,
+          kind: "machine",
+          state: :down,
+          title: "#{m.name} stopped reporting",
+          since: m.last_seen_at
+        })
+
+      Dokkit.Alerts.plan(issue, nil)
+    end
+
+    back =
+      Repo.all(
+        from i in Issue,
+          join: m in assoc(i, :machine),
+          where: i.kind == "machine" and is_nil(i.closed_at) and m.last_seen_at >= ^quiet
+      )
+
+    for issue <- back do
+      Repo.update!(Ecto.Changeset.change(issue, closed_at: now))
+      Dokkit.Alerts.closing(issue)
+    end
+
+    length(gone) + length(back)
+  end
+
+  def machine_down?(machine_id) do
+    Repo.exists?(
+      from i in Issue,
+        where: i.machine_id == ^machine_id and i.kind == "machine" and is_nil(i.closed_at)
+    )
+  end
+
   def machines do
+    down =
+      Repo.all(
+        from i in Issue, where: i.kind == "machine" and is_nil(i.closed_at), select: i.machine_id
+      )
+
     Repo.all(
       from m in Dokkit.Machine,
         left_join: s in assoc(m, :services),
@@ -105,11 +159,17 @@ defmodule Dokkit.Issues do
         select: %{
           id: m.id,
           name: m.name,
+          kind: m.kind,
+          os: m.os,
+          last_seen_at: m.last_seen_at,
           services: count(s.id),
           bad: count(s.id) |> filter(s.state in [:degraded, :down])
         }
     )
-    |> Enum.map(&Map.put(&1, :state, if(&1.bad > 0, do: "warn", else: "")))
+    |> Enum.map(fn m ->
+      gone = m.id in down
+      Map.merge(m, %{down: gone, state: if(gone or m.bad > 0, do: "warn", else: "")})
+    end)
   end
 
   defp open_for(check),

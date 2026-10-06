@@ -38,14 +38,19 @@ defmodule Dokkit.Alerts do
     new
   end
 
+  # A machine that is down alerts once for itself. What runs on it stays quiet until it is back.
   def plan(%Issue{} = issue, %Service{environment: "production"} = service) do
     channel = Map.get(service, :"route_#{issue.state}") || config()[to_string(issue.state)]
+    unless Dokkit.Issues.machine_down?(issue.machine_id), do: insert(issue, channel)
+  end
 
+  def plan(%Issue{kind: "machine"} = issue, nil), do: insert(issue, config()["down"])
+  def plan(_, _), do: nil
+
+  defp insert(issue, channel) do
     if channel in ~w(page push webhook),
       do: Repo.insert!(%Alert{issue_id: issue.id, channel: channel})
   end
-
-  def plan(_, _), do: nil
 
   def closing(%Issue{id: id}) do
     Repo.update_all(

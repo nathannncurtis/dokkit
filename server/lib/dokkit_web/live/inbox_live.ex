@@ -128,10 +128,10 @@ defmodule DokkitWeb.InboxLive do
             />
             <span :if={@tab == :snoozed}></span>
             <div>
-              <.link class="ti" navigate={~p"/s/#{i.service_id}"}>
+              <.link class="ti" navigate={where(i)}>
                 <.lvl state={i.state} /><span>{i.title}</span>
               </.link>
-              <div :if={i.check.note} class="sub">{i.check.note}</div>
+              <div :if={i.check && i.check.note} class="sub">{i.check.note}</div>
               <div class="meta">
                 <span class="tag">{issue_kind(i)}</span>
                 <span class="mono">{Issue.short_id(i)}</span>
@@ -153,7 +153,7 @@ defmodule DokkitWeb.InboxLive do
             </div>
             <span class="tag">{i.machine.name}</span>
             <div style="display:flex; gap:6px; justify-content:flex-end">
-              <.link class="btn" navigate={~p"/s/#{i.service_id}"}>Open</.link>
+              <.link class="btn" navigate={where(i)}>Open</.link>
               <button
                 :if={@tab == :now}
                 class="btn ghost"
@@ -196,6 +196,10 @@ defmodule DokkitWeb.InboxLive do
   defp told(%{status: :failed}), do: "Alert not sent"
   defp told(_), do: nil
 
+  defp where(%Issue{service_id: nil, machine_id: id}), do: ~p"/all" <> "#m-#{id}"
+  defp where(%Issue{service_id: id}), do: ~p"/s/#{id}"
+
+  defp issue_kind(%Issue{kind: "machine"}), do: "Machine"
   defp issue_kind(%Issue{kind: "job"}), do: "Job"
   defp issue_kind(_), do: "Check"
 

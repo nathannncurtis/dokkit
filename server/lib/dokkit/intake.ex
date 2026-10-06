@@ -33,6 +33,38 @@ defmodule Dokkit.Intake do
     |> tap(fn _ -> Issues.changed() end)
   end
 
+  @doc "Trades a one-use enrolment token for a machine and its key."
+  def enrol(token, params) do
+    name = String.trim(to_string(params["hostname"] || ""))
+
+    with true <- name != "",
+         {:ok, %Key{used_at: nil} = enrol} <- Dokkit.Keys.verify(token, :enrol) do
+      Repo.transaction(fn ->
+        now = DateTime.utc_now()
+        Repo.update!(Ecto.Changeset.change(enrol, used_at: now, revoked_at: now))
+
+        attrs = [
+          kind: :enrolled,
+          os: params["os"],
+          arch: params["arch"],
+          program_version: params["dokkit"],
+          last_seen_at: now
+        ]
+
+        machine =
+          case Repo.get_by(Machine, name: name) do
+            nil -> Repo.insert!(struct!(Machine, [name: name] ++ attrs))
+            machine -> Repo.update!(Ecto.Changeset.change(machine, attrs))
+          end
+
+        {key, _} = Dokkit.Keys.mint(:machine, %{machine_id: machine.id, label: name})
+        %{machine: machine.id, key: key}
+      end)
+    else
+      _ -> :error
+    end
+  end
+
   def ping(%Key{kind: :app} = key, name, event, run, tail) when event in @events do
     Repo.transaction(fn ->
       service = seen(key)
@@ -117,8 +149,18 @@ defmodule Dokkit.Intake do
     end
   end
 
+  defp line(%Key{kind: :machine, machine_id: id}, "inventory", line, _at) do
+    change =
+      for {field, key} <- [os: "os", arch: "arch", program_version: "dokkit"],
+          is_binary(line[key]),
+          do: {field, line[key]}
+
+    Repo.update_all(from(m in Machine, where: m.id == ^id), set: [kind: :enrolled] ++ change)
+    :ok
+  end
+
   # The other types are added with the features that read them.
-  defp line(_, type, _, _) when type in ~w(inventory metric beat stats deploy),
+  defp line(_, type, _, _) when type in ~w(metric beat stats deploy),
     do: {:error, "not_yet", "This server does not store #{type} lines yet."}
 
   defp line(_, type, _, _), do: {:error, "unknown_type", "Unknown type #{inspect(type)}."}

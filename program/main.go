@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -22,12 +23,19 @@ import (
 const (
 	tailBytes = 16 * 1024
 	spoolCap  = 500 * 1024 * 1024
+	version   = "0.1.0"
 	usage     = `dokkit run --job <name> -- <command> [arguments]
 dokkit ping <name> [start|ok|fail]
+dokkit enrol <address> <token>
+dokkit watch
 dokkit doctor
 
-Needs DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key).`
+Reads DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key),
+or the address and machine key that dokkit enrol saved.`
 )
+
+// How often watch tells the server this machine is alive.
+var beatEvery = time.Minute
 
 func main() { os.Exit(cli(os.Args[1:])) }
 
@@ -35,6 +43,13 @@ func cli(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, usage)
 		return 2
+	}
+	if args[0] == "enrol" {
+		if len(args) != 3 {
+			fmt.Fprintln(os.Stderr, usage)
+			return 2
+		}
+		return enrol(args[1], args[2])
 	}
 	c, err := load()
 	if err != nil {
@@ -57,8 +72,14 @@ func cli(args []string) int {
 			fmt.Fprintln(os.Stderr, usage)
 			return 2
 		}
-		c.report(line{Type: "job", Name: args[1], Event: event, At: now()})
+		c.report(c.job(line{Name: args[1], Event: event}))
 		return c.settle(15 * time.Second)
+	case "watch":
+		fmt.Println("Reporting to", c.url, "every", beatEvery)
+		for {
+			c.beat()
+			time.Sleep(beatEvery)
+		}
 	case "doctor":
 		return c.doctor()
 	}
@@ -74,6 +95,7 @@ type client struct {
 type line struct {
 	Type     string `json:"type"`
 	At       string `json:"at"`
+	Service  string `json:"service,omitempty"`
 	Name     string `json:"name"`
 	Run      string `json:"run,omitempty"`
 	Event    string `json:"event"`
@@ -82,11 +104,34 @@ type line struct {
 	Tail     string `json:"tail,omitempty"`
 }
 
-func load() (*client, error) {
-	c := &client{url: strings.TrimRight(os.Getenv("DOKKIT_URL"), "/"), key: os.Getenv("DOKKIT_KEY"), spool: os.Getenv("DOKKIT_SPOOL"), http: &http.Client{}}
-	if c.url == "" || c.key == "" {
-		return nil, errors.New("set DOKKIT_URL and DOKKIT_KEY")
+type saved struct {
+	URL string `json:"url"`
+	Key string `json:"key"`
+}
+
+func configPath() (string, error) {
+	if p := os.Getenv("DOKKIT_CONFIG"); p != "" {
+		return p, nil
 	}
+	dir, err := os.UserConfigDir()
+	return filepath.Join(dir, "dokkit", "config.json"), err
+}
+
+func load() (*client, error) {
+	c := &client{url: os.Getenv("DOKKIT_URL"), key: os.Getenv("DOKKIT_KEY"), spool: os.Getenv("DOKKIT_SPOOL"), http: &http.Client{}}
+	if c.url == "" || c.key == "" {
+		var s saved
+		if p, err := configPath(); err == nil {
+			if b, err := os.ReadFile(p); err == nil {
+				json.Unmarshal(b, &s)
+			}
+		}
+		if s.URL == "" || s.Key == "" {
+			return nil, errors.New("set DOKKIT_URL and DOKKIT_KEY, or run dokkit enrol")
+		}
+		c.url, c.key = s.URL, s.Key
+	}
+	c.url = strings.TrimRight(c.url, "/")
 	if c.spool == "" {
 		dir, err := os.UserCacheDir()
 		if err != nil {
@@ -95,6 +140,59 @@ func load() (*client, error) {
 		c.spool = filepath.Join(dir, "dokkit", "spool")
 	}
 	return c, os.MkdirAll(c.spool, 0o700)
+}
+
+// enrol trades a one-use token for this machine's key and saves it for this user only.
+func enrol(address, token string) int {
+	address = strings.TrimRight(address, "/")
+	host, _ := os.Hostname()
+	body, _ := json.Marshal(map[string]string{"token": token, "hostname": host, "os": runtime.GOOS, "arch": runtime.GOARCH, "dokkit": version})
+	res, err := (&http.Client{Timeout: 15 * time.Second}).Post(address+"/api/v1/enrol", "application/json", bytes.NewReader(body))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dokkit: cannot reach the server:", err)
+		return 1
+	}
+	defer res.Body.Close()
+	var a struct {
+		Key   string
+		Error struct{ Message string }
+	}
+	json.NewDecoder(res.Body).Decode(&a)
+	if res.StatusCode != 200 || a.Key == "" {
+		fmt.Fprintf(os.Stderr, "dokkit: the server said no (%d). %s\n", res.StatusCode, a.Error.Message)
+		return 1
+	}
+	p, err := configPath()
+	if err == nil {
+		err = os.MkdirAll(filepath.Dir(p), 0o700)
+	}
+	if err == nil {
+		b, _ := json.Marshal(saved{URL: address, Key: a.Key})
+		err = os.WriteFile(p, b, 0o600)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dokkit: enrolled, but could not save the key:", err)
+		return 1
+	}
+	fmt.Printf("%s is enrolled. Its key is in %s\nRun dokkit watch to start reporting.\n", host, p)
+	return 0
+}
+
+// beat says this machine is alive and sends whatever is waiting.
+func (c *client) beat() {
+	c.report(map[string]any{"type": "inventory", "at": now(), "os": runtime.GOOS, "arch": runtime.GOARCH, "dokkit": version})
+	if left, err := c.flush(20 * time.Second); left > 0 {
+		fmt.Fprintf(os.Stderr, "%s  %d report(s) waiting: %v\n", time.Now().Format("15:04:05"), left, err)
+	}
+}
+
+// job fills in what every job line carries. A machine key names the job as a service of its machine.
+func (c *client) job(l line) line {
+	l.Type, l.At = "job", now()
+	if strings.HasPrefix(c.key, "dkm_") {
+		l.Service = l.Name
+	}
+	return l
 }
 
 func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }
@@ -110,7 +208,7 @@ func id() string {
 // untouched, and reports how it ended. It exits as the command did.
 func (c *client) run(job string, command []string) int {
 	run := id()
-	c.report(line{Type: "job", Name: job, Run: run, Event: "start", At: now()})
+	c.report(c.job(line{Name: job, Run: run, Event: "start"}))
 	c.flush(5 * time.Second)
 
 	tail := &ring{max: tailBytes}
@@ -130,13 +228,13 @@ func (c *client) run(job string, command []string) int {
 		fmt.Fprintln(tail, "dokkit: could not start the command:", err)
 		fmt.Fprintln(os.Stderr, "dokkit: could not start the command:", err)
 	}
-	c.report(line{Type: "job", Name: job, Run: run, Event: event, At: now(), ExitCode: &code, Duration: &took, Tail: tail.String()})
+	c.report(c.job(line{Name: job, Run: run, Event: event, ExitCode: &code, Duration: &took, Tail: tail.String()}))
 	c.settle(15 * time.Second)
 	return code
 }
 
 // report puts lines in the spool, where they stay until the server has them.
-func (c *client) report(lines ...line) {
+func (c *client) report(lines ...any) {
 	var b bytes.Buffer
 	for _, l := range lines {
 		j, _ := json.Marshal(l)

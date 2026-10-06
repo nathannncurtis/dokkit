@@ -85,6 +85,55 @@ func TestRunReportsAndKeepsWhatItCannotSend(t *testing.T) {
 	}
 }
 
+func TestEnrolSavesTheKeyAndWatchUsesIt(t *testing.T) {
+	var inventory map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v1/enrol":
+			var b map[string]string
+			json.NewDecoder(r.Body).Decode(&b)
+			if b["token"] != "dke_once" || b["hostname"] == "" {
+				w.WriteHeader(401)
+				w.Write([]byte(`{"error":{"message":"used"}}`))
+				return
+			}
+			w.Write([]byte(`{"machine":"m1","key":"dkm_machine"}`))
+		case r.Header.Get("Authorization") == "Bearer dkm_machine":
+			z, _ := gzip.NewReader(r.Body)
+			json.NewDecoder(z).Decode(&inventory)
+			w.Write([]byte(`{"accepted":1,"refused":[]}`))
+		default:
+			w.WriteHeader(401)
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("DOKKIT_URL", "")
+	t.Setenv("DOKKIT_KEY", "")
+	t.Setenv("DOKKIT_CONFIG", filepath.Join(t.TempDir(), "dokkit", "config.json"))
+	t.Setenv("DOKKIT_SPOOL", t.TempDir())
+
+	if code := cli([]string{"doctor"}); code != 2 {
+		t.Fatalf("with no key anywhere, want 2, got %d", code)
+	}
+	if code := cli([]string{"enrol", srv.URL, "dke_wrong"}); code != 1 {
+		t.Fatalf("a bad token should fail, got %d", code)
+	}
+	if code := cli([]string{"enrol", srv.URL + "/", "dke_once"}); code != 0 {
+		t.Fatalf("enrol failed: %d", code)
+	}
+	c, err := load()
+	if err != nil || c.key != "dkm_machine" || c.url != srv.URL {
+		t.Fatalf("saved config not used: %+v %v", c, err)
+	}
+	c.beat()
+	if inventory["type"] != "inventory" || inventory["dokkit"] != version {
+		t.Fatalf("inventory: %v", inventory)
+	}
+	if l := c.job(line{Name: "backup", Event: "ok"}); l.Service != "backup" || l.Type != "job" {
+		t.Fatalf("a machine key names the job as a service: %+v", l)
+	}
+}
+
 func TestMain(m *testing.M) {
 	if os.Getenv("DOKKIT_FAKE") != "" && len(os.Args) == 1 {
 		os.Stdout.WriteString("copying\n")

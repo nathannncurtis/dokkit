@@ -26,6 +26,19 @@ defmodule DokkitWeb.IntakeController do
     end
   end
 
+  def enrol(conn, %{"token" => token} = params) when is_binary(token) do
+    case Intake.enrol(token, params) do
+      {:ok, answer} ->
+        Dokkit.Issues.changed(false)
+        json(conn, answer)
+
+      _ ->
+        fail(conn, 401, "bad_token", "That token is not known, was already used, or has run out.")
+    end
+  end
+
+  def enrol(conn, _), do: fail(conn, 422, "bad_body", "Needs a token and a hostname.")
+
   @doc "Lets a machine check its address, its key and its clock."
   def hello(conn, _params) do
     case bearer(conn) do

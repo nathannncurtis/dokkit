@@ -36,6 +36,7 @@ defmodule DokkitWeb.Router do
       live "/jobs/new", JobsLive, :new
       live "/s/:id", ServiceLive
       live "/logs", LogsLive
+      live "/machines/new", EnrolLive
       live "/alerts", AlertsLive
     end
   end
@@ -44,6 +45,7 @@ defmodule DokkitWeb.Router do
     pipe_through :api
 
     post "/report", IntakeController, :report
+    post "/enrol", IntakeController, :enrol
     get "/ping", IntakeController, :hello
     get "/in/:key/job/:name/:event", IntakeController, :ping
     post "/in/:key/job/:name/:event", IntakeController, :ping

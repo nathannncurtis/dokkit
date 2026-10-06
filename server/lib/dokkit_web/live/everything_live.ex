@@ -5,7 +5,10 @@ defmodule DokkitWeb.EverythingLive do
   def mount(_params, _session, socket), do: {:ok, load(assign(socket, page_title: "Everything"))}
   def handle_info(:issues_changed, socket), do: {:noreply, load(socket)}
 
-  defp load(socket), do: assign(socket, machines: Estate.machines())
+  defp load(socket) do
+    down = for m <- Dokkit.Issues.machines(), m.down, do: m.id
+    assign(socket, machines: Estate.machines(), down: down)
+  end
 
   def render(assigns) do
     ~H"""
@@ -13,6 +16,7 @@ defmodule DokkitWeb.EverythingLive do
       <div class="head">
         <h1 tabindex="-1">Everything</h1>
         <div class="end">
+          <.link class="btn" navigate={~p"/machines/new"}><.ic name="hard-drives" />Add a machine</.link>
           <.link class="btn primary" navigate={~p"/jobs/new"}><.ic name="plus" />New job</.link>
         </div>
       </div>
@@ -26,8 +30,12 @@ defmodule DokkitWeb.EverythingLive do
           </div>
           <%= for m <- @machines do %>
             <div class="grp" id={"m-#{m.id}"}>
-              <span style="display:flex; align-items:center; gap:8px"><.lvl state={worst(m.services)} />{m.name}</span>
+              <span style="display:flex; align-items:center; gap:8px"><.lvl state={
+                if m.id in @down, do: :down, else: worst(m.services)
+              } />{m.name}</span>
+              <span :if={m.os} class="mute" style="font-weight:400">{m.os}</span>
               <span class="end">
+                <span :if={m.id in @down} class="tag warn">Stopped reporting {at(m.last_seen_at)} UTC</span>
                 <span :if={count(m.services, :bad) > 0} class="tag warn">{need(
                   count(m.services, :bad)
                 )}</span>
