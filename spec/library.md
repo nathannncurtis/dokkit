@@ -36,7 +36,7 @@ An app using the library reports its host name. The host shows up in Dokkit as a
 
 ## Languages
 
-Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP and PowerShell. Any other language can use the plain API or the ping URLs in `api.md` until it has a library.
+Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell and shell. Any other language can use the plain API or the ping URLs in `api.md` until it has a library.
 
 ## Built so far
 
@@ -57,5 +57,7 @@ Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP and PowerShell. Any other la
 `clients/php/Dokkit.php`: one file, no packages or extensions, PHP 8.0 or later. `Dokkit::start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture` and `catchUnhandled`. PHP has no background thread, so lines are sent when the request or script ends, after the response has gone out where PHP allows it.
 
 `clients/powershell/Dokkit.psm1`: one file, for Windows PowerShell 5.1 and PowerShell 7. `Start-Dokkit`, `Send-DokkitBeat`, `Invoke-DokkitJob`, `Send-DokkitProgress`, `Send-DokkitCheck`, `Send-DokkitMetric`, `Write-DokkitLog`, `Send-DokkitError` and `Send-Dokkit`. Lines are sent when a job ends or when `Send-Dokkit` is called.
+
+`clients/shell/dokkit.sh`: one file to source, needing only curl. `dokkit_beat`, `dokkit_job`, `dokkit_check`, `dokkit_metric` and `dokkit_log`. Each call sends its one line straight away and waits at most five seconds. It does not report errors; a failed job carries its exit code.
 
 All of them send the host name, and the server records that host as a machine that was seen. The app's version on each host is not kept per host yet.
