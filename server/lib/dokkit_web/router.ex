@@ -120,7 +120,7 @@ defmodule DokkitWeb.Router do
     post "/issues/:id/snooze", ApiController, :snooze
     post "/issues/:id/unsnooze", ApiController, :unsnooze
     post "/issues/:id/acknowledge", ApiController, :acknowledge
-    get "/in/:key/job/:name/:event", IntakeController, :ping
-    post "/in/:key/job/:name/:event", IntakeController, :ping
+    get "/in/:key/job/:name/:event", IntakeController, :ping, log: false
+    post "/in/:key/job/:name/:event", IntakeController, :ping, log: false
   end
 end

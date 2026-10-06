@@ -12,16 +12,15 @@ defmodule Dokkit.Watch do
 
   def init(_) do
     Process.send_after(self(), :sweep, @every)
-    {:ok, DateTime.utc_now()}
+
+    {:ok,
+     DateTime.add(DateTime.utc_now(), -elem(:erlang.statistics(:wall_clock), 0), :millisecond)}
   end
 
   def handle_info(:sweep, started) do
     Process.send_after(self(), :sweep, @every)
 
-    if settled?(started) do
-      sweep()
-      Issues.machines_sweep(DateTime.utc_now())
-    end
+    sweep_quiet(started)
 
     Dokkit.Numbers.prune(DateTime.utc_now())
     Dokkit.Digest.tick(DateTime.utc_now(), Dokkit.Alerts.config())
@@ -32,6 +31,16 @@ defmodule Dokkit.Watch do
     today = Date.utc_today()
     Enum.each([today, Date.shift(today, month: 1)], &Dokkit.Logs.ensure_partition/1)
     {:noreply, started}
+  end
+
+  @doc "Sweeps jobs, beats and machines once the VM has been up long enough for machines to report."
+  def sweep_quiet(started, now \\ DateTime.utc_now()) do
+    if settled?(started, now) do
+      sweep(now)
+      Issues.machines_sweep(now)
+    else
+      0
+    end
   end
 
   @doc "A machine that was quiet while Dokkit was down is given time to report before it is flagged."

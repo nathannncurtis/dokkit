@@ -10,9 +10,17 @@ defmodule Dokkit.StartupTest do
     assert log =~ "setup code is:"
   end
 
-  test "right after a start, nothing is flagged for being quiet" do
+  test "right after a start, a quiet machine is not flagged" do
+    Req.Test.stub(Dokkit.Alerts, fn conn -> Plug.Conn.send_resp(conn, 202, "{}") end)
+
+    Repo.insert!(%Dokkit.Machine{
+      name: "startup-quiet01",
+      kind: :enrolled,
+      last_seen_at: DateTime.add(DateTime.utc_now(), -86_400)
+    })
+
     now = DateTime.utc_now()
-    refute Watch.settled?(DateTime.add(now, -60), now)
-    assert Watch.settled?(DateTime.add(now, -600), now)
+    assert Watch.sweep_quiet(DateTime.add(now, -60), now) == 0
+    assert Watch.sweep_quiet(DateTime.add(now, -600), now) == 1
   end
 end

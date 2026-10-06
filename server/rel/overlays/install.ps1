@@ -76,6 +76,9 @@ function Get-Erlsrv {
         Sort-Object { [version]($_.Directory.Parent.Name -replace '^erts-') } |
         Select-Object -Last 1).FullName
 }
+function Test-Ok([string]$What) {
+    if ($LASTEXITCODE -ne 0) { throw "$What failed." }
+}
 function Get-Secret([int]$Bytes) {
     $buffer = New-Object byte[] $Bytes
     [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($buffer)
@@ -124,21 +127,35 @@ try {
     [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($cookieBytes)
     Set-Content -Path $cookie -Value (($cookieBytes | ForEach-Object { $_.ToString('x2') }) -join '') -Encoding ascii -NoNewline
     & icacls $cookie /inheritance:r /grant:r "${administrators}:F" "${system}:F" | Out-Null
+    Test-Ok 'Locking down the cookie'
 
     New-Item -ItemType Directory -Force $folder | Out-Null
     if (-not $upgrade) {
         # The settings hold the database password and the key that signs sessions, so only
         # administrators and the system account may read them.
         & icacls $folder /setowner $administrators /T /C | Out-Null
+        Test-Ok 'Setting the owner of the settings folder'
         & icacls $folder /reset /T /C | Out-Null
+        Test-Ok 'Resetting the settings folder'
         & icacls $folder /inheritance:r /grant:r "${administrators}:(OI)(CI)F" "${system}:(OI)(CI)F" | Out-Null
+        Test-Ok 'Locking down the settings folder'
         # What a failed first install left behind is Postgres's again.
-        if (Test-Path $data) { & icacls $data /grant "${networkService}:(OI)(CI)F" | Out-Null }
+        if (Test-Path $data) {
+            & icacls $data /grant "${networkService}:(OI)(CI)F" | Out-Null
+            Test-Ok 'Giving Postgres its data folder'
+        }
     }
     # The service runs as Local Service. It may read the settings and write the log, nothing else here.
     & icacls $folder /grant "${localService}:R" | Out-Null
+    Test-Ok 'Letting the service read the settings folder'
     New-Item -ItemType Directory -Force $logs | Out-Null
     & icacls $logs /inheritance:r /grant:r "${administrators}:(OI)(CI)F" "${system}:(OI)(CI)F" "${localService}:(OI)(CI)M" | Out-Null
+    Test-Ok 'Locking down the log folder'
+    if ($values['DOKKIT_ARCHIVE']) {
+        New-Item -ItemType Directory -Force $values['DOKKIT_ARCHIVE'] | Out-Null
+        & icacls $values['DOKKIT_ARCHIVE'] /grant "${localService}:(OI)(CI)M" | Out-Null
+        Test-Ok 'Letting the service write the archive folder'
+    }
 
     if ($Cert) {
         $values['DOKKIT_CERT'] = Join-Path $folder 'cert.pem'
@@ -146,7 +163,9 @@ try {
         Copy-Item $Cert $values['DOKKIT_CERT'] -Force
         Copy-Item $CertKey $values['DOKKIT_CERT_KEY'] -Force
         & icacls $values['DOKKIT_CERT'] /grant "${localService}:R" | Out-Null
+        Test-Ok 'Letting the service read the certificate'
         & icacls $values['DOKKIT_CERT_KEY'] /grant "${localService}:R" | Out-Null
+        Test-Ok 'Letting the service read the key'
     }
 
     if ($Postgres) {
@@ -163,13 +182,17 @@ try {
 
         if (-not $running) {
             Write-Host 'Setting up a Postgres for Dokkit alone.'
-            # Letters and digits only, so the password needs no escaping in an address.
-            $password = (Get-Secret 24) -replace '[^A-Za-z0-9]', ''
-            Set-Content -Path $passwordFile -Value $password -Encoding ascii -NoNewline
-            & (Join-Path $pg 'bin\initdb.exe') -D $data -U dokkit --pwfile=$passwordFile -A scram-sha-256 -E UTF8 --locale=C | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw 'Postgres could not make its data folder.' }
+            # A data folder that was made keeps its password; only a missing one gets a new one.
+            if (-not (Test-Path (Join-Path $data 'PG_VERSION'))) {
+                # Letters and digits only, so the password needs no escaping in an address.
+                $password = (Get-Secret 24) -replace '[^A-Za-z0-9]', ''
+                Set-Content -Path $passwordFile -Value $password -Encoding ascii -NoNewline
+                & (Join-Path $pg 'bin\initdb.exe') -D $data -U dokkit --pwfile=$passwordFile -A scram-sha-256 -E UTF8 --locale=C | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw 'Postgres could not make its data folder.' }
+            }
             # It runs as Network Service, which needs the data folder and nothing else.
             & icacls $data /grant "${networkService}:(OI)(CI)F" | Out-Null
+            Test-Ok 'Giving Postgres its data folder'
             & (Join-Path $pg 'bin\pg_ctl.exe') register -N $database -D $data -U 'NT AUTHORITY\NetworkService' -S auto -o "-p $databasePort"
             if ($LASTEXITCODE -ne 0) { throw 'Postgres could not be registered as a service.' }
         }
@@ -194,6 +217,7 @@ try {
     if (-not $values['DATABASE_URL']) { throw 'There is no database address to write to the settings.' }
     Set-Content -Path $settings -Value ($values.Keys | ForEach-Object { "$_=$($values[$_])" }) -Encoding ascii
     & icacls $settings /grant "${localService}:R" | Out-Null
+    Test-Ok 'Letting the service read the settings'
 
     Write-Host 'Bringing the database up to date.'
     $restartService = $false
@@ -204,9 +228,27 @@ try {
     if (Get-Service $service -ErrorAction SilentlyContinue) { & (Get-Erlsrv) remove $service | Out-Null }
     & (Join-Path $To 'bin\dokkit.bat') install
     if ($LASTEXITCODE -ne 0) { throw 'The service could not be registered.' }
-    & sc.exe config $service obj= 'NT AUTHORITY\LocalService' start= auto | Out-Null
-    if (Get-Service $database -ErrorAction SilentlyContinue) { & sc.exe config $service depend= $database | Out-Null }
-    & sc.exe failure $service reset= 86400 actions= restart/60000/restart/60000/restart/60000 | Out-Null
+    & sc.exe config $service obj= 'NT AUTHORITY\LocalService' password= '""' start= auto | Out-Null
+    Test-Ok 'Making the service run as Local Service'
+    if (Get-Service $database -ErrorAction SilentlyContinue) {
+        & sc.exe config $service depend= $database | Out-Null
+        Test-Ok 'Making the service wait for its Postgres'
+    }
+    # The wrapper is the service process, so its own setting is what restarts it.
+    & (Get-Erlsrv) set $service -onfail restart | Out-Null
+    Test-Ok 'Making the service restart when it stops'
+    # The wrapper keeps the cookie in this key, which every user can read until it is locked.
+    $key = Get-ChildItem 'HKLM:\SOFTWARE\Ericsson\Erlang\ErlSrv' -ErrorAction Stop |
+        ForEach-Object { Join-Path $_.PSPath $service } | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $key) { throw 'The registry key of the service is not where it was expected.' }
+    $acl = Get-Acl $key
+    $acl.SetAccessRuleProtection($true, $false)
+    foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRule($rule) }
+    foreach ($grant in @(@('S-1-5-32-544', 'FullControl'), @('S-1-5-18', 'FullControl'), @('S-1-5-19', 'ReadKey'))) {
+        $sid = New-Object Security.Principal.SecurityIdentifier $grant[0]
+        $acl.AddAccessRule((New-Object Security.AccessControl.RegistryAccessRule $sid, $grant[1], 'ContainerInherit', 'None', 'Allow'))
+    }
+    Set-Acl $key $acl
 
     $before = @(Get-SetupCodes).Count
     & (Get-Erlsrv) start $service | Out-Null
@@ -218,7 +260,8 @@ catch {
 }
 
 $scheme = if ($values['DOKKIT_CERT']) { 'https' } else { 'http' }
-Write-Host "Dokkit is at ${scheme}://$($values['PHX_HOST']):$($values['PORT'])"
+$shown = if ($values['DOKKIT_CERT']) { $values['PHX_HOST'] } else { 'localhost' }
+Write-Host "Dokkit is at ${scheme}://${shown}:$($values['PORT'])"
 if (-not $values['DOKKIT_CERT']) {
     Write-Host 'It has no certificate, so only this machine can use it. Other machines need -Cert and -CertKey, or a proxy that holds a certificate.'
 }
