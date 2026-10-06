@@ -1,41 +1,60 @@
 defmodule Dokkit.LoginThrottle do
-  @moduledoc "Counts failed sign-ins per name and per address, so guessing cannot run unchecked."
+  @moduledoc """
+  Counts sign-in attempts before the password is hashed. A name and address pair, and an
+  address on its own, are refused over their limit; a name on its own only slows down.
+  """
   @table :dokkit_login_throttle
   @window 600
-  @per_name 10
+  @per_pair 10
   @per_address 30
+  @per_name 10
 
   def init, do: :ets.new(@table, [:named_table, :public, :set])
 
-  def blocked?(name, address),
-    do: count({:name, name}) >= @per_name or count({:address, address}) >= @per_address
-
-  def failed(name, address) do
+  @doc "Counts one attempt. Returns :blocked when over a limit, else :ok (after a delay if the name is being hammered)."
+  def attempt(name, address) do
     prune()
-    bump({:name, name})
-    bump({:address, address})
-  end
+    pair = hit({:pair, name, address})
+    addr = hit({:address, address})
+    by_name = hit({:name, name})
 
-  def cleared(name), do: :ets.delete(@table, {:name, name})
+    cond do
+      pair > @per_pair or addr > @per_address ->
+        :blocked
 
-  defp now, do: System.monotonic_time(:second)
+      by_name > @per_name ->
+        Process.sleep(1000)
+        :ok
 
-  defp count(key) do
-    case :ets.lookup(@table, key) do
-      [{_, n, since}] -> if now() - since < @window, do: n, else: 0
-      _ -> 0
+      true ->
+        :ok
     end
   end
 
-  defp bump(key) do
-    case :ets.lookup(@table, key) do
-      [{_, n, since}] when n > 0 ->
-        if now() - since < @window,
-          do: :ets.insert(@table, {key, n + 1, since}),
-          else: :ets.insert(@table, {key, 1, now()})
+  @doc "Gives back an attempt that was not a wrong password."
+  def refund(name, address) do
+    :ets.delete(@table, {:pair, name, address})
+    :ets.delete(@table, {:name, name})
 
-      _ ->
-        :ets.insert(@table, {key, 1, now()})
+    try do
+      :ets.update_counter(@table, {:address, address}, {2, -1, 0, 0})
+    rescue
+      ArgumentError -> 0
+    end
+  end
+
+  defp now, do: System.monotonic_time(:second)
+
+  defp hit(key) do
+    n = :ets.update_counter(@table, key, {2, 1}, {key, 0, now()})
+
+    [{_, _, since}] = :ets.lookup(@table, key)
+
+    if since < now() - @window do
+      :ets.insert(@table, {key, 1, now()})
+      1
+    else
+      n
     end
   end
 

@@ -3,7 +3,11 @@ defmodule DokkitWeb.AuthTest do
   alias DokkitWeb.Auth
 
   test "a burst of changes reloads once now and once more when the timer fires" do
-    load = fn s -> send(self(), :loaded) && s end
+    load = fn s ->
+      send(self(), :loaded)
+      s
+    end
+
     for _ <- 1..5, do: Auth.debounce(%{}, :burst, load, 10)
     assert_receive :loaded
     refute_receive :loaded, 5

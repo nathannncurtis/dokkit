@@ -11,7 +11,7 @@ defmodule DokkitWeb.Cors do
       |> put_resp_header("access-control-allow-methods", "GET, POST, OPTIONS")
       |> put_resp_header(
         "access-control-allow-headers",
-        "authorization, content-type, content-encoding, dokkit-batch"
+        "authorization, content-type, content-encoding, dokkit-batch, x-sentry-auth"
       )
       |> put_resp_header("access-control-max-age", "86400")
 

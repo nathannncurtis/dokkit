@@ -123,6 +123,7 @@ defmodule Dokkit.Accounts do
   @doc "Ends every session this person has, on every device."
   def sign_out_everywhere(%User{id: id}) do
     Repo.update_all(from(u in User, where: u.id == ^id), set: [sessions_after: stamp()])
+    DokkitWeb.Endpoint.broadcast("user:#{id}", "disconnect", %{})
     :ok
   end
 
@@ -132,7 +133,7 @@ defmodule Dokkit.Accounts do
   def change_password(%User{} = user, old, new) do
     cond do
       not is_binary(old) or not is_binary(new) or not check(old, user.password_hash) ->
-        {:error, "That is not your current password."}
+        {:error, :wrong, "That is not your current password."}
 
       String.length(new) < @min_password ->
         {:error, "Use a password of at least #{@min_password} characters."}
@@ -143,6 +144,7 @@ defmodule Dokkit.Accounts do
             set: [password_hash: hash(new), sessions_after: stamp()]
           )
 
+        DokkitWeb.Endpoint.broadcast("user:#{user.id}", "disconnect", %{})
         {:ok, get(user.id)}
     end
   end

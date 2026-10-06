@@ -78,9 +78,6 @@ defmodule DokkitWeb.Auth do
   def sign_out(conn) do
     if user = conn.assigns[:current_user], do: Accounts.sign_out_everywhere(user)
 
-    if id = get_session(conn, :live_socket_id),
-      do: DokkitWeb.Endpoint.broadcast(id, "disconnect", %{})
-
     configure_session(conn, drop: true)
   end
 

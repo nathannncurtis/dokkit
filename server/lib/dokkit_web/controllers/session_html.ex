@@ -14,9 +14,7 @@ defmodule DokkitWeb.SessionHTML do
       <form class="card" method="post" action={@action}>
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
         <h1><Layouts.mark />{@title}</h1>
-        
         <p :if={@lead != []} class="mute">{render_slot(@lead)}</p>
-        
         <p :if={@error} class="bad" role="alert">
           <i class="ph ph-warning" aria-hidden="true"></i>{@error}
         </p>
@@ -32,7 +30,6 @@ defmodule DokkitWeb.SessionHTML do
       <label>
         Name<input class="inp" name="name" value={@name} autocomplete="username" required autofocus />
       </label>
-      
       <label>
         Password<input
           class="inp"
@@ -50,7 +47,7 @@ defmodule DokkitWeb.SessionHTML do
     ~H"""
     <.door title="Change your password" error={@error} action={~p"/password"} button="Change password">
       <:lead :if={@done}>Your password is changed. Other devices are signed out.</:lead>
-      
+
       <label>
         Current password<input
           class="inp"
@@ -61,7 +58,7 @@ defmodule DokkitWeb.SessionHTML do
           autofocus
         />
       </label>
-      
+
       <label>
         New password<input
           class="inp"
@@ -83,7 +80,6 @@ defmodule DokkitWeb.SessionHTML do
       <:lead>
         This server has no account yet. It printed a setup code in its log when it started. Enter it here, so that nobody else on the network can claim the server first.
       </:lead>
-      
       <label>
         Setup code<input
           class="inp mono"
@@ -94,11 +90,9 @@ defmodule DokkitWeb.SessionHTML do
           autofocus
         />
       </label>
-      
       <label>
         Name<input class="inp" name="name" value={@name} autocomplete="username" required />
       </label>
-      
       <label>
         Password<input
           class="inp"

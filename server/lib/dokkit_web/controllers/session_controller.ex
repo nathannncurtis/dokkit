@@ -3,6 +3,8 @@ defmodule DokkitWeb.SessionController do
   alias Dokkit.{Accounts, LoginThrottle}
   alias DokkitWeb.Auth
 
+  @too_many "Too many attempts. Wait ten minutes and try again."
+
   plug :put_layout, false
 
   def new(conn, _) do
@@ -13,21 +15,17 @@ defmodule DokkitWeb.SessionController do
 
   def create(conn, %{"name" => name, "password" => password}) when is_binary(name) do
     key = String.downcase(String.trim(name))
-    address = conn.remote_ip
+    address = address(conn)
 
-    if LoginThrottle.blocked?(key, address) do
-      conn
-      |> put_resp_header("retry-after", "600")
-      |> put_status(429)
-      |> render(:login, error: "Too many attempts. Wait ten minutes and try again.", name: name)
+    if LoginThrottle.attempt(key, address) == :blocked do
+      conn |> blocked() |> render(:login, error: @too_many, name: name)
     else
       case Accounts.authenticate(name, password) do
         {:ok, user} ->
-          LoginThrottle.cleared(key)
+          LoginThrottle.refund(key, address)
           conn |> Auth.sign_in(user) |> redirect(to: ~p"/")
 
         :error ->
-          LoginThrottle.failed(key, address)
           Process.sleep(500)
 
           conn
@@ -57,19 +55,37 @@ defmodule DokkitWeb.SessionController do
   def change_password(conn, %{"old" => old, "new" => new}) do
     user = conn.assigns.current_user
     key = String.downcase(user.name)
+    address = address(conn)
 
-    result =
-      if LoginThrottle.blocked?(key, conn.remote_ip),
-        do: {:error, "Too many attempts. Wait ten minutes and try again."},
-        else: Accounts.change_password(user, old, new)
+    if LoginThrottle.attempt(key, address) == :blocked do
+      conn |> blocked() |> render(:password, error: @too_many, done: false)
+    else
+      case Accounts.change_password(user, old, new) do
+        {:ok, user} ->
+          LoginThrottle.refund(key, address)
+          conn |> Auth.sign_in(user) |> render(:password, error: nil, done: true)
 
-    case result do
-      {:ok, user} ->
-        conn |> Auth.sign_in(user) |> render(:password, error: nil, done: true)
+        {:error, :wrong, message} ->
+          conn |> put_status(422) |> render(:password, error: message, done: false)
 
-      {:error, message} ->
-        LoginThrottle.failed(key, conn.remote_ip)
-        conn |> put_status(422) |> render(:password, error: message, done: false)
+        {:error, message} ->
+          LoginThrottle.refund(key, address)
+          conn |> put_status(422) |> render(:password, error: message, done: false)
+      end
+    end
+  end
+
+  defp blocked(conn), do: conn |> put_resp_header("retry-after", "600") |> put_status(429)
+
+  # Behind a proxy every request comes from the proxy, so the address it appended is used.
+  defp address(conn) do
+    with true <- Application.get_env(:dokkit, :behind_proxy, false),
+         [list | _] <- get_req_header(conn, "x-forwarded-for"),
+         last = list |> String.split(",") |> List.last() |> String.trim(),
+         {:ok, ip} <- :inet.parse_address(String.to_charlist(last)) do
+      ip
+    else
+      _ -> conn.remote_ip
     end
   end
 end

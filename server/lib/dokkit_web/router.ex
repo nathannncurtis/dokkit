@@ -63,9 +63,10 @@ defmodule DokkitWeb.Router do
   end
 
   scope "/api", DokkitWeb do
-    pipe_through :api
+    pipe_through [:api, :cors]
 
     post "/:project/envelope", IntakeController, :envelope
+    options "/:project/envelope", IntakeController, :envelope
   end
 
   # App keys are write-only and ship inside browser pages, so these answer any origin.
