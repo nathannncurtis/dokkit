@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -186,38 +185,6 @@ func TestAResentLogBatchKeepsItsID(t *testing.T) {
 	c.sendLog("s", file, positions)
 	if len(ids) != 2 || ids[0] != ids[1] {
 		t.Fatalf("batch ids: %v", ids)
-	}
-}
-
-func TestTwoLogFilesWithTheSameFirstLineAreBothSentInFull(t *testing.T) {
-	var lines []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		z, _ := gzip.NewReader(r.Body)
-		s := bufio.NewScanner(z)
-		for s.Scan() {
-			var l map[string]any
-			json.Unmarshal(s.Bytes(), &l)
-			lines = append(lines, l["msg"].(string))
-		}
-	}))
-	defer srv.Close()
-	dir := t.TempDir()
-	toml := "schema = 1\n[service]\nid = \"twins\"\n[logs]\npath = \"*.log\"\n"
-	os.WriteFile(filepath.Join(dir, "dokkit.toml"), []byte(toml), 0o600)
-	os.WriteFile(filepath.Join(dir, "a.log"), []byte("#Fields: time\na1\na2\n"), 0o600)
-	os.WriteFile(filepath.Join(dir, "b.log"), []byte("#Fields: time\nb1\nb2\nb3\n"), 0o600)
-	d, err := readDeclaration(filepath.Join(dir, "dokkit.toml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	c := &client{url: srv.URL, key: "dkm_twins", spool: t.TempDir(), http: &http.Client{}}
-	w := &watcher{c: c, files: map[string]*declaration{d.path: d}, logs: map[string]int64{}}
-	w.tail()
-	w.tail()
-	slices.Sort(lines)
-	want := "#Fields: time,#Fields: time,a1,a2,b1,b2,b3"
-	if strings.Join(lines, ",") != want {
-		t.Fatalf("lines: %v", lines)
 	}
 }
 

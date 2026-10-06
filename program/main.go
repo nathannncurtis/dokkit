@@ -193,7 +193,6 @@ type client struct {
 	spoolMB         int64
 	lastOK          time.Time
 	stuck           map[string]*stuck
-	claimed         map[string]string // first-line keys taken so far in this log pass
 }
 
 // stuck counts the times one thing drew a server error.
