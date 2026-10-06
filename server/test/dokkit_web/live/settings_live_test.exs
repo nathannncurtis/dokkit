@@ -60,7 +60,13 @@ defmodule DokkitWeb.SettingsLiveTest do
     {_, key} = Keys.mint(:app, %{label: "x"})
 
     {:ok, view, html} =
-      live(Plug.Test.init_test_session(conn, %{"user_id" => viewer.id}), "/settings")
+      live(
+        Plug.Test.init_test_session(conn, %{
+          "user_id" => viewer.id,
+          "signed_at" => Dokkit.Accounts.stamp()
+        }),
+        "/settings"
+      )
 
     refute html =~ "Add person"
     refute html =~ "Make a token"

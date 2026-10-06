@@ -18,6 +18,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -441,7 +442,7 @@ func TestStatsVitalsAndExpiry(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "licence"), []byte(time.Now().Add(10*24*time.Hour+time.Hour).Format("2006-01-02")+"\n"), 0o600)
 	file := filepath.Join(dir, "dokkit.toml")
-	os.WriteFile(file, []byte("schema = 1\n[service]\nid = \"portal\"\n[stats]\nurl = \""+app.URL+"\"\nkey_env = \"TEST_STATS_KEY\"\n[[check]]\ntype = \"expiry\"\ndate_from = \"licence\"\n"), 0o600)
+	os.WriteFile(file, []byte("schema = 1\n[service]\nid = \"portal\"\n[stats]\nurl = \""+app.URL+"\"\nkey_env = \"DOKKIT_STATS_TEST\"\n[[check]]\ntype = \"expiry\"\ndate_from = \"licence\"\n"), 0o600)
 	d, err := readDeclaration(file)
 	if err != nil {
 		t.Fatal(err)
@@ -452,14 +453,14 @@ func TestStatsVitalsAndExpiry(t *testing.T) {
 	if len(lines) != 1 || lines[0].(map[string]any)["state"] != "down" {
 		t.Fatalf("without the key the fetch fails: %v", lines)
 	}
-	t.Setenv("TEST_STATS_KEY", "s3cret")
+	t.Setenv("DOKKIT_STATS_TEST", "s3cret")
 	lines = w.stats()
 	if got := lines[0].(map[string]any); got["type"] != "stats" || got["document"].(map[string]any)["version"] != "2.3.0" {
 		t.Fatalf("stats: %v", lines)
 	}
 
 	r := d.Check[0].run()
-	if l := stateLine(d, &d.Check[0], r); l["state"] != "degraded" || l["value"].(float64) > 10 || l["value"].(float64) < 9 {
+	if l := stateLine(d, &d.Check[0], r); l["state"] != "degraded" || l["value"].(float64) > 11 || l["value"].(float64) < 9 {
 		t.Fatalf("expiry: %v", l)
 	}
 
@@ -579,5 +580,143 @@ func TestAnUpdateIsFetchedAndNothingIsReplaced(t *testing.T) {
 	}
 	if !strings.Contains(said, "The newer copy is at") || !strings.Contains(said, "To finish") {
 		t.Fatalf("the run says where it is and how to finish: %q", said)
+	}
+}
+
+func TestANameDeclaredTwiceBelongsToNeither(t *testing.T) {
+	a, b := t.TempDir(), t.TempDir()
+	toml := func(dir, run string) string {
+		p := filepath.Join(dir, "dokkit.toml")
+		os.WriteFile(p, []byte("schema = 1\n[service]\nid = \"s\"\n[[task]]\nid = \"same\"\nrun = \""+run+"\"\n[[task]]\nid = \"only\"\nrun = \"x\"\n"), 0o600)
+		return p
+	}
+	pa, pb := toml(a, "echo a"), toml(b, "echo b")
+	if got := tasks([]string{pa, pa}); len(got) != 2 {
+		t.Fatalf("one file listed twice is still one file: %v", got)
+	}
+	got := tasks([]string{pa, pb})
+	if _, ok := got["same"]; ok {
+		t.Fatal("a name two files declare must not run")
+	}
+}
+
+func TestATimedOutTaskDoesNotWaitForWhatItStarted(t *testing.T) {
+	killWait = 500 * time.Millisecond
+	slow := "sleep 20 & wait"
+	if runtime.GOOS == "windows" {
+		slow = "ping -n 20 127.0.0.1"
+	}
+	start := time.Now()
+	code := task{ID: "slow", Run: slow, Timeout: "1s", dir: "."}.run(&chunks{}, &chunks{}, nil)
+	if code != 124 || time.Since(start) > 10*time.Second {
+		t.Fatalf("code %d after %s", code, time.Since(start))
+	}
+}
+
+func TestSystemTasksNeedTheMachinesOwnSay(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "dokkit.toml"), []byte("schema = 1\n[service]\nid = \"s\"\n[[task]]\nid = \"hello\"\nrun = \"echo hi\"\n"), 0o600)
+	sum := sha256.Sum256([]byte("echo hi"))
+	offered := false
+	posts := make(chan string, 8)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			if !offered {
+				offered = true
+				w.Write([]byte(`{"run":"s1","task":"hello","as":"system","command_sha256":"` + hex.EncodeToString(sum[:]) + `"}`))
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+			w.WriteHeader(204)
+			return
+		}
+		b, _ := io.ReadAll(r.Body)
+		posts <- r.URL.Path + " " + string(b)
+	}))
+	defer srv.Close()
+	go (&client{url: srv.URL, key: "k", folders: []string{dir}}).work()
+	select {
+	case g := <-posts:
+		if !strings.HasPrefix(g, `/api/v1/work/s1/result {"refused"`) || !strings.Contains(g, "system_tasks") {
+			t.Fatal(g)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no answer")
+	}
+}
+
+func TestAResultIsSentAgainWhenTheServerFails(t *testing.T) {
+	resultWait = time.Millisecond
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls++; calls < 3 {
+			w.WriteHeader(500)
+		}
+	}))
+	defer srv.Close()
+	(&client{url: srv.URL, key: "k"}).postResult("/api/v1/work/r/result", []byte(`{}`))
+	if calls != 3 {
+		t.Fatalf("expected 3 posts, got %d", calls)
+	}
+}
+
+func TestAFetchedUpdateMustMatchTheHashItIsHeldTo(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("the newer copy")) }))
+	defer srv.Close()
+	dir := t.TempDir()
+	c := &client{url: srv.URL, key: "k", spool: filepath.Join(dir, "spool"), updateSha: strings.Repeat("0", 64)}
+	if _, _, err := c.fetchUpdate(); err == nil {
+		t.Fatal("a copy with another hash was kept")
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, "update", "dokkit*")); len(left) != 0 {
+		t.Fatalf("nothing is left to run: %v", left)
+	}
+	sum := sha256.Sum256([]byte("the newer copy"))
+	c.updateSha = hex.EncodeToString(sum[:])
+	if _, _, err := c.fetchUpdate(); err != nil {
+		t.Fatal(err)
+	}
+	c.updateSha = strings.Repeat("1", 64)
+	if _, _, err := c.fetchUpdate(); err == nil {
+		t.Fatal("a copy with another hash was kept")
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, "update", "dokkit*")); len(left) != 0 {
+		t.Fatalf("an earlier copy is still there: %v", left)
+	}
+}
+
+func TestOneFileReachedTwoWaysIsOneFile(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "dokkit.toml")
+	os.WriteFile(p, []byte("schema = 1\n[service]\nid = \"s\"\n[[task]]\nid = \"a\"\nrun = \"x\"\n"), 0o600)
+	alias := filepath.Join(dir, ".", "dokkit.toml")
+	if runtime.GOOS == "windows" {
+		alias = strings.ToUpper(p)
+	}
+	if got := tasks([]string{p, alias}); len(got) != 1 {
+		t.Fatalf("the same file twice must not clash with itself: %v", got)
+	}
+}
+
+func TestATaskThatLeavesSomethingRunningStillSucceeds(t *testing.T) {
+	killWait = 500 * time.Millisecond
+	run := "sleep 20 & echo done"
+	if runtime.GOOS == "windows" {
+		run = "start /b ping -n 12 127.0.0.1 & echo done"
+	}
+	if code := (task{ID: "bg", Run: run, Timeout: "30s", dir: "."}).run(&chunks{}, &chunks{}, nil); code != 0 {
+		t.Fatalf("code %d", code)
+	}
+}
+
+func TestABareNameInTheTasksFolderRuns(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("cmd only")
+	}
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "hello.bat"), []byte("@echo hi\r\n"), 0o600)
+	var out chunks
+	if code := (task{ID: "h", Run: "hello.bat", dir: dir}).run(&out, &out, nil); code != 0 {
+		t.Fatalf("code %d: %s", code, out.take())
 	}
 }

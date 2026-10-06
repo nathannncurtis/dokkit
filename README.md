@@ -23,7 +23,7 @@ Working, with tests:
 - **Tasks.** A `dokkit.toml` offers a named command. The owner accepts it on the Found page, it is run from the Tasks page, and `dokkit watch` on its machine carries it out and sends back the output. A command that changes has to be accepted again.
 - **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Errors, Deploys, Found, Tasks, Alerts and Settings. People sign in; the first one claims the server with a setup code. A service page stops and starts watching, holds a version, keeps error messages or not, takes notes on its open issue, and lets the installed program start a stopped Windows service again. Versions lists desktop apps by how many PCs are on each version.
 - **Libraries.** For Python, .NET, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift, one file each: beats, job progress, an app's own checks, errors, logs.
-- **The API and the MCP**, for user tokens made in Settings. Every read and act call in `spec/api.md` is there, and a token with the `admin` scope manages keys and people.
+- **The API and the MCP**, for user tokens made in Settings. Every read and act call in `spec/api.md` is there, and a token with the `admin` scope manages keys, people, rules, checks and restart.
 
 Written and not yet run on a real machine: the Windows install script for the server, the Docker image, installing the program as a service, and sending mail through a real mail server.
 

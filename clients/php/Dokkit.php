@@ -15,9 +15,11 @@
 final class Dokkit
 {
     private const QUEUE = 1000;
+    private const MAX_BYTES = 4000000;
     private static ?array $on = null;
     private static array $lines = [];
     private static array $errors = [];
+    private static int $bytes = 0;
     /** How many lines were dropped because the list was full. */
     public static int $dropped = 0;
 
@@ -29,14 +31,18 @@ final class Dokkit
         if ($url === '' || $key === '' || self::$on) {
             return;
         }
+        if (preg_match('#^http://#i', $url) && !preg_match('#^http://(localhost|127(\.\d+){3}|\[::1\])([:/]|$)#i', $url) && getenv('DOKKIT_INSECURE') !== '1') {
+            fwrite(STDERR, "dokkit: http:// address to a non-local host; set DOKKIT_INSECURE=1 to allow it. Staying off.\n");
+            return;
+        }
         self::$on = [
             'url' => rtrim($url, '/'),
             'key' => $key,
             'version' => $version,
             'environment' => getenv('DOKKIT_ENV') ?: null,
             'host' => gethostname() ?: 'unknown',
-            // The folder the app was started from: frames under it are the app's own.
-            'root' => getcwd() ?: '',
+            // The folder the app was started from, or above public/ under a web server: frames under it are the app's own.
+            'root' => self::root(),
         ];
         register_shutdown_function(function () {
             if (function_exists('fastcgi_finish_request')) {
@@ -44,7 +50,7 @@ final class Dokkit
             }
             self::flush();
         });
-        if ($version !== null) {
+        if ($version !== null && PHP_SAPI === 'cli') {
             self::add(['type' => 'deploy', 'version' => $version]);
         }
     }
@@ -80,7 +86,7 @@ final class Dokkit
     /** Reports a run of a job: its start, its progress, and how it ended. Returns what the work returns. */
     public static function job(string $name, callable $work): mixed
     {
-        $run = bin2hex(random_bytes(16));
+        $run = self::uuid();
         $began = hrtime(true);
         $send = fn (string $event, array $more = []) => self::add(['type' => 'job', 'name' => $name, 'run' => $run, 'event' => $event] + $more);
         $took = fn () => intdiv(hrtime(true) - $began, 1000000);
@@ -102,11 +108,19 @@ final class Dokkit
         if (!self::$on || count(self::$errors) >= 100) {
             return;
         }
-        $own = fn (?string $file) => $file !== null && str_starts_with($file, self::$on['root']) && !str_contains($file, 'vendor');
+        $root = rtrim(self::$on['root'], '/\\') . DIRECTORY_SEPARATOR;
+        $own = fn (?string $file) => $file !== null && self::$on['root'] !== '' && str_starts_with($file, $root) && !str_starts_with($file, $root . 'vendor' . DIRECTORY_SEPARATOR);
+        $rel = function (string $file) use ($root): string {
+            if (str_starts_with($file, $root)) {
+                return substr($file, strlen($root));
+            }
+            $i = strrpos($file, DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR);
+            return $i === false ? basename($file) : substr($file, $i + 1);
+        };
         // The trace says where each call was made from; the place the error was raised comes first.
-        $frames = [['file' => $error->getFile(), 'function' => $error->getTrace()[0]['function'] ?? '(main)', 'line' => $error->getLine(), 'own' => $own($error->getFile())]];
+        $frames = [['file' => $rel($error->getFile()), 'function' => $error->getTrace()[0]['function'] ?? '(main)', 'line' => $error->getLine(), 'own' => $own($error->getFile())]];
         foreach ($error->getTrace() as $i => $f) {
-            $frames[] = ['file' => $f['file'] ?? '(internal)', 'function' => $error->getTrace()[$i + 1]['function'] ?? '(main)', 'line' => $f['line'] ?? null, 'own' => $own($f['file'] ?? null)];
+            $frames[] = ['file' => isset($f['file']) ? $rel($f['file']) : '(internal)', 'function' => $error->getTrace()[$i + 1]['function'] ?? '(main)', 'line' => $f['line'] ?? null, 'own' => $own($f['file'] ?? null)];
         }
         self::$errors[] = [
             'at' => self::now(),
@@ -134,28 +148,67 @@ final class Dokkit
         });
     }
 
-    /** Sends what is waiting. Called for you when the request or script ends. */
+    /** Sends what is waiting, and stops at the first request that fails. Called for you when the request or script ends. */
     public static function flush(): void
     {
         if (!self::$on) {
             return;
         }
-        [$errors, $lines] = [self::$errors, self::$lines];
-        [self::$errors, self::$lines] = [[], []];
-        foreach ($errors as $error) {
-            self::post('/api/v1/errors', json_encode($error), 'application/json');
+        while (self::$errors) {
+            if (!self::post('/api/v1/errors', self::encode(array_shift(self::$errors)), 'application/json', self::uuid())) {
+                self::$dropped++;
+                return;
+            }
         }
-        foreach (array_chunk($lines, 500) as $batch) {
-            self::post('/api/v1/report', implode("\n", array_map('json_encode', $batch)), 'application/x-ndjson');
+        while (self::$lines) {
+            $batch = array_splice(self::$lines, 0, 500);
+            self::$bytes -= array_sum(array_map('strlen', $batch));
+            $id = self::uuid();
+            $body = implode("
+", $batch);
+            // A failed batch gets one more try with the same id; after that it is dropped and counted.
+            if (!self::post('/api/v1/report', $body, 'application/x-ndjson', $id) && !self::post('/api/v1/report', $body, 'application/x-ndjson', $id)) {
+                self::$dropped += count($batch);
+                return;
+            }
         }
     }
 
-    // What cannot be sent is dropped. The app is never told.
-    private static function post(string $path, string $body, string $kind): void
+    private static function root(): string
     {
-        $headers = ['Authorization: Bearer ' . self::$on['key'], "Content-Type: $kind", 'Dokkit-Batch: ' . bin2hex(random_bytes(16))];
-        $context = stream_context_create(['http' => ['method' => 'POST', 'header' => implode("\r\n", $headers), 'content' => $body, 'timeout' => 5, 'ignore_errors' => true]]);
-        @file_get_contents(self::$on['url'] . $path, false, $context);
+        $cwd = getcwd() ?: '';
+        for ($d = $cwd; ; $d = dirname($d)) {
+            if (is_file($d . DIRECTORY_SEPARATOR . 'composer.json')) {
+                return $d;
+            }
+            if (dirname($d) === $d) {
+                break;
+            }
+        }
+        return basename($cwd) === 'public' ? dirname($cwd) : $cwd;
+    }
+
+    private static function uuid(): string
+    {
+        $b = random_bytes(16);
+        $b[6] = chr(ord($b[6]) & 0x0f | 0x40);
+        $b[8] = chr(ord($b[8]) & 0x3f | 0x80);
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($b), 4));
+    }
+
+    // Text that is not valid UTF-8 is repaired rather than losing the line.
+    private static function encode(array $line): string
+    {
+        return json_encode($line, JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
+    }
+
+    // What cannot be sent is dropped. The app is never told.
+    private static function post(string $path, string $body, string $kind, string $batch): bool
+    {
+        $headers = ['Authorization: Bearer ' . self::$on['key'], "Content-Type: $kind", "Dokkit-Batch: $batch"];
+        $context = stream_context_create(['http' => ['method' => 'POST', 'header' => implode("\r\n", $headers), 'content' => $body, 'timeout' => 2, 'ignore_errors' => true]]);
+        $reply = @file_get_contents(self::$on['url'] . $path, false, $context);
+        return $reply !== false && !preg_match('#^HTTP/\S+ [45]#', $http_response_header[0] ?? '');
     }
 
     private static function add(array $line): void
@@ -163,15 +216,22 @@ final class Dokkit
         if (!self::$on) {
             return;
         }
-        if (count(self::$lines) >= self::QUEUE) {
-            array_shift(self::$lines);
+        $text = self::encode(array_filter($line + ['at' => self::now(), 'host' => self::$on['host']], fn ($v) => $v !== null));
+        if (strlen($text) > self::MAX_BYTES) {
+            self::$dropped++;
+            return;
+        }
+        while (self::$lines && (count(self::$lines) >= self::QUEUE || self::$bytes + strlen($text) > self::MAX_BYTES)) {
+            self::$bytes -= strlen(array_shift(self::$lines));
             self::$dropped++;
         }
-        self::$lines[] = array_filter($line + ['at' => self::now(), 'host' => self::$on['host']], fn ($v) => $v !== null);
+        self::$lines[] = $text;
+        self::$bytes += strlen($text);
     }
 
     private static function now(): string
     {
-        return gmdate('Y-m-d\TH:i:s\Z');
+        $t = microtime(true);
+        return gmdate('Y-m-d\TH:i:s', (int) $t) . sprintf('.%03dZ', (int) (fmod($t, 1) * 1000));
     }
 }

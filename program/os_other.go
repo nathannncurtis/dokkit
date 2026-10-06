@@ -7,12 +7,38 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 )
 
 func machineDir() string { return "" }
+
+// listsPath is the file naming the services this machine may start and the hosts it may reach,
+// used only while root owns it and the folder and nobody else can write to either.
+func listsPath() string {
+	const p = "/etc/dokkit/config.json"
+	for _, f := range []string{p, filepath.Dir(p)} {
+		fi, err := os.Stat(f)
+		if err != nil {
+			return ""
+		}
+		if st, ok := fi.Sys().(*syscall.Stat_t); !ok || st.Uid != 0 || fi.Mode().Perm()&0o022 != 0 {
+			return ""
+		}
+	}
+	return p
+}
+
+// Run as root, a task would be root whatever it was accepted as, so only a task accepted for the system account runs.
+func init() {
+	if os.Geteuid() == 0 {
+		ordinary = func(*exec.Cmd) (func(), error) {
+			return nil, errors.New("dokkit is running as root and tasks cannot be dropped to another account; accept the task as the system account or run dokkit as an ordinary user")
+		}
+	}
+}
 
 func asService() bool { return false }
 
@@ -62,7 +88,7 @@ func findDisks() (all []found) {
 		}
 		total, _ := strconv.ParseInt(f[1], 10, 64)
 		free, _ := strconv.ParseInt(f[3], 10, 64)
-		all = append(all, found{"mount": f[5], "total_gb": fmt.Sprint(total >> 20), "free_gb": fmt.Sprint(free >> 20)})
+		all = append(all, found{"mount": f[5], "total_gb": fmt.Sprint(total >> 20), "free_gb": fmt.Sprint(free >> 20), "total_bytes": fmt.Sprint(total << 10), "free_bytes": fmt.Sprint(free << 10)})
 	}
 	return
 }

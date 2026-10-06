@@ -21,8 +21,13 @@ defmodule DokkitWeb.LogsLive do
     {:noreply, load(assign(socket, filter: filter))}
   end
 
-  def handle_info(:logs_changed, socket), do: {:noreply, load(socket)}
-  def handle_info(:issues_changed, socket), do: {:noreply, socket}
+  def handle_info(:logs_changed, socket),
+    do: {:noreply, DokkitWeb.Auth.debounce(socket, :page, &load/1)}
+
+  def handle_info({:settled, :page}, socket),
+    do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
+
+  def handle_info(_, socket), do: {:noreply, socket}
 
   def handle_event("filter", %{"q" => q, "level" => level}, socket) do
     service = socket.assigns.filter.service
@@ -85,8 +90,7 @@ defmodule DokkitWeb.LogsLive do
             <span class="mono">{at(l.at)}</span>
             <span class={["tag", l.level in ~w(error fatal) && "bad", l.level == "warn" && "warn"]}>{String.capitalize(
               l.level
-            )}</span>
-            <span class="tag">{l.machine.name}</span>
+            )}</span> <span class="tag">{l.machine.name}</span>
             <.link :if={l.service} navigate={~p"/s/#{l.service_id}"}>{l.service.name}</.link>
             <span :if={!l.service} class="mute">The machine</span>
             <span>{l.msg}<span :if={l.cut} class="mute"> (cut)</span></span>

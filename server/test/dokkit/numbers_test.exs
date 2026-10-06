@@ -103,4 +103,44 @@ defmodule Dokkit.NumbersTest do
     report(mkey, for(_ <- 1..4, do: %{full | value: 99.9}))
     assert Issues.open_list() == []
   end
+
+  describe "a file threshold and the built-in limit" do
+    defp declared(machine, limit) do
+      m = Repo.insert!(%Machine{name: machine, kind: :enrolled})
+
+      doc = %{
+        "schema" => 1,
+        "service" => %{"id" => "ndisk"},
+        "check" => [
+          %{
+            "type" => "threshold",
+            "name" => "d",
+            "metric" => "disk.used_percent.Q",
+            "limit" => limit,
+            "fail_after" => 1
+          }
+        ]
+      }
+
+      Dokkit.Numbers.record(m.id, nil, "disk.used_percent.Q", 10, DateTime.utc_now())
+      {:ok, _} = Dokkit.Estate.declare(m.id, doc)
+      m
+    end
+
+    test "a usable file limit and the built-in both see the value, one issue opens" do
+      m = declared("nd-a", 50)
+      Dokkit.Numbers.record(m.id, nil, "disk.used_percent.Q", 99, DateTime.utc_now())
+      assert [_] = Issues.open_list() |> Enum.filter(&(&1.machine_id == m.id))
+    end
+
+    test "a file limit that is not a number leaves the built-in alarming" do
+      Dokkit.Alerts.save(%{"disk_limit" => "90"})
+      m = declared("nd-b", "90")
+
+      for _ <- 1..3,
+          do: Dokkit.Numbers.record(m.id, nil, "disk.used_percent.Q", 99, DateTime.utc_now())
+
+      assert [_] = Issues.open_list() |> Enum.filter(&(&1.machine_id == m.id))
+    end
+  end
 end

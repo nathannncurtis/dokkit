@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -13,8 +14,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -36,6 +39,7 @@ type declaration struct {
 	}
 	Task  []task
 	Check []check
+	Job   []struct{ ID string }
 }
 
 type check struct {
@@ -46,6 +50,38 @@ type check struct {
 	name, dir             string
 	next                  time.Time
 	restart               bool
+	refuseStart           bool
+	refused               string
+}
+
+// Only variables with this prefix can be sent to a stats address.
+const statsKeyPrefix = "DOKKIT_STATS_"
+
+// within says whether path, once links are followed, is inside dir.
+func within(dir, path string) bool {
+	d, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return false
+	}
+	p, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(d, p)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}
+
+// parallel runs f for 0..n-1 at once and waits for all.
+func parallel(n int, f func(i int)) {
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			f(i)
+		}()
+	}
+	wg.Wait()
 }
 
 // startService starts a stopped Windows service. Only the installed service can.
@@ -53,9 +89,14 @@ var startService func(name string) error
 
 // restarted is when each service was last started here, so one that will not stay up is
 // tried once in ten minutes and no more.
-var restarted = map[string]time.Time{}
+var (
+	restarted   = map[string]time.Time{}
+	restartedMu sync.Mutex
+)
 
 func (c *check) tryRestart() bool {
+	restartedMu.Lock()
+	defer restartedMu.Unlock()
 	if !c.restart || startService == nil || time.Since(restarted[c.Name]) < 10*time.Minute {
 		return false
 	}
@@ -147,8 +188,8 @@ func (c *check) every() time.Duration {
 	return 30 * time.Second
 }
 
-// expires reads a date from a certificate (an https address or host:port) or from a file's first line.
-func (c *check) expires() (time.Time, error) {
+// certAddr is the host:port date_from names, or "" when it names a file.
+func (c *check) certAddr() string {
 	from := c.DateFrom
 	if u, err := url.Parse(from); err == nil && u.Scheme == "https" {
 		from = u.Host
@@ -157,7 +198,61 @@ func (c *check) expires() (time.Time, error) {
 		}
 	}
 	if _, _, err := net.SplitHostPort(from); err == nil {
-		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: c.timeout()}, "tcp", from, nil)
+		return from
+	}
+	return ""
+}
+
+// host is the machine a check reaches out to, or "" when it stays on this one.
+func (c *check) host() string {
+	switch c.Type {
+	case "tcp":
+		return c.Host
+	case "http":
+		if u, err := url.Parse(c.URL); err == nil && u.Hostname() != "" {
+			return u.Hostname()
+		}
+		return "?"
+	case "expiry":
+		h, _, _ := net.SplitHostPort(c.certAddr())
+		return h
+	}
+	return ""
+}
+
+// mayReach says whether a check pulled from the server may go to host: this machine always,
+// anything else only when this machine's own configuration names it.
+func (c *client) mayReach(host string) bool {
+	if host == "" || strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil && (ip.IsLoopback() || ownAddress(ip)) {
+		return true
+	}
+	if me, _ := os.Hostname(); strings.EqualFold(me, host) {
+		return true
+	}
+	return slices.ContainsFunc(c.hosts, func(h string) bool { return strings.EqualFold(h, host) })
+}
+
+func ownAddress(ip net.IP) bool {
+	addrs, _ := net.InterfaceAddrs()
+	for _, a := range addrs {
+		if n, ok := a.(*net.IPNet); ok && n.IP.Equal(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// expires reads a date from a certificate (an https address or host:port) or from a file's first line.
+func (c *check) expires() (time.Time, error) {
+	from := c.DateFrom
+	if addr := c.certAddr(); addr != "" {
+		from = addr
+	}
+	if _, _, err := net.SplitHostPort(from); err == nil {
+		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: c.timeout()}, "tcp", from, &tls.Config{InsecureSkipVerify: true}) // only the date is read, so a self-signed certificate still counts
 		if err != nil {
 			return time.Time{}, err
 		}
@@ -166,6 +261,9 @@ func (c *check) expires() (time.Time, error) {
 	}
 	if !filepath.IsAbs(from) {
 		from = filepath.Join(c.dir, from)
+	}
+	if !within(c.dir, from) {
+		return time.Time{}, errors.New("date_from must be a file in the same folder as dokkit.toml")
 	}
 	b, err := os.ReadFile(from)
 	if err != nil {
@@ -176,7 +274,8 @@ func (c *check) expires() (time.Time, error) {
 	if t, err := time.Parse(time.RFC3339, line); err == nil {
 		return t, nil
 	}
-	return time.Parse("2006-01-02", line)
+	t, err := time.Parse("2006-01-02", line)
+	return t.Add(24 * time.Hour), err // a bare date lasts through that day
 }
 
 func (c *check) timeout() time.Duration {
@@ -187,6 +286,9 @@ func (c *check) timeout() time.Duration {
 }
 
 func (c *check) run() result {
+	if c.refused != "" {
+		return result{state: "down", note: c.refused}
+	}
 	started := time.Now()
 	var err error
 	switch c.Type {
@@ -212,26 +314,40 @@ func (c *check) run() result {
 	case "expiry":
 		var until time.Time
 		if until, err = c.expires(); err == nil {
-			days := float64(int(time.Until(until).Hours() / 24))
-			switch {
-			case days < 0:
-				return result{state: "down", value: days, note: "ran out on " + until.Format("Jan 2 2006")}
-			case days < 30:
-				return result{state: "degraded", value: days, note: fmt.Sprintf("runs out in %.0f days, on %s", days, until.Format("Jan 2 2006"))}
-			}
-			return result{ok: true, value: days}
+			return expiryResult(until, time.Now())
 		}
 	case "process":
 		err = processRunning(c.Name)
 	case "windows-service":
-		if err = serviceRunning(c.Name); err != nil && c.tryRestart() {
-			return result{ok: true, note: "had stopped; started it again"}
+		if err = serviceRunning(c.Name); err != nil {
+			if c.tryRestart() {
+				return result{ok: true, note: "had stopped; started it again"}
+			}
+			if c.refuseStart {
+				err = fmt.Errorf("%w; this machine does not allow starting it, list it under restart in its config.json", err)
+			}
 		}
 	}
 	if err != nil {
 		return result{note: short(err)}
 	}
 	return result{ok: true, value: float64(time.Since(started).Milliseconds())}
+}
+
+// expiryResult is down once the time has passed, and shows whole days left, rounded up while any remain.
+func expiryResult(until, at time.Time) result {
+	left := until.Sub(at).Hours() / 24
+	days := math.Floor(left)
+	if left > 0 {
+		days = math.Ceil(left)
+	}
+	switch {
+	case left < 0:
+		return result{state: "down", value: days, note: "ran out on " + until.Format("Jan 2 2006")}
+	case days < 30:
+		return result{state: "degraded", value: days, note: fmt.Sprintf("runs out in %.0f days, on %s", days, until.Format("Jan 2 2006"))}
+	}
+	return result{ok: true, value: days}
 }
 
 // short keeps the last part of a Go network error, which is the part a person wants.
@@ -373,6 +489,9 @@ type watcher struct {
 	modified map[string]time.Time
 	logs     map[string]int64
 	sent     time.Time
+	mu       sync.Mutex // guards files, which the log reader looks at from its own goroutine
+	logc     *client    // the log reader's own client, so its timeout is its own
+	unsaved  bool
 }
 
 // refresh re-reads files that are new or changed, declares them, and forgets files that are gone.
@@ -397,15 +516,19 @@ func (w *watcher) refresh() {
 				continue
 			}
 			fmt.Printf("%s  watching %s from %s\n", time.Now().Format("15:04:05"), d.Service.ID, p)
+			w.mu.Lock()
 			w.files[p] = d
+			w.mu.Unlock()
 		}
 	}
+	w.mu.Lock()
 	for p := range w.files {
 		if !found[p] {
 			delete(w.files, p)
 			delete(w.modified, p)
 		}
 	}
+	w.mu.Unlock()
 	w.pull()
 }
 
@@ -428,8 +551,15 @@ func (w *watcher) pull() {
 		var c check
 		b, _ := json.Marshal(item.Config)
 		json.Unmarshal(b, &c)
-		c.Type, c.name, c.restart = item.Type, item.Name, item.Restart
+		c.Type, c.name = item.Type, item.Name
+		// Only a service this machine's own configuration names is ever started, and only
+		// addresses on this machine, or named there, are reached.
+		listed := slices.ContainsFunc(w.c.restartable, func(n string) bool { return strings.EqualFold(n, c.Name) })
+		c.restart, c.refuseStart = item.Restart && listed, item.Restart && !listed
 		if runs, _ := c.problem(); runs {
+			if h := c.host(); !w.c.mayReach(h) {
+				c.refused = "this machine does not allow reaching " + h + "; list it under hosts in its config.json"
+			}
 			d := &declaration{Check: []check{c}}
 			d.Service.ID = item.Service
 			w.added = append(w.added, d)
@@ -444,8 +574,12 @@ func (w *watcher) versions() (all []map[string]string) {
 		if from == "" || from == "stats" {
 			continue
 		}
+		dir := filepath.Dir(d.path)
 		if !filepath.IsAbs(from) {
-			from = filepath.Join(filepath.Dir(d.path), from)
+			from = filepath.Join(dir, from)
+		}
+		if !within(dir, from) {
+			continue
 		}
 		b, err := os.ReadFile(from)
 		line, _, _ := strings.Cut(strings.TrimSpace(string(b)), "\n")
@@ -458,7 +592,11 @@ func (w *watcher) versions() (all []map[string]string) {
 
 // tick runs the checks that are due and returns how many it ran.
 func (w *watcher) tick(at time.Time) int {
-	var lines []any
+	type due struct {
+		d *declaration
+		c *check
+	}
+	var todo []due
 	all := w.added
 	for _, d := range w.files {
 		all = append(all, d)
@@ -470,9 +608,12 @@ func (w *watcher) tick(at time.Time) int {
 				continue
 			}
 			c.next = at.Add(c.every())
-			lines = append(lines, stateLine(d, c, c.run()))
+			todo = append(todo, due{d, c})
 		}
 	}
+	// At once, so one check that times out does not hold the rest back.
+	lines := make([]any, len(todo))
+	parallel(len(todo), func(i int) { lines[i] = stateLine(todo[i].d, todo[i].c, todo[i].c.run()) })
 	if len(lines) > 0 {
 		w.c.report(lines...)
 	}
@@ -489,7 +630,17 @@ func (c *client) watch() int {
 		fmt.Println("No folders to read dokkit.toml files from. Set DOKKIT_FOLDERS, or add folders to the saved configuration.")
 	}
 	go c.work()
-	var beat, tailed time.Time
+	lc := *c
+	lc.http = &http.Client{Transport: c.http.Transport}
+	w.logc = &lc
+	// Logs go on their own clock: a slow check or stats address never holds them back.
+	go func() {
+		for {
+			w.tail()
+			time.Sleep(5 * time.Second)
+		}
+	}()
+	var beat time.Time
 	for {
 		at := time.Now()
 		ran := 0
@@ -509,10 +660,6 @@ func (c *client) watch() int {
 			} else {
 				w.sent = at
 			}
-		}
-		if at.Sub(tailed) >= 5*time.Second {
-			tailed = at
-			w.tail()
 		}
 		if beat.Equal(at) {
 			w.saveStatus(at)

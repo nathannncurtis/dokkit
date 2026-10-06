@@ -7,6 +7,8 @@
 # General application configuration
 import Config
 
+config :dokkit, Dokkit.Repo, parameters: [timezone: "UTC"]
+
 config :dokkit,
   ecto_repos: [Dokkit.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true]

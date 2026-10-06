@@ -20,16 +20,17 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const (
 	tailBytes = 16 * 1024
-	spoolCap  = 500 * 1024 * 1024
+	spoolMB   = 500
 	version   = "0.1.0"
-	usage     = `dokkit run --job <name> -- <command> [arguments]
-dokkit ping <name> [start|ok|fail]
+	usage     = `dokkit run [--service <slug>] --job <name> -- <command> [arguments]
+dokkit ping [--service <slug>] <name> [start|ok|fail]
 dokkit init
 dokkit check [dokkit.toml]
 dokkit apply [dokkit.toml]
@@ -45,7 +46,8 @@ dokkit task list
 dokkit task run <name>
 
 Reads DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key),
-or the address and machine key that dokkit enrol saved.
+or the address and machine key that dokkit enrol saved. DOKKIT_SPOOL_MB caps the spool (500).
+A job declared under a service in a dokkit.toml is found by name; --service says which service when it is not.
 dokkit watch reads dokkit.toml files from the folders in DOKKIT_FOLDERS
 or in the saved configuration, and from the folders directly inside them.
 It runs their checks and sends the log files they name. It is an ordinary program:
@@ -102,6 +104,9 @@ func cli(args []string) int {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "dokkit:", err)
 		return 2
+	}
+	if args[0] == "run" || args[0] == "ping" {
+		args, c.service = takeService(args)
 	}
 	switch args[0] {
 	case "run":
@@ -179,7 +184,55 @@ type client struct {
 	pin             string
 	url, key, spool string
 	folders         []string
+	restartable     []string
+	hosts           []string
+	system          bool   // this machine's own config allows tasks accepted for the system account
+	updateSha       string // the hash a fetched update must have, when the config names one
 	http            *http.Client
+	service         string
+	spoolMB         int64
+	lastOK          time.Time
+	stuck           map[string]*stuck
+}
+
+// stuck counts the times one thing drew a server error.
+type stuck struct {
+	n     int
+	since time.Time
+}
+
+// takeService removes --service <slug> from the arguments before any "--".
+func takeService(args []string) ([]string, string) {
+	for i := 1; i+1 < len(args) && args[i] != "--"; i++ {
+		if args[i] == "--service" {
+			return append(args[:i:i], args[i+2:]...), args[i+1]
+		}
+	}
+	return args, ""
+}
+
+// giveUp is true for something that keeps drawing a server error while the server
+// has taken other things since it first did.
+func (c *client) giveUp(key string) bool {
+	if c.stuck == nil {
+		c.stuck = map[string]*stuck{}
+	}
+	s := c.stuck[key]
+	if s == nil {
+		s = &stuck{since: time.Now()}
+		c.stuck[key] = s
+	}
+	s.n++
+	return s.n >= 5 && c.lastOK.After(s.since)
+}
+
+// writeFile replaces a file whole, so a reader never sees half of it.
+func writeFile(path string, b []byte) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func fileArg(args []string) string {
@@ -206,6 +259,15 @@ type saved struct {
 	Key     string   `json:"key"`
 	Pin     string   `json:"pin,omitempty"`
 	Folders []string `json:"folders,omitempty"`
+	// Read only from the installed service's own configuration: services it may start, and
+	// other machines a check from the server may reach.
+	Restart []string `json:"restart,omitempty"`
+	Hosts   []string `json:"hosts,omitempty"`
+	SpoolMB int      `json:"spool_mb,omitempty"`
+	// SystemTasks lets tasks accepted for the system account run as it. UpdateSha256 is the
+	// SHA-256 a fetched update must have.
+	SystemTasks  bool   `json:"system_tasks,omitempty"`
+	UpdateSha256 string `json:"update_sha256,omitempty"`
 }
 
 func configPath() (string, error) {
@@ -225,13 +287,25 @@ func load() (*client, error) {
 			json.Unmarshal(b, &s)
 		}
 	}
+	s.Restart, s.Hosts = nil, nil
 	// An installed service's configuration wins for whoever is allowed to read it.
 	if dir := machineDir(); dir != "" && os.Getenv("DOKKIT_CONFIG") == "" {
 		if b, err := os.ReadFile(filepath.Join(dir, "config.json")); err == nil && json.Unmarshal(b, &s) == nil && c.spool == "" {
 			c.spool = filepath.Join(dir, "spool")
 		}
 	}
-	c.folders, c.pin = s.Folders, s.Pin
+	if p := listsPath(); p != "" {
+		var l saved
+		if b, err := os.ReadFile(p); err == nil && json.Unmarshal(b, &l) == nil {
+			s.Restart, s.Hosts = l.Restart, l.Hosts
+		}
+	}
+	c.folders, c.pin, c.restartable, c.hosts = s.Folders, s.Pin, s.Restart, s.Hosts
+	c.system, c.updateSha = s.SystemTasks, strings.ToLower(s.UpdateSha256)
+	c.spoolMB = int64(s.SpoolMB)
+	if n, err := strconv.Atoi(os.Getenv("DOKKIT_SPOOL_MB")); err == nil && n > 0 {
+		c.spoolMB = int64(n)
+	}
 	pinTo(s.Pin)
 	if f := os.Getenv("DOKKIT_FOLDERS"); f != "" {
 		c.folders = filepath.SplitList(f)
@@ -279,7 +353,12 @@ func enrol(address, token, pin string) int {
 		err = os.MkdirAll(filepath.Dir(p), 0o700)
 	}
 	if err == nil {
-		b, _ := json.Marshal(saved{URL: address, Key: a.Key, Pin: pin})
+		keep := saved{}
+		if old, rerr := os.ReadFile(p); rerr == nil {
+			json.Unmarshal(old, &keep)
+		}
+		keep.URL, keep.Key, keep.Pin = address, a.Key, pin
+		b, _ := json.Marshal(keep)
 		err = os.WriteFile(p, b, 0o600)
 	}
 	if err != nil {
@@ -296,11 +375,35 @@ func (c *client) beat(services []map[string]string) {
 	c.report(append([]any{inventory}, vitals()...)...)
 }
 
-// job fills in what every job line carries. A machine key names the job as a service of its machine.
+// job fills in what every job line carries. A machine key names the service the job belongs to:
+// the one given, the one whose dokkit.toml declares a job of that name, or else a service named
+// for the job.
 func (c *client) job(l line) line {
 	l.Type, l.At = "job", now()
 	if strings.HasPrefix(c.key, "dkm_") {
-		l.Service = l.Name
+		l.Service = c.service
+		var owners []string
+		if l.Service == "" {
+			for _, p := range declarations(c.folders) {
+				if d, err := readDeclaration(p); err == nil {
+					for _, j := range d.Job {
+						if j.ID == l.Name {
+							owners = append(owners, d.Service.ID)
+						}
+					}
+				}
+			}
+		}
+		switch len(owners) {
+		case 1:
+			l.Service = owners[0]
+		case 0:
+		default:
+			fmt.Fprintf(os.Stderr, "dokkit: %s is declared by %s, give --service to say which\n", l.Name, strings.Join(owners, ", "))
+		}
+		if l.Service == "" {
+			l.Service = l.Name
+		}
 	}
 	return l
 }
@@ -357,7 +460,7 @@ func (c *client) report(lines ...any) {
 		b.WriteByte('\n')
 	}
 	name := fmt.Sprintf("%020d-%s.ndjson", time.Now().UnixNano(), id())
-	if err := os.WriteFile(filepath.Join(c.spool, name), b.Bytes(), 0o600); err != nil {
+	if err := writeFile(filepath.Join(c.spool, name), b.Bytes()); err != nil {
 		fmt.Fprintln(os.Stderr, "dokkit: could not write to the spool:", err)
 	}
 }
@@ -370,42 +473,99 @@ func (c *client) settle(wait time.Duration) int {
 	return 0
 }
 
-// flush sends spooled batches oldest first and returns how many are left.
+// flush sends spooled batches oldest first, for no longer than wait in all, and returns how many
+// are left. A batch the server keeps answering with an error is set aside once it has taken others.
+// The count is kept in the spool folder, so one-shot commands add to it too.
 func (c *client) flush(wait time.Duration) (int, error) {
+	start := time.Now()
+	stale, _ := filepath.Glob(filepath.Join(c.spool, "*.ndjson.tmp"))
+	for _, f := range stale {
+		if i, err := os.Stat(f); err == nil && time.Since(i.ModTime()) > time.Minute {
+			os.Remove(f)
+		}
+	}
 	files, _ := filepath.Glob(filepath.Join(c.spool, "*.ndjson"))
 	sort.Strings(files)
 	files = c.trim(files)
-	c.http.Timeout = wait
+	deadline := start.Add(wait)
+	counts := c.failures()
+	before := len(counts)
+	held := 0
+	var last error
+	var doomed []string
+	defer func() {
+		if len(counts) > 0 || before > 0 {
+			b, _ := json.Marshal(counts)
+			writeFile(filepath.Join(c.spool, "failures.json"), b)
+		}
+	}()
 	for i, f := range files {
+		left := time.Until(deadline)
+		if left <= 0 {
+			return held + len(files) - i, errors.New("out of time")
+		}
+		c.http.Timeout = left
 		body, err := os.ReadFile(f)
 		if err != nil {
 			continue
 		}
-		batch := strings.TrimSuffix(filepath.Base(f)[21:], ".ndjson")
+		name := filepath.Base(f)
+		batch := strings.TrimSuffix(name[21:], ".ndjson")
 		status, answer, err := c.post(batch, body)
 		switch {
 		case err != nil:
-			return len(files) - i, err
+			return held + len(files) - i, err
 		case status/100 == 2:
-			var a struct {
-				Refused []struct {
-					Line          int
-					Code, Message string
-				}
-			}
-			json.Unmarshal(answer, &a)
-			for _, r := range a.Refused {
-				fmt.Fprintf(os.Stderr, "dokkit: the server refused a line (%s): %s\n", r.Code, r.Message)
-			}
+			refused(answer)
 			os.Remove(f)
+			delete(counts, name)
 		case status == 413 || status == 422:
 			fmt.Fprintf(os.Stderr, "dokkit: the server will never take this batch (%d), dropping it\n", status)
 			os.Remove(f)
+			delete(counts, name)
 		default:
-			return len(files) - i, fmt.Errorf("the server answered %d", status)
+			last = fmt.Errorf("the server answered %d", status)
+			held++
+			if counts[name]++; counts[name] >= 5 {
+				doomed = append(doomed, f)
+			}
 		}
 	}
-	return 0, nil
+	if c.lastOK.After(start) {
+		for _, f := range doomed {
+			fmt.Fprintf(os.Stderr, "dokkit: the server keeps answering errors to %s, setting it aside\n", filepath.Base(f))
+			os.Rename(f, f+".rejected")
+			delete(counts, filepath.Base(f))
+			held--
+		}
+	}
+	if held == 0 {
+		last = nil
+	}
+	return held, last
+}
+
+// failures reads how many times each spooled batch has drawn a server error.
+func (c *client) failures() map[string]int {
+	counts := map[string]int{}
+	if b, err := os.ReadFile(filepath.Join(c.spool, "failures.json")); err == nil {
+		json.Unmarshal(b, &counts)
+	}
+	return counts
+}
+
+// refused says what the server would not take from a batch it accepted.
+func refused(answer []byte) {
+	var a struct {
+		Refused []struct {
+			Line          int
+			Code, Message string
+		}
+	}
+	json.Unmarshal(answer, &a)
+	for _, r := range a.Refused {
+		fmt.Fprintf(os.Stderr, "dokkit: the server refused a line (%s): %s\n", r.Code, r.Message)
+	}
 }
 
 func (c *client) post(batch string, body []byte) (int, []byte, error) {
@@ -427,29 +587,40 @@ func (c *client) post(batch string, body []byte) (int, []byte, error) {
 	}
 	defer res.Body.Close()
 	answer, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	if res.StatusCode/100 == 2 {
+		c.lastOK = time.Now()
+	}
 	return res.StatusCode, answer, nil
 }
 
-// trim drops the oldest batches when the spool is over its cap.
+// trim drops the oldest batches, set-aside ones first, when the spool is over its cap.
 func (c *client) trim(files []string) []string {
+	aside, _ := filepath.Glob(filepath.Join(c.spool, "*.rejected"))
+	all := append(aside, files...)
 	var total int64
-	sizes := make([]int64, len(files))
-	for i, f := range files {
+	sizes := make([]int64, len(all))
+	for i, f := range all {
 		if s, err := os.Stat(f); err == nil {
 			sizes[i] = s.Size()
 			total += sizes[i]
 		}
 	}
+	limit := c.spoolMB
+	if limit <= 0 {
+		limit = spoolMB
+	}
 	dropped := 0
-	for total > spoolCap && dropped < len(files) {
-		os.Remove(files[dropped])
+	for total > limit<<20 && dropped < len(all) {
+		os.Remove(all[dropped])
 		total -= sizes[dropped]
 		dropped++
 	}
 	if dropped > 0 {
-		fmt.Fprintf(os.Stderr, "dokkit: the spool was full, dropped the %d oldest report(s)\n", dropped)
+		msg := fmt.Sprintf("the spool was full, dropped the %d oldest report(s)", dropped)
+		fmt.Fprintln(os.Stderr, "dokkit:", msg)
+		c.report(map[string]any{"type": "log", "t": now(), "level": "warn", "msg": "dokkit: " + msg})
 	}
-	return files[dropped:]
+	return files[min(max(dropped-len(aside), 0), len(files)):]
 }
 
 func (c *client) doctor() int {

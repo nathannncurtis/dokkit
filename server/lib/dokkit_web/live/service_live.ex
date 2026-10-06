@@ -11,7 +11,11 @@ defmodule DokkitWeb.ServiceLive do
     end
   end
 
-  def handle_info(:issues_changed, socket), do: {:noreply, load(socket)}
+  def handle_info(:issues_changed, socket),
+    do: {:noreply, DokkitWeb.Auth.debounce(socket, :page, &load/1)}
+
+  def handle_info({:settled, :page}, socket),
+    do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
 
   def handle_event("route", %{"route" => params}, socket) do
     if socket.assigns.current_user.role != :viewer,
@@ -147,13 +151,15 @@ defmodule DokkitWeb.ServiceLive do
                 placeholder="What you found or did"
                 aria-label="Add a note to this issue"
                 autocomplete="off"
-              />
-              <button class="btn sm" type="submit">Add</button>
+              /> <button class="btn sm" type="submit">Add</button>
             </form>
           </div>
+
           <div :if={@job} class="card">
             <h2>Runs<span :if={@runs != []} class="end">Newest first</span></h2>
+
             <p :if={@runs == []} class="lead">No run seen yet.</p>
+
             <div :if={@runs != []} class="lh" style={"--cols:" <> @cols}>
               <span>Started</span><span>Result</span><span class="r">Took</span><span class="r">Exit code</span><span></span><span></span>
             </div>
@@ -162,19 +168,19 @@ defmodule DokkitWeb.ServiceLive do
                 <span class="mono">{at(r.started_at || r.finished_at)}</span>
                 <DokkitWeb.JobsLive.result run={r} />
                 <span class="mono r">{took(r.duration_ms || between(r))}</span>
-                <span class="mono r">{r.exit_code}</span>
-                <span></span>
-                <.ic name="caret-down" />
+                <span class="mono r">{r.exit_code}</span> <span></span> <.ic name="caret-down" />
               </summary>
               <pre class="logbox">{r.tail || "No output was sent with this run."}</pre>
             </details>
           </div>
+
           <div :if={!@job or @checks != []} class="card">
             <h2>Checks</h2>
+
             <p :if={@checks == []} class="lead">No checks yet.</p>
+
             <div :for={c <- @checks} class="est">
-              <b><.lvl state={c.state} />{c.name}</b>
-              <span class="st">{c.note || say(c.state)}</span>
+              <b><.lvl state={c.state} />{c.name}</b> <span class="st">{c.note || say(c.state)}</span>
               <span class="mute" style="grid-column: 1 / -1">
                 {target(c)}<span :if={c.checked_at}> · checked {at(c.checked_at)} UTC</span><span :if={
                   c.source == :file
@@ -189,8 +195,7 @@ defmodule DokkitWeb.ServiceLive do
               class="li slim"
               style="--cols: minmax(0,1fr) 120px 90px"
             >
-              <span class="mono">{name}</span>
-              <.spark values={values} />
+              <span class="mono">{name}</span> <.spark values={values} />
               <span class="mono r">{last && Float.round(last, 2)}</span>
             </div>
           </div>
@@ -242,8 +247,7 @@ defmodule DokkitWeb.ServiceLive do
                     value={@service.held}
                     placeholder="None"
                     aria-label="Version held on purpose"
-                  />
-                  <button class="btn sm" type="submit">Save</button>
+                  /> <button class="btn sm" type="submit">Save</button>
                 </form>
                 <span class="hint">A version kept on purpose, so being behind is not news.</span>
               </dd>
