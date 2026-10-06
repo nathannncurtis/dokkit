@@ -73,6 +73,7 @@ defmodule Dokkit.Envelope do
 
     %{
       "type" => exception["type"] || "Error",
+      "message" => exception["value"],
       "frames" => frames,
       "handled" => get_in(exception, ["mechanism", "handled"]) != false,
       "release" => event["release"],

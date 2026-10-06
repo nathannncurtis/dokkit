@@ -1,7 +1,7 @@
 defmodule Dokkit.Errors do
   @moduledoc """
   Errors an app reports, grouped by type and the app's own frames. See spec/errors.md.
-  Message text is never kept: no service can be set to keep it yet.
+  Message text is kept only for a service set to keep it.
   """
   import Ecto.Query
   alias Dokkit.{ErrorEvent, ErrorGroup, Repo, Service}
@@ -59,7 +59,8 @@ defmodule Dokkit.Errors do
         host: seen[:host],
         handled: seen[:handled],
         frames: frames,
-        tags: tags(report["tags"])
+        tags: tags(report["tags"]),
+        message: if(service.keep_messages, do: message(report["message"]))
       })
     end
 
@@ -89,6 +90,8 @@ defmodule Dokkit.Errors do
   end
 
   defp tags(_), do: %{}
+
+  defp message(value), do: if(is_binary(value), do: String.slice(value, 0, 2000))
 
   defp text(value), do: if(is_binary(value), do: String.slice(value, 0, 300))
 

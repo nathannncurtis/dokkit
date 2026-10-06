@@ -41,6 +41,7 @@ defmodule Dokkit.Service do
     field :watched, :boolean, default: true
     field :held, :string
     field :restart, :boolean, default: false
+    field :keep_messages, :boolean, default: false
     field :declared, :map
     field :stats, :map
     field :stats_at, :utc_datetime_usec
@@ -216,6 +217,7 @@ defmodule Dokkit.ErrorEvent do
     field :handled, :boolean
     field :frames, {:array, :map}, default: []
     field :tags, :map, default: %{}
+    field :message, :string
     belongs_to :group, Dokkit.ErrorGroup
   end
 end

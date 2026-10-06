@@ -288,6 +288,10 @@ defmodule Dokkit.Estate do
   def set_restart(%Service{} = service, allow),
     do: Repo.update!(Ecto.Changeset.change(service, restart: allow == true))
 
+  @doc "Keeps the message text of this service's errors from now on, or stops keeping it."
+  def set_keep_messages(%Service{} = service, keep),
+    do: Repo.update!(Ecto.Changeset.change(service, keep_messages: keep == true))
+
   @runs ~w(http tcp process windows-service)
 
   @doc """

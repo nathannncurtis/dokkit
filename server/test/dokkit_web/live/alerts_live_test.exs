@@ -65,8 +65,8 @@ defmodule DokkitWeb.AlertsLiveTest do
   end
 
   test "an issue snoozed over and over is offered the digest, and a person decides", %{conn: conn} do
-    {:ok, a} = Dokkit.Estate.add_job(%{"name" => "Flaky sync", "machine" => "nas"})
-    {:ok, b} = Dokkit.Estate.add_job(%{"name" => "Noisy probe", "machine" => "nas"})
+    {:ok, a} = Dokkit.Estate.add_job(%{"name" => "Flaky sync", "machine" => "attic"})
+    {:ok, b} = Dokkit.Estate.add_job(%{"name" => "Noisy probe", "machine" => "attic"})
 
     for job <- [a, b] do
       post(build_conn(), "/api/v1/in/#{job.key}/job/#{job.service.slug}/fail")

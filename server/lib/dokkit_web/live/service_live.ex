@@ -20,7 +20,7 @@ defmodule DokkitWeb.ServiceLive do
     {:noreply, load(socket)}
   end
 
-  def handle_event(event, params, socket) when event in ~w(watching hold restart) do
+  def handle_event(event, params, socket) when event in ~w(watching hold restart messages) do
     service = socket.assigns.service
 
     if socket.assigns.current_user.role != :viewer do
@@ -28,6 +28,7 @@ defmodule DokkitWeb.ServiceLive do
         "watching" -> Estate.set_watched(service, !service.watched)
         "hold" -> Estate.set_hold(service, String.trim(params["version"] || ""))
         "restart" -> Estate.set_restart(service, !service.restart)
+        "messages" -> Estate.set_keep_messages(service, !service.keep_messages)
       end
     end
 
@@ -217,6 +218,18 @@ defmodule DokkitWeb.ServiceLive do
                   <button class="btn sm" type="submit">Save</button>
                 </form>
                 <span class="hint">A version kept on purpose, so being behind is not news.</span>
+              </dd>
+              <dt>Error messages</dt>
+              <dd>
+                <button class="btn sm" type="button" phx-click="messages">
+                  {if @service.keep_messages, do: "Stop keeping them", else: "Keep them"}
+                </button>
+                <span class="hint">
+                  {if @service.keep_messages,
+                    do: "The text of each error is stored with it.",
+                    else:
+                      "Only the type and the stack are stored. Messages are where personal data ends up."}
+                </span>
               </dd>
               <dt :if={Enum.any?(@checks, &(&1.type == :"windows-service"))}>If it stops</dt>
               <dd :if={Enum.any?(@checks, &(&1.type == :"windows-service"))}>

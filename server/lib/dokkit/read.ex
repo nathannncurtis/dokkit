@@ -189,7 +189,8 @@ defmodule Dokkit.Read do
     with %{group: group, latest: latest} <- Dokkit.Errors.get(id) do
       Map.merge(error_group(group), %{
         frames: (latest && latest.frames) || [],
-        tags: (latest && latest.tags) || %{}
+        tags: (latest && latest.tags) || %{},
+        message: latest && latest.message
       })
     end
   end

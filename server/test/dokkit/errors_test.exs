@@ -129,4 +129,30 @@ defmodule Dokkit.ErrorsTest do
 
     assert json_response(bad, 401)
   end
+
+  test "a service set to keep messages keeps them from then on", %{conn: conn} do
+    # Its own machine name: tests run side by side and a shared name makes them wait on each other.
+    machine = Repo.insert!(%Machine{name: "cellar"})
+
+    service =
+      Repo.insert!(%Service{machine_id: machine.id, slug: "portal", name: "Upload portal"})
+
+    {app, _} = Keys.mint(:app, %{service_id: service.id})
+    as = put_req_header(build_conn(), "authorization", "Bearer " <> app)
+
+    send = fn ->
+      post(as, "/api/v1/errors", %{type: "TimeoutError", message: "upstream took 31 s"})
+    end
+
+    send.()
+    [%{id: id}] = Read.errors()
+    assert Read.error(id).message == nil
+
+    {:ok, view, _} = live(signed_in(conn), "/s/#{service.id}")
+    assert render_click(view, "messages") =~ "Stop keeping them"
+    send.()
+    assert Read.error(id).message == "upstream took 31 s"
+    {:ok, _, html} = live(signed_in(conn), "/errors/#{id}")
+    assert html =~ "upstream took 31 s"
+  end
 end

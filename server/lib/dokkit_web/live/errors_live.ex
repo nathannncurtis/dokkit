@@ -73,6 +73,10 @@ defmodule DokkitWeb.ErrorsLive do
         <span class="st">since <span class="mono">{at(@g.first_seen)}</span></span>
       </div>
       <div class="body rail">
+        <div :if={@latest && @latest.message} class="card">
+          <h2>Message<span class="end">From the latest report</span></h2>
+          <p class="lead mono">{@latest.message}</p>
+        </div>
         <div class="card">
           <h2>Stack<span class="end">The app's own code is marked</span></h2>
           <p :if={!@latest or @latest.frames == []} class="lead">
