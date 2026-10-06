@@ -61,6 +61,66 @@ defmodule DokkitWeb.ApiController do
   def errors(conn, _), do: list(conn, Read.errors())
   def rules(conn, _), do: list(conn, Read.rules())
 
+  plug :scope,
+       "admin" when action in [:keys, :add_key, :revoke_key, :users, :add_user, :remove_user]
+
+  def keys(conn, _), do: list(conn, Read.keys())
+  def users(conn, _), do: list(conn, Read.users())
+
+  @scopes ~w(read read-logs act admin)
+
+  @doc "Makes a token for a script, a key for an app, or a one-use token to enrol a machine. Shown once."
+  def add_key(conn, %{"kind" => "user"} = p) do
+    scopes = for s <- List.wrap(p["scopes"]), s in @scopes, do: s
+
+    if scopes == [] or blank?(p["label"]),
+      do: fail(conn, 422, "bad_key", "A token needs a label and scopes."),
+      else: minted(conn, Keys.mint(:user, %{label: p["label"], scopes: scopes}))
+  end
+
+  def add_key(conn, %{"kind" => "app", "service" => id}) do
+    case Dokkit.Estate.service(id) do
+      nil -> missing(conn)
+      service -> minted(conn, Keys.mint(:app, %{service_id: service.id}))
+    end
+  end
+
+  def add_key(conn, %{"kind" => "enrol"}) do
+    expires = DateTime.add(DateTime.utc_now(), 3600)
+    minted(conn, Keys.mint(:enrol, %{expires_at: expires}))
+  end
+
+  def add_key(conn, _),
+    do:
+      fail(
+        conn,
+        422,
+        "bad_key",
+        "kind is user with label and scopes, app with service, or enrol."
+      )
+
+  defp minted(conn, {text, key}), do: json(conn, %{id: key.id, key: text})
+  defp blank?(text), do: not is_binary(text) or String.trim(text) == ""
+
+  def revoke_key(conn, %{"id" => id}) do
+    Keys.revoke(id)
+    json(conn, %{ok: true})
+  end
+
+  def add_user(conn, params) do
+    case Dokkit.Accounts.add(params["name"], params["role"], params["password"]) do
+      {:ok, user} -> json(conn, Map.take(user, [:id, :name, :role]))
+      {:error, why} -> fail(conn, 422, "bad_person", why)
+    end
+  end
+
+  def remove_user(conn, %{"id" => id}) do
+    case Dokkit.Accounts.remove(id, %Dokkit.User{}) do
+      :ok -> json(conn, %{ok: true})
+      {:error, why} -> fail(conn, 422, "bad_person", why)
+    end
+  end
+
   def versions(conn, _), do: list(conn, Read.versions())
   def proposals(conn, _), do: list(conn, Read.proposals())
   def machine(conn, %{"id" => id}), do: one(conn, Read.machine(id))

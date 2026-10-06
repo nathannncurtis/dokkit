@@ -21,6 +21,16 @@ defmodule Dokkit.Read do
     end
   end
 
+  def keys do
+    for k <- Dokkit.Keys.list() do
+      k
+      |> Map.take([:id, :kind, :hint, :label, :scopes, :used_at, :expires_at, :inserted_at])
+      |> Map.merge(%{machine: k.machine && k.machine.name, service: k.service_id})
+    end
+  end
+
+  def users, do: for(u <- Dokkit.Accounts.list(), do: Map.take(u, [:id, :name, :role]))
+
   def machine(id) do
     with %{} = m <- Enum.find(machines(), &(&1.id == id)),
          do: Map.put(m, :services, services(%{"machine" => id}))

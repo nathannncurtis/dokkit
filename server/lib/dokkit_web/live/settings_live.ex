@@ -39,7 +39,7 @@ defmodule DokkitWeb.SettingsLive do
 
   def handle_event("token", %{"token" => t}, socket) do
     owner(socket, fn ->
-      scopes = for s <- ~w(read read-logs act), t[s] == "true", do: s
+      scopes = for s <- ~w(read read-logs act admin), t[s] == "true", do: s
       label = String.trim(t["label"] || "")
 
       if label == "" or scopes == [] do
@@ -162,6 +162,7 @@ defmodule DokkitWeb.SettingsLive do
             <label><input type="checkbox" name="token[read]" value="true" checked /> Read</label>
             <label><input type="checkbox" name="token[read-logs]" value="true" /> Read logs</label>
             <label><input type="checkbox" name="token[act]" value="true" /> Snooze and acknowledge</label>
+            <label><input type="checkbox" name="token[admin]" value="true" /> Manage keys and people</label>
             <span :if={@new_token}>Shown only now.</span>
             <span class="end"><button class="btn primary" type="submit">Make a token</button></span>
           </form>

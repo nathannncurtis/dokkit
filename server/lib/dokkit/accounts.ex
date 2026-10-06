@@ -90,9 +90,15 @@ defmodule Dokkit.Accounts do
         {:error, "You cannot remove yourself."}
 
       {:ok, id} ->
-        Repo.delete_all(from u in User, where: u.id == ^id)
-        DokkitWeb.Endpoint.broadcast("user:#{id}", "disconnect", %{})
-        :ok
+        owners = Repo.all(from u in User, where: u.role == :owner, select: u.id)
+
+        if owners == [id] do
+          {:error, "Someone has to be an owner."}
+        else
+          Repo.delete_all(from u in User, where: u.id == ^id)
+          DokkitWeb.Endpoint.broadcast("user:#{id}", "disconnect", %{})
+          :ok
+        end
 
       :error ->
         {:error, "No such person."}

@@ -92,6 +92,12 @@ defmodule DokkitWeb.Router do
     get "/tasks", ApiController, :tasks
     get "/task-runs", ApiController, :task_runs
     post "/tasks/:id/run", ApiController, :run_task
+    get "/keys", ApiController, :keys
+    post "/keys", ApiController, :add_key
+    delete "/keys/:id", ApiController, :revoke_key
+    get "/users", ApiController, :users
+    post "/users", ApiController, :add_user
+    delete "/users/:id", ApiController, :remove_user
     get "/machines/:id", ApiController, :machine
     get "/versions", ApiController, :versions
     get "/proposals", ApiController, :proposals

@@ -237,4 +237,61 @@ defmodule DokkitWeb.ApiControllerTest do
 
     assert json_response(call(:put, "/services/nope/restart", all, %{allow: true}), 404)
   end
+
+  test "an admin token manages keys and people, and nothing less does", %{job: job, all: all} do
+    {admin, _} = Keys.mint(:user, %{scopes: ["admin"], label: "ops"})
+    assert json_response(call(:get, "/keys", all), 403)
+    assert json_response(call(:get, "/inbox", admin), 403)
+
+    assert %{"key" => "dku_" <> _ = token, "id" => id} =
+             json_response(
+               call(:post, "/keys", admin, %{kind: "user", label: "ci", scopes: ["read", "fly"]}),
+               200
+             )
+
+    assert json_response(call(:get, "/inbox", token), 200)
+    assert json_response(call(:post, "/keys", admin, %{kind: "user", scopes: ["read"]}), 422)
+
+    assert %{"key" => "dke_" <> _} =
+             json_response(call(:post, "/keys", admin, %{kind: "enrol"}), 200)
+
+    service = Dokkit.Repo.get_by!(Dokkit.Service, slug: "nightly-backup")
+
+    assert %{"key" => "dka_" <> _} =
+             json_response(call(:post, "/keys", admin, %{kind: "app", service: service.id}), 200)
+
+    assert json_response(call(:post, "/keys", admin, %{kind: "app", service: "nope"}), 404)
+
+    assert %{"items" => keys} = json_response(call(:get, "/keys", admin), 200)
+
+    assert %{"label" => "ci", "scopes" => ["read"], "hint" => "dku_" <> _} =
+             Enum.find(keys, &(&1["id"] == id))
+
+    refute inspect(keys) =~ token
+    assert json_response(call(:delete, "/keys/#{id}", admin), 200)
+    assert json_response(call(:get, "/inbox", token), 401)
+
+    assert %{"error" => %{"code" => "bad_person"}} =
+             json_response(
+               call(:post, "/users", admin, %{name: "ana", role: "member", password: "short"}),
+               422
+             )
+
+    assert %{"id" => ana, "role" => "owner"} =
+             json_response(
+               call(:post, "/users", admin, %{
+                 name: "ana",
+                 role: "owner",
+                 password: "a long enough password"
+               }),
+               200
+             )
+
+    assert %{"items" => [%{"name" => "ana"}]} = json_response(call(:get, "/users", admin), 200)
+
+    assert %{"error" => %{"message" => "Someone has to be an owner."}} =
+             json_response(call(:delete, "/users/#{ana}", admin), 422)
+
+    assert job
+  end
 end
