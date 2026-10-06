@@ -38,3 +38,13 @@ if ($("#api")) fetch("openapi.json").then((r) => r.json()).then((d) => {
   }).join("")).join("");
   if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
 });
+
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-copy]");
+  if (!t) return;
+  const el = $("#" + t.dataset.copy), label = t.textContent;
+  // The clipboard needs https; on plain http the link is selected instead.
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(el.textContent).then(() => (t.textContent = "Copied"));
+  else { getSelection().selectAllChildren(el); t.textContent = "Selected"; }
+  setTimeout(() => (t.textContent = label), 1400);
+});

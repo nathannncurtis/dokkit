@@ -1,0 +1,12 @@
+# Dokkit
+
+> Self-hosted monitoring that says what needs a look. A server you host, one small program on each machine, and one API behind everything.
+
+An AI tool reaches Dokkit over MCP at `/mcp` on the server, or over the HTTP API, with a user token whose scopes decide what it may do.
+
+## Docs
+
+- [The API](https://dokkit.dev/api.md): every call, with what to send and what comes back
+- [The command line](https://dokkit.dev/cli.md): every `dokkit` command
+- [The API as OpenAPI 3.1](https://dokkit.dev/openapi.json)
+- [Everything in one file](https://dokkit.dev/llms-full.txt): the API, the command line, the MCP tools and the `dokkit.toml` reference

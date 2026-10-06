@@ -13,7 +13,7 @@ The website (dokkit.dev): Astro, static output, plain CSS, no Tailwind. It lives
 
 ## Users
 
-People who run their own software and are the only one watching it: the developer or administrator of a small shop with a few servers, a NAS, a database, nightly jobs and some staff PCs. They are at a desk almost all the time and on a phone only after a page.
+People who build their own software, run it, and are the only one watching it: the developer or administrator of a small shop with a few servers, a NAS, a database, nightly jobs and some staff PCs. They are at a desk almost all the time and on a phone only after a page.
 
 Visitors to the website are the same people, deciding whether to install it. The site goes live when the repository is public, so a visitor can read the docs, see the source and install.
 
@@ -31,7 +31,7 @@ One self-hosted place that watches everything a small shop runs and says what ne
 
 ## Operating Context
 
-Checks (http, tcp, process, Windows service, beats, jobs on a schedule, thresholds, expiry dates), job runs, logs kept twelve months live then archived, errors grouped by type and place, versions per machine, deploys, alert rules (page, push, email, text, digest), tasks, an MCP endpoint for AI tools. Issues have short ids (`DOK-12`) and close by themselves when the check recovers.
+Checks (http, tcp, process, Windows service, beats, jobs on a schedule, thresholds, expiry dates), job runs, logs kept twelve months live then archived, errors grouped by type and place, versions per machine, deploys, alert rules (page, push, email, text, digest), tasks, an MCP endpoint with a tool for everything the API can do. A token that can do everything is made only after typing the server address to confirm. Issues have short ids (`DOK-12`) and close by themselves when the check recovers.
 
 ## Capabilities and Constraints
 
@@ -49,6 +49,7 @@ Checks (http, tcp, process, Windows service, beats, jobs on a schedule, threshol
 - The website is a scrolling site with a working sample of the interface in it; its mock is `gallery/brand/`.
 - The website must not look like Sentry's, or like any other monitoring product's.
 - Voice: plain statements, short, no hype.
+- The website speaks to the builder as much as the watcher: wiring an app in is part of building it, and an AI tool can be handed the docs and a token.
 
 ## Evidence on Hand
 

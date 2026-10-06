@@ -27,6 +27,11 @@
   <article>
     <h1>The <span>API.</span></h1>
     <p>One HTTP API under <code>/api/v1</code>. The interface, the <code>dokkit</code> program, the libraries and the MCP endpoint are all clients of it, so nothing can be seen or done in the interface that the API cannot do. <span id="count"></span> The same document is <a href="openapi.json">openapi.json</a>, in OpenAPI 3.1.</p>
+    <div class="feed">
+      <b>Hand this page to an AI tool</b>
+      <div class="cmd"><code id="feed">https://dokkit.dev/api.md</code><button class="btn" data-copy="feed">Copy link</button></div>
+      <p><a href="api.md" download>Download it as Markdown</a>, or the <a href="openapi.json" download>OpenAPI file</a>, or give it <a href="llms-full.txt">everything in one file</a>.</p>
+    </div>
     <h2>Keys</h2>
     <p>Every call carries a key as <code>Authorization: Bearer &lt;key&gt;</code>. The prefix says what kind it is, and the server keeps only a hash.</p>
     <table><thead><tr><th>Key</th><th>Held by</th><th>Can do</th></tr></thead><tbody>

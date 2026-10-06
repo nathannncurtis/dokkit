@@ -125,6 +125,7 @@
             <li><b>An AI tool, over MCP</b><div class="cmd"><code id="c6">claude mcp add --transport http dokkit https://your.domain.com/mcp --header "Authorization: Bearer dku_..."</code><button class="btn" data-copy="c6">Copy</button></div></li>
             <li><b>A script, over the API</b><div class="cmd"><code id="c7">curl -H "Authorization: Bearer dku_..." https://your.domain.com/api/v1/inbox</code><button class="btn" data-copy="c7">Copy</button></div></li>
             <li><b>In an app's repo, from the command line</b><div class="cmd"><code id="c8">dokkit check</code><button class="btn" data-copy="c8">Copy</button></div><span class="quiet">Runs every check once and prints what would be sent. No server needed.</span></li>
+            <li><b>All of it, in one file an agent can read</b><div class="cmd"><code id="c9">https://dokkit.dev/llms-full.txt</code><button class="btn" data-copy="c9">Copy</button></div><span class="quiet">The API, every command, the MCP tools and the <code>dokkit.toml</code> reference. Paste the link and it knows how.</span></li>
           </ol>
           <p class="quiet never">An agent can be given everything you can do, and Dokkit asks you to be sure before it makes that token. <a href="api.html">The whole API</a> and <a href="cli.html">every command</a> are written down.</p>
       </div>
@@ -133,7 +134,7 @@
 
   <section class="wrap how" id="how">
     <div class="stick">
-      <h2>Built for the person who is the only one watching.</h2>
+      <h2>You build it. You are also <span>the only one watching it.</span></h2>
       <div class="file"><b>dokkit.toml</b><pre id="toml">[service]
 id = "upload-portal"
 name = "Upload portal"
@@ -152,6 +153,8 @@ grace = "30m"
 path = "logs/*.jsonl"</pre></div>
     </div>
     <dl>
+      <div><dt>Wired in while you build</dt><dd><code>dokkit init</code> writes the file and <code>dokkit check</code> proves it on your own machine, with no server. Run the app as <code>dev</code> and it shows up without ever alerting.</dd></div>
+      <div><dt>A deploy is noticed by itself</dt><dd>When the version an app reports changes, that is a deploy. What broke since the last one is a single question, for you or for your agent.</dd></div>
       <div><dt>The app describes itself</dt><dd>A <code>dokkit.toml</code> in the app's own repo says what it is and how to tell it is healthy. Nothing is wired in by hand on the server.</dd></div>
       <div><dt>Nothing privileged listens</dt><dd>The program on each machine opens no port. Work reaches it over a connection it makes itself, and only tasks you accepted can run.</dd></div>
       <div><dt>Scanning is offered, never required</dt><dd>Let it look over a machine and propose what to watch, or list things yourself. Nobody is asked to turn off antivirus.</dd></div>
@@ -205,7 +208,7 @@ path = "logs/*.jsonl"</pre></div>
   <div class="wrap">
     <div class="fbrand">
       <a class="brand" href="#top"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
-      <p>One place that says what needs a look. Self-hosted, on your own hardware.</p>
+      <p>One place that says what needs a look. For the person who builds it and watches it, on your own hardware.</p>
       <a class="btn pri" href="#install">Install</a>
     </div>
     <nav aria-label="Site map">
