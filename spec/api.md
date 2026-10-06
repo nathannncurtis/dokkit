@@ -151,10 +151,10 @@ The checks added in the interface for this machine, for `dokkit` to run: `{"item
 ### `POST /deploys`
 
 ```json
-{"service": "upload-portal", "version": "2.3.0", "machine": "<id>", "commit": "abc123", "by": "ci"}
+{"service": "upload-portal", "version": "2.3.0", "host": "<name>", "commit": "abc123", "by": "ci"}
 ```
 
-For CI. A deploy is also recorded automatically whenever a service's reported version changes, so most apps never call this.
+For CI. `host` is the machine the version went onto, when that is not the machine the service lives on. A deploy is also recorded automatically whenever a service's reported version changes, so most apps never call this.
 
 ### Taking work
 
@@ -191,7 +191,7 @@ POST /api/<project>/envelope/       reports from Sentry's open-source SDKs
 
 ## Read
 
-A login session, or a user token with `read`. Log contents need `read-logs`.
+A login session, or a user token with `read`. Log contents need `read-logs`: without it, job output, task output, error messages and issue notes are left out of every answer.
 
 | Call | Gives |
 |---|---|
@@ -201,7 +201,7 @@ A login session, or a user token with `read`. Log contents need `read-logs`.
 | `GET /services/<id>/series` | Chart data. Takes `metric`, `from`, `to` and `points`. |
 | `GET /issues`, `GET /issues/<id>` | Issues and their history. |
 | `GET /jobs`, `GET /jobs/<id>/runs` | Jobs with schedule, last run, last good run and next expected run; then the runs. |
-| `GET /logs` | Log search. Takes `q`, `level`, `machine`, `service`, `from`, `to`. |
+| `GET /logs` | Log search. Takes `q`, `level`, `machine` (id or name), `service`, `from` and `to` (RFC 3339). An unknown machine or service, or a time that is not one, answers `404`. |
 | `GET /errors`, `GET /errors/<id>` | Errors grouped by type and place; then the individual reports. |
 | `GET /deploys` | Deploy history. |
 | `GET /versions` | Which version of each service is on which machine, and under `apps`, each app that runs on many hosts with the hosts on each version. |
@@ -211,22 +211,22 @@ A login session, or a user token with `read`. Log contents need `read-logs`.
 
 ## Act
 
-A login session, or a user token with `act`.
+A login session, or a user token with `act`. Rules, checks and restart need `admin`.
 
 | Call | Does |
 |---|---|
-| `POST /issues/<id>/snooze` | Snooze until a time. `{"until": "..."}` |
+| `POST /issues/<id>/snooze` | Snooze until a time. `{"until": "..."}`. An unknown issue answers `404`, here and for `unsnooze` and `acknowledge`. |
 | `POST /issues/<id>/unsnooze` | Bring it back. |
 | `POST /issues/<id>/acknowledge` | Mark as seen. |
 | `POST /issues/<id>/notes` | Add a note. |
 | `POST /issues/bulk` | Any of the above for a list of issues. |
 | `POST /services/<id>/watch`, `/unwatch` | Start or stop watching a found service. |
-| `PUT /services/<id>/checks` | Edit checks added in the interface. Checks that came from a file are changed in the file. |
+| `PUT /services/<id>/checks` (`admin`) | Edit checks added in the interface. Checks that came from a file are changed in the file. |
 | `PUT /services/<id>/routing` | Who is told, by which channel, for `down` and for `degraded`. |
 | `PUT /services/<id>/hold` | Mark a version on a machine as held on purpose. |
-| `PUT /services/<id>/restart` | Allow or stop automatic restart. |
+| `PUT /services/<id>/restart` (`admin`) | Allow or stop automatic restart. |
 | `POST /proposals/<id>/accept`, `/dismiss` | Accept all or some of a proposal, or dismiss it. |
-| `POST /rules`, `PUT /rules/<id>`, `DELETE /rules/<id>` | Alert rules. |
+| `POST /rules`, `PUT /rules/<id>`, `DELETE /rules/<id>` (`admin`) | Alert rules. |
 | `POST /tasks/<id>/run` | Run an accepted task on its machine. Answers with the run id. |
 
 Keys, tokens and users are managed with the `admin` scope and are never offered through the MCP.
