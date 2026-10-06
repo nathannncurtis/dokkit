@@ -15,7 +15,7 @@
           theme = (JSON.parse(localStorage.getItem("dokkit-look")) || {}).theme;
         } catch (e) { theme = null; }
         var dark = theme ? theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-        document.documentElement.className = (dark ? "t-dark " : "") + "d-slate a-teal";
+        document.documentElement.className = dark ? "t-dark d-ember a-orange" : "a-teal";
       }
       dokkitTheme();
     </script>

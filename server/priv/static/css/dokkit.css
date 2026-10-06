@@ -18,8 +18,9 @@
 /* dark bases you can switch between in Settings */
 .t-dark.d-plum { --bg: #17131f; --panel: #1f1a2a; --raise: #2a2339; --line: #332b44; --chip: #302942; --mute: #aba3bd; --side: #110e18; --side-2: #2b243b; --side-ink: #d9d2e8; --side-mute: #a59cb9; }
 .t-dark.d-slate { --bg: #1d222d; --panel: #252b39; --raise: #2f3749; --line: #353d50; --chip: #374055; --mute: #a6b0c4; --side: #161a23; --side-2: #2a3141; --side-ink: #cdd5e4; --side-mute: #94a0b8; }
+.t-dark.d-ember { --bg: #1e1917; --panel: #27201d; --raise: #332a26; --line: #40342f; --chip: #3a2f2a; --ink: #f7f1ec; --mute: #b9a99e; --side: #171311; --side-2: #322925; --side-ink: #e3d8d0; --side-mute: #a8978b; }
 /* accents */
-.a-orange { --brand: #c2410c; } .t-dark.a-orange { --brand: #ff8a4c; --brand-ink: #1a0d05; }
+.a-orange { --brand: #c2410c; } .t-dark.a-orange { --brand: #ff9a4d; --brand-ink: #2a1203; }
 .a-blue { --brand: #2563eb; } .t-dark.a-blue { --brand: #7aa2f7; --brand-ink: #0b1220; }
 .a-teal { --brand: #0f766e; } .t-dark.a-teal { --brand: #2dd4bf; --brand-ink: #04201c; }
 * { box-sizing: border-box; }

@@ -10,7 +10,7 @@
 // Paint the saved look before first render; with none saved, follow the system theme.
 (function () {
   var look = null; try { look = JSON.parse(localStorage.getItem("dokkit-look")); } catch (e) {}
-  if (!look) { document.documentElement.className = (matchMedia("(prefers-color-scheme: dark)").matches ? "t-dark " : "") + "d-slate a-teal"; return; }
+  if (!look) { document.documentElement.className = matchMedia("(prefers-color-scheme: dark)").matches ? "t-dark d-ember a-orange" : "a-teal"; return; }
   document.documentElement.className = [look.theme === "dark" ? "t-dark" : "", look.base && look.base !== "neutral" ? "d-" + look.base : "", look.accent && look.accent !== "violet" ? "a-" + look.accent : ""].filter(Boolean).join(" ");
 })();
 </script>

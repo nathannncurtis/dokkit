@@ -122,7 +122,7 @@ Four kinds of key: one to enrol a machine, one per machine, one per app that can
 ### The look
 
 - Sentry's grammar: a dark icon sidebar, a page header with filters and tabs, issue rows that each carry a small chart, and detail pages with a large chart and a facts rail.
-- Slate dark base with a teal accent, and a light theme alongside.
+- Ember, a warm charcoal dark base with a tangerine accent, and a light theme with a teal accent alongside. Slate, Plum and Neutral remain as dark bases.
 - The logo is a D with a dot at its top left.
 - What did not work, in order: flat hairline dashboards, soft settings-style panels with too little on them, and anything that needed a click to learn a service's state.
 

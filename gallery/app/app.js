@@ -9,7 +9,8 @@ var draft = blank();
 // The mark: a D with one dot, traced from the generated logo so it stays sharp at 30 px and takes the accent colour.
 var LOGO = '<svg viewBox="0 0 100 100" fill="currentColor" aria-hidden="true"><circle cx="27.5" cy="30.5" r="5.4"></circle><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"></path></svg>';
 // look = theme + dark base + accent. Saved choice wins; with none saved, keep whatever the page painted (system theme).
-var look = { theme: /\bt-dark\b/.test(document.documentElement.className) ? "dark" : "light", base: "slate", accent: "teal" };
+var look = { theme: /\bt-dark\b/.test(document.documentElement.className) ? "dark" : "light", base: "ember", accent: "teal" };
+if (look.theme === "dark") look.accent = "orange";
 try { look = Object.assign(look, JSON.parse(localStorage.getItem("dokkit-look") || "{}")); } catch (e) {}
 // Address overrides, for looking at one state directly: ?theme=dark&tab=soon&ui=edit&y=800
 (location.search || "").replace(/[?&](theme|base|accent|tab|ui|y)=([a-z0-9,]+)/g, function (_, k, v) {
@@ -396,7 +397,7 @@ function viewSettings() {
     }).join("") + "</div>";
   }
   return head("Settings") + '<div class="body set">' + settingsMore() +
-    '<div class="card"><h2>Appearance</h2><dl class="kv"><dt>Theme</dt><dd>' + opts("theme", [["light", "Light", "t-light"], ["dark", "Dark", dk]]) + "</dd><dt>Dark base</dt><dd>" + opts("base", [["neutral", "Neutral", "t-dark"], ["plum", "Plum", "t-dark d-plum"], ["slate", "Slate", "t-dark d-slate"]]) + '<span class="hint">Applies in dark</span></dd><dt>Accent</dt><dd>' + opts("accent", [["violet", "Violet", th], ["orange", "Orange", th + " a-orange"], ["blue", "Blue", th + " a-blue"], ["teal", "Teal", th + " a-teal"]]) + "</dd></dl></div></div>";
+    '<div class="card"><h2>Appearance</h2><dl class="kv"><dt>Theme</dt><dd>' + opts("theme", [["light", "Light", "t-light"], ["dark", "Dark", dk]]) + "</dd><dt>Dark base</dt><dd>" + opts("base", [["neutral", "Neutral", "t-dark"], ["plum", "Plum", "t-dark d-plum"], ["slate", "Slate", "t-dark d-slate"], ["ember", "Ember", "t-dark d-ember"]]) + '<span class="hint">Applies in dark</span></dd><dt>Accent</dt><dd>' + opts("accent", [["violet", "Violet", th], ["orange", "Orange", th + " a-orange"], ["blue", "Blue", th + " a-blue"], ["teal", "Teal", th + " a-teal"]]) + "</dd></dl></div></div>";
 }
 
 // ---------- actions and router ----------
