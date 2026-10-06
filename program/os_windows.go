@@ -125,13 +125,19 @@ func install(m *mgr.Mgr) error {
 		return err
 	}
 	dir := machineDir()
+	if _, err := os.Stat(dir); err == nil {
+		if err := trustedOwner(dir); err != nil {
+			return err
+		}
+	}
 	if err := os.MkdirAll(filepath.Join(dir, "spool"), 0o700); err != nil {
 		return err
 	}
 	// The system account and administrators, by their fixed ids, and nobody else.
-	if out, err := exec.Command("icacls", dir, "/inheritance:r", "/grant:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F").CombinedOutput(); err != nil {
+	if out, err := exec.Command("icacls", dir, "/T", "/C", "/inheritance:r", "/grant:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F").CombinedOutput(); err != nil {
 		return fmt.Errorf("could not lock down %s: %s", dir, out)
 	}
+	os.Remove(filepath.Join(dir, "config.json"))
 	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders})
 	if err := os.WriteFile(filepath.Join(dir, "config.json"), b, 0o600); err != nil {
 		return err
@@ -157,6 +163,23 @@ func install(m *mgr.Mgr) error {
 	defer s.Close()
 	s.SetRecoveryActions([]mgr.RecoveryAction{{Type: mgr.ServiceRestart, Delay: time.Minute}}, 86400)
 	return s.Start()
+}
+
+// trustedOwner refuses a folder that someone else made first: its owner could change its
+// permissions again after the install, whatever they are set to now.
+func trustedOwner(dir string) error {
+	sd, err := windows.GetNamedSecurityInfo(dir, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION)
+	if err != nil {
+		return err
+	}
+	owner, _, err := sd.Owner()
+	if err != nil {
+		return err
+	}
+	if owner.IsWellKnown(windows.WinLocalSystemSid) || owner.IsWellKnown(windows.WinBuiltinAdministratorsSid) {
+		return nil
+	}
+	return fmt.Errorf("%s already exists and is owned by %s, not by administrators. Delete it from an administrator prompt, then install again", dir, owner)
 }
 
 // detach lets a command outlive this one, with no window of its own.
@@ -218,7 +241,7 @@ func findDisks() (all []found) {
 		p, _ := windows.UTF16PtrFromString(root)
 		var free, total uint64
 		if mask&(1<<i) != 0 && windows.GetDriveType(p) == windows.DRIVE_FIXED && windows.GetDiskFreeSpaceEx(p, &free, &total, nil) == nil {
-			all = append(all, found{"mount": root, "total_gb": fmt.Sprint(total >> 30), "free_gb": fmt.Sprint(free >> 30)})
+			all = append(all, found{"mount": root, "total_gb": fmt.Sprint(total >> 30), "free_gb": fmt.Sprint(free >> 30), "total_bytes": fmt.Sprint(total), "free_bytes": fmt.Sprint(free)})
 		}
 	}
 	return
