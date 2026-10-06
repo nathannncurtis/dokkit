@@ -133,6 +133,73 @@ defmodule DokkitWeb.AlertsLive do
                 <.send_test channel="webhook" tests={@tests} />
                 <span class="hint">A JSON request when an issue opens and another when it closes.</span>
               </dd>
+              <dt>Mail server</dt>
+              <dd>
+                <input
+                  :for={
+                    {name, label, width} <- [
+                      {"smtp_host", "Mail server, such as smtp.example.com", 240},
+                      {"smtp_port", "Port, 587 unless told otherwise", 90},
+                      {"smtp_user", "User name", 180}
+                    ]
+                  }
+                  class="inp"
+                  style={"flex: 1 1 #{width}px"}
+                  name={"alerts[#{name}]"}
+                  value={@config[name]}
+                  placeholder={label}
+                  aria-label={label}
+                />
+                <.secret name="smtp_password" config={@config} label="Password" />
+                <input
+                  class="inp"
+                  style="flex: 1 1 240px"
+                  name="alerts[mail_from]"
+                  value={@config["mail_from"]}
+                  placeholder="Sent from, such as dokkit@example.com"
+                  aria-label="Sent from"
+                />
+                <span class="hint">Used for email, text and the daily digest.</span>
+              </dd>
+              <dt>Email</dt>
+              <dd>
+                <input
+                  class="inp"
+                  style="flex: 1 1 260px"
+                  name="alerts[email_to]"
+                  value={@config["email_to"]}
+                  placeholder="you@example.com"
+                  aria-label="Email goes to"
+                />
+                <.send_test channel="email" tests={@tests} />
+              </dd>
+              <dt>Text</dt>
+              <dd>
+                <input
+                  class="inp"
+                  style="flex: 1 1 260px"
+                  name="alerts[text_to]"
+                  value={@config["text_to"]}
+                  placeholder="5551234567@your-carrier.example"
+                  aria-label="Text goes to"
+                />
+                <.send_test channel="text" tests={@tests} />
+                <span class="hint">An address that turns a mail into a text message.</span>
+              </dd>
+              <dt>Daily digest</dt>
+              <dd>
+                <input
+                  class="inp mono"
+                  style="width: 90px"
+                  name="alerts[digest_at]"
+                  value={@config["digest_at"]}
+                  placeholder="07:00"
+                  aria-label="Digest time, UTC"
+                />
+                <span class="hint">
+                  One email a day at this time, UTC: what opened without paging, new errors, and numbers close to a limit. A day with nothing to say sends nothing.
+                </span>
+              </dd>
             </dl>
             <div class="foot">
               <span :if={!@owner}>Only the owner can change these.</span>

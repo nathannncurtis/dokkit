@@ -52,7 +52,8 @@ defmodule Dokkit.MixProject do
       {:jason, "~> 1.2"},
       {:bandit, "~> 1.5"},
       {:crontab, "~> 1.1"},
-      {:req, "~> 0.5"}
+      {:req, "~> 0.5"},
+      {:gen_smtp, "~> 1.2"}
     ]
   end
 

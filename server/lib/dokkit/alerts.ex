@@ -10,9 +10,18 @@ defmodule Dokkit.Alerts do
   alias Dokkit.{Alert, Issue, Repo, Service, Setting}
 
   @defaults %{"down" => "page", "degraded" => "push", "push_with" => "ntfy"}
-  @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user)
+  @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user smtp_password)
+  @plain ~w(ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to text_to digest_at)
   @max_attempts 5
-  @channels [{"Page", "page"}, {"Push", "push"}, {"Webhook", "webhook"}, {"Nobody", "none"}]
+  @channels [
+    {"Page", "page"},
+    {"Push", "push"},
+    {"Email", "email"},
+    {"Text", "text"},
+    {"Daily digest", "digest"},
+    {"Webhook", "webhook"},
+    {"Nobody", "none"}
+  ]
 
   def channels, do: @channels
   def sends?(channel), do: channel != "none" and List.keymember?(@channels, channel, 1)
@@ -28,7 +37,7 @@ defmodule Dokkit.Alerts do
     old = config()
 
     new =
-      for {k, v} <- Map.take(params, Map.keys(@defaults) ++ @secrets ++ ~w(ntfy_url webhook_url)),
+      for {k, v} <- Map.take(params, Map.keys(@defaults) ++ @secrets ++ @plain),
           into: old do
         v = String.trim(v)
         {k, if(v == "" and k in @secrets, do: old[k], else: v)}
@@ -84,6 +93,8 @@ defmodule Dokkit.Alerts do
       from a in Alert,
         where:
           a.status in [:pending, :closing] or (a.status == :failed and a.attempts < @max_attempts),
+        # A digest alert waits for the day's one mail.
+        where: a.channel != "digest",
         preload: [issue: [:machine, :check]]
     )
     |> Enum.map(fn alert ->
@@ -145,6 +156,7 @@ defmodule Dokkit.Alerts do
 
   defp provider("page", _), do: :pagerduty_high
   defp provider("webhook", _), do: :webhook
+  defp provider(channel, _) when channel in ~w(email text digest), do: String.to_atom(channel)
   defp provider("push", %{"push_with" => "pagerduty"}), do: :pagerduty_low
   defp provider("push", %{"push_with" => "pushover"}), do: :pushover
   defp provider("push", _), do: :ntfy
@@ -216,7 +228,16 @@ defmodule Dokkit.Alerts do
 
   defp send_to(:webhook, _, _, _), do: {:error, "The webhook has no address yet."}
 
-  # ntfy and Pushover have nothing to resolve.
+  defp send_to(p, :open, about, config) when p in [:email, :digest] do
+    lines = [about.title, about.note, "On #{about.machine}. #{about.short}.", about.url]
+    Dokkit.Mail.send(config["email_to"], summary(about), Enum.reject(lines, &is_nil/1), config)
+  end
+
+  # A text is short, and the address that turns mail into one decides how short.
+  defp send_to(:text, :open, about, config),
+    do: Dokkit.Mail.send(config["text_to"], "Dokkit", [summary(about)], config)
+
+  # ntfy, Pushover and mail have nothing to resolve.
   defp send_to(_, :close, _, _), do: :ok
 
   defp summary(about), do: "#{about.title} (#{about.machine}, #{about.short})"

@@ -96,4 +96,39 @@ defmodule Dokkit.AlertsTest do
     assert_received {:sent, "hooks.example", body, _}
     assert %{"event" => "opened", "issue" => %{"id" => "DOK-0"}} = Jason.decode!(body)
   end
+
+  test "email and text go through the mail server, and the digest is one mail a day" do
+    Alerts.save(%{"down" => "email", "degraded" => "digest", "email_to" => "me@example.com"})
+    machine = Repo.insert!(%Machine{name: "press"})
+    Repo.insert!(%Service{machine_id: machine.id, slug: "spool", name: "Spooler"})
+    {_, key} = Keys.mint(:machine, %{machine_id: machine.id})
+
+    line = fn state ->
+      ~s({"type":"state","service":"spool","check":"http","state":"#{state}"})
+    end
+
+    Intake.report(key, nil, Enum.join([line.("down"), line.("down"), line.("down")], "\n"))
+
+    assert Alerts.deliver_pending() == 1
+    assert_received {:mail, "me@example.com", "Spooler: http is down" <> _, body}
+    assert body =~ "On press."
+
+    Intake.report(key, nil, Enum.join([line.("ok"), line.("ok"), line.("ok")], "\n"))
+    Repo.insert!(%Service{machine_id: machine.id, slug: "queue", name: "Queue"})
+    slow = ~s({"type":"state","service":"queue","check":"depth","state":"degraded"})
+    Intake.report(key, nil, Enum.join([slow, slow, slow], "\n"))
+    Alerts.deliver_pending()
+    refute_received {:mail, _, "Queue" <> _, _}
+
+    config = Alerts.config()
+    now = DateTime.utc_now()
+    early = %{now | hour: 6, minute: 0}
+    late = %{now | hour: 7, minute: 30}
+    assert Dokkit.Digest.tick(early, config) == :not_yet
+    assert Dokkit.Digest.tick(late, config) == :sent
+    assert_received {:mail, "me@example.com", "Dokkit: yesterday", body}
+    assert body =~ "Opened without paging:"
+    assert body =~ "Queue"
+    assert Dokkit.Digest.tick(late, config) == :not_yet
+  end
 end
