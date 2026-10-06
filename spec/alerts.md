@@ -58,4 +58,6 @@ Every channel in the table, with one server-wide choice for `down` and one for `
 
 An alert is written with its issue and sent afterwards, and a send that fails is tried again each minute, five times. Mail goes through the mail server in the settings and has not been sent through a real one yet. The digest holds what opened without paging, errors first seen that day from any app, and thresholds within a tenth of their limit.
 
-Not built yet: suggestions, and more than one recipient.
+One suggestion is made: an issue that has opened six times or more in a month and is snoozed is offered the daily digest, on the Alerts page, and accepting sets that service's routing. Dismissing it stops the offer for that service.
+
+Not built yet: more than one recipient.

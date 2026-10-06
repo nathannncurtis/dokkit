@@ -63,4 +63,28 @@ defmodule DokkitWeb.AlertsLiveTest do
     render_click(view, "rule", %{"remove" => rule["id"]})
     assert Dokkit.Alerts.rules() == []
   end
+
+  test "an issue snoozed over and over is offered the digest, and a person decides", %{conn: conn} do
+    {:ok, a} = Dokkit.Estate.add_job(%{"name" => "Flaky sync", "machine" => "nas"})
+    {:ok, b} = Dokkit.Estate.add_job(%{"name" => "Noisy probe", "machine" => "nas"})
+
+    for job <- [a, b] do
+      post(build_conn(), "/api/v1/in/#{job.key}/job/#{job.service.slug}/fail")
+    end
+
+    import Ecto.Query
+    until = DateTime.add(DateTime.utc_now(), 3600)
+    Dokkit.Repo.update_all(from(i in Dokkit.Issue), set: [count: 6, snoozed_until: until])
+
+    {:ok, view, html} = live(signed_in(conn), "/alerts")
+    assert html =~ "Flaky sync has needed a look 6 times"
+    [one, two] = Dokkit.Alerts.suggestions()
+
+    render_click(view, "suggestion", %{"accept" => one.id})
+    assert Dokkit.Repo.get!(Dokkit.Service, one.service_id).route_down == "digest"
+    html = render_click(view, "suggestion", %{"dismiss" => two.id})
+    refute html =~ "Suggestions"
+    assert Dokkit.Repo.get!(Dokkit.Service, two.service_id).route_down == nil
+    assert Dokkit.Alerts.suggestions() == []
+  end
 end

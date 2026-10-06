@@ -91,6 +91,53 @@ defmodule Dokkit.Alerts do
 
   def delete_rule(id), do: save_rules(Enum.reject(rules(), &(&1["id"] == id)))
 
+  @often 6
+
+  @doc """
+  Changes worth offering: an issue that has opened six times or more in a month and is
+  snoozed, while its service still sends somewhere louder than the digest. Nothing here
+  changes a rule; a person accepts or dismisses.
+  """
+  def suggestions do
+    dismissed =
+      (Repo.get(Setting, "suggestions") || %Setting{value: %{}}).value["dismissed"] || []
+
+    since = DateTime.add(DateTime.utc_now(), -30 * 86_400)
+
+    Repo.all(
+      from i in Issue,
+        join: s in assoc(i, :service),
+        where: i.count >= @often and not is_nil(i.snoozed_until) and i.since > ^since,
+        where: s.id not in ^dismissed,
+        order_by: [desc: i.count],
+        preload: [service: s]
+    )
+    |> Enum.reject(&(route(&1.service, &1.state) == "digest"))
+    |> Enum.uniq_by(& &1.service_id)
+  end
+
+  defp route(service, :down), do: service.route_down
+  defp route(service, _), do: service.route_degraded
+
+  @doc "Sends that service's issues of that kind to the daily digest from now on."
+  def accept_suggestion(issue_id) do
+    with %Issue{} = i <- Enum.find(suggestions(), &(&1.id == issue_id)) do
+      field = if i.state == :down, do: :route_down, else: :route_degraded
+      Repo.update!(Ecto.Changeset.change(i.service, [{field, "digest"}]))
+    end
+  end
+
+  def dismiss_suggestion(issue_id) do
+    with %Issue{} = i <- Enum.find(suggestions(), &(&1.id == issue_id)) do
+      old = (Repo.get(Setting, "suggestions") || %Setting{value: %{}}).value["dismissed"] || []
+
+      Repo.insert!(%Setting{key: "suggestions", value: %{"dismissed" => [i.service_id | old]}},
+        on_conflict: {:replace, [:value, :updated_at]},
+        conflict_target: :key
+      )
+    end
+  end
+
   defp pick(options, value), do: Enum.find_value(options, "", fn {_, v} -> v == value && v end)
 
   defp save_rules(list) do

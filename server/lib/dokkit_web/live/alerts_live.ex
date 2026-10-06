@@ -11,6 +11,7 @@ defmodule DokkitWeb.AlertsLive do
        page_title: "Alerts",
        config: Alerts.config(),
        rules: Alerts.rules(),
+       suggestions: Alerts.suggestions(),
        saved: false,
        tests: %{}
      )}
@@ -36,6 +37,17 @@ defmodule DokkitWeb.AlertsLive do
     end
 
     {:noreply, assign(socket, rules: Alerts.rules())}
+  end
+
+  def handle_event("suggestion", params, socket) do
+    if owner?(socket) do
+      case params do
+        %{"accept" => id} -> Alerts.accept_suggestion(id)
+        %{"dismiss" => id} -> Alerts.dismiss_suggestion(id)
+      end
+    end
+
+    {:noreply, assign(socket, suggestions: Alerts.suggestions())}
   end
 
   def handle_event("test", %{"channel" => channel}, socket) do
@@ -68,6 +80,39 @@ defmodule DokkitWeb.AlertsLive do
     <Layouts.app active={:alerts} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Alerts</h1>
+      </div>
+      <div :if={@suggestions != []} class="body set" style="padding-bottom: 0">
+        <div class="card">
+          <h2>Suggestions<span class="cnt">{length(@suggestions)}</span></h2>
+          <div
+            :for={i <- @suggestions}
+            class="li slim"
+            style="--cols: minmax(0,1fr) auto auto"
+            id={"suggestion-#{i.id}"}
+          >
+            <span>
+              {i.service.name} has needed a look {i.count} times this month and is snoozed. Send it to the daily digest instead?
+            </span>
+            <button
+              class="btn sm"
+              type="button"
+              disabled={!@owner}
+              phx-click="suggestion"
+              phx-value-accept={i.id}
+            >
+              Send to the digest
+            </button>
+            <button
+              class="btn sm"
+              type="button"
+              disabled={!@owner}
+              phx-click="suggestion"
+              phx-value-dismiss={i.id}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
       </div>
       <form class="body set" phx-submit="save" phx-change="changed" id="alerts-form">
         <fieldset disabled={!@owner} style="display: contents">
