@@ -108,7 +108,8 @@ defmodule Dokkit.TasksTest do
     declare(key, "true")
     [task] = Tasks.waiting()
     :ok = Tasks.decide(task.id, "true", :accepted)
-    {:ok, run} = {:ok, Tasks.run(task.id, "sam")}
+    run = Tasks.run(task.id, "sam")
+    assert run
 
     assert %{"run" => id, "as" => "ordinary"} =
              json_response(get(as(key), "/api/v1/work?wait=0"), 200)

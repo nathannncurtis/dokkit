@@ -68,13 +68,15 @@ defmodule DokkitWeb.AlertsLiveTest do
     {:ok, a} = Dokkit.Estate.add_job(%{"name" => "Flaky sync", "machine" => "attic"})
     {:ok, b} = Dokkit.Estate.add_job(%{"name" => "Noisy probe", "machine" => "attic"})
 
-    for job <- [a, b] do
+    # Each recovery and relapse reopens the same issue and counts once more.
+    for job <- [a, b], round <- 1..6 do
+      if round > 1, do: post(build_conn(), "/api/v1/in/#{job.key}/job/#{job.service.slug}/ok")
       post(build_conn(), "/api/v1/in/#{job.key}/job/#{job.service.slug}/fail")
     end
 
-    import Ecto.Query
-    until = DateTime.add(DateTime.utc_now(), 3600)
-    Dokkit.Repo.update_all(from(i in Dokkit.Issue), set: [count: 6, snoozed_until: until])
+    mine = [a.service.id, b.service.id]
+    ids = for i <- Dokkit.Issues.open_list(), i.service_id in mine, do: i.id
+    Dokkit.Issues.snooze(ids, 3600)
 
     {:ok, view, html} = live(signed_in(conn), "/alerts")
     assert html =~ "Flaky sync has needed a look 6 times"
