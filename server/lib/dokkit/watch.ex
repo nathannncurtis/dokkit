@@ -21,6 +21,8 @@ defmodule Dokkit.Watch do
     Dokkit.Numbers.prune(DateTime.utc_now())
     Dokkit.Digest.tick(DateTime.utc_now(), Dokkit.Alerts.config())
     Dokkit.Self.tick(DateTime.utc_now(), Dokkit.Alerts.config())
+    archive = Application.get_env(:dokkit, :archive)
+    if archive && DateTime.utc_now().minute == 0, do: Dokkit.Logs.archive(archive)
     Issues.changed()
     today = Date.utc_today()
     Enum.each([today, Date.shift(today, month: 1)], &Dokkit.Logs.ensure_partition/1)

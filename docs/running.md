@@ -57,4 +57,6 @@ Its own usernames and passwords. It is meant for a local network or a private ov
 
 **Who watches Dokkit.** The outside heartbeat is a setting on the Alerts page. Dokkit's own row is a service called Dokkit with one check, that the database answers, and a chart of the database's size. It routes to a quiet push.
 
-Not built yet: the installer and its private Postgres, archiving old log months, and the rest of its own row (whether it is taking reports, whether archiving worked).
+**Archiving.** With `DOKKIT_ARCHIVE` set to a folder, each log month older than a year is written there as `logs-YYYY-MM.ndjson.gz` and dropped from the database, checked once an hour. `Dokkit.Logs.restore/1` loads a file back. Without the setting every month stays.
+
+Not built yet: the installer and its private Postgres, and the rest of its own row (whether it is taking reports, whether archiving worked).

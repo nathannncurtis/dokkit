@@ -120,6 +120,82 @@ defmodule Dokkit.Logs do
     end
   end
 
+  @keep_months 12
+
+  @doc """
+  Writes each month older than a year to one compressed file in `dir` and drops it from the
+  database. Returns the files written. A month is read whole into memory to be written.
+  """
+  def archive(dir, today \\ Date.utc_today()) do
+    cutoff = Date.shift(Date.beginning_of_month(today), month: -@keep_months)
+
+    months =
+      Repo.query!("""
+      SELECT c.relname FROM pg_inherits i
+      JOIN pg_class c ON c.oid = i.inhrelid JOIN pg_class p ON p.oid = i.inhparent
+      WHERE p.relname = 'logs' ORDER BY 1
+      """).rows
+
+    for [name] <- months,
+        [_, year, month] <- [Regex.run(~r/^logs_y(\d{4})m(\d{2})$/, name)],
+        key = {String.to_integer(year), String.to_integer(month)},
+        Date.compare(Date.new!(elem(key, 0), elem(key, 1), 1), cutoff) == :lt do
+      File.mkdir_p!(dir)
+      path = Path.join(dir, "logs-#{year}-#{month}.ndjson.gz")
+
+      %{rows: rows} =
+        Repo.query!("SELECT row_to_json(l)::text FROM #{name} l ORDER BY l.at", [],
+          timeout: :infinity
+        )
+
+      # Written under another name first, so a half-written file is never taken for the archive.
+      File.write!(path <> ".part", :zlib.gzip(Enum.map_join(rows, "\n", &hd/1)))
+      File.rename!(path <> ".part", path)
+      Repo.query!("DROP TABLE #{name}")
+      :persistent_term.erase({__MODULE__, key})
+      path
+    end
+  end
+
+  @doc "Loads an archived month back. Lines from a machine that no longer exists are left out."
+  def restore(path) do
+    machines = MapSet.new(Repo.all(from m in Dokkit.Machine, select: m.id))
+    services = MapSet.new(Repo.all(from s in Dokkit.Service, select: s.id))
+
+    # Postgres writes the time with or without an offset, depending on the column.
+    time = fn text ->
+      at =
+        case DateTime.from_iso8601(text) do
+          {:ok, at, _} -> at
+          _ -> elem(DateTime.from_iso8601(text <> "Z"), 1)
+        end
+
+      %{at | microsecond: {elem(at.microsecond, 0), 6}}
+    end
+
+    rows =
+      for line <- path |> File.read!() |> :zlib.gunzip() |> String.split("\n", trim: true),
+          l = Jason.decode!(line),
+          l["machine_id"] in machines do
+        at = time.(l["at"])
+        ensure_partition(at)
+
+        %{
+          at: at,
+          received_at: time.(l["received_at"]),
+          level: l["level"],
+          msg: l["msg"],
+          fields: l["fields"],
+          cut: l["cut"],
+          machine_id: l["machine_id"],
+          service_id: if(l["service_id"] in services, do: l["service_id"])
+        }
+      end
+
+    rows |> Enum.chunk_every(1000) |> Enum.each(&Repo.insert_all(Dokkit.Log, &1))
+    length(rows)
+  end
+
   # Times far from now would each make a partition, so they are read as now.
   defp time(text, now) when is_binary(text) do
     with {:ok, at, _} <- DateTime.from_iso8601(text),
