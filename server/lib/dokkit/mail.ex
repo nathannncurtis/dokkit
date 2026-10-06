@@ -2,6 +2,8 @@ defmodule Dokkit.Mail do
   @moduledoc "Sends one mail through the mail server in the alert settings. HTML that reads like plain text."
 
   def send(to, subject, lines, config) when is_binary(to) and to != "" do
+    # Several addresses are written with commas between them.
+    to = String.split(to, ~r/[,;\s]+/, trim: true)
     text = Enum.join(lines, "\n")
 
     html =
@@ -10,7 +12,7 @@ defmodule Dokkit.Mail do
 
     case Application.get_env(:dokkit, :mail) do
       :test ->
-        Kernel.send(self(), {:mail, to, subject, text})
+        Kernel.send(self(), {:mail, Enum.join(to, ", "), subject, text})
         :ok
 
       _ ->
@@ -27,7 +29,8 @@ defmodule Dokkit.Mail do
 
     mail =
       :mimemail.encode(
-        {"multipart", "alternative", [{"From", from}, {"To", to}, {"Subject", subject}], %{},
+        {"multipart", "alternative",
+         [{"From", from}, {"To", Enum.join(to, ", ")}, {"Subject", subject}], %{},
          [{"text", "plain", [], utf8, text}, {"text", "html", [], utf8, html}]}
       )
 
@@ -49,7 +52,7 @@ defmodule Dokkit.Mail do
         password: config["smtp_password"] || ""
       ]
 
-    case :gen_smtp_client.send_blocking({from, [to], mail}, options) do
+    case :gen_smtp_client.send_blocking({from, to, mail}, options) do
       receipt when is_binary(receipt) -> :ok
       error -> {:error, "The mail server refused it: #{inspect(error) |> String.slice(0, 200)}"}
     end

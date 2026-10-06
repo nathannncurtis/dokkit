@@ -127,6 +127,11 @@ defmodule Dokkit.AlertsTest do
     assert Dokkit.Digest.tick(early, config) == :not_yet
     assert Dokkit.Digest.tick(late, config) == :sent
     assert_received {:mail, "me@example.com", "Dokkit: yesterday", body}
+
+    assert :ok =
+             Dokkit.Mail.send("a@example.com; b@example.com,c@example.com", "Hello", ["x"], %{})
+
+    assert_received {:mail, "a@example.com, b@example.com, c@example.com", "Hello", "x"}
     assert body =~ "Opened without paging:"
     assert body =~ "Queue"
     assert Dokkit.Digest.tick(late, config) == :not_yet

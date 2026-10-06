@@ -237,6 +237,7 @@ defmodule DokkitWeb.AlertsLive do
                   aria-label="Email goes to"
                 />
                 <.send_test channel="email" tests={@tests} />
+                <span class="hint">More than one address, with commas between them.</span>
               </dd>
               <dt>Text</dt>
               <dd>
