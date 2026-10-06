@@ -19,8 +19,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -28,32 +31,48 @@ import (
 	"time"
 )
 
-const queue = 1000
+const (
+	queue    = 1000
+	maxBytes = 8 << 20 // queued bytes
+	maxLine  = 1 << 20
+	maxBatch = 4 << 20 // the server refuses an unzipped batch over 5 MB
+)
 
 type line = map[string]any
 
+// batch is what one request carries. One that fails is kept for a second try.
+type batch struct {
+	path  string
+	items [][]byte
+	id    string
+	tried bool
+}
+
 var (
-	mu                             sync.Mutex
-	on                             bool
-	url, key, version, environment string
-	host, module                   string
-	lines, errs                    []line
-	dropped                        int
-	wake                           = make(chan struct{}, 1)
-	client                         = &http.Client{Timeout: 10 * time.Second}
+	mu                                 sync.Mutex
+	flushing                           sync.Mutex
+	on                                 bool
+	address, key, version, environment string
+	host, module                       string
+	lines, errs                        [][]byte
+	queued                             int
+	held                               *batch
+	dropped                            int
+	wake                               = make(chan struct{}, 1)
+	client                             = &http.Client{Timeout: 10 * time.Second}
 )
 
 // Start turns the library on. With no address or key it stays off and every call does nothing.
 func Start(release string) { StartWith(release, os.Getenv("DOKKIT_URL"), os.Getenv("DOKKIT_KEY")) }
 
 // StartWith is Start with the address and key given instead of read from the environment.
-func StartWith(release, address, appKey string) {
+func StartWith(release, addr, appKey string) {
 	mu.Lock()
-	if on || address == "" || appKey == "" {
+	if on || addr == "" || appKey == "" || !secure(addr) {
 		mu.Unlock()
 		return
 	}
-	on, url, key, version = true, strings.TrimRight(address, "/"), appKey, release
+	on, address, key, version = true, strings.TrimRight(addr, "/"), appKey, release
 	environment = os.Getenv("DOKKIT_ENV")
 	host, _ = os.Hostname()
 	if info, ok := debug.ReadBuildInfo(); ok {
@@ -74,7 +93,24 @@ func StartWith(release, address, appKey string) {
 	}
 }
 
-// Dropped is how many lines were dropped because the queue was full.
+// secure is false for an http address to another machine, unless DOKKIT_INSECURE=1.
+func secure(addr string) bool {
+	u, err := url.Parse(addr)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	if u.Scheme == "https" || os.Getenv("DOKKIT_INSECURE") == "1" {
+		return true
+	}
+	h := u.Hostname()
+	if ip := net.ParseIP(h); h == "localhost" || (ip != nil && ip.IsLoopback()) {
+		return true
+	}
+	fmt.Fprintln(os.Stderr, "dokkit: off, the address is http and not this machine; use https or set DOKKIT_INSECURE=1")
+	return false
+}
+
+// Dropped is how many lines were dropped: the queue was full, or they could not be sent.
 func Dropped() int {
 	mu.Lock()
 	defer mu.Unlock()
@@ -89,21 +125,45 @@ func id() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
+// encode marshals a line. One that cannot be marshalled gives nil.
+func encode(l line) (b []byte) {
+	defer func() {
+		if recover() != nil {
+			b = nil
+		}
+	}()
+	b, err := json.Marshal(l)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
 func add(l line) {
 	mu.Lock()
-	defer mu.Unlock()
-	if !on {
+	h, live := host, on
+	mu.Unlock()
+	if !live {
 		return
-	}
-	if len(lines) >= queue {
-		lines = lines[1:]
-		dropped++
 	}
 	if l["at"] == nil {
 		l["at"] = now()
 	}
-	l["host"] = host
-	lines = append(lines, l)
+	l["host"] = h
+	b := encode(l)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(b) == 0 || len(b) > maxLine {
+		dropped++
+		return
+	}
+	for len(lines) > 0 && (len(lines) >= queue || queued+len(b) > maxBytes) {
+		queued -= len(lines[0])
+		lines = lines[1:]
+		dropped++
+	}
+	queued += len(b)
+	lines = append(lines, b)
 }
 
 // Beat says the app is alive. Call it from the main loop.
@@ -197,6 +257,19 @@ func Recover() {
 	}
 }
 
+// relative is the package path and file name, so no folder of the machine is sent.
+func relative(file, function string) string {
+	if i := strings.IndexByte(function, '['); i >= 0 {
+		function = function[:i]
+	}
+	slash := strings.LastIndexByte(function, '/') + 1
+	dot := strings.IndexByte(function[slash:], '.')
+	if dot < 0 {
+		return path.Base(file)
+	}
+	return function[:slash+dot] + "/" + path.Base(file)
+}
+
 func capture(kind string, handled bool, tags map[string]string, skip int) {
 	pcs := make([]uintptr, 64)
 	walk := runtime.CallersFrames(pcs[:runtime.Callers(skip+1, pcs)])
@@ -205,7 +278,7 @@ func capture(kind string, handled bool, tags map[string]string, skip int) {
 		f, more := walk.Next()
 		// Innermost last, as the format asks.
 		frames = append([]line{{
-			"file": f.File, "function": f.Function, "line": f.Line,
+			"file": relative(f.File, f.Function), "function": f.Function, "line": f.Line,
 			"own": strings.HasPrefix(f.Function, "main.") || (module != "" && strings.HasPrefix(f.Function, module)),
 		}}, frames...)
 		if !more {
@@ -220,10 +293,14 @@ func capture(kind string, handled bool, tags map[string]string, skip int) {
 	if !on || len(errs) >= 100 {
 		return
 	}
-	errs = append(errs, line{
+	b := encode(line{
 		"at": now(), "type": kind, "handled": handled, "release": version,
 		"environment": environment, "host": host, "frames": frames, "tags": tags,
 	})
+	if len(b) == 0 {
+		return
+	}
+	errs = append(errs, b)
 	nudge()
 }
 
@@ -236,54 +313,89 @@ func nudge() {
 
 // Flush sends what is waiting. Call it before the app exits.
 func Flush() {
+	flushing.Lock()
+	defer flushing.Unlock()
 	for {
 		mu.Lock()
-		var one line
-		var batch []line
-		if len(errs) > 0 {
-			one, errs = errs[0], errs[1:]
-		} else {
-			n := min(len(lines), 500)
-			batch, lines = lines[:n:n], lines[n:]
+		b := held
+		held = nil
+		if b == nil {
+			if len(errs) > 0 {
+				b = &batch{path: "/api/v1/errors", items: errs[:1:1], id: id()}
+				errs = errs[1:]
+			} else if len(lines) > 0 {
+				n, size := 0, 0
+				for n < len(lines) && n < 500 && (n == 0 || size+len(lines[n]) <= maxBatch) {
+					size += len(lines[n])
+					n++
+				}
+				b = &batch{path: "/api/v1/report", items: lines[:n:n], id: id()}
+				lines = lines[n:]
+				queued -= size
+			}
 		}
 		mu.Unlock()
-		// What cannot be sent is dropped. The app is never told.
-		switch {
-		case one != nil:
-			body, _ := json.Marshal(one)
-			post("/api/v1/errors", body, "application/json", false)
-		case len(batch) > 0:
-			var text bytes.Buffer
-			z := gzip.NewWriter(&text)
-			for i, l := range batch {
-				if i > 0 {
-					z.Write([]byte("\n"))
-				}
-				b, _ := json.Marshal(l)
-				z.Write(b)
+		if b == nil {
+			return
+		}
+		switch send(b) {
+		case refused:
+			mu.Lock()
+			dropped += len(b.items)
+			mu.Unlock()
+		case failed:
+			mu.Lock()
+			if b.tried || b.path == "/api/v1/errors" {
+				dropped += len(b.items)
+			} else {
+				b.tried = true
+				held = b
 			}
-			z.Close()
-			post("/api/v1/report", text.Bytes(), "application/x-ndjson", true)
-		default:
+			mu.Unlock()
 			return
 		}
 	}
 }
 
-func post(path string, body []byte, kind string, zipped bool) {
-	req, err := http.NewRequest("POST", url+path, bytes.NewReader(body))
+const (
+	sent = iota
+	refused
+	failed
+)
+
+// send tells whether the batch was taken, refused (not tried again) or not delivered.
+// An error post has no batch id on the server, so it is never sent twice.
+func send(b *batch) int {
+	body, kind, zipped := b.items[0], "application/json", false
+	if b.path == "/api/v1/report" {
+		var text bytes.Buffer
+		z := gzip.NewWriter(&text)
+		z.Write(bytes.Join(b.items, []byte("\n")))
+		z.Close()
+		body, kind, zipped = text.Bytes(), "application/x-ndjson", true
+	}
+	req, err := http.NewRequest("POST", address+b.path, bytes.NewReader(body))
 	if err != nil {
-		return
+		return refused
 	}
 	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("Content-Type", kind)
 	if zipped {
 		req.Header.Set("Content-Encoding", "gzip")
-		req.Header.Set("Dokkit-Batch", id())
+		req.Header.Set("Dokkit-Batch", b.id)
 	}
-	if res, err := client.Do(req); err == nil {
-		res.Body.Close()
+	res, err := client.Do(req)
+	if err != nil {
+		return failed
 	}
+	res.Body.Close()
+	switch {
+	case res.StatusCode >= 500:
+		return failed
+	case res.StatusCode >= 400:
+		return refused
+	}
+	return sent
 }
 
 type handler struct {
@@ -312,9 +424,23 @@ func (h *handler) Handle(_ context.Context, r slog.Record) error {
 	}
 	fields := map[string]any{}
 	for _, a := range h.attrs {
-		fields[a.Key] = a.Value.Any()
+		fields[a.Key] = plain(a.Value)
 	}
-	r.Attrs(func(a slog.Attr) bool { fields[a.Key] = a.Value.Any(); return true })
+	r.Attrs(func(a slog.Attr) bool { fields[a.Key] = plain(a.Value); return true })
 	add(line{"type": "log", "t": r.Time.UTC().Format(time.RFC3339Nano), "level": level, "msg": r.Message, "fields": fields})
 	return nil
+}
+
+// plain resolves a LogValuer first, and turns an error into its text, which marshals as {}.
+func plain(v slog.Value) (out any) {
+	defer func() {
+		if recover() != nil {
+			out = nil
+		}
+	}()
+	a := v.Resolve().Any()
+	if err, ok := a.(error); ok {
+		return err.Error()
+	}
+	return a
 }
