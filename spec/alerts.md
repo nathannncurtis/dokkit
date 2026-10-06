@@ -54,4 +54,8 @@ Learning what normal looks like and flagging the unusual. Limits are fixed numbe
 
 ## Built so far
 
-Page, push (ntfy, Pushover, or PagerDuty at low urgency) and webhook, with one server-wide choice for `down` and one for `degraded`. An alert is written with its issue and sent afterwards, and a send that fails is tried again each minute, five times. Email, text, the digest, rules, per-service routing in the interface, machine-down quieting and suggestions are not built yet.
+Every channel in the table, with one server-wide choice for `down` and one for `degraded`, each service's own routing, and rules. An issue's channel is its service's routing if it has one, else the first rule that fits, else the server-wide choice. A rule's condition is the kind of thing (a job, a check, a machine), what happened (stops, struggles) and optionally one machine. Everyone is one recipient so far: one email address and one text address in the settings.
+
+An alert is written with its issue and sent afterwards, and a send that fails is tried again each minute, five times. Mail goes through the mail server in the settings and has not been sent through a real one yet. The digest holds what opened without paging, errors first seen that day from any app, and thresholds within a tenth of their limit.
+
+Not built yet: suggestions, and more than one recipient.

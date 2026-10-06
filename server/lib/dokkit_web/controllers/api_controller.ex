@@ -20,7 +20,8 @@ defmodule DokkitWeb.ApiController do
               :deploys,
               :errors,
               :error,
-              :series
+              :series,
+              :rules
             ]
 
   plug :scope, "read-logs" when action in [:logs]
@@ -33,6 +34,7 @@ defmodule DokkitWeb.ApiController do
   def jobs(conn, _), do: list(conn, Read.jobs())
   def deploys(conn, _), do: list(conn, Read.deploys())
   def errors(conn, _), do: list(conn, Read.errors())
+  def rules(conn, _), do: list(conn, Read.rules())
 
   def error(conn, %{"id" => id}) do
     case Read.error(id) do

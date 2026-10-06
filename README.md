@@ -17,14 +17,14 @@ Working, with tests:
 - **Errors.** An app posts an error with its type and stack. Reports are grouped by type and the app's own frames, and message text is not kept. The Errors page lists the groups. Dokkit also accepts reports from Sentry's open-source SDKs.
 - **Numbers.** `dokkit watch` sends each machine's processor, memory and disk use, fetches a service's stats document, and apps can send their own metrics. A threshold check opens an issue when a number is over its limit, and an expiry check warns 30 days before a certificate or a dated file runs out. Service pages chart the last 24 hours.
 - **Machines.** A machine enrols with a one-use token and says it is alive once a minute. Three minutes of silence opens one issue and quiets what runs on it.
-- **Alerts.** A page through PagerDuty, a quiet push through ntfy, Pushover or PagerDuty, or a webhook. Once per issue, resolved when it closes.
+- **Alerts.** A page through PagerDuty, a quiet push through ntfy, Pushover or PagerDuty, an email, a text, a daily digest, or a webhook. Rules send one kind of issue somewhere else. Once per issue, resolved when it closes.
 - **Logs.** Lines in Dokkit's format or CLEF, kept in monthly partitions, searched on the Logs page. `dokkit watch` reads the log files a `dokkit.toml` names.
 - **Found.** `dokkit scan` writes what is on a machine to a file and `dokkit propose` sends it. Running Windows services and listening ports wait on the Found page, and watching one adds a check that `dokkit watch` runs on that machine.
 - **Tasks.** A `dokkit.toml` offers a named command. The owner accepts it on the Found page, it is run from the Tasks page, and `dokkit watch` on its machine carries it out and sends back the output. A command that changes has to be accepted again.
 - **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Errors, Deploys, Found, Tasks, Alerts and Settings. People sign in; the first one claims the server with a setup code.
 - **The API and the MCP**, for user tokens made in Settings.
 
-Not built yet: email, text and the digest, alert rules and suggestions, the libraries, the installer and the Docker image.
+Not built yet: alert suggestions, the libraries, the installer and the Docker image.
 
 To run it for development, with Postgres on localhost:
 

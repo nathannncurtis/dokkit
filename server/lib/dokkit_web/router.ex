@@ -88,6 +88,7 @@ defmodule DokkitWeb.Router do
     get "/deploys", ApiController, :deploys
     get "/errors", ApiController, :errors
     get "/errors/:id", ApiController, :error
+    get "/rules", ApiController, :rules
     get "/tasks", ApiController, :tasks
     get "/task-runs", ApiController, :task_runs
     post "/tasks/:id/run", ApiController, :run_task

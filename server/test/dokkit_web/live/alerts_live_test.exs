@@ -40,4 +40,27 @@ defmodule DokkitWeb.AlertsLiveTest do
     render_click(view, "test", %{"channel" => "page"})
     assert Alerts.config()["down"] == "page"
   end
+
+  test "a rule sends one kind of issue somewhere else", %{conn: conn} do
+    {:ok, view, html} = live(signed_in(conn), "/alerts")
+    assert html =~ "No rules."
+
+    html =
+      view
+      |> form("#rule-form", rule: %{kind: "job", state: "down", machine: "nas", channel: "email"})
+      |> render_submit()
+
+    assert html =~ "When a job stops on nas: Email"
+    [rule] = Dokkit.Alerts.rules()
+
+    Dokkit.Alerts.save(%{"email_to" => "me@example.com"})
+    {:ok, job} = Dokkit.Estate.add_job(%{"name" => "Nightly backup", "machine" => "nas"})
+    post(build_conn(), "/api/v1/in/#{job.key}/job/nightly-backup/fail")
+    assert [%{channel: "email"}] = Dokkit.Repo.all(Dokkit.Alert)
+
+    render_click(view, "rule", %{"toggle" => rule["id"]})
+    assert [%{"on" => false}] = Dokkit.Alerts.rules()
+    render_click(view, "rule", %{"remove" => rule["id"]})
+    assert Dokkit.Alerts.rules() == []
+  end
 end

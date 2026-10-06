@@ -175,6 +175,8 @@ defmodule Dokkit.Read do
     with {:ok, at, _} <- DateTime.from_iso8601(text), do: {:ok, at}
   end
 
+  def rules, do: Dokkit.Alerts.rules()
+
   def tasks do
     for %{task: t, last: last} <- Dokkit.Tasks.accepted() do
       %{

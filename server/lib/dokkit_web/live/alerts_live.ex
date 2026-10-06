@@ -7,7 +7,13 @@ defmodule DokkitWeb.AlertsLive do
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(page_title: "Alerts", config: Alerts.config(), saved: false, tests: %{})}
+     |> assign(
+       page_title: "Alerts",
+       config: Alerts.config(),
+       rules: Alerts.rules(),
+       saved: false,
+       tests: %{}
+     )}
   end
 
   def handle_info(:issues_changed, socket), do: {:noreply, socket}
@@ -19,6 +25,18 @@ defmodule DokkitWeb.AlertsLive do
   end
 
   def handle_event("changed", _, socket), do: {:noreply, assign(socket, saved: false)}
+
+  def handle_event("rule", params, socket) do
+    if owner?(socket) do
+      case params do
+        %{"rule" => rule} -> Alerts.add_rule(rule)
+        %{"toggle" => id} -> Alerts.toggle_rule(id)
+        %{"remove" => id} -> Alerts.delete_rule(id)
+      end
+    end
+
+    {:noreply, assign(socket, rules: Alerts.rules())}
+  end
 
   def handle_event("test", %{"channel" => channel}, socket) do
     if owner?(socket) and Alerts.sends?(channel) do
@@ -40,6 +58,8 @@ defmodule DokkitWeb.AlertsLive do
     assigns =
       assign(assigns,
         channels: Alerts.channels(),
+        kinds: Alerts.rule_kinds(),
+        states: Alerts.rule_states(),
         push: @push,
         owner: assigns.current_user.role == :owner
       )
@@ -209,6 +229,58 @@ defmodule DokkitWeb.AlertsLive do
           </div>
         </fieldset>
       </form>
+      <form class="body set" phx-submit="rule" id="rule-form" style="padding-top: 0">
+        <fieldset disabled={!@owner} style="display: contents">
+          <div class="card">
+            <h2>Rules<span :if={@rules != []} class="cnt">{length(@rules)}</span></h2>
+            <p :if={@rules == []} class="lead">
+              No rules. Every issue follows the two choices under Who is told, unless its service says otherwise.
+            </p>
+            <div
+              :for={r <- @rules}
+              class="li slim"
+              style="--cols: minmax(0,1fr) auto auto"
+              id={"rule-#{r["id"]}"}
+            >
+              <span class={!r["on"] && "mute"}>{describe(r, @kinds, @states, @channels)}</span>
+              <button class="btn sm" type="button" phx-click="rule" phx-value-toggle={r["id"]}>
+                {if r["on"], do: "Switch off", else: "Switch on"}
+              </button>
+              <button class="btn sm" type="button" phx-click="rule" phx-value-remove={r["id"]}>
+                Remove
+              </button>
+            </div>
+            <dl class="kv">
+              <dt>New rule</dt>
+              <dd>
+                <span :for={{field, options} <- [{"kind", @kinds}, {"state", @states}]} class="dd">
+                  <select class="inp" name={"rule[#{field}]"} aria-label={"Rule " <> field}>
+                    <option :for={{text, value} <- options} value={value}>{text}</option>
+                  </select>
+                  <i class="ph ph-caret-down" aria-hidden="true"></i>
+                </span>
+                <input
+                  class="inp"
+                  style="flex: 1 1 160px"
+                  name="rule[machine]"
+                  placeholder="On machine (blank for any)"
+                  aria-label="On machine"
+                />
+                <span class="dd">
+                  <select class="inp" name="rule[channel]" aria-label="Rule channel">
+                    <option :for={{text, value} <- @channels} value={value}>{text}</option>
+                  </select>
+                  <i class="ph ph-caret-down" aria-hidden="true"></i>
+                </span>
+                <button class="btn" type="submit">Add the rule</button>
+                <span class="hint">
+                  The first rule that fits an issue decides its channel. A service's own routing comes first.
+                </span>
+              </dd>
+            </dl>
+          </div>
+        </fieldset>
+      </form>
     </Layouts.app>
     """
   end
@@ -250,6 +322,16 @@ defmodule DokkitWeb.AlertsLive do
     />
     """
   end
+
+  defp describe(rule, kinds, states, channels) do
+    on = if rule["machine"] == "", do: "", else: " on #{rule["machine"]}"
+
+    "When #{String.downcase(name(kinds, rule["kind"]))} #{name(states, rule["state"])}#{on}: " <>
+      name(channels, rule["channel"])
+  end
+
+  defp name(options, value),
+    do: Enum.find_value(options, "", fn {text, v} -> v == value && text end)
 
   attr :channel, :string, required: true
   attr :tests, :map, required: true

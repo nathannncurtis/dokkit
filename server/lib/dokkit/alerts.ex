@@ -51,13 +51,70 @@ defmodule Dokkit.Alerts do
     new
   end
 
+  @kinds [{"Anything", ""}, {"A job", "job"}, {"A check", "check"}, {"A machine", "machine"}]
+  @states [{"stops or struggles", ""}, {"stops", "down"}, {"struggles", "degraded"}]
+  def rule_kinds, do: @kinds
+  def rule_states, do: @states
+
+  @doc "Rules, first match first. A service's own routing comes before them, the two defaults after."
+  def rules, do: (Repo.get(Setting, "rules") || %Setting{value: %{}}).value["list"] || []
+
+  def add_rule(params) do
+    rule = %{
+      "id" => Ecto.UUID.generate(),
+      "kind" => pick(@kinds, params["kind"]),
+      "state" => pick(@states, params["state"]),
+      "machine" => String.trim(params["machine"] || ""),
+      "channel" => pick(@channels, params["channel"]) || "none",
+      "on" => true
+    }
+
+    save_rules(rules() ++ [rule])
+  end
+
+  def toggle_rule(id),
+    do:
+      save_rules(
+        for r <- rules(), do: if(r["id"] == id, do: Map.update!(r, "on", &(!&1)), else: r)
+      )
+
+  def delete_rule(id), do: save_rules(Enum.reject(rules(), &(&1["id"] == id)))
+
+  defp pick(options, value), do: Enum.find_value(options, "", fn {_, v} -> v == value && v end)
+
+  defp save_rules(list) do
+    Repo.insert!(%Setting{key: "rules", value: %{"list" => list}},
+      on_conflict: {:replace, [:value, :updated_at]},
+      conflict_target: :key
+    )
+
+    list
+  end
+
+  defp ruled(%Issue{} = issue, machine) do
+    kind = if issue.kind in ~w(job machine), do: issue.kind, else: "check"
+
+    Enum.find_value(rules(), fn r ->
+      (r["on"] and r["kind"] in ["", kind] and r["state"] in ["", to_string(issue.state)] and
+         r["machine"] in ["", machine]) && r["channel"]
+    end)
+  end
+
+  defp machine_name(id),
+    do: Repo.one(from m in Dokkit.Machine, where: m.id == ^id, select: m.name)
+
   # A machine that is down alerts once for itself. What runs on it stays quiet until it is back.
   def plan(%Issue{} = issue, %Service{environment: "production"} = service) do
-    channel = Map.get(service, :"route_#{issue.state}") || config()[to_string(issue.state)]
+    channel =
+      Map.get(service, :"route_#{issue.state}") || ruled(issue, machine_name(issue.machine_id)) ||
+        config()[to_string(issue.state)]
+
     unless Dokkit.Issues.machine_down?(issue.machine_id), do: insert(issue, channel)
   end
 
-  def plan(%Issue{kind: "machine"} = issue, nil), do: insert(issue, config()["down"])
+  def plan(%Issue{kind: "machine"} = issue, nil),
+    do: insert(issue, ruled(issue, machine_name(issue.machine_id)) || config()["down"])
+
   def plan(_, _), do: nil
 
   defp insert(issue, channel) do
