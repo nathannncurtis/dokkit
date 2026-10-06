@@ -12,7 +12,9 @@ defmodule Dokkit.Watch do
 
   def init(_) do
     Process.send_after(self(), :sweep, @every)
-    {:ok, DateTime.utc_now()}
+
+    {:ok,
+     DateTime.add(DateTime.utc_now(), -elem(:erlang.statistics(:wall_clock), 0), :millisecond)}
   end
 
   # After a server outage, machines have had no chance to report yet.
@@ -74,6 +76,16 @@ defmodule Dokkit.Watch do
           m.kind == :seen and m.last_seen_at < ^DateTime.add(now, -@keep_hosts_days * 86_400) and
             not exists(from s in Dokkit.Service, where: s.machine_id == parent_as(:machine).id)
     )
+  end
+
+  @doc "Sweeps jobs, beats and machines once the VM has been up long enough for machines to report."
+  def sweep_quiet(started, now \\ DateTime.utc_now()) do
+    if settled?(started, now) do
+      sweep(now)
+      Issues.machines_sweep(now)
+    else
+      0
+    end
   end
 
   @doc "Returns how many jobs and beats it flagged."

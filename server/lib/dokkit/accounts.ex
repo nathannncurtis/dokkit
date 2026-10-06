@@ -32,6 +32,10 @@ defmodule Dokkit.Accounts do
 
   def announce do
     unless any?(), do: Logger.warning("No account yet. Setup code: #{setup_code()}")
+  rescue
+    e ->
+      Logger.warning("Could not check for an account: #{Exception.message(e)}")
+      Logger.warning("If there is no account yet, the setup code is: #{setup_code()}")
   end
 
   def create_owner(code, name, password) do
