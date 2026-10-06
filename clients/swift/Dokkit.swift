@@ -41,28 +41,30 @@ public enum Dokkit {
         guard let url = url ?? env["DOKKIT_URL"], let key = key ?? env["DOKKIT_KEY"], !url.isEmpty, !key.isEmpty else { return }
         if url.lowercased().hasPrefix("http://") && env["DOKKIT_INSECURE"] != "1" {
             let name = URL(string: url)?.host ?? ""
-            if name != "localhost" && name != "::1" && !name.hasPrefix("127.") {
+            if name != "localhost" && name != "::1" && name != "127.0.0.1" {
                 FileHandle.standardError.write(Data("dokkit: \(url) is not https and not this machine; staying off. Set DOKKIT_INSECURE=1 to allow it.\n".utf8))
                 return
             }
         }
         // The host name can take seconds to look up, so it is read on the queue, never on the caller's thread.
-        queue.async {
-            guard on == nil else { return }
-            var address = url
-            while address.hasSuffix("/") { address.removeLast() }
+        DispatchQueue.global().async {
             #if os(macOS) || os(Linux)
             let name = host ?? ProcessInfo.processInfo.hostName
             #else
             let name = host ?? "device"
             #endif
-            on = (address, key, version, environment ?? env["DOKKIT_ENV"], name)
-            let t = DispatchSource.makeTimerSource(queue: queue)
-            t.schedule(deadline: .now() + 2, repeating: 2)
-            t.setEventHandler { send() }
-            t.resume()
-            timer = t
-            if let version = version { add(["type": "deploy", "version": version]) }
+            queue.async {
+                guard on == nil else { return }
+                var address = url
+                while address.hasSuffix("/") { address.removeLast() }
+                on = (address, key, version, environment ?? env["DOKKIT_ENV"], name)
+                let t = DispatchSource.makeTimerSource(queue: queue)
+                t.schedule(deadline: .now() + 2, repeating: 2)
+                t.setEventHandler { send() }
+                t.resume()
+                timer = t
+                if let version = version { add(["type": "deploy", "version": version]) }
+            }
         }
     }
 
@@ -193,7 +195,7 @@ public enum Dokkit {
                 if status >= 400 {
                     queue.async {
                         var batch = batch
-                        if (status >= 500 || status == 429) && batch.tries == 0 {
+                        if (status >= 500 || status == 429) && batch.tries == 0 && batch.path == "/api/v1/report" {
                             batch.tries = 1
                             retry.append(batch)
                         } else {

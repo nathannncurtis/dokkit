@@ -42,6 +42,9 @@ public class Test {
             });
         } catch (IllegalStateException expected) {
         }
+        Dokkit.own = "Test";
+        try { Integer.parseInt("x"); } catch (NumberFormatException e) { Dokkit.capture(e); }
+        Dokkit.own = "";
         Dokkit.stats("{\n  \"stat\": 7\n}");
         Dokkit.flush();
         Dokkit.flush();
@@ -50,7 +53,7 @@ public class Test {
         java.lang.reflect.Method safe = Dokkit.class.getDeclaredMethod("safe", String.class);
         safe.setAccessible(true);
         boolean guarded = (boolean) safe.invoke(null, "https://dokkit.example") && (boolean) safe.invoke(null, "http://localhost:80")
-                && !(boolean) safe.invoke(null, "http://dokkit.example");
+                && !(boolean) safe.invoke(null, "http://dokkit.example") && !(boolean) safe.invoke(null, "http://127.evil.example");
 
         String all = String.join("\n", got);
         String[] want = {
@@ -62,6 +65,7 @@ public class Test {
         List<String> missing = new ArrayList<>();
         for (String w : want) if (!all.contains(w)) missing.add(w);
         if (!all.contains("\"document\":{   \"stat\": 7 }")) missing.add("stats on one line");
+        if (!java.util.regex.Pattern.compile("\"java.lang.Integer\"[^}]*\"own\":false").matcher(all).find()) missing.add("jdk frame not own");
         if (!guarded) missing.add("http to another machine refused");
         if (Dokkit.dropped() != 0) missing.add("nothing dropped, got " + Dokkit.dropped());
         if (!missing.isEmpty() || all.contains("4411") || all.contains("BAD KEY") || all.contains("ignored")) {

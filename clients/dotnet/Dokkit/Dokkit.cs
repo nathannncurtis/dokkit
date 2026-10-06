@@ -32,16 +32,18 @@ namespace Dokkit
         static Batch retry;
         static readonly object Gate = new object();
         static readonly Queue<string> Lines = new Queue<string>();
-        static readonly Queue<Dictionary<string, object>> Errors = new Queue<Dictionary<string, object>>();
+        // Reports are built on the sender thread, so reading symbols never slows the app.
+        static readonly Queue<Func<Dictionary<string, object>>> Errors = new Queue<Func<Dictionary<string, object>>>();
         static readonly AutoResetEvent Wake = new AutoResetEvent(false);
         static HttpClient http;
-        static string url, version, environment, host;
+        static string url, version, environment, host, own;
 
         /// <summary>How many lines were dropped because the queue was full or could not be sent.</summary>
         public static int Dropped { get; private set; }
 
-        /// <summary>Turns the library on. With no address or key it stays off and every call does nothing.</summary>
-        public static void Start(string version = null, string environment = null, string url = null, string key = null)
+        /// <summary>Turns the library on. With no address or key it stays off and every call does nothing.
+        /// Frames of assemblies named <paramref name="own"/> or <paramref name="own"/>.* are the app's own; by default, the entry assembly's first name segment.</summary>
+        public static void Start(string version = null, string environment = null, string url = null, string key = null, string own = null)
         {
             try
             {
@@ -55,6 +57,7 @@ namespace Dokkit
                 }
                 Client.url = url.TrimEnd('/');
                 Client.version = version;
+                Client.own = own;
                 Client.environment = environment ?? Environment.GetEnvironmentVariable("DOKKIT_ENV");
                 host = Environment.MachineName;
                 var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
@@ -98,32 +101,37 @@ namespace Dokkit
             try
             {
                 if (http == null || error == null) return;
-                // The entry assembly's first name segment, so its sibling projects count too. Without one, anything but the framework.
-                var prefix = Assembly.GetEntryAssembly()?.GetName().Name?.Split('.')[0];
-                var frames = new List<object>();
-                // Innermost last, as the format asks.
-                foreach (var f in (new StackTrace(error, true).GetFrames() ?? new StackFrame[0]).Reverse())
-                {
-                    var method = f.GetMethod();
-                    if (method == null) continue;
-                    frames.Add(new Dictionary<string, object>
-                    {
-                        ["file"] = method.DeclaringType?.FullName,
-                        ["function"] = method.Name,
-                        ["line"] = f.GetFileLineNumber() == 0 ? (object)null : f.GetFileLineNumber(),
-                        ["own"] = IsOwn(method.DeclaringType?.Assembly, prefix),
-                    });
-                }
-                var report = new Dictionary<string, object>
-                {
-                    ["at"] = Now(), ["type"] = error.GetType().Name, ["handled"] = handled, ["release"] = version,
-                    ["environment"] = environment, ["host"] = host, ["frames"] = frames,
-                    ["tags"] = (tags ?? new Dictionary<string, string>()).ToDictionary(t => t.Key, t => (object)t.Value),
-                };
-                lock (Gate) { if (Errors.Count < 100) Errors.Enqueue(report); }
+                var at = Now();
+                var copy = (tags ?? new Dictionary<string, string>()).ToDictionary(t => t.Key, t => (object)t.Value);
+                lock (Gate) { if (Errors.Count < 100) Errors.Enqueue(() => Report(error, handled, copy, at)); }
                 Wake.Set();
             }
             catch { }
+        }
+
+        static Dictionary<string, object> Report(Exception error, bool handled, Dictionary<string, object> tags, string at)
+        {
+            // The entry assembly's first name segment, so its sibling projects count too. Without one, anything but the framework.
+            var prefix = own ?? Assembly.GetEntryAssembly()?.GetName().Name?.Split('.')[0];
+            var frames = new List<object>();
+            // Innermost last, as the format asks.
+            foreach (var f in (new StackTrace(error, true).GetFrames() ?? new StackFrame[0]).Reverse())
+            {
+                var method = f.GetMethod();
+                if (method == null) continue;
+                frames.Add(new Dictionary<string, object>
+                {
+                    ["file"] = method.DeclaringType?.FullName,
+                    ["function"] = method.Name,
+                    ["line"] = f.GetFileLineNumber() == 0 ? (object)null : f.GetFileLineNumber(),
+                    ["own"] = IsOwn(method.DeclaringType?.Assembly, prefix),
+                });
+            }
+            return new Dictionary<string, object>
+            {
+                ["at"] = at, ["type"] = error.GetType().Name, ["handled"] = handled, ["release"] = version,
+                ["environment"] = environment, ["host"] = host, ["frames"] = frames, ["tags"] = tags,
+            };
         }
 
         static bool IsOwn(Assembly assembly, string prefix)
@@ -132,7 +140,7 @@ namespace Dokkit
             if (name == null) return false;
             if (prefix != null) return name == prefix || name.StartsWith(prefix + ".", StringComparison.Ordinal);
             return name != "mscorlib" && name != "netstandard" && !name.StartsWith("System", StringComparison.Ordinal)
-                && !name.StartsWith("Microsoft", StringComparison.Ordinal) && name != "Dokkit";
+                && !name.StartsWith("Microsoft", StringComparison.Ordinal) && name != "Dokkit" && !name.StartsWith("Dokkit.", StringComparison.Ordinal);
         }
 
         /// <summary>Also reports errors nothing caught.</summary>
@@ -176,7 +184,7 @@ namespace Dokkit
 
         static Batch Next()
         {
-            Dictionary<string, object> error = null;
+            Func<Dictionary<string, object>> error = null;
             var batch = new List<string>();
             lock (Gate)
             {
@@ -189,7 +197,7 @@ namespace Dokkit
                 }
             }
             if (error != null)
-                return new Batch { Path = "/api/v1/errors", Body = Encoding.UTF8.GetBytes(Json(error)), Kind = "application/json", Count = 1 };
+                return new Batch { Path = "/api/v1/errors", Body = Encoding.UTF8.GetBytes(Json(error())), Kind = "application/json", Count = 1 };
             if (batch.Count == 0) return null;
             return new Batch { Path = "/api/v1/report", Body = Gzip(string.Join("\n", batch)), Kind = "application/x-ndjson", Gzip = true, Count = batch.Count };
         }

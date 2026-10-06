@@ -35,7 +35,7 @@ import java.util.zip.GZIPOutputStream;
 
 public final class Dokkit {
     private static final int QUEUE = 1000;
-    private static final int QUEUE_BYTES = 4 << 20;
+    private static final int QUEUE_BYTES = 4 << 20; // counted in chars, about
     private static final Object gate = new Object();
     private static final Object sending = new Object();
     private static final ArrayDeque<String> lines = new ArrayDeque<>();
@@ -46,7 +46,7 @@ public final class Dokkit {
     private static String url, key, version, environment, host;
     private static int dropped;
 
-    /** Frames of classes whose names start with this are the app's own. Blank means the package of the main class. */
+    /** Frames of classes whose names start with this are the app's own. Blank means every frame that is not the JDK's or this library's; set it to the app's package to be exact. */
     public static String own = "";
 
     private Dokkit() {}
@@ -79,7 +79,7 @@ public final class Dokkit {
             }, "dokkit");
             sender.setDaemon(true);
             sender.start();
-            Runtime.getRuntime().addShutdownHook(new Thread(Dokkit::flush));
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> { flush(); flush(); }));
             if (version != null) add(line("deploy", "version", version));
         } catch (Exception e) {
             http = null;
@@ -89,7 +89,7 @@ public final class Dokkit {
     private static boolean safe(String url) {
         if (!url.regionMatches(true, 0, "http://", 0, 7) || "1".equals(System.getenv("DOKKIT_INSECURE"))) return true;
         String host = URI.create(url).getHost();
-        return host != null && (host.equals("localhost") || host.equals("[::1]") || host.startsWith("127."));
+        return host != null && (host.equals("localhost") || host.equals("[::1]") || host.equals("127.0.0.1"));
     }
 
     // A lookup can stall for seconds, so it gets two and then the environment's answer.
@@ -174,7 +174,7 @@ public final class Dokkit {
         try {
             if (http == null || error == null) return;
             List<Object> frames = new ArrayList<>();
-            String mine = own.isEmpty() ? mainPackage() : own;
+            String mine = own;
             StackTraceElement[] stack = error.getStackTrace();
             // Innermost last, as the format asks.
             for (int i = stack.length - 1; i >= 0; i--) {
@@ -182,7 +182,7 @@ public final class Dokkit {
                 boolean jdk = type.startsWith("java.") || type.startsWith("javax.") || type.startsWith("jdk.") || type.startsWith("sun.");
                 frames.add(pairs("file", type, "function", stack[i].getMethodName(),
                         "line", stack[i].getLineNumber() > 0 ? stack[i].getLineNumber() : null,
-                        "own", mine.isEmpty() ? !jdk : type.startsWith(mine)));
+                        "own", mine.isEmpty() ? !jdk && !type.equals("Dokkit") : type.startsWith(mine)));
             }
             Map<String, Object> report = pairs("at", Instant.now().toString(), "type", error.getClass().getSimpleName(),
                     "handled", handled, "release", version, "environment", environment, "host", host,
@@ -196,18 +196,12 @@ public final class Dokkit {
         }
     }
 
-    // The package of the class that started the app, when there is one.
-    private static String mainPackage() {
-        String command = System.getProperty("sun.java.command", "").split(" ")[0];
-        int dot = command.lastIndexOf('.');
-        return dot > 0 && !command.endsWith(".jar") ? command.substring(0, dot + 1) : "";
-    }
-
     /** Also reports errors nothing caught, then hands them to whatever handled them before. */
     public static void catchUnhandled() {
         Thread.UncaughtExceptionHandler before = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
             capture(error, false);
+            flush();
             flush();
             if (before != null) before.uncaughtException(thread, error);
         });
@@ -237,7 +231,7 @@ public final class Dokkit {
                     try { status = post(batch); } catch (Exception e) { status = 599; }
                     if (status < 400) continue;
                     // A failed batch gets one more try; what is lost then is counted.
-                    boolean again = status >= 500 || status == 429;
+                    boolean again = (status >= 500 || status == 429) && batch.gzip;
                     if (again && ++batch.tries < 2) retry = batch;
                     else synchronized (gate) { dropped += batch.count; }
                     if (again) return;
