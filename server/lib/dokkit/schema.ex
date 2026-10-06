@@ -126,6 +126,36 @@ defmodule Dokkit.JobRun do
   end
 end
 
+defmodule Dokkit.Task do
+  use Dokkit.Schema
+
+  schema "tasks" do
+    field :name, :string
+    field :command, :string
+    field :accepted, :string
+    field :dismissed, :string
+    belongs_to :machine, Dokkit.Machine
+    belongs_to :service, Dokkit.Service
+    timestamps()
+  end
+end
+
+defmodule Dokkit.TaskRun do
+  use Dokkit.Schema
+
+  schema "task_runs" do
+    field :state, Ecto.Enum, values: [:queued, :running, :ok, :fail, :refused], default: :queued
+    field :by, :string
+    field :exit_code, :integer
+    field :duration_ms, :integer
+    field :output, :string, default: ""
+    field :started_at, :utc_datetime_usec
+    field :finished_at, :utc_datetime_usec
+    belongs_to :task, Dokkit.Task
+    timestamps()
+  end
+end
+
 defmodule Dokkit.User do
   use Dokkit.Schema
 

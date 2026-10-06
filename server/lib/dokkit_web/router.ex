@@ -37,6 +37,8 @@ defmodule DokkitWeb.Router do
       live "/s/:id", ServiceLive
       live "/logs", LogsLive
       live "/machines/new", EnrolLive
+      live "/found", TasksLive, :found
+      live "/tasks", TasksLive, :tasks
       live "/alerts", AlertsLive
       live "/settings", SettingsLive
     end
@@ -56,6 +58,9 @@ defmodule DokkitWeb.Router do
     post "/enrol", IntakeController, :enrol
     put "/declare", IntakeController, :declare
     get "/ping", IntakeController, :hello
+    get "/work", IntakeController, :work
+    post "/work/:run/output", IntakeController, :work_output
+    post "/work/:run/result", IntakeController, :work_result
 
     get "/inbox", ApiController, :inbox
     get "/issues", ApiController, :issues
@@ -65,6 +70,9 @@ defmodule DokkitWeb.Router do
     get "/jobs", ApiController, :jobs
     get "/jobs/:id/runs", ApiController, :runs
     get "/logs", ApiController, :logs
+    get "/tasks", ApiController, :tasks
+    get "/task-runs", ApiController, :task_runs
+    post "/tasks/:id/run", ApiController, :run_task
     post "/issues/:id/snooze", ApiController, :snooze
     post "/issues/:id/unsnooze", ApiController, :unsnooze
     post "/issues/:id/acknowledge", ApiController, :acknowledge

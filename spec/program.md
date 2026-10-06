@@ -96,4 +96,6 @@ In `program/`: `dokkit init`, `run`, `ping`, `check`, `apply`, `enrol`, `watch`,
 
 `dokkit scan` writes `dokkit-proposal.json` in the current folder, and each part has a `--no-` flag. `dokkit task list` and `dokkit task run` read the tasks in the current folder's `dokkit.toml` and in the folders the machine reads. A task runs in its file's folder and stops at its `timeout`, an hour when none is given.
 
-Not built yet: stats, `dokkit propose`, taking work from the server, whether a task is accepted, certificate pinning, and the built-in update task.
+`dokkit watch` holds a request open to the server and runs the task runs it is given, one at a time, sending output every three seconds. It refuses a task whose command in the file is not the one that was accepted. A task runs as whoever runs `dokkit watch`. The installed service runs as the system account, so it does not take work until a task can be given an ordinary account.
+
+Not built yet: stats, `dokkit propose`, `dokkit task list` showing what is accepted, the account tasks run under, certificate pinning, and the built-in update task.

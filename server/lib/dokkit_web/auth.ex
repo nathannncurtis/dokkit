@@ -32,7 +32,12 @@ defmodule DokkitWeb.Auth do
   end
 
   defp assign_shell(socket) do
-    shell = %{machines: Dokkit.Issues.machines(), open: Dokkit.Issues.open_count()}
+    shell = %{
+      machines: Dokkit.Issues.machines(),
+      open: Dokkit.Issues.open_count(),
+      waiting: Dokkit.Tasks.waiting_count()
+    }
+
     Phoenix.Component.assign(socket, :shell, shell)
   end
 

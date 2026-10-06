@@ -6,16 +6,36 @@ defmodule DokkitWeb.ApiController do
   plug :token
 
   plug :scope,
-       "read" when action in [:inbox, :machines, :services, :service, :issues, :jobs, :runs]
+       "read"
+       when action in [
+              :inbox,
+              :machines,
+              :services,
+              :service,
+              :issues,
+              :jobs,
+              :runs,
+              :tasks,
+              :task_runs
+            ]
 
   plug :scope, "read-logs" when action in [:logs]
-  plug :scope, "act" when action in [:snooze, :unsnooze, :acknowledge]
+  plug :scope, "act" when action in [:snooze, :unsnooze, :acknowledge, :run_task]
 
   def inbox(conn, _), do: json(conn, Read.inbox())
   def issues(conn, _), do: list(conn, Read.issues())
   def machines(conn, _), do: list(conn, Read.machines())
   def services(conn, params), do: list(conn, Read.services(params))
   def jobs(conn, _), do: list(conn, Read.jobs())
+  def tasks(conn, _), do: list(conn, Read.tasks())
+  def task_runs(conn, _), do: list(conn, Read.task_runs())
+
+  def run_task(conn, %{"id" => id}) do
+    case Dokkit.Tasks.run(id, "token " <> (conn.assigns.key.label || "")) do
+      nil -> missing(conn)
+      run -> json(conn, %{run: run.id})
+    end
+  end
 
   def service(conn, %{"id" => id}) do
     case Read.service(id) do

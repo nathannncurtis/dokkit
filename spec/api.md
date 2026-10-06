@@ -1,6 +1,6 @@
 # The Dokkit API (v1)
 
-This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom` and `log` lines, the ping URLs, and `GET /ping`.
+This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom` and `log` lines, the ping URLs, `GET /ping`, `PUT /declare`, taking work, and the read and act calls for issues, services, jobs, logs and tasks.
 
 ## One rule
 
@@ -161,8 +161,10 @@ GET /work?wait=50
 `dokkit` asks for work and the server holds the request for up to 50 seconds. `204` means nothing to do; ask again. Otherwise:
 
 ```json
-{"run": "<id>", "task": "security-scan"}
+{"run": "<id>", "task": "security-scan", "command_sha256": "<hex>"}
 ```
+
+`command_sha256` is the SHA-256 of the command that was accepted. `dokkit` runs the task only when the command in its own file has the same one.
 
 A task has a name and nothing else. There are no arguments in v1, so the server cannot shape what runs.
 

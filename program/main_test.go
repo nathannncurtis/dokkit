@@ -3,7 +3,10 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -361,5 +364,44 @@ func TestScanWritesAFileAndTasksRunWhereTheirFileIs(t *testing.T) {
 	}
 	if code := cli([]string{"task", "run", "bad"}); code != 4 {
 		t.Fatalf("a task exits as its command did, got %d", code)
+	}
+}
+
+func TestWorkRunsOnlyTheAcceptedCommand(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "dokkit.toml"), []byte("schema = 1\n[service]\nid = \"portal\"\n[[task]]\nid = \"hello\"\nrun = \"echo hello from the task\"\n"), 0o600)
+	sum := sha256.Sum256([]byte("echo hello from the task"))
+	offers := []string{
+		`{"run":"r1","task":"hello","command_sha256":"` + hex.EncodeToString(sum[:]) + `"}`,
+		`{"run":"r2","task":"hello","command_sha256":"some other command"}`,
+	}
+	got := make(chan string, 8)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			if len(offers) == 0 {
+				time.Sleep(100 * time.Millisecond)
+				w.WriteHeader(204)
+				return
+			}
+			w.Write([]byte(offers[0]))
+			offers = offers[1:]
+			return
+		}
+		b, _ := io.ReadAll(r.Body)
+		got <- r.URL.Path + " " + string(b)
+	}))
+	defer srv.Close()
+	c := &client{url: srv.URL, key: "dkm_machine", folders: []string{dir}}
+	go c.work()
+	want := []string{"/api/v1/work/r1/output hello from the task", "/api/v1/work/r1/result {", "/api/v1/work/r2/result {\"refused\""}
+	for _, w := range want {
+		select {
+		case g := <-got:
+			if !strings.HasPrefix(g, w) || (strings.Contains(w, "r1/result") && !strings.Contains(g, `"exit_code":0`)) {
+				t.Fatalf("got %q, want %q", g, w)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("nothing arrived for " + w)
+		}
 	}
 }

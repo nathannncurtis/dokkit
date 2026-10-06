@@ -51,6 +51,59 @@ defmodule DokkitWeb.IntakeController do
     end
   end
 
+  @doc "Holds the request until there is a task run for this machine, or the wait runs out."
+  def work(conn, params) do
+    with {:ok, machine} <- machine(conn) do
+      wait =
+        case Integer.parse(params["wait"] || "") do
+          {seconds, ""} when seconds in 0..50 -> seconds
+          _ -> 50
+        end
+
+      case Dokkit.Tasks.take(machine, wait * 1000) do
+        nil ->
+          send_resp(conn, 204, "")
+
+        run ->
+          json(conn, %{
+            run: run.id,
+            task: run.task.name,
+            command_sha256: Dokkit.Tasks.sha256(run.task.command)
+          })
+      end
+    end
+  end
+
+  def work_output(conn, %{"run" => run}) do
+    with {:ok, machine} <- machine(conn),
+         {:ok, run} <- Ecto.UUID.cast(run),
+         {:ok, chunk, conn} <- body(conn),
+         :ok <- Dokkit.Tasks.output(machine, run, chunk) do
+      json(conn, %{ok: true})
+    else
+      %Plug.Conn{} = conn -> conn
+      _ -> fail(conn, 404, "not_found", "This machine is not running that.")
+    end
+  end
+
+  def work_result(conn, %{"run" => run} = params) do
+    with {:ok, machine} <- machine(conn),
+         {:ok, run} <- Ecto.UUID.cast(run),
+         :ok <- Dokkit.Tasks.result(machine, run, params) do
+      json(conn, %{ok: true})
+    else
+      %Plug.Conn{} = conn -> conn
+      _ -> fail(conn, 404, "not_found", "This machine is not running that.")
+    end
+  end
+
+  defp machine(conn) do
+    case bearer(conn) do
+      {:ok, %{kind: :machine, machine_id: machine}} -> {:ok, machine}
+      _ -> fail(conn, 401, "bad_key", "Needs a machine key.")
+    end
+  end
+
   @doc "Lets a machine check its address, its key and its clock."
   def hello(conn, _params) do
     case bearer(conn) do

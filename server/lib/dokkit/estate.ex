@@ -225,6 +225,7 @@ defmodule Dokkit.Estate do
             end
           end
 
+          Dokkit.Tasks.declared(service, doc["task"])
           service
         end)
     end

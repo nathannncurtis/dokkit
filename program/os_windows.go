@@ -30,6 +30,7 @@ func asService() bool {
 	if out, err := openLog(filepath.Join(machineDir(), "dokkit.log")); err == nil {
 		os.Stdout, os.Stderr = out, out
 	}
+	takesWork = false
 	svc.Run(serviceName, service{})
 	return true
 }

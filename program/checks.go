@@ -351,6 +351,11 @@ func (c *client) watch() int {
 	if len(w.folders) == 0 {
 		fmt.Println("No folders to read dokkit.toml files from. Set DOKKIT_FOLDERS, or add folders to the saved configuration.")
 	}
+	if takesWork {
+		go c.work()
+	} else {
+		fmt.Println("Tasks are not run by the installed service yet. dokkit watch under a login runs them.")
+	}
 	var beat, tailed time.Time
 	for {
 		at := time.Now()

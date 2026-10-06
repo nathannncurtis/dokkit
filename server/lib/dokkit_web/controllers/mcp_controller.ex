@@ -31,7 +31,12 @@ defmodule DokkitWeb.McpController do
     {"snooze", "act",
      "Snooze an issue until a time (RFC 3339). Takes the issue id from attention.",
      %{"id" => @text, "until" => @text}, ["id", "until"]},
-    {"acknowledge", "act", "Mark an issue as seen.", %{"id" => @text}, ["id"]}
+    {"acknowledge", "act", "Mark an issue as seen.", %{"id" => @text}, ["id"]},
+    {"tasks", "read", "The accepted tasks, each with its machine, command and latest run.", %{},
+     []},
+    {"run_task", "act",
+     "Run an accepted task on its machine. Takes the task's id from tasks. The task runs its accepted command and takes no arguments.",
+     %{"id" => @text}, ["id"]}
   ]
 
   def rpc(conn, %{"method" => method} = request) do
@@ -138,6 +143,15 @@ defmodule DokkitWeb.McpController do
   defp tool("acknowledge", %{"id" => id}) do
     Issues.acknowledge(id)
     %{ok: true}
+  end
+
+  defp tool("tasks", _), do: Read.tasks()
+
+  defp tool("run_task", %{"id" => id}) do
+    case Dokkit.Tasks.run(id, "an AI tool") do
+      nil -> {:error, "No accepted task with that id."}
+      run -> %{run: run.id}
+    end
   end
 
   defp tool(_, _), do: {:error, "That tool needs different arguments."}

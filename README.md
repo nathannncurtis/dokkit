@@ -15,10 +15,11 @@ Working, with tests:
 - **Machines.** A machine enrols with a one-use token and says it is alive once a minute. Three minutes of silence opens one issue and quiets what runs on it.
 - **Alerts.** A page through PagerDuty, a quiet push through ntfy, Pushover or PagerDuty, or a webhook. Once per issue, resolved when it closes.
 - **Logs.** Lines in Dokkit's format or CLEF, kept in monthly partitions, searched on the Logs page. `dokkit watch` reads the log files a `dokkit.toml` names.
-- **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Alerts and Settings. People sign in; the first one claims the server with a setup code.
+- **Tasks.** A `dokkit.toml` offers a named command. The owner accepts it on the Found page, it is run from the Tasks page, and `dokkit watch` on its machine carries it out and sends back the output. A command that changes has to be accepted again.
+- **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Found, Tasks, Alerts and Settings. People sign in; the first one claims the server with a setup code.
 - **The API and the MCP**, for user tokens made in Settings.
 
-Not built yet: errors, deploys and versions, stats, beats and metrics, email, text and the digest, alert rules and suggestions, found-and-not-watched, proposals and running tasks from the server, the libraries, the installer and the Docker image.
+Not built yet: errors, deploys and versions, stats, beats and metrics, email, text and the digest, alert rules and suggestions, found-and-not-watched and sending a scan, the libraries, the installer and the Docker image.
 
 To run it for development, with Postgres on localhost:
 

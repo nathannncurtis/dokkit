@@ -1,16 +1,22 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -202,10 +208,10 @@ type task struct {
 	dir              string
 }
 
-// tasks reads the tasks defined in this folder's dokkit.toml and in the folders this machine may read.
-func tasks(folders []string) map[string]task {
+// tasks reads the tasks these dokkit.toml files define. The first file to name a task has it.
+func tasks(files []string) map[string]task {
 	all := map[string]task{}
-	for _, p := range append([]string{"dokkit.toml"}, declarations(folders)...) {
+	for _, p := range files {
 		if d, err := readDeclaration(p); err == nil {
 			for _, t := range d.Task {
 				if _, taken := all[t.ID]; !taken {
@@ -219,7 +225,7 @@ func tasks(folders []string) map[string]task {
 }
 
 func taskCommand(args []string, folders []string) int {
-	all := tasks(folders)
+	all := tasks(append([]string{"dokkit.toml"}, declarations(folders)...))
 	if len(args) == 1 && args[0] == "list" {
 		for id, t := range all {
 			fmt.Printf("%-24s %s   in %s\n", id, t.Run, t.dir)
@@ -238,11 +244,11 @@ func taskCommand(args []string, folders []string) int {
 		fmt.Fprintln(os.Stderr, "dokkit: no task called", args[1])
 		return 1
 	}
-	return t.run()
+	return t.run(os.Stdout, os.Stderr)
 }
 
-// run runs a task where its file is, lets its output through, and exits as it did.
-func (t task) run() int {
+// run runs a task where its file is and exits as it did.
+func (t task) run(stdout, stderr io.Writer) int {
 	run := t.Run
 	limit, err := time.ParseDuration(t.Timeout)
 	if err != nil || limit <= 0 {
@@ -259,18 +265,115 @@ func (t task) run() int {
 	}
 	// On Windows the time limit stops the shell; what the shell started may outlive it.
 	cmd := exec.CommandContext(ctx, shell[0], shell[1:]...)
-	cmd.Dir, cmd.Stdin, cmd.Stdout, cmd.Stderr = t.dir, os.Stdin, os.Stdout, os.Stderr
+	cmd.Dir, cmd.Stdout, cmd.Stderr = t.dir, stdout, stderr
 	err = cmd.Run()
 	var exit *exec.ExitError
 	switch {
 	case ctx.Err() != nil:
-		fmt.Fprintln(os.Stderr, "dokkit: stopped after", limit)
+		fmt.Fprintln(stderr, "dokkit: stopped after", limit)
 		return 124
 	case errors.As(err, &exit):
 		return exit.ExitCode()
 	case err != nil:
-		fmt.Fprintln(os.Stderr, "dokkit:", err)
+		fmt.Fprintln(stderr, "dokkit:", err)
 		return 127
 	}
 	return 0
+}
+
+// The installed service runs as the system account, and a task must not until it can
+// be given an ordinary account. So only dokkit watch under a login takes work.
+var takesWork = true
+
+// work asks the server for task runs, holding each request open, and runs them one at a time.
+func (c *client) work() {
+	for {
+		var job struct {
+			Run, Task string
+			Sha       string `json:"command_sha256"`
+		}
+		status, err := c.call("GET", "/api/v1/work?wait=50", "", nil, &job)
+		if status == 204 {
+			continue
+		}
+		if err != nil || status != 200 {
+			time.Sleep(15 * time.Second)
+			continue
+		}
+		result := "/api/v1/work/" + job.Run + "/result"
+		t, defined := tasks(declarations(c.folders))[job.Task]
+		sum := sha256.Sum256([]byte(t.Run))
+		// Only the command a person accepted runs. A file edited since then is refused.
+		if !defined || hex.EncodeToString(sum[:]) != job.Sha {
+			c.call("POST", result, "application/json", []byte(`{"refused":"This machine has no task with that name and that command."}`), nil)
+			continue
+		}
+		fmt.Printf("%s  running task %s\n", time.Now().Format("15:04:05"), job.Task)
+		out, done, sent := &chunks{}, make(chan bool), make(chan bool)
+		send := func() {
+			if b := out.take(); len(b) > 0 {
+				c.call("POST", "/api/v1/work/"+job.Run+"/output", "text/plain", b, nil)
+			}
+		}
+		go func() {
+			for {
+				select {
+				case <-done:
+					send()
+					close(sent)
+					return
+				case <-time.After(3 * time.Second):
+					send()
+				}
+			}
+		}()
+		started := time.Now()
+		code := t.run(out, out)
+		close(done)
+		<-sent
+		body, _ := json.Marshal(map[string]any{"exit_code": code, "duration_ms": time.Since(started).Milliseconds()})
+		c.call("POST", result, "application/json", body, nil)
+	}
+}
+
+// call makes one request with this machine's key and reads a JSON answer into `into`.
+func (c *client) call(method, path, kind string, body []byte, into any) (int, error) {
+	req, err := http.NewRequest(method, c.url+path, bytes.NewReader(body))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.key)
+	if kind != "" {
+		req.Header.Set("Content-Type", kind)
+	}
+	res, err := (&http.Client{Timeout: 70 * time.Second}).Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer res.Body.Close()
+	if into != nil && res.StatusCode == 200 {
+		json.NewDecoder(res.Body).Decode(into)
+	}
+	return res.StatusCode, nil
+}
+
+// chunks holds a task's output until it is next sent.
+type chunks struct {
+	sync.Mutex
+	b []byte
+}
+
+func (c *chunks) Write(p []byte) (int, error) {
+	c.Lock()
+	defer c.Unlock()
+	c.b = append(c.b, p...)
+	return len(p), nil
+}
+
+func (c *chunks) take() []byte {
+	c.Lock()
+	defer c.Unlock()
+	b := c.b
+	c.b = nil
+	return b
 }

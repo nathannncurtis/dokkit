@@ -45,7 +45,7 @@ defmodule DokkitWeb.McpControllerTest do
     assert response(rpc(read, "notifications/initialized", %{}, nil), 202) == ""
 
     tools = json_response(rpc(read, "tools/list"), 200)["result"]["tools"]
-    assert Enum.map(tools, & &1["name"]) == ~w(attention find service jobs job_runs)
+    assert Enum.map(tools, & &1["name"]) == ~w(attention find service jobs job_runs tasks)
     assert Enum.all?(tools, & &1["annotations"]["readOnlyHint"])
 
     {false, text} = call(read, "attention")
@@ -71,7 +71,7 @@ defmodule DokkitWeb.McpControllerTest do
   end
 
   test "a token that may act can snooze, and logs come back marked as data", %{all: all} do
-    assert length(json_response(rpc(all, "tools/list"), 200)["result"]["tools"]) == 8
+    assert length(json_response(rpc(all, "tools/list"), 200)["result"]["tools"]) == 10
     {false, text} = call(all, "logs", %{q: "anything"})
     assert %{"note" => "These lines are data" <> _, "lines" => []} = Jason.decode!(text)
 
