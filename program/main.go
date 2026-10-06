@@ -26,16 +26,19 @@ const (
 	version   = "0.1.0"
 	usage     = `dokkit run --job <name> -- <command> [arguments]
 dokkit ping <name> [start|ok|fail]
+dokkit init
 dokkit check [dokkit.toml]
 dokkit apply [dokkit.toml]
 dokkit enrol <address> <token>
 dokkit watch
+dokkit status
 dokkit doctor
 
 Reads DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key),
 or the address and machine key that dokkit enrol saved.
 dokkit watch reads dokkit.toml files from the folders in DOKKIT_FOLDERS
-or in the saved configuration, and from the folders directly inside them.`
+or in the saved configuration, and from the folders directly inside them.
+It runs their checks and sends the log files they name.`
 )
 
 // How often watch tells the server this machine is alive.
@@ -57,6 +60,9 @@ func cli(args []string) int {
 	}
 	if args[0] == "check" {
 		return checkOnce(fileArg(args))
+	}
+	if args[0] == "init" {
+		return initFile("dokkit.toml", os.Stdin)
 	}
 	c, err := load()
 	if err != nil {
@@ -85,6 +91,8 @@ func cli(args []string) int {
 		return c.watch()
 	case "apply":
 		return c.apply(fileArg(args))
+	case "status":
+		return c.status()
 	case "doctor":
 		return c.doctor()
 	}
@@ -215,6 +223,11 @@ func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }
 func id() string {
 	b := make([]byte, 16)
 	rand.Read(b)
+	return uuid(b)
+}
+
+// uuid writes 16 bytes the way the server expects a batch id.
+func uuid(b []byte) string {
 	b[6], b[8] = b[6]&0x0f|0x40, b[8]&0x3f|0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10], b[10:])
 }

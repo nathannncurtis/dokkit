@@ -24,6 +24,7 @@ type declaration struct {
 	raw     map[string]any
 	Schema  int
 	Service struct{ ID, Name string }
+	Logs    struct{ Path string }
 	Check   []check
 }
 
@@ -284,6 +285,8 @@ type watcher struct {
 	folders  []string
 	files    map[string]*declaration
 	modified map[string]time.Time
+	logs     map[string]int64
+	sent     time.Time
 }
 
 // refresh re-reads files that are new or changed, declares them, and forgets files that are gone.
@@ -341,12 +344,15 @@ func (w *watcher) tick(at time.Time) int {
 }
 
 func (c *client) watch() int {
-	w := &watcher{c: c, folders: c.folders, files: map[string]*declaration{}, modified: map[string]time.Time{}}
+	w := &watcher{c: c, folders: c.folders, files: map[string]*declaration{}, modified: map[string]time.Time{}, logs: map[string]int64{}}
+	if b, err := os.ReadFile(filepath.Join(c.spool, "logs.json")); err == nil {
+		json.Unmarshal(b, &w.logs)
+	}
 	fmt.Println("Reporting to", c.url)
 	if len(w.folders) == 0 {
 		fmt.Println("No folders to read dokkit.toml files from. Set DOKKIT_FOLDERS, or add folders to the saved configuration.")
 	}
-	var beat time.Time
+	var beat, tailed time.Time
 	for {
 		at := time.Now()
 		ran := 0
@@ -360,7 +366,16 @@ func (c *client) watch() int {
 		if ran > 0 {
 			if left, err := c.flush(20 * time.Second); left > 0 {
 				fmt.Fprintf(os.Stderr, "%s  %d report(s) waiting: %v\n", at.Format("15:04:05"), left, err)
+			} else {
+				w.sent = at
 			}
+		}
+		if at.Sub(tailed) >= 5*time.Second {
+			tailed = at
+			w.tail()
+		}
+		if beat.Equal(at) {
+			w.saveStatus(at)
 		}
 		time.Sleep(time.Second)
 	}

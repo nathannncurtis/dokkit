@@ -14,11 +14,11 @@ Working, with tests:
 - **Checks.** A `dokkit.toml` declares a service and its checks. `dokkit watch` runs http, tcp, process and Windows-service checks, and three failures in a row open an issue.
 - **Machines.** A machine enrols with a one-use token and says it is alive once a minute. Three minutes of silence opens one issue and quiets what runs on it.
 - **Alerts.** A page through PagerDuty, a quiet push through ntfy, Pushover or PagerDuty, or a webhook. Once per issue, resolved when it closes.
-- **Logs.** Lines in Dokkit's format or CLEF, kept in monthly partitions, searched on the Logs page.
+- **Logs.** Lines in Dokkit's format or CLEF, kept in monthly partitions, searched on the Logs page. `dokkit watch` reads the log files a `dokkit.toml` names.
 - **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Alerts and Settings. People sign in; the first one claims the server with a setup code.
 - **The API and the MCP**, for user tokens made in Settings.
 
-Not built yet: errors, deploys and versions, stats, beats and metrics, email, text and the digest, alert rules and suggestions, found-and-not-watched, tasks, scanning, log file reading, the libraries, running as a Windows service, the installer and the Docker image.
+Not built yet: errors, deploys and versions, stats, beats and metrics, email, text and the digest, alert rules and suggestions, found-and-not-watched, tasks, scanning, the libraries, running as a Windows service, the installer and the Docker image.
 
 To run it for development, with Postgres on localhost:
 

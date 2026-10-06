@@ -84,8 +84,8 @@ A listener on localhost. Earlier notes had `dokkit` listening on localhost so ap
 
 ## Built so far
 
-In `program/`: `dokkit run`, `ping`, `check`, `apply`, `enrol`, `watch` and `doctor`. With `DOKKIT_URL` and `DOKKIT_KEY` set they use that key; otherwise they use the address and machine key that `dokkit enrol` saved in the user's configuration folder.
+In `program/`: `dokkit init`, `run`, `ping`, `check`, `apply`, `enrol`, `watch`, `status` and `doctor`. With `DOKKIT_URL` and `DOKKIT_KEY` set they use that key; otherwise they use the address and machine key that `dokkit enrol` saved in the user's configuration folder.
 
-`dokkit watch` reads `dokkit.toml` files from the folders in `DOKKIT_FOLDERS` or in the saved configuration, and from the folders directly inside them. It declares each file, runs its `http`, `tcp`, `process` and `windows-service` checks on their own timing, says the machine is alive once a minute, and re-reads a file when it changes.
+`dokkit watch` reads `dokkit.toml` files from the folders in `DOKKIT_FOLDERS` or in the saved configuration, and from the folders directly inside them. It declares each file, runs its `http`, `tcp`, `process` and `windows-service` checks on their own timing, sends the log files it names, says the machine is alive once a minute, and re-reads a file when it changes. `dokkit status` shows what `watch` last wrote down: the files it reads, when the spool was last emptied, and how much is waiting.
 
-Not built yet: `init`, `status`, log files, stats, tasks, scanning, certificate pinning, and running as a service.
+Not built yet: stats, tasks, scanning, certificate pinning, and running as a service.

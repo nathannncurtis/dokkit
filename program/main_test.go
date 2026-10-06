@@ -261,3 +261,74 @@ func TestRingKeepsTheEnd(t *testing.T) {
 		t.Fatal(r.String())
 	}
 }
+
+func TestLogFilesAreSentOnceTheServerHasThem(t *testing.T) {
+	var got []map[string]any
+	batches := map[string]bool{}
+	status := 503
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if status != 200 {
+			w.WriteHeader(status)
+			return
+		}
+		batches[r.Header.Get("Dokkit-Batch")] = true
+		z, _ := gzip.NewReader(r.Body)
+		s := bufio.NewScanner(z)
+		for s.Scan() {
+			var l map[string]any
+			json.Unmarshal(s.Bytes(), &l)
+			got = append(got, l)
+		}
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "dokkit.toml"), []byte("schema = 1\n[service]\nid = \"portal\"\n[logs]\npath = \"*.log\"\n"), 0o600)
+	file := filepath.Join(dir, "app.log")
+	os.WriteFile(file, []byte(`{"t":"2026-10-05T21:14:03Z","level":"error","msg":"Upload failed","type":"state"}`+"\nplain words\r\nhalf a li"), 0o600)
+	d, err := readDeclaration(filepath.Join(dir, "dokkit.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &client{url: srv.URL, key: "dkm_machine", spool: t.TempDir(), http: &http.Client{}}
+	w := &watcher{c: c, files: map[string]*declaration{d.path: d}, logs: map[string]int64{}}
+
+	w.tail()
+	if len(got) != 0 || len(w.logs) != 0 {
+		t.Fatal("nothing moves while the server is away")
+	}
+	status = 200
+	w.tail()
+	if len(got) != 2 || got[0]["type"] != "log" || got[0]["service"] != "portal" || got[1]["msg"] != "plain words" {
+		t.Fatalf("lines: %v", got)
+	}
+	w.tail()
+	if len(got) != 2 {
+		t.Fatal("a half line waits, and sent lines are not sent again")
+	}
+	f, _ := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0)
+	f.WriteString("ne\n")
+	f.Close()
+	os.Rename(file, filepath.Join(dir, "app.1.log"))
+	w.tail()
+	if len(got) != 3 || got[2]["msg"] != "half a line" || len(batches) != 2 {
+		t.Fatalf("after a rename: %v", got)
+	}
+	if b, _ := os.ReadFile(filepath.Join(c.spool, "logs.json")); !strings.Contains(string(b), ":") {
+		t.Fatal("positions are saved")
+	}
+}
+
+func TestInitWritesAFileThatChecks(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if code := initFile("dokkit.toml", strings.NewReader("Upload portal\n\n8080\nlogs/*.jsonl\n")); code != 0 {
+		t.Fatal(code)
+	}
+	d, err := readDeclaration("dokkit.toml")
+	if err != nil || d.Service.ID != "upload-portal" || d.Check[0].Port != 8080 || d.Logs.Path != "logs/*.jsonl" {
+		t.Fatalf("%v %+v", err, d)
+	}
+	if initFile("dokkit.toml", strings.NewReader("")) != 1 {
+		t.Fatal("init must not overwrite")
+	}
+}
