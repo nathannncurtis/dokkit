@@ -34,7 +34,7 @@ max_runtime = "1h"
 [[task]]
 id = "security-scan"
 run = "scripts/zap.ps1"
-timeout = "2h"
+timeout = "2h"                  # the server ends a run still going after 12 hours
 
 [alert]
 down = "page"                   # a suggested default only

@@ -676,4 +676,47 @@ func TestAFetchedUpdateMustMatchTheHashItIsHeldTo(t *testing.T) {
 	if _, _, err := c.fetchUpdate(); err != nil {
 		t.Fatal(err)
 	}
+	c.updateSha = strings.Repeat("1", 64)
+	if _, _, err := c.fetchUpdate(); err == nil {
+		t.Fatal("a copy with another hash was kept")
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, "update", "dokkit*")); len(left) != 0 {
+		t.Fatalf("an earlier copy is still there: %v", left)
+	}
+}
+
+func TestOneFileReachedTwoWaysIsOneFile(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "dokkit.toml")
+	os.WriteFile(p, []byte("schema = 1\n[service]\nid = \"s\"\n[[task]]\nid = \"a\"\nrun = \"x\"\n"), 0o600)
+	alias := filepath.Join(dir, ".", "dokkit.toml")
+	if runtime.GOOS == "windows" {
+		alias = strings.ToUpper(p)
+	}
+	if got := tasks([]string{p, alias}); len(got) != 1 {
+		t.Fatalf("the same file twice must not clash with itself: %v", got)
+	}
+}
+
+func TestATaskThatLeavesSomethingRunningStillSucceeds(t *testing.T) {
+	killWait = 500 * time.Millisecond
+	run := "sleep 20 & echo done"
+	if runtime.GOOS == "windows" {
+		run = "start /b ping -n 12 127.0.0.1 & echo done"
+	}
+	if code := (task{ID: "bg", Run: run, Timeout: "30s", dir: "."}).run(&chunks{}, &chunks{}, nil); code != 0 {
+		t.Fatalf("code %d", code)
+	}
+}
+
+func TestABareNameInTheTasksFolderRuns(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("cmd only")
+	}
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "hello.bat"), []byte("@echo hi\r\n"), 0o600)
+	var out chunks
+	if code := (task{ID: "h", Run: "hello.bat", dir: dir}).run(&out, &out, nil); code != 0 {
+		t.Fatalf("code %d: %s", code, out.take())
+	}
 }

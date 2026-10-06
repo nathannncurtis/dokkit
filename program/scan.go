@@ -16,6 +16,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -229,15 +230,18 @@ type task struct {
 // tasks reads the tasks these dokkit.toml files define. A name that two files both
 // declare belongs to neither: a file dropped in another folder cannot take over a task.
 func tasks(files []string) map[string]task {
-	all, clash, read := map[string]task{}, map[string]bool{}, map[string]bool{}
+	all, clash := map[string]task{}, map[string]bool{}
+	var read []os.FileInfo
 	for _, p := range files {
 		if abs, err := filepath.Abs(p); err == nil {
 			p = abs
 		}
-		if read[p] {
-			continue
+		if info, err := os.Stat(p); err == nil {
+			if slices.ContainsFunc(read, func(o os.FileInfo) bool { return os.SameFile(o, info) }) {
+				continue
+			}
+			read = append(read, info)
 		}
-		read[p] = true
 		if d, err := readDeclaration(p); err == nil {
 			for _, t := range d.Task {
 				if _, taken := all[t.ID]; taken {
@@ -336,6 +340,12 @@ func (t task) run(stdout, stderr io.Writer, prepare func(*exec.Cmd) (func(), err
 	defer cancel()
 	shell := []string{"sh", "-c", run}
 	if runtime.GOOS == "windows" {
+		// A bare name that is a file in the task's folder is run from there on purpose.
+		if first, _, _ := strings.Cut(run, " "); !strings.ContainsAny(first, `\/:"`) {
+			if _, err := os.Stat(filepath.Join(t.dir, first)); err == nil {
+				run = `.\` + run
+			}
+		}
 		shell = []string{"cmd", "/c", run}
 		if first, _, _ := strings.Cut(run, " "); strings.HasSuffix(strings.ToLower(first), ".ps1") {
 			shell = append([]string{"powershell", "-NoProfile", "-File"}, strings.Fields(run)...)
@@ -345,7 +355,6 @@ func (t task) run(stdout, stderr io.Writer, prepare func(*exec.Cmd) (func(), err
 	cmd := exec.CommandContext(ctx, shell[0], shell[1:]...)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = t.dir, stdout, stderr
 	cmd.WaitDelay = killWait
-	// cmd looks in the task's own folder first unless told not to.
 	cmd.Env = append(os.Environ(), "NoDefaultCurrentDirectoryInExePath=1")
 	if prepare != nil {
 		after, err := prepare(cmd)
@@ -361,6 +370,9 @@ func (t task) run(stdout, stderr io.Writer, prepare func(*exec.Cmd) (func(), err
 	case ctx.Err() != nil:
 		fmt.Fprintln(stderr, "dokkit: stopped after", limit)
 		return 124
+	case errors.Is(err, exec.ErrWaitDelay):
+		fmt.Fprintln(stderr, "dokkit: the task ended, and its output was cut off while something it started kept running")
+		return 0
 	case errors.As(err, &exit):
 		return exit.ExitCode()
 	case err != nil:
@@ -370,9 +382,9 @@ func (t task) run(stdout, stderr io.Writer, prepare func(*exec.Cmd) (func(), err
 	return 0
 }
 
-// killWait is how long a stopped task's output is waited for.
 var resultWait = 2 * time.Second
 
+// killWait is how long a stopped task's output is waited for.
 var killWait = 5 * time.Second
 
 // ordinary makes a command run under an ordinary account instead of this program's own.
@@ -409,7 +421,9 @@ func (c *client) postResult(path string, body []byte) {
 		if status, err := c.call("POST", path, "application/json", body, nil); err == nil && status < 500 {
 			return
 		}
-		time.Sleep(resultWait << i)
+		if i < 7 {
+			time.Sleep(resultWait << i)
+		}
 	}
 }
 
@@ -438,6 +452,7 @@ func (c *client) fetchUpdate() (string, string, error) {
 	sum := hex.EncodeToString(hash.Sum(nil))
 	if c.updateSha != "" && c.updateSha != sum {
 		os.Remove(path + ".part")
+		os.Remove(path)
 		return "", "", fmt.Errorf("the fetched copy has SHA-256 %s, not the %s this machine expects", sum, c.updateSha)
 	}
 	return path, sum, os.Rename(path+".part", path)
@@ -471,7 +486,7 @@ func (c *client) work() {
 			continue
 		}
 		if job.As == "system" && !c.system {
-			c.postResult(result, []byte(`{"refused":"This task was accepted for the system account, and this machine's own configuration does not allow that. Set system_tasks to true in its config file."}`))
+			c.postResult(result, []byte(`{"refused":"This task was accepted for the system account, and this machine's own configuration does not allow that. Set system_tasks to true in its config file (config.json in dokkit's configuration folder)."}`))
 			continue
 		}
 		fmt.Printf("%s  running task %s\n", time.Now().Format("15:04:05"), job.Task)

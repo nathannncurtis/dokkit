@@ -285,7 +285,12 @@ func enrol(address, token, pin string) int {
 		err = os.MkdirAll(filepath.Dir(p), 0o700)
 	}
 	if err == nil {
-		b, _ := json.Marshal(saved{URL: address, Key: a.Key, Pin: pin})
+		keep := saved{}
+		if old, rerr := os.ReadFile(p); rerr == nil {
+			json.Unmarshal(old, &keep)
+		}
+		keep.URL, keep.Key, keep.Pin = address, a.Key, pin
+		b, _ := json.Marshal(keep)
 		err = os.WriteFile(p, b, 0o600)
 	}
 	if err != nil {

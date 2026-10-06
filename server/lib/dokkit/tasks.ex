@@ -264,22 +264,31 @@ defmodule Dokkit.Tasks do
   """
   def expire(now \\ DateTime.utc_now()) do
     ended = fn query, state, why ->
-      {n, _} =
-        Repo.update_all(query,
-          set: [state: state, finished_at: now, output: why]
-        )
-
+      {n, _} = Repo.update_all(query, set: [state: state, finished_at: now, output: why])
       n
     end
 
+    # What a stuck run already printed is kept; the reason goes after it.
+    stuck =
+      from(r in TaskRun,
+        where: r.state == :running and r.started_at < ^DateTime.add(now, -12, :hour),
+        update: [
+          set: [
+            state: :fail,
+            finished_at: ^now,
+            output:
+              fragment(
+                "right(coalesce(?, '') || ?, ?)",
+                r.output,
+                ^"\nNo result arrived from the machine.",
+                ^@max_output
+              )
+          ]
+        ]
+      )
+
     n =
-      ended.(
-        from(r in TaskRun,
-          where: r.state == :running and r.started_at < ^DateTime.add(now, -12, :hour)
-        ),
-        :fail,
-        "No result arrived from the machine."
-      ) +
+      elem(Repo.update_all(stuck, []), 0) +
         ended.(
           from(r in TaskRun,
             where: r.state == :queued and r.inserted_at < ^DateTime.add(now, -1, :day)

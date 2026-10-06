@@ -153,12 +153,21 @@ defmodule Dokkit.TasksTest do
     m = Repo.insert!(%Machine{name: "stale-sweep-box", kind: :enrolled})
     t = Repo.insert!(%Dokkit.Task{machine_id: m.id, name: "t", command: "c", accepted: "c"})
     old = DateTime.add(DateTime.utc_now(), -2, :day)
-    stuck = Repo.insert!(%Dokkit.TaskRun{task_id: t.id, state: :running, started_at: old})
+
+    stuck =
+      Repo.insert!(%Dokkit.TaskRun{
+        task_id: t.id,
+        state: :running,
+        started_at: old,
+        output: "kept"
+      })
+
     waiting = Repo.insert!(%Dokkit.TaskRun{task_id: t.id, state: :queued, inserted_at: old})
     fresh = Repo.insert!(%Dokkit.TaskRun{task_id: t.id, state: :queued})
 
     assert Tasks.expire() == 2
     assert Repo.reload!(stuck).state == :fail
+    assert Repo.reload!(stuck).output == "kept\nNo result arrived from the machine."
     assert Repo.reload!(waiting).state == :refused
     assert Repo.reload!(fresh).state == :queued
   end
