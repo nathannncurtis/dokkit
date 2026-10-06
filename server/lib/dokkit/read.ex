@@ -21,6 +21,49 @@ defmodule Dokkit.Read do
     end
   end
 
+  def machine(id) do
+    with %{} = m <- Enum.find(machines(), &(&1.id == id)),
+         do: Map.put(m, :services, services(%{"machine" => id}))
+  end
+
+  @doc "Which version of each service is on which machine."
+  def versions do
+    services(%{})
+    |> Enum.group_by(&{&1.name, &1.slug})
+    |> Enum.sort()
+    |> Enum.map(fn {{name, slug}, rows} ->
+      %{
+        slug: slug,
+        name: name,
+        on: Enum.map(rows, &Map.take(&1, [:machine, :version, :environment]))
+      }
+    end)
+  end
+
+  @doc "One issue, open or closed, with its notes."
+  def one_issue(id) do
+    with {:ok, id} <- Ecto.UUID.cast(id),
+         %Issue{} = i <- Repo.get(Issue, id) do
+      i = Repo.preload(i, [:machine, :service, :check, :alert])
+      Map.merge(issue(i), %{closed_at: i.closed_at, notes: i.notes})
+    else
+      _ -> nil
+    end
+  end
+
+  @doc "What waits to be accepted: found things, and tasks a file offers."
+  def proposals do
+    found =
+      for f <- Dokkit.Found.list(),
+          do: %{id: f.id, kind: f.kind, name: f.key, detail: f.detail, machine: f.machine.name}
+
+    tasks =
+      for t <- Dokkit.Tasks.waiting(),
+          do: %{id: t.id, kind: "task", name: t.name, command: t.command, machine: t.machine.name}
+
+    found ++ tasks
+  end
+
   def services(params) do
     q = String.downcase(params["q"] || "")
 

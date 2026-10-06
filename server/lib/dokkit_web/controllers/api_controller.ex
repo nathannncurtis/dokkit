@@ -21,11 +21,31 @@ defmodule DokkitWeb.ApiController do
               :errors,
               :error,
               :series,
-              :rules
+              :rules,
+              :machine,
+              :versions,
+              :issue,
+              :proposals
             ]
 
   plug :scope, "read-logs" when action in [:logs]
-  plug :scope, "act" when action in [:snooze, :unsnooze, :acknowledge, :run_task]
+
+  plug :scope,
+       "act"
+       when action in [
+              :snooze,
+              :unsnooze,
+              :acknowledge,
+              :run_task,
+              :note,
+              :bulk,
+              :routing,
+              :accept,
+              :dismiss,
+              :add_rule,
+              :update_rule,
+              :delete_rule
+            ]
 
   def inbox(conn, _), do: json(conn, Read.inbox())
   def issues(conn, _), do: list(conn, Read.issues())
@@ -35,6 +55,79 @@ defmodule DokkitWeb.ApiController do
   def deploys(conn, _), do: list(conn, Read.deploys())
   def errors(conn, _), do: list(conn, Read.errors())
   def rules(conn, _), do: list(conn, Read.rules())
+
+  def versions(conn, _), do: list(conn, Read.versions())
+  def proposals(conn, _), do: list(conn, Read.proposals())
+  def machine(conn, %{"id" => id}), do: one(conn, Read.machine(id))
+  def issue(conn, %{"id" => id}), do: one(conn, Read.one_issue(id))
+
+  def note(conn, %{"id" => id, "text" => text}) when is_binary(text) and text != "" do
+    case Issues.note(id, text, "token " <> (conn.assigns.key.label || "")) do
+      nil -> missing(conn)
+      _ -> json(conn, %{ok: true})
+    end
+  end
+
+  def note(conn, _), do: fail(conn, 422, "bad_note", "Needs text.")
+
+  def bulk(conn, %{"ids" => ids, "action" => action} = params) when is_list(ids) do
+    case {action, seconds_until(params["until"])} do
+      {"snooze", {:ok, seconds}} -> Issues.snooze(ids, seconds)
+      {"unsnooze", _} -> Issues.unsnooze(ids)
+      {"acknowledge", _} -> Issues.acknowledge(ids)
+      _ -> nil
+    end
+    |> case do
+      nil ->
+        fail(conn, 422, "bad_action", "action is snooze with until, unsnooze or acknowledge.")
+
+      _ ->
+        json(conn, %{ok: true})
+    end
+  end
+
+  def bulk(conn, _), do: fail(conn, 422, "bad_action", "Needs ids and action.")
+
+  def routing(conn, %{"id" => id} = params) do
+    case Dokkit.Estate.service(id) do
+      nil ->
+        missing(conn)
+
+      service ->
+        s = Dokkit.Estate.set_routing(service, params)
+        json(conn, %{down: s.route_down, degraded: s.route_degraded})
+    end
+  end
+
+  # A task is a command a machine would run, so it is accepted by a person in the interface.
+  def accept(conn, %{"id" => id}), do: found(conn, id, &Dokkit.Found.watch/1)
+  def dismiss(conn, %{"id" => id}), do: found(conn, id, &Dokkit.Found.dismiss/1)
+
+  defp found(conn, id, act) do
+    if Enum.any?(Dokkit.Found.list(), &(&1.id == id)) do
+      act.([id])
+      json(conn, %{ok: true})
+    else
+      missing(conn)
+    end
+  end
+
+  def add_rule(conn, params), do: json(conn, List.last(Dokkit.Alerts.add_rule(params)))
+
+  def update_rule(conn, %{"id" => id} = params) do
+    case Enum.find(Dokkit.Alerts.update_rule(id, params), &(&1["id"] == id)) do
+      nil -> missing(conn)
+      rule -> json(conn, rule)
+    end
+  end
+
+  def delete_rule(conn, %{"id" => id}) do
+    Dokkit.Alerts.delete_rule(id)
+    json(conn, %{ok: true})
+  end
+
+  defp one(conn, nil), do: missing(conn)
+  defp one(conn, thing), do: json(conn, thing)
 
   def error(conn, %{"id" => id}) do
     case Read.error(id) do

@@ -80,6 +80,17 @@ defmodule Dokkit.Issues do
   def unsnooze(ids), do: set(ids, snoozed_until: nil)
   def acknowledge(ids), do: set(ids, acknowledged_at: DateTime.utc_now())
 
+  @doc "Adds a note to an issue, open or closed. nil when there is no such issue."
+  def note(id, text, by) do
+    with {:ok, id} <- Ecto.UUID.cast(id), %Issue{} = issue <- Repo.get(Issue, id) do
+      note = %{"at" => DateTime.utc_now(), "by" => by, "text" => String.slice(text, 0, 2000)}
+      Repo.update!(Ecto.Changeset.change(issue, notes: issue.notes ++ [note]))
+      changed(false)
+    else
+      _ -> nil
+    end
+  end
+
   defp set(ids, change) do
     ids = for id <- List.wrap(ids), match?({:ok, _}, Ecto.UUID.cast(id)), do: id
     Repo.update_all(from(i in Issue, where: i.id in ^ids and is_nil(i.closed_at)), set: change)

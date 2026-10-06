@@ -98,4 +98,93 @@ defmodule DokkitWeb.ApiControllerTest do
     assert json_response(call(:post, "/issues/#{issue.id}/unsnooze", all), 200)
     assert Issues.open_count() == 1
   end
+
+  test "notes, bulk actions, routing, rules, one machine and versions", %{
+    job: job,
+    read: read,
+    all: all
+  } do
+    %{"needs_you" => [%{"id" => id, "service" => service}]} =
+      json_response(call(:get, "/inbox", read), 200)
+
+    assert json_response(call(:post, "/issues/#{id}/notes", read, %{text: "x"}), 403)
+    assert json_response(call(:post, "/issues/#{id}/notes", all, %{}), 422)
+    assert json_response(call(:post, "/issues/#{id}/notes", all, %{text: "Disk swapped"}), 200)
+
+    assert %{"notes" => [%{"text" => "Disk swapped", "by" => "token " <> _}], "closed_at" => nil} =
+             json_response(call(:get, "/issues/#{id}", read), 200)
+
+    assert json_response(call(:get, "/issues/nope", read), 404)
+
+    assert json_response(call(:post, "/issues/bulk", all, %{ids: [id], action: "snooze"}), 422)
+
+    assert json_response(
+             call(:post, "/issues/bulk", all, %{ids: [id], action: "acknowledge"}),
+             200
+           )
+
+    until = DateTime.to_iso8601(DateTime.add(DateTime.utc_now(), 3600))
+
+    assert json_response(
+             call(:post, "/issues/bulk", all, %{ids: [id], action: "snooze", until: until}),
+             200
+           )
+
+    assert %{"needs_you" => [], "snoozed" => [%{"acknowledged_at" => at}]} =
+             json_response(call(:get, "/inbox", read), 200)
+
+    assert at
+
+    assert %{"down" => "email", "degraded" => nil} =
+             json_response(
+               call(:put, "/services/#{service}/routing", all, %{
+                 down: "email",
+                 degraded: "pigeon"
+               }),
+               200
+             )
+
+    assert %{"id" => rule, "channel" => "push", "on" => true} =
+             json_response(call(:post, "/rules", all, %{kind: "job", channel: "push"}), 200)
+
+    assert %{"channel" => "email", "on" => false, "kind" => "job"} =
+             json_response(
+               call(:put, "/rules/#{rule}", all, %{kind: "job", channel: "email", on: false}),
+               200
+             )
+
+    assert json_response(call(:put, "/rules/nope", all, %{}), 404)
+    assert json_response(call(:delete, "/rules/#{rule}", all), 200)
+    assert %{"items" => []} = json_response(call(:get, "/rules", read), 200)
+
+    %{"items" => [%{"id" => machine}]} = json_response(call(:get, "/machines", read), 200)
+
+    assert %{"name" => "nas", "services" => [%{"slug" => "nightly-backup"}]} =
+             json_response(call(:get, "/machines/#{machine}", read), 200)
+
+    assert %{"items" => [%{"slug" => "nightly-backup", "on" => [%{"machine" => "nas"}]}]} =
+             json_response(call(:get, "/versions", read), 200)
+
+    assert job
+  end
+
+  test "found things are accepted or dismissed, tasks are not", %{read: read, all: all} do
+    {:ok, m} = Dokkit.Repo.insert(%Dokkit.Machine{name: "box"})
+
+    Dokkit.Found.propose(m.id, %{
+      "os" => "windows",
+      "found" => %{
+        "services" => [%{"name" => "Spooler", "state" => "running"}],
+        "ports" => [%{"port" => 8080, "program" => "node"}]
+      }
+    })
+
+    assert %{"items" => [a, b]} = json_response(call(:get, "/proposals", read), 200)
+    assert json_response(call(:post, "/proposals/#{a["id"]}/accept", read), 403)
+    assert json_response(call(:post, "/proposals/#{a["id"]}/accept", all), 200)
+    assert json_response(call(:post, "/proposals/#{b["id"]}/dismiss", all), 200)
+    assert json_response(call(:post, "/proposals/#{b["id"]}/dismiss", all), 404)
+    assert %{"items" => []} = json_response(call(:get, "/proposals", read), 200)
+    assert %{"services" => [_]} = json_response(call(:get, "/machines/#{m.id}", read), 200)
+  end
 end

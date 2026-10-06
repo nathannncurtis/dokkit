@@ -59,17 +59,28 @@ defmodule Dokkit.Alerts do
   @doc "Rules, first match first. A service's own routing comes before them, the two defaults after."
   def rules, do: (Repo.get(Setting, "rules") || %Setting{value: %{}}).value["list"] || []
 
-  def add_rule(params) do
-    rule = %{
-      "id" => Ecto.UUID.generate(),
+  def add_rule(params),
+    do: save_rules(rules() ++ [Map.merge(rule(params), %{"id" => Ecto.UUID.generate()})])
+
+  @doc "Replaces what a rule says. Its place in the order stays."
+  def update_rule(id, params) do
+    save_rules(
+      for r <- rules() do
+        if r["id"] == id,
+          do: Map.merge(rule(params), %{"id" => id, "on" => params["on"] != false}),
+          else: r
+      end
+    )
+  end
+
+  defp rule(params) do
+    %{
       "kind" => pick(@kinds, params["kind"]),
       "state" => pick(@states, params["state"]),
       "machine" => String.trim(params["machine"] || ""),
       "channel" => pick(@channels, params["channel"]) || "none",
       "on" => true
     }
-
-    save_rules(rules() ++ [rule])
   end
 
   def toggle_rule(id),

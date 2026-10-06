@@ -82,6 +82,7 @@ defmodule Dokkit.Issue do
     field :closed_at, :utc_datetime_usec
     field :snoozed_until, :utc_datetime_usec
     field :acknowledged_at, :utc_datetime_usec
+    field :notes, {:array, :map}, default: []
     belongs_to :machine, Dokkit.Machine
     belongs_to :service, Dokkit.Service
     belongs_to :check, Dokkit.Check
