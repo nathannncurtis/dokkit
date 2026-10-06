@@ -1,0 +1,175 @@
+defmodule DokkitWeb.ServiceLive do
+  use DokkitWeb, :live_view
+  alias Dokkit.{Alerts, Estate, Issue}
+
+  @cols "150px 110px 90px 90px minmax(0,1fr) 16px;--ncols:96px 72px 84px 56px minmax(0,1fr) 16px;--minw:426px"
+  @routes [{"Page", "page"}, {"Push", "push"}, {"Webhook", "webhook"}, {"Nobody", "none"}]
+
+  def mount(%{"id" => id}, _session, socket) do
+    case Estate.service(id) do
+      nil -> {:ok, push_navigate(socket, to: ~p"/all")}
+      service -> {:ok, load(assign(socket, page_title: service.name, id: id))}
+    end
+  end
+
+  def handle_info(:issues_changed, socket), do: {:noreply, load(socket)}
+
+  def handle_event("route", %{"route" => params}, socket) do
+    if socket.assigns.current_user.role != :viewer,
+      do: Estate.set_routing(socket.assigns.service, params)
+
+    {:noreply, load(socket)}
+  end
+
+  defp load(socket) do
+    service = Estate.service(socket.assigns.id)
+    job = Enum.find(service.checks, &(&1.type == :job))
+
+    assign(socket,
+      service: service,
+      job: job,
+      issue: Estate.open_issue(service),
+      runs: Estate.runs(service),
+      defaults: Alerts.config()
+    )
+  end
+
+  def render(assigns) do
+    assigns = assign(assigns, cols: @cols, routes: @routes)
+
+    ~H"""
+    <Layouts.app active={:all} shell={@shell} user={@current_user}>
+      <div class="crumb">
+        <.link navigate={~p"/all"}>Everything</.link><.ic name="caret-right" /><span>{@service.machine.name}</span><.ic name="caret-right" /><span>{@service.name}</span>
+      </div>
+      <div class="head">
+        <h1 tabindex="-1">
+          <.lvl state={@service.state} /> {(@issue && @issue.title) || @service.name}
+        </h1>
+      </div>
+      <div class="filters" style="padding-top:10px">
+        <span class={[
+          "tag",
+          @service.state in [:degraded, :down] && "warn",
+          @service.state == :ok && "ok"
+        ]}>{say(@service.state)}</span>
+        <span :if={@issue} class="st"><span class="mono">{Issue.short_id(@issue)}</span>
+        since {at(@issue.since)} UTC</span>
+      </div>
+      <div class="body rail">
+        <div class="col">
+          <div :if={@job} class="card">
+            <h2>Runs<span :if={@runs != []} class="end">Newest first</span></h2>
+            <p :if={@runs == []} class="lead">No run seen yet.</p>
+            <div :if={@runs != []} class="lh" style={"--cols:" <> @cols}>
+              <span>Started</span><span>Result</span><span class="r">Took</span><span class="r">Exit code</span><span></span><span></span>
+            </div>
+            <details :for={r <- @runs} class="run" style={"--cols:" <> @cols} id={"run-#{r.id}"}>
+              <summary class="li slim" style={"--cols:" <> @cols}>
+                <span class="mono">{at(r.started_at || r.finished_at)}</span>
+                <DokkitWeb.JobsLive.result run={r} />
+                <span class="mono r">{took(r.duration_ms || between(r))}</span>
+                <span class="mono r">{r.exit_code}</span>
+                <span></span>
+                <.ic name="caret-down" />
+              </summary>
+              <pre class="logbox">{r.tail || "No output was sent with this run."}</pre>
+            </details>
+          </div>
+          <div :if={!@job} class="card">
+            <h2>Checks</h2>
+            <p :if={@service.checks == []} class="lead">No checks yet.</p>
+            <div :for={c <- @service.checks} class="est">
+              <b><.lvl state={c.state} />{c.name}</b>
+              <span class="st">{c.note || say(c.state)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card">
+            <h2>Details</h2>
+            <dl class="kv">
+              <dt>Machine</dt>
+              <dd>{@service.machine.name}</dd>
+              <dt>Kind</dt>
+              <dd>{kind(@service.kind)}</dd>
+              <dt :if={@job}>Schedule</dt>
+              <dd :if={@job}>
+                <span :if={@job.config["schedule"]} class="mono">{@job.config["schedule"]}</span>
+                <span :if={!@job.config["schedule"]} class="mute">Not set</span>
+              </dd>
+              <dt :if={@job}>Last good run</dt>
+              <dd :if={@job}><.time at={last_good(@runs)} none="None yet" /></dd>
+              <dt :if={@job}>Next expected</dt>
+              <dd :if={@job}><.time at={Estate.next_expected(@job)} none="Not scheduled" /></dd>
+            </dl>
+          </div>
+          <form class="card" phx-change="route" id="route-form">
+            <h2>Who hears about it</h2>
+            <dl class="kv">
+              <dt>{if @job, do: "If a run fails", else: "If it stops"}</dt>
+              <dd>
+                <.route
+                  name="down"
+                  value={@service.route_down}
+                  routes={@routes}
+                  default={@defaults["down"]}
+                />
+              </dd>
+              <dt :if={!@job}>If it degrades</dt>
+              <dd :if={!@job}>
+                <.route
+                  name="degraded"
+                  value={@service.route_degraded}
+                  routes={@routes}
+                  default={@defaults["degraded"]}
+                />
+              </dd>
+            </dl>
+          </form>
+        </div>
+      </div>
+    </Layouts.app>
+    """
+  end
+
+  attr :at, :any, required: true
+  attr :none, :string, required: true
+
+  defp time(assigns) do
+    ~H"""
+    <span :if={@at} class="mono">{at(@at)} UTC</span><span :if={!@at} class="mute">{@none}</span>
+    """
+  end
+
+  attr :name, :string, required: true
+  attr :value, :string, required: true
+  attr :routes, :list, required: true
+  attr :default, :string, required: true
+
+  defp route(assigns) do
+    ~H"""
+    <span class="dd wide">
+      <select class="inp" name={"route[#{@name}]"} aria-label="Channel">
+        <option value="" selected={@value == nil}>
+          As set on Alerts ({name(@routes, @default)})
+        </option>
+        <option :for={{text, value} <- @routes} value={value} selected={value == @value}>
+          {text}
+        </option>
+      </select>
+      <.ic name="caret-down" />
+    </span>
+    """
+  end
+
+  defp name(routes, value),
+    do: Enum.find_value(routes, "Nobody", fn {text, v} -> v == value && text end)
+
+  defp last_good(runs), do: Enum.find_value(runs, &(&1.result == :ok && &1.finished_at))
+
+  defp between(%{started_at: %DateTime{} = a, finished_at: %DateTime{} = b}),
+    do: DateTime.diff(b, a, :millisecond)
+
+  defp between(_), do: nil
+end

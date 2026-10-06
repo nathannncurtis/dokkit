@@ -1,0 +1,62 @@
+defmodule DokkitWeb.EverythingLive do
+  use DokkitWeb, :live_view
+  alias Dokkit.Estate
+
+  def mount(_params, _session, socket), do: {:ok, load(assign(socket, page_title: "Everything"))}
+  def handle_info(:issues_changed, socket), do: {:noreply, load(socket)}
+
+  defp load(socket), do: assign(socket, machines: Estate.machines())
+
+  def render(assigns) do
+    ~H"""
+    <Layouts.app active={:all} shell={@shell} user={@current_user}>
+      <div class="head">
+        <h1 tabindex="-1">Everything</h1>
+        <div class="end">
+          <.link class="btn primary" navigate={~p"/jobs/new"}><.ic name="plus" />New job</.link>
+        </div>
+      </div>
+      <div class="body">
+        <div class="card">
+          <div :if={@machines == []} class="empty">
+            <.ic name="squares-four" />Nothing is being watched yet. Add a job to start.
+          </div>
+          <div :if={@machines != []} class="lh cols-all">
+            <span>Service</span><span>Version</span><span>Listens</span><span>Kind</span><span></span><span>State</span><span></span>
+          </div>
+          <%= for m <- @machines do %>
+            <div class="grp" id={"m-#{m.id}"}>
+              <span style="display:flex; align-items:center; gap:8px"><.lvl state={worst(m.services)} />{m.name}</span>
+              <span class="end">
+                <span :if={count(m.services, :bad) > 0} class="tag warn">{need(
+                  count(m.services, :bad)
+                )}</span>
+                <span :if={count(m.services, :ok) > 0} class="tag">{count(m.services, :ok)} fine</span>
+              </span>
+            </div>
+            <.link :for={s <- m.services} class="li slim cols-all" navigate={~p"/s/#{s.id}"}>
+              <div class="ti"><.lvl state={s.state} /><span>{s.name}</span></div>
+              <span class="mono mute">{s.version}</span>
+              <span class="mono mute">{s.listens}</span>
+              <span class="mute">{kind(s.kind)}</span>
+              <span></span>
+              <span class={["tag", s.state in [:degraded, :down] && "warn"]}>{s.note || say(s.state)}</span>
+              <.ic name="caret-right" />
+            </.link>
+          <% end %>
+        </div>
+      </div>
+    </Layouts.app>
+    """
+  end
+
+  defp count(services, :bad), do: Enum.count(services, &(&1.state in [:degraded, :down]))
+  defp count(services, :ok), do: Enum.count(services, &(&1.state == :ok))
+
+  defp worst(services),
+    do:
+      if(count(services, :bad) > 0, do: :down, else: if(services == [], do: :unknown, else: :ok))
+
+  defp need(1), do: "1 needs a look"
+  defp need(n), do: "#{n} need a look"
+end

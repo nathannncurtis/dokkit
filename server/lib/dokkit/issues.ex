@@ -67,6 +67,8 @@ defmodule Dokkit.Issues do
     )
   end
 
+  def open_count, do: Repo.aggregate(from(i in Issue, where: is_nil(i.closed_at)), :count)
+
   def subscribe, do: Phoenix.PubSub.subscribe(Dokkit.PubSub, "issues")
   @doc "Call after the change is committed: pages reload, and alerts waiting to go are sent."
   def changed(send \\ true) do
@@ -82,6 +84,7 @@ defmodule Dokkit.Issues do
         group_by: m.id,
         order_by: m.name,
         select: %{
+          id: m.id,
           name: m.name,
           services: count(s.id),
           bad: count(s.id) |> filter(s.state in [:degraded, :down])
@@ -124,9 +127,15 @@ defmodule Dokkit.Issues do
     end
   end
 
+  # A service is as bad as its worst check, and says what that check said.
   defp refresh(service) do
-    states = Repo.all(from c in Check, where: c.service_id == ^service.id, select: c.state)
-    worst = Enum.max_by(states, &@rank[&1], fn -> :unknown end)
-    if worst != service.state, do: Repo.update!(Ecto.Changeset.change(service, state: worst))
+    checks =
+      Repo.all(from c in Check, where: c.service_id == ^service.id, select: {c.state, c.note})
+
+    {state, note} =
+      Enum.max_by(checks, fn {state, _} -> @rank[state] end, fn -> {:unknown, nil} end)
+
+    note = if state in [:degraded, :down], do: note
+    Repo.update!(Ecto.Changeset.change(service, state: state, note: note))
   end
 end

@@ -4,8 +4,7 @@ defmodule DokkitWeb.Layouts do
   embed_templates "layouts/*"
 
   attr :active, :atom, required: true
-  attr :machines, :list, required: true
-  attr :open, :integer, required: true
+  attr :shell, :map, required: true
   attr :user, :map, required: true
   slot :inner_block, required: true
 
@@ -21,18 +20,24 @@ defmodule DokkitWeb.Layouts do
         <.link
           class={["nav", @active == :inbox && "on"]}
           navigate={~p"/"}
-          aria-label={"Inbox" <> if(@open > 0, do: ", #{@open}", else: "")}
+          aria-label={"Inbox" <> if(@shell.open > 0, do: ", #{@shell.open}", else: "")}
         >
-          <i class="ph ph-tray" aria-hidden="true"></i>Inbox<span :if={@open > 0} class="n">{@open}</span>
+          <i class="ph ph-tray" aria-hidden="true"></i>Inbox<span :if={@shell.open > 0} class="n">{@shell.open}</span>
+        </.link>
+        <.link class={["nav", @active == :all && "on"]} navigate={~p"/all"}>
+          <i class="ph ph-squares-four" aria-hidden="true"></i>Everything
+        </.link>
+        <.link class={["nav", @active == :jobs && "on"]} navigate={~p"/jobs"}>
+          <i class="ph ph-clock-countdown" aria-hidden="true"></i>Jobs
         </.link>
         <h3>Manage</h3>
         <.link class={["nav", @active == :alerts && "on"]} navigate={~p"/alerts"}>
           <i class="ph ph-bell" aria-hidden="true"></i>Alerts
         </.link>
-        <h3 :if={@machines != []}>Machines</h3>
-        <span :for={m <- @machines} class="nav">
+        <h3 :if={@shell.machines != []}>Machines</h3>
+        <.link :for={m <- @shell.machines} class="nav" navigate={~p"/all" <> "#m-#{m.id}"}>
           <span class={["dot", m.state]}></span>{m.name}<span :if={m.bad > 0} class="q">{m.bad}</span>
-        </span>
+        </.link>
         <span class="grow"></span>
         <div class="me">
           <span class="av">{@user.name |> String.slice(0, 2) |> String.upcase()}</span>

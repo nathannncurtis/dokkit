@@ -3,7 +3,6 @@ defmodule DokkitWeb.InboxLive do
   alias Dokkit.{Issue, Issues}
 
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Issues.subscribe()
     {:ok, load(socket)}
   end
 
@@ -11,12 +10,12 @@ defmodule DokkitWeb.InboxLive do
 
   defp load(socket) do
     issues = Issues.open_list()
-    assign(socket, page_title: "Inbox", issues: issues, machines: Issues.machines())
+    assign(socket, page_title: "Inbox", issues: issues)
   end
 
   def render(assigns) do
     ~H"""
-    <Layouts.app active={:inbox} machines={@machines} open={length(@issues)} user={@current_user}>
+    <Layouts.app active={:inbox} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Inbox</h1>
       </div>
@@ -35,12 +34,12 @@ defmodule DokkitWeb.InboxLive do
           </div>
           <div :for={i <- @issues} class="li cols-inbox plain" id={"issue-#{i.id}"}>
             <div>
-              <div class="ti">
+              <.link class="ti" navigate={~p"/s/#{i.service_id}"}>
                 <span class={["lvl", "warn"]} role="img" aria-label="Needs a look"></span><span>{i.title}</span>
-              </div>
+              </.link>
               <div :if={i.check.note} class="sub">{i.check.note}</div>
               <div class="meta">
-                <span class="tag">{kind(i)}</span>
+                <span class="tag">{issue_kind(i)}</span>
                 <span class="mono">{Issue.short_id(i)}</span>
                 <span>Since {since(i.since)}</span>
                 <span
@@ -60,8 +59,8 @@ defmodule DokkitWeb.InboxLive do
         </div>
         <div class="card">
           <h2>Estate</h2>
-          <div :if={@machines == []} class="empty">No machines yet.</div>
-          <div :for={m <- @machines} class="est">
+          <div :if={@shell.machines == []} class="empty">No machines yet.</div>
+          <div :for={m <- @shell.machines} class="est">
             <b><span class={["lvl", m.state]}></span>{m.name}</b>
             <span class={["st", m.bad > 0 && "warn"]}>{estate(m)}</span>
           </div>
@@ -77,8 +76,8 @@ defmodule DokkitWeb.InboxLive do
   defp told(%{status: :failed}), do: "Alert not sent"
   defp told(_), do: nil
 
-  defp kind(%Issue{kind: "job"}), do: "Job"
-  defp kind(_), do: "Check"
+  defp issue_kind(%Issue{kind: "job"}), do: "Job"
+  defp issue_kind(_), do: "Check"
 
   defp since(at), do: Calendar.strftime(at, "%b %-d %H:%M") <> " UTC"
 

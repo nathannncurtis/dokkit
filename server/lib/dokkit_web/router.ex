@@ -31,6 +31,10 @@ defmodule DokkitWeb.Router do
 
     live_session :user, on_mount: {DokkitWeb.Auth, :user} do
       live "/", InboxLive
+      live "/all", EverythingLive
+      live "/jobs", JobsLive, :index
+      live "/jobs/new", JobsLive, :new
+      live "/s/:id", ServiceLive
       live "/alerts", AlertsLive
     end
   end

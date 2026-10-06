@@ -15,8 +15,25 @@ defmodule DokkitWeb.Auth do
   def on_mount(:user, _params, session, socket) do
     case user(session) do
       nil -> {:halt, Phoenix.LiveView.redirect(socket, to: door())}
-      user -> {:cont, Phoenix.Component.assign(socket, :current_user, user)}
+      user -> {:cont, socket |> Phoenix.Component.assign(:current_user, user) |> shell()}
     end
+  end
+
+  # What the sidebar shows, kept fresh on every page.
+  defp shell(socket) do
+    if Phoenix.LiveView.connected?(socket), do: Dokkit.Issues.subscribe()
+
+    socket
+    |> assign_shell()
+    |> Phoenix.LiveView.attach_hook(:shell, :handle_info, fn
+      :issues_changed, socket -> {:cont, assign_shell(socket)}
+      _, socket -> {:cont, socket}
+    end)
+  end
+
+  defp assign_shell(socket) do
+    shell = %{machines: Dokkit.Issues.machines(), open: Dokkit.Issues.open_count()}
+    Phoenix.Component.assign(socket, :shell, shell)
   end
 
   def sign_in(conn, user) do

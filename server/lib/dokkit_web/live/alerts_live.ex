@@ -1,20 +1,17 @@
 defmodule DokkitWeb.AlertsLive do
   use DokkitWeb, :live_view
-  alias Dokkit.{Alerts, Issues}
+  alias Dokkit.Alerts
 
   @channels [{"Page", "page"}, {"Push", "push"}, {"Webhook", "webhook"}, {"Nobody", "none"}]
   @push [{"ntfy", "ntfy"}, {"Pushover", "pushover"}, {"PagerDuty low urgency", "pagerduty"}]
 
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Issues.subscribe()
-
     {:ok,
      socket
-     |> assign(page_title: "Alerts", config: Alerts.config(), saved: false, tests: %{})
-     |> counts()}
+     |> assign(page_title: "Alerts", config: Alerts.config(), saved: false, tests: %{})}
   end
 
-  def handle_info(:issues_changed, socket), do: {:noreply, counts(socket)}
+  def handle_info(:issues_changed, socket), do: {:noreply, socket}
 
   def handle_event("save", %{"alerts" => params}, socket) do
     if owner?(socket),
@@ -41,9 +38,6 @@ defmodule DokkitWeb.AlertsLive do
 
   defp owner?(socket), do: socket.assigns.current_user.role == :owner
 
-  defp counts(socket),
-    do: assign(socket, machines: Issues.machines(), open: length(Issues.open_list()))
-
   def render(assigns) do
     assigns =
       assign(assigns,
@@ -53,7 +47,7 @@ defmodule DokkitWeb.AlertsLive do
       )
 
     ~H"""
-    <Layouts.app active={:alerts} machines={@machines} open={@open} user={@current_user}>
+    <Layouts.app active={:alerts} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Alerts</h1>
       </div>
