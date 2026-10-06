@@ -14,6 +14,15 @@ import (
 
 func machineDir() string { return "" }
 
+// Run as root, a task would be root whatever it was accepted as, so only a task accepted for the system account runs.
+func init() {
+	if os.Geteuid() == 0 {
+		ordinary = func(*exec.Cmd) (func(), error) {
+			return nil, errors.New("dokkit is running as root and tasks cannot be dropped to another account; accept the task as the system account or run dokkit as an ordinary user")
+		}
+	}
+}
+
 func asService() bool { return false }
 
 func detach(cmd *exec.Cmd) { cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} }

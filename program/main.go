@@ -184,6 +184,8 @@ type client struct {
 	pin             string
 	url, key, spool string
 	folders         []string
+	system          bool   // this machine's own config allows tasks accepted for the system account
+	updateSha       string // the hash a fetched update must have, when the config names one
 	http            *http.Client
 	service         string
 	spoolMB         int64
@@ -256,6 +258,10 @@ type saved struct {
 	Pin     string   `json:"pin,omitempty"`
 	Folders []string `json:"folders,omitempty"`
 	SpoolMB int      `json:"spool_mb,omitempty"`
+	// SystemTasks lets tasks accepted for the system account run as it. UpdateSha256 is the
+	// SHA-256 a fetched update must have.
+	SystemTasks  bool   `json:"system_tasks,omitempty"`
+	UpdateSha256 string `json:"update_sha256,omitempty"`
 }
 
 func configPath() (string, error) {
@@ -281,7 +287,7 @@ func load() (*client, error) {
 			c.spool = filepath.Join(dir, "spool")
 		}
 	}
-	c.folders, c.pin = s.Folders, s.Pin
+	c.folders, c.pin, c.system, c.updateSha = s.Folders, s.Pin, s.SystemTasks, strings.ToLower(s.UpdateSha256)
 	c.spoolMB = int64(s.SpoolMB)
 	if n, err := strconv.Atoi(os.Getenv("DOKKIT_SPOOL_MB")); err == nil && n > 0 {
 		c.spoolMB = int64(n)
@@ -333,7 +339,12 @@ func enrol(address, token, pin string) int {
 		err = os.MkdirAll(filepath.Dir(p), 0o700)
 	}
 	if err == nil {
-		b, _ := json.Marshal(saved{URL: address, Key: a.Key, Pin: pin})
+		keep := saved{}
+		if old, rerr := os.ReadFile(p); rerr == nil {
+			json.Unmarshal(old, &keep)
+		}
+		keep.URL, keep.Key, keep.Pin = address, a.Key, pin
+		b, _ := json.Marshal(keep)
 		err = os.WriteFile(p, b, 0o600)
 	}
 	if err != nil {
