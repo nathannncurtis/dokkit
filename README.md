@@ -13,7 +13,7 @@ Working, with tests:
 - **Jobs.** A job is added in the interface and reports with a plain web request or with `dokkit run`. A failed run opens an issue at once; a missed or overlong one within a minute.
 - **Checks.** A `dokkit.toml` declares a service and its checks. `dokkit watch` runs http, tcp, process and Windows-service checks, and three failures in a row open an issue.
 - **Beats.** An app sends a `beat` line from its main loop. When two are missed and a minute more passes, an issue opens: the app is up and stuck.
-- **Deploys.** A service's version changing is a deploy. `dokkit watch` reads the version from the file `version_from` names, or CI says it with one request. The Deploys page lists them.
+- **Deploys.** A service's version changing is a deploy. `dokkit watch` reads the version from the file `version_from` names, or CI says it with one request. The Deploys page lists them, and the Versions page shows which version is on which machine.
 - **Errors.** An app posts an error with its type and stack. Reports are grouped by type and the app's own frames, and message text is not kept. The Errors page lists the groups. Dokkit also accepts reports from Sentry's open-source SDKs.
 - **Machines.** A machine enrols with a one-use token and says it is alive once a minute. Three minutes of silence opens one issue and quiets what runs on it.
 - **Alerts.** A page through PagerDuty, a quiet push through ntfy, Pushover or PagerDuty, or a webhook. Once per issue, resolved when it closes.
@@ -23,7 +23,7 @@ Working, with tests:
 - **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Errors, Deploys, Found, Tasks, Alerts and Settings. People sign in; the first one claims the server with a setup code.
 - **The API and the MCP**, for user tokens made in Settings.
 
-Not built yet: the Versions page, stats, metrics, email, text and the digest, alert rules and suggestions, the libraries, the installer and the Docker image.
+Not built yet: stats, metrics, email, text and the digest, alert rules and suggestions, the libraries, the installer and the Docker image.
 
 To run it for development, with Postgres on localhost:
 

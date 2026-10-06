@@ -39,5 +39,19 @@ defmodule Dokkit.DeploysTest do
     assert html =~ "Reported by ci"
     assert html =~ "Noticed by Dokkit"
     assert html =~ "2.3.1"
+
+    other = Repo.insert!(%Machine{name: "press", kind: :enrolled, program_version: "0.1.0"})
+
+    Repo.insert!(%Service{
+      machine_id: other.id,
+      slug: "portal",
+      name: "Upload portal",
+      version: "2.10.0"
+    })
+
+    {:ok, _, html} = live(signed_in(conn), "/versions")
+    assert html =~ ~s(<span class="tag warn">2.4.0</span>)
+    assert html =~ "<span>2.10.0</span>"
+    assert html =~ "dokkit"
   end
 end

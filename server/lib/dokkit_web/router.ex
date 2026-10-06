@@ -39,7 +39,8 @@ defmodule DokkitWeb.Router do
       live "/machines/new", EnrolLive
       live "/errors", ErrorsLive
       live "/errors/:id", ErrorsLive
-      live "/deploys", DeploysLive
+      live "/deploys", DeploysLive, :deploys
+      live "/versions", DeploysLive, :versions
       live "/found", TasksLive, :found
       live "/tasks", TasksLive, :tasks
       live "/alerts", AlertsLive

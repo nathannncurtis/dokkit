@@ -3,21 +3,85 @@ defmodule DokkitWeb.DeploysLive do
 
   @cols "minmax(0,1.2fr) minmax(0,1.2fr) 120px 110px 140px 16px"
 
-  def mount(_params, _session, socket), do: {:ok, load(assign(socket, page_title: "Deploys"))}
+  def mount(_params, _session, socket), do: {:ok, socket}
+
+  def handle_params(_params, _uri, socket) do
+    title = if socket.assigns.live_action == :versions, do: "Versions", else: "Deploys"
+    {:noreply, load(assign(socket, page_title: title))}
+  end
 
   def handle_info(:issues_changed, socket), do: {:noreply, load(socket)}
 
-  defp load(socket), do: assign(socket, deploys: Dokkit.Deploys.list())
+  defp load(socket) do
+    machines = Enum.filter(Dokkit.Estate.machines(), &(&1.kind != :group))
+
+    services =
+      for m <- machines, s <- m.services, s.version, reduce: %{} do
+        acc -> Map.update(acc, {s.slug, s.name}, %{m.id => s}, &Map.put(&1, m.id, s))
+      end
+
+    program = for m <- machines, m.program_version, into: %{}, do: {m.id, m.program_version}
+
+    rows =
+      if(program == %{}, do: [], else: [{"dokkit", program, nil}]) ++
+        for {{_, name}, on} <- Enum.sort(services) do
+          {name, Map.new(on, fn {id, s} -> {id, s.version} end), on |> Map.values() |> hd()}
+        end
+
+    assign(socket, deploys: Dokkit.Deploys.list(), machines: machines, rows: rows)
+  end
+
+  # Versions are compared by their numbers, so 2.10 is newer than 2.9.
+  defp newest(on) do
+    on
+    |> Map.values()
+    |> Enum.max_by(fn v -> for [n] <- Regex.scan(~r/\d+/, v), do: String.to_integer(n) end)
+  end
 
   def render(assigns) do
     assigns = assign(assigns, cols: @cols)
 
     ~H"""
-    <Layouts.app active={:deploys} shell={@shell} user={@current_user}>
+    <Layouts.app active={@live_action} shell={@shell} user={@current_user}>
       <div class="head">
-        <h1 tabindex="-1">Deploys</h1>
+        <h1 tabindex="-1">{@page_title}</h1>
       </div>
-      <div class="body">
+      <div :if={@live_action == :versions} class="body">
+        <div class="card">
+          <h2>Services<span class="end">Which version is on which machine</span></h2>
+          <div :if={@rows == []} class="empty">
+            <.ic name="git-branch" />No service has reported a version yet.
+          </div>
+          <div :if={@rows != []} class="scroll">
+            <table class="vt">
+              <thead>
+                <tr>
+                  <th scope="col">Service</th>
+                  <th :for={m <- @machines} scope="col">{m.name}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :for={{name, on, service} <- @rows} class={!service && "flat"}>
+                  <th scope="row">
+                    <.link :if={service} navigate={~p"/s/#{service.id}"}>{name}</.link>
+                    <span :if={!service}>{name}</span>
+                  </th>
+                  <td :for={m <- @machines}>
+                    <span :if={on[m.id] && on[m.id] != newest(on)} class="tag warn">{on[m.id]}</span>
+                    <span :if={on[m.id] == newest(on)}>{on[m.id]}</span>
+                  </td>
+                  <td><.ic :if={service} name="caret-right" /></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div :if={@rows != []} class="foot">
+            <span class="tag warn">Behind the newest</span><span>Empty: not installed there</span>
+          </div>
+        </div>
+      </div>
+      <div :if={@live_action == :deploys} class="body">
         <div class="card">
           <div :if={@deploys == []} class="empty">
             <.ic name="rocket-launch" />No deploy seen yet. One is recorded when a service's version changes.

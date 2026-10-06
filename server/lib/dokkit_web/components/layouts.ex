@@ -71,7 +71,11 @@ defmodule DokkitWeb.Layouts do
          {:logs, "scroll", "Logs", ~p"/logs"},
          {:errors, "bug", "Errors", ~p"/errors"}
        ]},
-      {"Changes", [{:deploys, "rocket-launch", "Deploys", ~p"/deploys"}]},
+      {"Changes",
+       [
+         {:deploys, "rocket-launch", "Deploys", ~p"/deploys"},
+         {:versions, "git-branch", "Versions", ~p"/versions"}
+       ]},
       {"Manage",
        [
          {:found, "binoculars", "Found", ~p"/found"},
