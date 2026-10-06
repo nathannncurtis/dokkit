@@ -582,6 +582,7 @@ input, select { accent-color: var(--brand); caret-color: var(--brand); }
 .lane i { height: 10px; border-radius: 2px; background: var(--chip); } .lane .warn { height: 16px; background: var(--warn); } .lane .bad { height: 22px; background: var(--bad); }
 .lane .none { background: none; border: 1px dashed var(--mute); }
 .evs { display: grid; gap: 4px; font-size: 13px; } .evs b { margin-right: 6px; }
+@media (max-width: 760px) { .ticks span:nth-child(even) { display: none; } }
 
 /* server: first screen rows */
 .lvl.bad { border-radius: 50%; }
