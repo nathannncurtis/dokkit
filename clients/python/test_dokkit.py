@@ -112,9 +112,11 @@ class Library(unittest.TestCase):
 
     @unittest.skipUnless(hasattr(os, "fork"), "needs fork")
     def test_the_sender_thread_is_back_after_a_fork(self):
+        dokkit._state.add({"type": "beat"})
+        dokkit._state.lines.append("x")
         pid = os.fork()
         if pid == 0:
-            os._exit(0 if any(t.name == "dokkit" for t in threading.enumerate()) else 1)
+            os._exit(0 if any(t.name == "dokkit" for t in threading.enumerate()) and not dokkit._state.lines else 1)
         self.assertEqual(os.waitpid(pid, 0)[1], 0)
 
 

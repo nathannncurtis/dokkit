@@ -63,13 +63,20 @@ Dokkit::beat('a');
 Dokkit::beat('b');
 $began = microtime(true);
 Dokkit::flush();
-$retry = (new ReflectionProperty('Dokkit', 'retry'))->getValue();
-if (!$retry || count($retry['lines']) !== 2 || microtime(true) - $began > 3) {
-    $bad[] = 'a failed batch is not kept for one more try, or the flush did not stop';
+if (Dokkit::$dropped !== 2 || microtime(true) - $began > 5) {
+    $bad[] = 'a batch that failed twice is not counted as dropped in one flush';
 }
-Dokkit::flush();
-if ((new ReflectionProperty('Dokkit', 'retry'))->getValue() !== null || Dokkit::$dropped !== 2) {
-    $bad[] = 'a batch that failed twice is not counted as dropped';
+$on->setValue(null, null);
+Dokkit::start('1', 'http://example.com', 'k');
+if ($on->getValue() !== null) {
+    $bad[] = 'plain http to a non-local host is not refused';
+}
+@mkdir(__DIR__ . '/out/app/www', 0777, true);
+file_put_contents(__DIR__ . '/out/app/composer.json', '{}');
+chdir(__DIR__ . '/out/app/www');
+$root = new ReflectionMethod('Dokkit', 'root');
+if (realpath($root->invoke(null)) !== realpath(__DIR__ . '/out/app')) {
+    $bad[] = 'the app root is not the folder holding composer.json';
 }
 if (str_contains($all, trim(json_encode(__DIR__), '"'))) {
     $bad[] = 'a stack frame carries an absolute path';

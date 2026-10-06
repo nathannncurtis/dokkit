@@ -48,8 +48,14 @@ class _State:
         self.root = os.path.abspath(os.getcwd())
         self.restart()
 
-    def restart(self):
+    def restart(self, forked=False):
         """Also runs in a forked child, where the sender thread and any held lock are gone."""
+        if forked:
+            # The parent still owns what was queued at the fork.
+            self.lines.clear()
+            self.errors.clear()
+            self.retry = None
+            self.size = 0
         self.lock = threading.Lock()
         self.sending = threading.Lock()
         self.wake = threading.Event()
@@ -61,6 +67,9 @@ class _State:
         try:
             text = json.dumps(line, default=str)
         except (TypeError, ValueError):
+            self.dropped += 1
+            return
+        if len(text) > MAX_BYTES:
             self.dropped += 1
             return
         with self.lock:
@@ -147,7 +156,7 @@ def _insecure(url):
 
 def _after_fork():
     if _state:
-        _state.restart()
+        _state.restart(forked=True)
 
 
 if hasattr(os, "register_at_fork"):
@@ -256,7 +265,7 @@ def capture(error=None, handled=True, tags=None):
 
 def _own(filename):
     path = os.path.abspath(filename)
-    return path.startswith(_state.root + os.sep) and "site-packages" not in path
+    return path.startswith(_state.root.rstrip(os.sep) + os.sep) and "site-packages" not in path
 
 
 def _path(filename):

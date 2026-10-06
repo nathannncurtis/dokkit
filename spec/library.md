@@ -23,12 +23,13 @@ It can also send the stats document (`stats-v1.md`) itself, for an app `dokkit` 
 
 ## Configuration
 
-Two environment variables:
+Environment variables:
 
 | Variable | Holds |
 |---|---|
 | `DOKKIT_URL` | The server address. |
 | `DOKKIT_KEY` | An app key. |
+| `DOKKIT_INSECURE` | `1` allows an `http://` address to a host other than this machine. The browser library takes an `insecure` option for the same. |
 
 The service's id and version come from the app key and from what the app passes at start.
 

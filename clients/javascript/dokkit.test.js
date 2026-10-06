@@ -92,6 +92,14 @@ test("a plain http address to another host keeps it off", async () => {
   assert.strictEqual(r.got.length, 0);
 });
 
+test("the insecure option allows plain http, and a line over the byte limit is dropped alone", async () => {
+  const r = await scenario(`dokkit.start({ url: url.replace("127.0.0.1", "localhost"), key: "k" }); dokkit.beat("small"); dokkit.log("info", "x".repeat(5_000_000)); await dokkit.flush(); console.log(dokkit.dropped);`);
+  assert.strictEqual(r.got[0].lines.length, 1);
+  assert.strictEqual(r.stdout.trim(), "1");
+  const o = await scenario(`dokkit.start({ url: "http://example.com", key: "k", insecure: true }); dokkit.beat("x"); console.log("on");`);
+  assert.strictEqual(o.stderr, "");
+});
+
 test("a failed batch is sent once more with the same id, then dropped and counted", async () => {
   const r = await scenario(
     `dokkit.start({ url, key: "k" }); dokkit.beat("x"); await dokkit.flush(); await dokkit.flush(); console.log(dokkit.dropped);`,

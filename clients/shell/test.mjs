@@ -10,7 +10,7 @@ test("off when blank, then one line per call", async () => {
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", () => {
-      got.push([req.url, req.headers.authorization, JSON.parse(body)]);
+      got.push([req.url, req.headers.authorization, JSON.parse(body), req.headers["dokkit-batch"]]);
       res.end("{}");
     });
   });
@@ -25,6 +25,7 @@ test("off when blank, then one line per call", async () => {
   assert.ok(got.every(([path, auth]) => path === "/api/v1/report" && auth === "Bearer dka_test"));
   const lines = got.map(([, , l]) => l);
   assert.deepStrictEqual(lines.map((l) => l.type), ["beat", "custom", "metric", "log", "job", "job"]);
+  assert.ok(got.every((g) => /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(g[3])));
   assert.strictEqual(lines[0].every_seconds, 30);
   assert.strictEqual(lines[1].note, 'oldest item is "14" minutes \\ old');
   assert.strictEqual(lines[1].value, 14);

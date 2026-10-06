@@ -16,7 +16,6 @@ $script:Errors = New-Object System.Collections.Generic.List[object]
 $script:Dropped = 0
 $script:Run = $null
 $script:Bytes = 0
-$script:Retry = $null
 
 function Start-Dokkit {
     # Turns the library on. With no address or key it stays off and every call does nothing.
@@ -27,7 +26,7 @@ function Start-Dokkit {
         return
     }
     # Windows PowerShell 5.1 on older .NET does not offer TLS 1.2 unless asked.
-    try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
+    try { if ([Net.ServicePointManager]::SecurityProtocol -ne 0) { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } } catch {}
     $script:On = @{ Url = $Url.TrimEnd('/'); Key = $Key; Version = $Version; Environment = $env:DOKKIT_ENV; Host = [Environment]::MachineName; Root = (Get-Location).Path }
     if ($Version) { Add-Line @{ type = 'deploy'; version = $Version } }
 }
@@ -38,11 +37,13 @@ function Add-Line([hashtable]$Line) {
     $Line.host = $script:On.Host
     foreach ($name in @($Line.Keys)) { if ($null -eq $Line[$name] -or ($Line[$name] -is [string] -and $Line[$name] -eq '')) { $Line.Remove($name) } }
     try { $text = ConvertTo-Json $Line -Depth 6 -Compress } catch { $script:Dropped++; return }
-    while ($script:Lines.Count -gt 0 -and ($script:Lines.Count -ge 1000 -or $script:Bytes + $text.Length -gt 4000000)) {
-        $script:Bytes -= $script:Lines[0].Length; $script:Lines.RemoveAt(0); $script:Dropped++
+    $size = [Text.Encoding]::UTF8.GetByteCount($text)
+    if ($size -gt 4000000) { $script:Dropped++; return }
+    while ($script:Lines.Count -gt 0 -and ($script:Lines.Count -ge 1000 -or $script:Bytes + $size -gt 4000000)) {
+        $script:Bytes -= [Text.Encoding]::UTF8.GetByteCount($script:Lines[0]); $script:Lines.RemoveAt(0); $script:Dropped++
     }
     $script:Lines.Add($text)
-    $script:Bytes += $text.Length
+    $script:Bytes += $size
 }
 
 function Send-DokkitBeat {
@@ -132,21 +133,19 @@ function Send-Dokkit {
         }
         catch { $false }
     }
-    $errors = $script:Errors.ToArray(); $script:Errors.Clear()
-    foreach ($e in $errors) {
+    while ($script:Errors.Count -gt 0) {
+        $e = $script:Errors[0]; $script:Errors.RemoveAt(0)
         if (-not (& $post '/api/v1/errors' (ConvertTo-Json $e -Depth 6 -Compress) 'application/json' ([guid]::NewGuid().ToString()))) { $script:Dropped++; break }
     }
-    while ($script:Retry -or $script:Lines.Count -gt 0) {
-        if (-not $script:Retry) {
-            $take = [Math]::Min(500, $script:Lines.Count)
-            $batch = $script:Lines.GetRange(0, $take).ToArray(); $script:Lines.RemoveRange(0, $take)
-            foreach ($l in $batch) { $script:Bytes -= $l.Length }
-            $script:Retry = @{ Id = [guid]::NewGuid().ToString(); Lines = $batch; Tries = 0 }
-        }
-        if (& $post '/api/v1/report' ($script:Retry.Lines -join "`n") 'application/x-ndjson' $script:Retry.Id) { $script:Retry = $null }
-        else {
-            # A failed batch gets one more try; after that it is dropped and counted.
-            if ($script:Retry.Tries++) { $script:Dropped += $script:Retry.Lines.Count; $script:Retry = $null }
+    while ($script:Lines.Count -gt 0) {
+        $take = [Math]::Min(500, $script:Lines.Count)
+        $batch = $script:Lines.GetRange(0, $take).ToArray(); $script:Lines.RemoveRange(0, $take)
+        foreach ($l in $batch) { $script:Bytes -= [Text.Encoding]::UTF8.GetByteCount($l) }
+        $id = [guid]::NewGuid().ToString()
+        $body = $batch -join "`n"
+        # A failed batch gets one more try with the same id; after that it is dropped and counted.
+        if (-not (& $post '/api/v1/report' $body 'application/x-ndjson' $id) -and -not (& $post '/api/v1/report' $body 'application/x-ndjson' $id)) {
+            $script:Dropped += $batch.Count
             break
         }
     }

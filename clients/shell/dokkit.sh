@@ -14,8 +14,8 @@
 # Newlines and tabs become spaces first: BSD sed adds a newline of its own.
 _dokkit_text() { printf '%s' "$1" | tr '\n\t' '  ' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
 
-# A number as JSON takes digits and a dot only; anything else would put fields into the line.
-_dokkit_num() { case $1 in '' | *[!0-9.-]*) return 1 ;; esac; }
+# A number as JSON: -?digits[.digits], no leading zero; anything else would break the line or add fields.
+_dokkit_num() { case $1 in '' | *[!0-9.-]* | ?*-* | *.*.* | - | .* | -.* | *. | 0[0-9]* | -0[0-9]*) return 1 ;; esac; }
 
 # On, unless blank, or plain http to a host that is not this machine.
 _dokkit_on() {
@@ -33,15 +33,16 @@ _dokkit_on() {
 
 # The key and the body go to curl on its standard input, so ps never shows them.
 _dokkit_post() {
-  printf 'url = "%s/api/v1/report"\nheader = "Authorization: Bearer %s"\nheader = "Content-Type: application/x-ndjson"\ndata-binary = "%s"\n' \
-    "$(_dokkit_text "${DOKKIT_URL%/}")" "$(_dokkit_text "$DOKKIT_KEY")" "$(_dokkit_text "$1")" |
+  printf 'url = "%s/api/v1/report"\nheader = "Authorization: Bearer %s"\nheader = "Content-Type: application/x-ndjson"\nheader = "Dokkit-Batch: %s"\ndata-binary = "%s"\n' \
+    "$(_dokkit_text "${DOKKIT_URL%/}")" "$(_dokkit_text "$DOKKIT_KEY")" "$2" "$(_dokkit_text "$1")" |
     curl -s -f -o /dev/null --max-time 5 -K -
 }
 
 _dokkit_send() {
   _dokkit_on || return 0
   _dokkit_line="{$1,\"host\":\"$(_dokkit_text "$(hostname)")\"}"
-  _dokkit_post "$_dokkit_line" || _dokkit_post "$_dokkit_line" || true
+  _dokkit_id=$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' | sed 's/^\(........\)\(....\)\(....\)\(....\)\(............\)$/\1-\2-\3-\4-\5/')
+  _dokkit_post "$_dokkit_line" "$_dokkit_id" || _dokkit_post "$_dokkit_line" "$_dokkit_id" || true
 }
 
 # dokkit_beat <name> [every seconds]

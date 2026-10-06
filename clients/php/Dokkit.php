@@ -20,7 +20,6 @@ final class Dokkit
     private static array $lines = [];
     private static array $errors = [];
     private static int $bytes = 0;
-    private static ?array $retry = null;
     /** How many lines were dropped because the list was full. */
     public static int $dropped = 0;
 
@@ -109,7 +108,7 @@ final class Dokkit
         if (!self::$on || count(self::$errors) >= 100) {
             return;
         }
-        $root = self::$on['root'] . DIRECTORY_SEPARATOR;
+        $root = rtrim(self::$on['root'], '/\\') . DIRECTORY_SEPARATOR;
         $own = fn (?string $file) => $file !== null && self::$on['root'] !== '' && str_starts_with($file, $root) && !str_starts_with($file, $root . 'vendor' . DIRECTORY_SEPARATOR);
         $rel = function (string $file) use ($root): string {
             if (str_starts_with($file, $root)) {
@@ -161,20 +160,15 @@ final class Dokkit
                 return;
             }
         }
-        while (self::$retry || self::$lines) {
-            if (!self::$retry) {
-                $batch = array_splice(self::$lines, 0, 500);
-                self::$bytes -= array_sum(array_map('strlen', $batch));
-                self::$retry = ['id' => self::uuid(), 'lines' => $batch, 'tries' => 0];
-            }
-            if (self::post('/api/v1/report', implode("\n", self::$retry['lines']), 'application/x-ndjson', self::$retry['id'])) {
-                self::$retry = null;
-            } else {
-                // A failed batch gets one more try on the next flush; after that it is dropped and counted.
-                if (self::$retry['tries']++) {
-                    self::$dropped += count(self::$retry['lines']);
-                    self::$retry = null;
-                }
+        while (self::$lines) {
+            $batch = array_splice(self::$lines, 0, 500);
+            self::$bytes -= array_sum(array_map('strlen', $batch));
+            $id = self::uuid();
+            $body = implode("
+", $batch);
+            // A failed batch gets one more try with the same id; after that it is dropped and counted.
+            if (!self::post('/api/v1/report', $body, 'application/x-ndjson', $id) && !self::post('/api/v1/report', $body, 'application/x-ndjson', $id)) {
+                self::$dropped += count($batch);
                 return;
             }
         }
@@ -183,6 +177,14 @@ final class Dokkit
     private static function root(): string
     {
         $cwd = getcwd() ?: '';
+        for ($d = $cwd; ; $d = dirname($d)) {
+            if (is_file($d . DIRECTORY_SEPARATOR . 'composer.json')) {
+                return $d;
+            }
+            if (dirname($d) === $d) {
+                break;
+            }
+        }
         return basename($cwd) === 'public' ? dirname($cwd) : $cwd;
     }
 
@@ -215,6 +217,10 @@ final class Dokkit
             return;
         }
         $text = self::encode(array_filter($line + ['at' => self::now(), 'host' => self::$on['host']], fn ($v) => $v !== null));
+        if (strlen($text) > self::MAX_BYTES) {
+            self::$dropped++;
+            return;
+        }
         while (self::$lines && (count(self::$lines) >= self::QUEUE || self::$bytes + strlen($text) > self::MAX_BYTES)) {
             self::$bytes -= strlen(array_shift(self::$lines));
             self::$dropped++;

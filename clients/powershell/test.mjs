@@ -85,7 +85,7 @@ test("plain http to another host keeps it off", async () => {
 });
 
 test("a failed batch is sent once more with the same id, then dropped and counted", async () => {
-  const r = await snippet(`Send-DokkitBeat x; Send-Dokkit; Send-Dokkit; & (Get-Module Dokkit) { $script:Dropped }`, { status: 503 });
+  const r = await snippet(`Send-DokkitBeat x; Send-Dokkit; & (Get-Module Dokkit) { $script:Dropped }`, { status: 503 });
   assert.strictEqual(r.got.length, 2);
   assert.strictEqual(r.got[0].batch, r.got[1].batch);
   assert.strictEqual(r.stdout.trim(), "1");

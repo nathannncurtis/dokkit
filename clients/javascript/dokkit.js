@@ -27,13 +27,8 @@ const uuid = () => {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 };
 
-let osHostname;
-if (typeof process !== "undefined" && process.versions?.node) {
-  try {
-    const name = "node:os";
-    osHostname = (await import(name)).hostname;
-  } catch {}
-}
+const enc = new TextEncoder();
+const size = (text) => enc.encode(text).length;
 
 /** How many lines were dropped because the queue was full. */
 export let dropped = 0;
@@ -42,13 +37,13 @@ const env = (name) => (typeof process !== "undefined" && process.env && process.
 const now = () => new Date().toISOString();
 
 /** Turns the library on. With no address or key it stays off and every call does nothing. */
-export function start({ version, environment, url, key, host } = {}) {
+export function start({ version, environment, url, key, host, insecure } = {}) {
   try {
     url = url || env("DOKKIT_URL");
     key = key || env("DOKKIT_KEY");
     if (!url || !key || state) return;
-    if (/^http:\/\//i.test(url) && !/^http:\/\/(localhost|127(\.\d+){3}|\[::1\])([:/]|$)/i.test(url) && env("DOKKIT_INSECURE") !== "1") {
-      console.error("dokkit: http:// address to a non-local host; set DOKKIT_INSECURE=1 to allow it. Staying off.");
+    if (/^http:\/\//i.test(url) && !/^http:\/\/(localhost|127(\.\d+){3}|\[::1\])([:/]|$)/i.test(url) && !insecure && env("DOKKIT_INSECURE") !== "1") {
+      console.error("dokkit: http:// address to a non-local host; set DOKKIT_INSECURE=1 or pass insecure: true to allow it. Staying off.");
       return;
     }
     state = {
@@ -56,7 +51,7 @@ export function start({ version, environment, url, key, host } = {}) {
       key,
       version,
       environment: environment || env("DOKKIT_ENV") || undefined,
-      host: host || env("COMPUTERNAME") || env("HOSTNAME") || osHostname?.() || globalThis.location?.hostname || "unknown",
+      host: host || env("COMPUTERNAME") || env("HOSTNAME") || globalThis.process?.getBuiltinModule?.("node:os")?.hostname?.() || globalThis.location?.hostname || "unknown",
       lines: [],
       bytes: 0,
       retry: null,
@@ -75,12 +70,17 @@ function add(line) {
   try {
     if (!state) return;
     const text = JSON.stringify({ at: now(), ...line, host: state.host });
-    while (state.lines.length && (state.lines.length >= QUEUE || state.bytes + text.length > MAX_BYTES)) {
-      state.bytes -= state.lines.shift().length;
+    const n = size(text);
+    if (n > MAX_BYTES) {
+      dropped++;
+      return;
+    }
+    while (state.lines.length && (state.lines.length >= QUEUE || state.bytes + n > MAX_BYTES)) {
+      state.bytes -= size(state.lines.shift());
       dropped++;
     }
     state.lines.push(text);
-    state.bytes += text.length;
+    state.bytes += n;
   } catch {
     dropped++;
   }
@@ -120,7 +120,7 @@ export async function job(name, work) {
 
 // Paths under the folder the app runs from are sent relative to it; others keep only what follows node_modules, or their name.
 function where(file) {
-  const root = typeof process !== "undefined" && process.cwd ? process.cwd().replace(/\\/g, "/") : "";
+  const root = typeof process !== "undefined" && process.cwd ? process.cwd().replace(/\\/g, "/").replace(/\/+$/, "") : "";
   if (!root) return { file, own: !file.includes("node_modules") && !file.startsWith("node:") };
   let path = file.replace(/^file:\/\//, "").replace(/\\/g, "/").replace(/^\/(\w:)/, "$1");
   try {
@@ -157,7 +157,7 @@ export function capture(error, { handled = true, tags = {} } = {}) {
   } catch {}
 }
 
-/** Also reports errors nothing caught. In Node the process still ends as it would have. */
+/** Also reports errors nothing caught. In Node the process ends after the report is sent, or after 3 seconds; if another uncaughtException listener exists it decides whether the process ends. */
 export function catchUnhandled() {
   if (typeof process !== "undefined" && process.on) {
     // Node ends the process right after a monitor returns, so the report is sent first.
@@ -208,7 +208,7 @@ async function send() {
     while (state.retry || state.lines.length) {
       if (!state.retry) {
         const lines = state.lines.splice(0, 500);
-        state.bytes -= lines.reduce((n, l) => n + l.length, 0);
+        state.bytes -= lines.reduce((n, l) => n + size(l), 0);
         state.retry = { id: uuid(), n: lines.length, body: lines.join("\n"), tries: 0 };
       }
       const batch = state.retry;
