@@ -51,7 +51,7 @@ defmodule DokkitWeb.SettingsLiveTest do
       )
       |> render_submit()
 
-    [token] = Regex.run(~r/dku_\w+/, html)
+    [token] = Regex.run(~r/dku_\w{36}/, html)
     assert {:ok, %{scopes: ["read", "read-logs"]}} = Keys.verify(token, :user)
   end
 
