@@ -40,22 +40,33 @@ if (-not $PSScriptRoot -or -not (Test-Path (Join-Path $PSScriptRoot 'bin\dokkit.
     $ProgressPreference = 'SilentlyContinue'
     $work = Join-Path $env:TEMP ('dokkit-install-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory $work | Out-Null
+    # Nothing is unpacked until its SHA-256 matches the one expected.
     $fetch = {
-        param($Url, $Name)
+        param($Url, $Name, $Sha256)
         Write-Host "Fetching $Url"
-        Invoke-WebRequest -Uri $Url -OutFile (Join-Path $work "$Name.zip") -UseBasicParsing
-        Expand-Archive -Path (Join-Path $work "$Name.zip") -DestinationPath (Join-Path $work $Name)
+        $zip = Join-Path $work "$Name.zip"
+        Invoke-WebRequest -Uri $Url -OutFile $zip -UseBasicParsing
+        $got = (Get-FileHash $zip -Algorithm SHA256).Hash
+        if ($got -ne $Sha256) { throw "$Url is not the file expected: its SHA-256 is $got, not $Sha256. Nothing was installed." }
+        Expand-Archive -Path $zip -DestinationPath (Join-Path $work $Name)
     }
     $releaseUrl = 'https://github.com/nathannncurtis/dokkit/releases/latest/download/dokkit-windows-x64.zip'
     if ($env:DOKKIT_RELEASE_URL) { $releaseUrl = $env:DOKKIT_RELEASE_URL }
-    & $fetch $releaseUrl 'dokkit'
+    # A release is published with its SHA-256 beside it, in a file of the same name plus .sha256.
+    $releaseSha = (-split [string](Invoke-WebRequest -Uri "$releaseUrl.sha256" -UseBasicParsing).Content)[0]
+    & $fetch $releaseUrl 'dokkit' $releaseSha
     $again = @{}
     foreach ($name in $PSBoundParameters.Keys) { $again[$name] = $PSBoundParameters[$name] }
     $first = -not (Test-Path (Join-Path $env:ProgramData 'Dokkit\settings.env'))
     if ($first -and -not $DatabaseUrl -and -not $Postgres) {
         $postgresUrl = 'https://get.enterprisedb.com/postgresql/postgresql-17.6-1-windows-x64-binaries.zip'
-        if ($env:DOKKIT_POSTGRES_URL) { $postgresUrl = $env:DOKKIT_POSTGRES_URL }
-        & $fetch $postgresUrl 'postgres'
+        $postgresSha = 'D378882ABD001A186735ACD6F6BA716BCA6CCD192E800412D4FD15ED25376B3E'
+        # Another download needs its own SHA-256 named with it.
+        if ($env:DOKKIT_POSTGRES_URL) {
+            if (-not $env:DOKKIT_POSTGRES_SHA256) { throw 'DOKKIT_POSTGRES_URL needs DOKKIT_POSTGRES_SHA256 with it.' }
+            $postgresUrl = $env:DOKKIT_POSTGRES_URL; $postgresSha = $env:DOKKIT_POSTGRES_SHA256
+        }
+        & $fetch $postgresUrl 'postgres' $postgresSha
         $again.Postgres = Join-Path $work 'postgres\pgsql'
     }
     $inner = Get-ChildItem (Join-Path $work 'dokkit') -Recurse -Filter install.ps1 | Select-Object -First 1
