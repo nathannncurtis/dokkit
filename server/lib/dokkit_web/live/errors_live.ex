@@ -6,7 +6,11 @@ defmodule DokkitWeb.ErrorsLive do
 
   def handle_params(params, _uri, socket), do: {:noreply, load(assign(socket, id: params["id"]))}
 
-  def handle_info(:issues_changed, socket), do: {:noreply, load(socket)}
+  def handle_info(:issues_changed, socket),
+    do: {:noreply, DokkitWeb.Auth.debounce(socket, :page, &load/1)}
+
+  def handle_info({:settled, :page}, socket),
+    do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
 
   defp load(%{assigns: %{id: nil}} = socket),
     do: assign(socket, page_title: "Errors", errors: Errors.list(), error: nil)

@@ -26,7 +26,11 @@ defmodule DokkitWeb.ApiController do
 
     if scopes == [] or blank?(p["label"]),
       do: fail(conn, 422, "bad_key", "A token needs a label and scopes."),
-      else: minted(conn, Keys.mint(:user, %{label: p["label"], scopes: scopes}))
+      else:
+        minted(
+          conn,
+          Keys.mint(:user, %{label: p["label"], scopes: scopes, user_id: conn.assigns.key.user_id})
+        )
   end
 
   def add_key(conn, %{"kind" => "app", "service" => id}) do
@@ -36,9 +40,10 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
-  def add_key(conn, %{"kind" => "enrol"}) do
+  def add_key(conn, %{"kind" => "enrol"} = p) do
     expires = DateTime.add(DateTime.utc_now(), 3600)
-    minted(conn, Keys.mint(:enrol, %{expires_at: expires}))
+    label = if is_binary(p["machine"]) and p["machine"] != "", do: String.trim(p["machine"])
+    minted(conn, Keys.mint(:enrol, %{expires_at: expires, label: label}))
   end
 
   def add_key(conn, _),
