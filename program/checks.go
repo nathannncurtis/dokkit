@@ -45,7 +45,7 @@ type declaration struct {
 type check struct {
 	Type, Name, URL, Host string
 	Port                  int
-	Every, Timeout, Slow    string
+	Every, Timeout, Slow  string
 	DateFrom              string `toml:"date_from"`
 	name, dir             string
 	next                  time.Time
@@ -94,17 +94,32 @@ var (
 	restartedMu sync.Mutex
 )
 
+// unitKey is a name as the throttle and the restart list compare it: a unit with or without .service is one.
+func (c *check) unitKey(name string) string {
+	name = strings.ToLower(name)
+	if c.Type == "systemd" {
+		name = strings.TrimSuffix(name, ".service")
+	}
+	return name
+}
+
 func (c *check) tryRestart() bool {
-	restartedMu.Lock()
-	defer restartedMu.Unlock()
 	start := startService
 	if c.Type == "systemd" {
-		start = restartUnit
+		// Only the installed service restarts a unit, never a watch run from a login.
+		start = nil
+		if runningAsService() {
+			start = restartUnit
+		}
 	}
-	if !c.restart || start == nil || time.Since(restarted[c.Name]) < 10*time.Minute {
+	key := c.unitKey(c.Name)
+	restartedMu.Lock()
+	if !c.restart || start == nil || time.Since(restarted[key]) < 10*time.Minute {
+		restartedMu.Unlock()
 		return false
 	}
-	restarted[c.Name] = time.Now()
+	restarted[key] = time.Now()
+	restartedMu.Unlock() // the restart itself can take a while, and holds nothing
 	return start(c.Name) == nil
 }
 
@@ -156,6 +171,17 @@ func (c *check) problem() (runs bool, err error) {
 			if _, err := time.ParseDuration(d); err != nil {
 				return false, fmt.Errorf("%q is not a time such as 30s or 5m", d)
 			}
+		}
+	}
+	if c.Slow != "" {
+		slow, _ := time.ParseDuration(c.Slow)
+		switch {
+		case c.Type != "http":
+			return false, errors.New("slow is only for an http check")
+		case slow <= 0:
+			return false, fmt.Errorf("slow must be more than zero, not %q", c.Slow)
+		case slow >= c.timeout():
+			return false, fmt.Errorf("slow (%s) must be less than timeout (%s), or it can never show. Raise timeout, which is 5s when not set", c.Slow, seconds(c.timeout()))
 		}
 	}
 	switch c.Type {
@@ -307,7 +333,7 @@ func (c *check) run() result {
 		}
 		if slow, perr := time.ParseDuration(c.Slow); err == nil && perr == nil && time.Since(started) > slow {
 			took := time.Since(started)
-			return result{state: "degraded", value: float64(took.Milliseconds()), note: fmt.Sprintf("answered in %.1f s, slower than %s", took.Seconds(), seconds(slow))}
+			return result{state: "degraded", value: float64(took.Milliseconds()), note: "answered in " + tookText(took, slow) + ", slower than " + seconds(slow)}
 		}
 	case "tcp":
 		host := c.Host
@@ -332,6 +358,10 @@ func (c *check) run() result {
 		} else {
 			err = serviceRunning(c.Name)
 		}
+		var busy unitBusy
+		if errors.As(err, &busy) {
+			return result{state: "degraded", note: c.Name + " " + err.Error()}
+		}
 		if err != nil {
 			if c.tryRestart() {
 				return result{ok: true, note: "had stopped; started it again"}
@@ -345,6 +375,16 @@ func (c *check) run() result {
 		return result{note: short(err)}
 	}
 	return result{ok: true, value: float64(time.Since(started).Milliseconds())}
+}
+
+// tookText writes a time with as many decimals as it takes to show it is over the limit.
+func tookText(took, limit time.Duration) string {
+	for places := 1; ; places++ {
+		s := strconv.FormatFloat(took.Seconds(), 'f', places, 64)
+		if f, _ := strconv.ParseFloat(s, 64); f > limit.Seconds() || places >= 4 {
+			return s + " s"
+		}
+	}
 }
 
 // seconds writes a duration as "2 s" or "0.5 s".
@@ -426,6 +466,9 @@ func stateLine(d *declaration, c *check, r result) map[string]any {
 	l := map[string]any{"type": "state", "at": now(), "service": d.Service.ID, "check": c.name, "state": "ok"}
 	if r.ok {
 		l["value"] = r.value
+		if r.note != "" {
+			l["note"] = r.note
+		}
 	} else {
 		l["state"], l["note"] = "down", r.note
 		if r.state != "" {
@@ -453,7 +496,13 @@ func checkOnce(path string) int {
 		r := c.run()
 		line, _ := json.Marshal(stateLine(d, c, r))
 		mark := "ok  "
-		if !r.ok {
+		switch {
+		case r.ok:
+		case r.state == "degraded" && c.Type == "http":
+			mark = "slow"
+		case r.state == "degraded":
+			mark = "warn"
+		default:
 			mark, bad = "FAIL", bad+1
 		}
 		fmt.Printf("  %s %-14s %s\n       would send %s\n", mark, c.name, c.target(), line)
@@ -533,10 +582,32 @@ type watcher struct {
 	mu       sync.Mutex // guards files, which the log reader looks at from its own goroutine
 	logc     *client    // the log reader's own client, so its timeout is its own
 	unsaved  bool
+	blocked  []string        // folders this account cannot list, with why
+	told     map[string]bool // blocked folders already written to the log
+}
+
+// checkFolders notes each folder in the configuration that this account cannot list.
+func (w *watcher) checkFolders() {
+	w.blocked = nil
+	for _, f := range w.folders {
+		why := unreadable(f)
+		if why == "" {
+			continue
+		}
+		w.blocked = append(w.blocked, f+": "+why)
+		if w.told == nil {
+			w.told = map[string]bool{}
+		}
+		if !w.told[f] {
+			w.told[f] = true
+			fmt.Fprintf(os.Stderr, "%s  cannot read the folder %s: %s\n", time.Now().Format("15:04:05"), f, why)
+		}
+	}
 }
 
 // refresh re-reads files that are new or changed, declares them, and forgets files that are gone.
 func (w *watcher) refresh() {
+	w.checkFolders()
 	found := map[string]bool{}
 	{
 		for _, p := range declarations(w.folders) {
@@ -608,7 +679,7 @@ func (w *watcher) pull() {
 		c.Type, c.name = item.Type, item.Name
 		// Only a service this machine's own configuration names is ever started, and only
 		// addresses on this machine, or named there, are reached.
-		listed := slices.ContainsFunc(w.c.restartable, func(n string) bool { return strings.EqualFold(n, c.Name) })
+		listed := slices.ContainsFunc(w.c.restartable, func(n string) bool { return c.unitKey(n) == c.unitKey(c.Name) })
 		c.restart, c.refuseStart = item.Restart && listed, item.Restart && !listed
 		if runs, _ := c.problem(); runs {
 			if h := c.host(); !w.c.mayReach(h) {
@@ -666,12 +737,24 @@ func (w *watcher) tick(at time.Time) int {
 		}
 	}
 	// At once, so one check that times out does not hold the rest back.
-	lines := make([]any, len(todo))
-	parallel(len(todo), func(i int) { lines[i] = stateLine(todo[i].d, todo[i].c, todo[i].c.run()) })
+	out := make([][]any, len(todo))
+	parallel(len(todo), func(i int) {
+		d, c := todo[i].d, todo[i].c
+		r := c.run()
+		out[i] = []any{stateLine(d, c, r)}
+		// A note on a good answer is a restart; the state alone would not keep it.
+		if r.ok && r.note != "" {
+			out[i] = append(out[i], map[string]any{"type": "log", "t": now(), "level": "warn", "service": d.Service.ID, "msg": c.name + ": " + r.note})
+		}
+	})
+	var lines []any
+	for _, o := range out {
+		lines = append(lines, o...)
+	}
 	if len(lines) > 0 {
 		w.c.report(lines...)
 	}
-	return len(lines)
+	return len(todo)
 }
 
 func (c *client) watch() int {

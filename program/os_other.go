@@ -8,12 +8,21 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
 )
 
 func machineDir() string { return "" }
+
+// serviceFiles are the installed service's configuration file and spool folder, where there is one.
+func serviceFiles() (string, string) {
+	if runtime.GOOS == "linux" {
+		return configFile, stateDir
+	}
+	return "", ""
+}
 
 // listsPath is the file naming the services this machine may start and the hosts it may reach,
 // used only while root owns it and the folder and nobody else can write to either.
@@ -126,4 +135,3 @@ func findDisks() (all []found) {
 	}
 	return
 }
-

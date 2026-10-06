@@ -1,9 +1,11 @@
 # Puts the dokkit program on this Windows machine. No administrator needed.
 #     irm https://dokkit.dev/get.ps1 | iex
 # DOKKIT_RELEASE_BASE names another place to download from.
+# Run in its own scope, so nothing it sets is left in the session that ran it.
+& {
 $ErrorActionPreference = 'Stop'
-[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 $ProgressPreference = 'SilentlyContinue'
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 $base = 'https://github.com/nathannncurtis/dokkit/releases/latest/download'
 if ($env:DOKKIT_RELEASE_BASE) { $base = $env:DOKKIT_RELEASE_BASE.TrimEnd('/') }
@@ -38,3 +40,4 @@ if (-not (($userPath -split ';') -contains $folder)) {
     Write-Host 'Added it to your Path. Open a new terminal to use it.'
 }
 Write-Host 'Next: dokkit enrol <address> <token>'
+}

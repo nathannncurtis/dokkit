@@ -46,7 +46,16 @@ main() {
     *":$dest:"*) ;;
     *) echo "$dest is not on your PATH." ;;
   esac
-  echo "Next: dokkit enrol <address> <token>"
+  echo "Next: $dest/dokkit enrol <address> <token>"
+  if [ "$os" = linux ]; then
+    if [ "$(id -u)" = 0 ] && [ -f /etc/systemd/system/dokkit.service ]; then
+      echo "The service is installed. To run it on this copy: dokkit service update"
+    elif [ "$(id -u)" = 0 ]; then
+      echo "To keep it running with nobody signed in: dokkit service install"
+    else
+      echo "To keep it running with nobody signed in, after enrolling: sudo $dest/dokkit service install"
+    fi
+  fi
 }
 
 main "$@"

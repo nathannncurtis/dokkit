@@ -514,6 +514,9 @@ func (c *client) postResult(path string, body []byte) {
 // fetchUpdate leaves the newer copy in place and returns its SHA-256. A copy that does not
 // match the hash in this machine's config is removed.
 func (c *client) fetchUpdate() (string, string, error) {
+	if runningAsService() {
+		return "", "", errors.New("this machine runs dokkit as a Linux service, which cannot fetch its own update. As root, install the newer program (run get.sh again), then run: dokkit service update")
+	}
 	name := "dokkit"
 	if runtime.GOOS == "windows" {
 		name += ".exe"

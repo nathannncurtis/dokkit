@@ -137,10 +137,11 @@ type status struct {
 	Pid      int
 	URL      string
 	Services []string
+	Blocked  []string
 }
 
 func (w *watcher) saveStatus(at time.Time) {
-	s := status{At: at, Sent: w.sent, Pid: os.Getpid(), URL: w.c.url}
+	s := status{At: at, Sent: w.sent, Pid: os.Getpid(), URL: w.c.url, Blocked: w.blocked}
 	for _, d := range w.files {
 		line := fmt.Sprintf("%-24s %d check(s)", d.Service.ID, len(d.Check))
 		if d.Logs.Path != "" {
@@ -173,6 +174,9 @@ func (c *client) status() int {
 	}
 	if len(s.Services) == 0 {
 		fmt.Println("  No dokkit.toml files are being read.")
+	}
+	for _, b := range s.Blocked {
+		fmt.Println("  Cannot read the folder", b)
 	}
 	if time.Since(s.At) > 3*time.Minute {
 		fmt.Println("dokkit watch is not running. It last wrote this", ago(s.At)+".")

@@ -24,6 +24,9 @@ const serviceName = "dokkit"
 // Only administrators and the system account can read it.
 func machineDir() string { return filepath.Join(os.Getenv("ProgramData"), "dokkit") }
 
+// serviceFiles is for Linux; Windows reads machineDir for every command.
+func serviceFiles() (string, string) { return "", "" }
+
 // The installed service's config.json carries the lists; there is no other place.
 func listsPath() string { return "" }
 
@@ -120,6 +123,9 @@ func serviceCommand(action string) int {
 		return 1
 	}
 	fmt.Println("Done:", action)
+	if action == "uninstall" {
+		fmt.Println(stillEnrolled)
+	}
 	return 0
 }
 
@@ -164,7 +170,7 @@ func install(m *mgr.Mgr) error {
 		}
 	}
 	os.Remove(file)
-	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders, Restart: lists.Restart, Hosts: lists.Hosts, SystemTasks: c.system, UpdateSha256: c.updateSha})
+	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders, Restart: lists.Restart, Hosts: lists.Hosts, SpoolMB: int(c.spoolMB), SystemTasks: c.system, UpdateSha256: c.updateSha})
 	if err := os.WriteFile(file, b, 0o600); err != nil {
 		return err
 	}

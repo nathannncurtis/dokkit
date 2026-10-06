@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,7 +48,7 @@ dokkit task run <name>
 
 Reads DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key),
 or the address and machine key that dokkit enrol saved. DOKKIT_SPOOL_MB caps the spool (500).
-A job declared under a service in a dokkit.toml is found by name; --service says which service when it is not.
+With a machine key, a job declared in a dokkit.toml in the folders of the saved configuration is found by name; --service says which service when it is not.
 dokkit watch reads dokkit.toml files from the folders in DOKKIT_FOLDERS
 or in the saved configuration, and from the folders directly inside them.
 It runs their checks and sends the log files they name. It is an ordinary program:
@@ -69,11 +70,10 @@ func cli(args []string) int {
 		fmt.Fprintln(os.Stderr, usage)
 		return 2
 	}
-	isHelp := func(s string) bool { return s == "help" || s == "--help" || s == "-h" }
-	if isHelp(args[0]) {
+	if args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		return help(args[1:])
 	}
-	if len(args) == 2 && isHelp(args[1]) {
+	if wantsHelp(args) {
 		return help(args[:1])
 	}
 	if args[0] == "enrol" {
@@ -96,6 +96,7 @@ func cli(args []string) int {
 		}
 		return serviceCommand(args[1])
 	}
+	viewService = args[0] == "status" || args[0] == "doctor"
 	c, err := load()
 	// These two need no server, only the folders when there are any.
 	if args[0] == "scan" || args[0] == "task" {
@@ -160,6 +161,24 @@ func cli(args []string) int {
 	}
 	fmt.Fprintln(os.Stderr, usage)
 	return 2
+}
+
+// wantsHelp is true for a known command given --help or -h before any "--". run and ping take
+// a free word as their name or command, so for them only the first argument counts.
+func wantsHelp(args []string) bool {
+	if !slices.ContainsFunc(topics, func(t topic) bool { return t.name == args[0] }) {
+		return false
+	}
+	free := args[0] == "run" || args[0] == "ping"
+	for i, a := range args[1:] {
+		if a == "--" {
+			return false
+		}
+		if (a == "--help" || a == "-h") && (!free || i == 0) {
+			return true
+		}
+	}
+	return false
 }
 
 // toServer is how every request to the Dokkit server travels. Checks of other things do not use it.
@@ -277,6 +296,10 @@ type saved struct {
 	UpdateSha256 string `json:"update_sha256,omitempty"`
 }
 
+// viewService makes status and doctor read an installed Linux service's configuration and spool.
+// Other commands keep to the person's own, so root never writes into the service's spool.
+var viewService bool
+
 func configPath() (string, error) {
 	if p := os.Getenv("DOKKIT_CONFIG"); p != "" {
 		return p, nil
@@ -299,6 +322,15 @@ func load() (*client, error) {
 	if dir := machineDir(); dir != "" && os.Getenv("DOKKIT_CONFIG") == "" {
 		if b, err := os.ReadFile(filepath.Join(dir, "config.json")); err == nil && json.Unmarshal(b, &s) == nil && c.spool == "" {
 			c.spool = filepath.Join(dir, "spool")
+		}
+	}
+	if cfg, spool := serviceFiles(); viewService && cfg != "" && os.Getenv("DOKKIT_CONFIG") == "" {
+		var v saved
+		if b, err := os.ReadFile(cfg); err == nil && json.Unmarshal(b, &v) == nil && v.URL != "" {
+			s = v
+			if c.spool == "" {
+				c.spool = spool
+			}
 		}
 	}
 	if p := listsPath(); p != "" {
