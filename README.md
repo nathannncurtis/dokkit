@@ -98,9 +98,9 @@ Four kinds of key: one to enrol a machine, one per machine, one per app that can
 
 | Path | What it is |
 |---|---|
-| `gallery/app/` | The current mock. Open `index.html` through a web server. Settings switches theme, dark base and accent. `node check.js` renders every route. |
+| `gallery/app/` | The current mock, filled with an invented company's data. Open `index.html` through a web server. Settings switches theme, dark base and accent. `node check.js` renders every route. |
 | `gallery/app/logos/` | The generated logo images. The mock uses a vector traced from `d2.png`. |
-| `gallery/demo/` | An earlier clickable demo, and `data.js`, the inventory the mocks are filled from. |
+| `gallery/demo/` | An earlier clickable demo, and `data.js`, the real inventory the earlier mocks are filled from. |
 | `gallery/`, `gallery/v2/` to `gallery/v5/` | Earlier explorations, kept for reference. |
 | `spec/` | The contract: the API, `dokkit.toml`, alerts, log lines, errors, the `dokkit` program, the library, the MCP, and the stats document two applications already implement. |
 | `docs/` | Wiring an app in, running the server, moving over from other tools, and the note on Sentry's SDKs. |
@@ -116,7 +116,7 @@ Then open `http://localhost:7912/app/`.
 
 ## Before this goes public
 
-The mocks are filled with one real install's inventory. All of it has to be replaced with invented demo data first:
+The current mock in `gallery/app/` runs on invented data. Everything older is filled with one real install's inventory and has to be replaced or removed first:
 
 - `gallery/demo/data.js`: real machine names, services, versions and ports.
 - Every page under `gallery/` that names those machines and services.

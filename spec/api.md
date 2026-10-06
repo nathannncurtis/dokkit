@@ -14,10 +14,10 @@ There is one HTTP API on the server. `dokkit`, the CLI, the libraries, the MCP a
 | **Service** | Anything that is a row. Kind is `service`, `job`, `dependency` or `app` (a desktop app on many PCs). Has `version`, `listens` and `environment`. |
 | **Check** | One way of knowing a service's state. See the check types below. |
 | **State** | `ok`, `degraded`, `down`, `unknown` (watched, no signal) or `unwatched` (found, nothing watching it). |
-| **Issue** | Opens when a check goes bad and closes by itself when it recovers. Has a short id (`DOC-12`), a kind, a since-time and a count. Can be snoozed until a time or acknowledged. |
+| **Issue** | Opens when a check goes bad and closes by itself when it recovers. Has a short id (`DOK-12`), a kind, a since-time and a count. Can be snoozed until a time or acknowledged. |
 | **Job run** | One run of a job: start, finish, exit code, duration, progress, last lines of output. |
 | **Deploy** | Version X of service S went onto machine M at time T. |
-| **Rule** | A condition, a channel (`page`, `push`, `email`, `text`, `digest`) and who receives it. |
+| **Rule** | A condition, a channel (`page`, `push`, `email`, `text`, `digest`, `webhook`) and who receives it. |
 | **Proposal** | Something found or offered that is not active until accepted in the interface: scan results and tasks. |
 | **Task** | A named piece of work defined on a machine. A task run is one execution. |
 | **Environment** | `production` by default. Anything reported under another environment, such as `dev`, is shown and never alerts. |

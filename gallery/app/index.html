@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Docket</title>
+<title>Dokkit</title>
 <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
 <link rel="stylesheet" href="app.css">
 <script>
 // Paint the saved look before first render; with none saved, follow the system theme.
 (function () {
-  var look = null; try { look = JSON.parse(localStorage.getItem("docket-look")); } catch (e) {}
+  var look = null; try { look = JSON.parse(localStorage.getItem("dokkit-look")); } catch (e) {}
   if (!look) { document.documentElement.className = (matchMedia("(prefers-color-scheme: dark)").matches ? "t-dark " : "") + "d-slate a-teal"; return; }
   document.documentElement.className = [look.theme === "dark" ? "t-dark" : "", look.base && look.base !== "neutral" ? "d-" + look.base : "", look.accent && look.accent !== "violet" ? "a-" + look.accent : ""].filter(Boolean).join(" ");
 })();
@@ -21,7 +21,8 @@
   <aside class="side" id="side"></aside>
   <main class="page" id="page"></main>
 </div>
-<script src="../demo/data.js"></script>
+<script src="data.js"></script>
+<script src="more.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
