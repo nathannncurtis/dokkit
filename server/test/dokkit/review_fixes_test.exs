@@ -137,7 +137,7 @@ defmodule Dokkit.ReviewFixesTest do
 
   test "a held alert is not sent for an issue that was snoozed or marked as seen" do
     {_, _, _, c} = job("heldsn", %{}, night: false)
-    Issues.record(c, :down, at: @late, title: "x failed")
+    Issues.record(c, :down, at: @late, now: @late, title: "x failed")
     [issue] = issues(c)
     assert alert(issue).status == :held
     Issues.acknowledge(issue.id)
@@ -147,7 +147,7 @@ defmodule Dokkit.ReviewFixesTest do
 
   test "turning night alerts back on sends what is held" do
     {_, _, s, c} = job("wakeup", %{}, night: false)
-    Issues.record(c, :down, at: @late, title: "x failed")
+    Issues.record(c, :down, at: @late, now: @late, title: "x failed")
     [issue] = issues(c)
     assert alert(issue).status == :held
     Estate.set_routing(s, %{"night" => true})

@@ -36,7 +36,7 @@ defmodule Dokkit.NightTest do
   end
 
   defp fail(check, at) do
-    Issues.record(check, :down, at: at, title: "#{check.name} failed")
+    Issues.record(check, :down, at: at, now: at, title: "#{check.name} failed")
     issue = Repo.get_by!(Dokkit.Issue, check_id: check.id)
     {issue, Repo.get_by!(Alert, issue_id: issue.id)}
   end

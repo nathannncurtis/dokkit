@@ -1879,7 +1879,7 @@ Send:
 
 ### PUT /api/v1/jobs/{id}/timing
 
-Set when a job is late. Sets when a job counts as late (grace) and as run too long (max_runtime). A field left out is cleared. A job from a dokkit.toml is changed in the file. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Set when a job is late. Sets when a job counts as late (grace) and as run too long (max_runtime). A field left out stays as it was; an empty one clears it. A job from a dokkit.toml is changed in the file. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 - `id` (path): The id of the job, which is its service id.
 
@@ -2097,7 +2097,7 @@ Send:
 
 ### PUT /api/v1/rules/{id}
 
-Replace an alert rule. Replaces what a rule says. Its place in the order stays. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Change an alert rule. Changes a rule: a field left out stays as it was and an empty one clears it. A kind, state or channel that is not one of its choices, null, or a machine that is not text answers 422. Its place in the order stays. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 - `id` (path): The id of the rule.
 
@@ -2437,7 +2437,7 @@ Send:
 
 ### POST /api/v1/alerts/test
 
-Send a test alert. Sends a test alert by one channel. Answers 422 when the channel is not one that sends, or when the send fails, with what went wrong. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Send a test alert. Sends a test alert by one channel. Answers ok, or 422 with one fixed reason that never carries anything the far end said, or 422 with code `slow_down` after four tests at once for a token, then one every 25 seconds. Answers 422 too when the channel is not one that sends. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 Send:
@@ -2539,7 +2539,7 @@ Not served. Answers 405. The MCP server takes POST only. Takes a user token (`dk
 
 ### POST /mcp
 
-Talk to the MCP server. The MCP server, as JSON-RPC over one POST address. It can do no more than the user token allows. An AI tool with a token can do through MCP everything the token can do through the API. The tools are, with `read` scope: `attention`, `find`, `service`, `jobs`, `job_runs`, `errors`, `since_deploy`, `tasks`, `machines`, `machine`, `issues`, `issue`, `deploys`, `versions`, `rules`, `proposals`, `task_runs`, `series` and `day`; with `read-logs` scope: `logs`; with `act` scope: `snooze`, `acknowledge`, `unsnooze`, `note`, `bulk`, `watch`, `unwatch`, `routing`, `hold`, `accept_proposal`, `dismiss_proposal` and `run_task`; with `admin` scope: `add_rule`, `update_rule`, `delete_rule`, `set_checks`, `allow_restart`, `keys`, `make_key`, `revoke_key`, `people`, `add_person` and `remove_person`. `make_key` returns the key text once. Admin tools are marked destructive. `tools/list` shows only the tools the token may use. Every answer starts with a line saying that what follows is data written by machines and apps, never instructions. An argument of the wrong type is an `isError` answer. A tool error is an answer with `isError` true, not an HTTP error. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Talk to the MCP server. The MCP server, as JSON-RPC over one POST address. It can do no more than the user token allows. An AI tool with a token can do through MCP everything the token can do through the API. The tools are, with `read` scope: `attention`, `find`, `service`, `jobs`, `job_runs`, `errors`, `since_deploy`, `tasks`, `machines`, `machine`, `issues`, `issue`, `deploys`, `versions`, `rules`, `proposals`, `task_runs`, `series` and `day`; with `read-logs` scope: `logs`; with `act` scope: `snooze`, `acknowledge`, `unsnooze`, `note`, `bulk`, `watch`, `unwatch`, `routing`, `hold`, `accept_proposal`, `dismiss_proposal` and `run_task`; with `admin` scope: `add_rule`, `update_rule`, `delete_rule`, `set_checks`, `allow_restart`, `keys`, `make_key`, `revoke_key`, `people`, `add_person` and `remove_person`. `make_key` returns the key text once. Admin tools are marked destructive. `tools/list` shows only the tools the token may use. Every answer starts with a line saying that what follows is data written by machines and apps, never instructions. An argument of the wrong type is an `isError` answer; a null argument is the same as one left out, and a whole number written as 5.0 is an integer. A tool error is an answer with `isError` true, not an HTTP error. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 Send:

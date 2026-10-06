@@ -34,21 +34,38 @@ defmodule Dokkit.Mail do
          [{"text", "plain", [], utf8, text}, {"text", "html", [], utf8, html}]}
       )
 
-    case :gen_smtp_client.send_blocking({from, to, mail}, smtp_options(host, config)) do
-      receipt when is_binary(receipt) -> :ok
-      error -> {:error, "The mail server refused it: #{inspect(error) |> String.slice(0, 200)}"}
+    with :ok <- allowed_port(config["smtp_port"] || "587"),
+         {:ok, ips} <- Dokkit.Alerts.resolve(host) do
+      case :gen_smtp_client.send_blocking({from, to, mail}, smtp_options(host, config, ips)) do
+        receipt when is_binary(receipt) -> :ok
+        error -> Dokkit.Alerts.failed(host, inspect(error) |> String.slice(0, 300))
+      end
     end
   rescue
-    e -> {:error, Exception.message(e)}
+    e -> Dokkit.Alerts.failed(host, Exception.message(e))
   end
 
   defp smtp(_, _, _, _, _), do: {:error, "The mail server has no address yet."}
 
+  defp allowed_port(port) do
+    if port in Enum.map(Dokkit.Alerts.smtp_ports(), &to_string/1),
+      do: :ok,
+      else:
+        {:error, "The mail server port is one of #{Enum.join(Dokkit.Alerts.smtp_ports(), ", ")}."}
+  end
+
   @doc false
   # Port 465 is TLS from the first byte; any other port must upgrade with STARTTLS or fail.
-  def smtp_options(host, config) do
+  # `ips` is what the host resolved to when it was checked; the connection goes to that address.
+  def smtp_options(host, config, ips \\ []) do
     user = config["smtp_user"]
     port = String.to_integer(config["smtp_port"] || "587")
+
+    relay =
+      case Enum.sort_by(ips, &tuple_size/1) do
+        [ip | _] -> :inet.ntoa(ip)
+        [] -> String.to_charlist(host)
+      end
 
     tls = [
       verify: :verify_peer,
@@ -58,7 +75,9 @@ defmodule Dokkit.Mail do
     ]
 
     [
-      relay: host,
+      relay: relay,
+      # The host was checked, so no other host is looked up for it.
+      no_mx_lookups: true,
       port: port,
       auth: if(user in [nil, ""], do: :never, else: :always),
       username: user || "",

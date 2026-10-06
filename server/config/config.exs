@@ -47,6 +47,19 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Names that never reach the logs: passwords, tokens, keys and the addresses that carry one.
+config :phoenix, :filter_parameters, [
+  "password",
+  "secret",
+  "token",
+  "key",
+  "pushover_user",
+  "smtp_user",
+  "ntfy_url",
+  "webhook_url",
+  "heartbeat_url"
+]
+
 config :phoenix_live_view, :colocated_assets, disable_symlink_warning: true
 
 # Import environment specific config. This must remain at the bottom

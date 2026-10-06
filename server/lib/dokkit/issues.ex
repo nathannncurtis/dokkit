@@ -9,6 +9,8 @@ defmodule Dokkit.Issues do
   @doc """
   Records a check result. Pass `soon: true` when a degraded result is a warning ahead of a
   failure: the issue lists under Soon and never pages. An expiry check is always soon.
+  `at` is when the result happened; `now` is when the server got it and decides whether an
+  alert is held for the night. Only tests pass `now`.
   """
   def record(%Check{} = check, state, opts \\ []) when state in [:ok, :degraded, :down] do
     # A service nobody is watching keeps no state and opens nothing.
@@ -18,7 +20,8 @@ defmodule Dokkit.Issues do
   end
 
   defp recorded(check, state, opts) do
-    at = opts[:at] || DateTime.utc_now()
+    now = opts[:now] || DateTime.utc_now()
+    at = opts[:at] || now
 
     {fails, passes} =
       if state == :ok, do: {0, check.passes + 1}, else: {check.fails + 1, 0}
@@ -58,13 +61,13 @@ defmodule Dokkit.Issues do
       # A different state or soon is a different issue: a warning that becomes a failure alerts as a new failure.
       {bad, %Issue{} = issue} ->
         close(issue, at)
-        open(check, service, bad, at, opts[:title], soon)
+        open(check, service, bad, at, opts[:title], soon, now, issue)
 
       {:unknown, nil} ->
         nil
 
       {bad, nil} ->
-        open(check, service, bad, at, opts[:title], soon)
+        open(check, service, bad, at, opts[:title], soon, now)
     end
 
     refresh(service)
@@ -102,7 +105,7 @@ defmodule Dokkit.Issues do
     quiet =
       from s in Service,
         where:
-          s.watched and s.environment == "production" and
+          s.watched and s.environment == "production" and s.state == :ok and
             s.id not in subquery(busy) and s.machine_id not in subquery(down)
 
     %{
@@ -149,7 +152,18 @@ defmodule Dokkit.Issues do
     count
   end
 
-  def open_count, do: length(groups().needs_you)
+  def open_count do
+    now = DateTime.utc_now()
+
+    Repo.one(
+      from i in Issue,
+        left_join: s in assoc(i, :service),
+        where: is_nil(i.closed_at) and not i.soon,
+        where: is_nil(i.snoozed_until) or i.snoozed_until <= ^now,
+        where: is_nil(s.id) or s.environment == "production",
+        select: count(i.id)
+    )
+  end
 
   def subscribe, do: Phoenix.PubSub.subscribe(Dokkit.PubSub, "issues")
   @doc "Call after the change is committed: pages reload, and alerts waiting to go are sent."
@@ -226,14 +240,26 @@ defmodule Dokkit.Issues do
   end
 
   def machines do
-    %{needs_you: now, soon: soon} = groups()
-    attention = Enum.frequencies_by(now, & &1.machine_id)
-    soon = Enum.frequencies_by(soon, & &1.machine_id)
+    now = DateTime.utc_now()
 
-    down =
+    # One query for every machine's open issues: down, under Needs you, and under Soon.
+    counts =
       Repo.all(
-        from i in Issue, where: i.kind == "machine" and is_nil(i.closed_at), select: i.machine_id
+        from i in Issue,
+          left_join: s in assoc(i, :service),
+          where: is_nil(i.closed_at),
+          group_by: i.machine_id,
+          select:
+            {i.machine_id, count(i.id) |> filter(i.kind == "machine"),
+             count(i.id)
+             |> filter(
+               (is_nil(i.snoozed_until) or i.snoozed_until <= ^now) and not i.soon and
+                 (is_nil(s.id) or s.environment == "production")
+             ),
+             count(i.id)
+             |> filter((is_nil(i.snoozed_until) or i.snoozed_until <= ^now) and i.soon)}
       )
+      |> Map.new(fn {id, down, needs, soon} -> {id, {down > 0, needs, soon}} end)
 
     Repo.all(
       from m in Dokkit.Machine,
@@ -253,13 +279,12 @@ defmodule Dokkit.Issues do
         }
     )
     |> Enum.map(fn m ->
-      gone = m.id in down
-      n = attention[m.id] || 0
+      {gone, n, soon} = counts[m.id] || {false, 0, 0}
 
       Map.merge(m, %{
         down: gone,
         attention: n,
-        soon: soon[m.id] || 0,
+        soon: soon,
         state: if(gone or n > 0, do: "warn", else: "")
       })
     end)
@@ -276,7 +301,7 @@ defmodule Dokkit.Issues do
   defp soon?(check, state, opts),
     do: state == :degraded and (opts[:soon] == true or check.type == :expiry)
 
-  defp open(check, service, state, at, title, soon) do
+  defp open(check, service, state, at, title, soon, now, from \\ nil) do
     recent =
       Repo.one(
         from i in Issue,
@@ -288,32 +313,65 @@ defmodule Dokkit.Issues do
       )
 
     if recent do
-      Dokkit.Alerts.reopened(recent)
-
-      Repo.update!(
-        Ecto.Changeset.change(recent,
-          closed_at: nil,
-          state: state,
-          soon: soon,
-          count: recent.count + 1
+      reopened =
+        Repo.update!(
+          Ecto.Changeset.change(recent,
+            closed_at: nil,
+            state: state,
+            soon: soon,
+            count: recent.count + 1
+          )
         )
-      )
-    else
-      issue =
-        Repo.insert!(%Issue{
-          machine_id: service.machine_id,
-          service_id: service.id,
-          check_id: check.id,
-          kind: to_string(check.type),
-          state: state,
-          soon: soon,
-          title: title || plain_title(service, check, state),
-          since: at
-        })
 
-      Dokkit.Alerts.plan(issue, service, at)
+      Dokkit.Alerts.reopened(reopened, now)
+      reopened
+    else
+      {:ok, issue} =
+        Repo.transaction(fn -> successor(check, service, state, at, title, soon, now, from) end)
+
       issue
     end
+  end
+
+  # The issue a person follows keeps its number and notes when its state changes. A snooze and
+  # "seen" go with it, except on the way to down: that always comes back and alerts.
+  defp successor(check, service, state, at, title, soon, now, from) do
+    heir = if from && state != :down, do: from
+    snoozed = heir && heir.snoozed_until && DateTime.compare(heir.snoozed_until, now) == :gt
+
+    issue =
+      Repo.insert!(%Issue{
+        machine_id: service.machine_id,
+        service_id: service.id,
+        check_id: check.id,
+        kind: to_string(check.type),
+        state: state,
+        soon: soon,
+        title: title || plain_title(service, check, state),
+        since: at,
+        number: from && renumber(from),
+        notes: (from && from.notes) || [],
+        snoozed_until: if(snoozed, do: heir.snoozed_until),
+        acknowledged_at: heir && heir.acknowledged_at
+      })
+
+    unless snoozed || (heir && heir.acknowledged_at),
+      do: Dokkit.Alerts.plan(issue, service, now)
+
+    issue
+  end
+
+  # The closed issue takes a fresh number so the successor can keep the one people saw.
+  defp renumber(%Issue{id: id, number: number}) do
+    Repo.update_all(
+      from(i in Issue,
+        where: i.id == ^id,
+        update: [set: [number: fragment("nextval(pg_get_serial_sequence('issues', 'number'))")]]
+      ),
+      []
+    )
+
+    number
   end
 
   # A service with one check, or a check named like the service or `up`, is named alone.

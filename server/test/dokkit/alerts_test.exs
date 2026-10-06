@@ -47,9 +47,11 @@ defmodule Dokkit.AlertsTest do
     assert_received {:sent, "events.pagerduty.com", body, _}
     assert %{"event_action" => "resolve"} = Jason.decode!(body)
 
+    # The resolve closed the incident, so a failure inside 30 minutes pages again.
     Intake.ping(key, "backup", "fail", nil, "")
-    assert Alerts.deliver_pending() == 0
-    refute_received {:sent, _, _, _}
+    assert Alerts.deliver_pending() == 1
+    assert_received {:sent, "events.pagerduty.com", body, _}
+    assert %{"event_action" => "trigger"} = Jason.decode!(body)
   end
 
   test "a channel that is not set up is reported, and sent once it is", %{key: key} do
@@ -61,7 +63,7 @@ defmodule Dokkit.AlertsTest do
 
     Alerts.save(%{"down" => "push", "pagerduty_key" => "R0UTE"})
     assert Alerts.config()["down"] == "push"
-    Alerts.save(%{"pagerduty_key" => ""})
+    Alerts.save(%{"down" => "push"})
     assert Alerts.config()["pagerduty_key"] == "R0UTE"
 
     Repo.update_all(Alert, set: [updated_at: DateTime.add(DateTime.utc_now(), -120)])

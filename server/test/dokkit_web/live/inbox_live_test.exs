@@ -224,7 +224,18 @@ defmodule DokkitWeb.InboxLiveTest do
     assert id == issue.id
   end
 
-  test "the fine line counts watched services with nothing open, and the machines", %{conn: conn} do
+  test "the fine line counts watched services that reported fine, and the machines", %{
+    conn: conn,
+    service: service
+  } do
+    {:ok, _, html} = live(conn, "/")
+    refute html =~ "more is fine"
+
+    check =
+      Repo.insert!(%Check{service_id: service.id, name: "backup", type: :job, fail_after: 1})
+
+    Dokkit.Issues.record(check, :ok)
+
     {:ok, _, html} = live(conn, "/")
     assert html =~ "1 more is fine, on 1 machine."
     assert %{fine: %{services: 1, machines: 1}} = Dokkit.Read.inbox()

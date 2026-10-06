@@ -435,11 +435,15 @@ defmodule Dokkit.Estate do
 
   @doc "Changes when a job counts as late and as run too long. A job from a dokkit.toml is read-only."
   def set_job_timing(%Check{type: :job, source: :reported} = check, params) do
-    timing = for k <- ~w(grace max_runtime), do: {k, String.trim(params[k] || "")}
+    # A field that is not given stays as it was; an empty one clears it.
+    timing =
+      for k <- ~w(grace max_runtime),
+          Map.has_key?(params, k),
+          do: {k, String.trim(params[k] || "")}
 
     if Enum.all?(timing, fn {_, v} -> v == "" or v =~ @duration end) do
       config =
-        Map.drop(check.config, ~w(grace max_runtime))
+        Map.drop(check.config, Enum.map(timing, &elem(&1, 0)))
         |> Map.merge(Map.reject(Map.new(timing), &(elem(&1, 1) == "")))
 
       {:ok, Repo.update!(Ecto.Changeset.change(check, config: config))}

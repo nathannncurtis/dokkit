@@ -17,12 +17,12 @@ defmodule DokkitWeb.JobsLive do
     do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
 
   def handle_event("add", %{"job" => params}, socket) do
-    with true <- socket.assigns.current_user.role != :viewer,
+    with true <- socket.assigns.current_user.role == :owner,
          {:ok, added} <- Estate.add_job(params) do
       {:noreply, assign(socket, added: added, error: nil, form: %{})}
     else
       {:error, text} -> {:noreply, assign(socket, error: text, form: params)}
-      false -> {:noreply, assign(socket, error: "A viewer cannot add jobs.", form: params)}
+      false -> {:noreply, assign(socket, error: "An owner adds jobs.", form: params)}
     end
   end
 
@@ -147,7 +147,12 @@ defmodule DokkitWeb.JobsLive do
 
           <div class="foot">
             <span :if={@error} class="bad" role="alert">{@error}</span>
-            <span class="end"><button class="btn primary" type="submit">Add the job</button></span>
+            <span :if={@current_user.role != :owner} class="hint">An owner adds jobs.</span>
+            <span class="end">
+              <button class="btn primary" type="submit" disabled={@current_user.role != :owner}>
+                Add the job
+              </button>
+            </span>
           </div>
         </div>
       </form>

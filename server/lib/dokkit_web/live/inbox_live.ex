@@ -72,6 +72,7 @@ defmodule DokkitWeb.InboxLive do
       found: Found.list(),
       snoozed: Issues.snoozed_list(),
       fine: Issues.fine(),
+      night: Dokkit.Alerts.night_ends(),
       day: Dokkit.Read.day(),
       linked: Enum.map(socket.assigns.shell.machines, & &1.id),
       picked: MapSet.intersection(socket.assigns.picked, MapSet.new(now ++ soon, & &1.id))
@@ -174,7 +175,7 @@ defmodule DokkitWeb.InboxLive do
             /> <span :if={@tab == :snoozed}></span>
             <span>Issue</span><span></span><span class="r">Count</span><span>Machine</span><span></span>
           </div>
-          <.issue_row :for={i <- @rows} i={i} tab={@tab} picked={@picked} spans={@spans} />
+          <.issue_row :for={i <- @rows} i={i} tab={@tab} picked={@picked} spans={@spans} night={@night} />
           <div :if={@tab == :found and @found != []} class="lh cols-inbox nw">
             <span>Found</span><span>How it was found</span><span>Machine</span><span></span>
           </div>
@@ -207,7 +208,7 @@ defmodule DokkitWeb.InboxLive do
             <div class="grp">
               {env}<span class="end"><span class="tag">{length(list)}</span></span>
             </div>
-            <.issue_row :for={i <- list} i={i} tab={:other} picked={@picked} spans={@spans} />
+            <.issue_row :for={i <- list} i={i} tab={:other} picked={@picked} spans={@spans} night={@night} />
           </div>
         </div>
 
@@ -272,6 +273,7 @@ defmodule DokkitWeb.InboxLive do
   attr :tab, :atom, required: true
   attr :picked, :any, required: true
   attr :spans, :list, required: true
+  attr :night, :string, required: true
 
   defp issue_row(assigns) do
     ~H"""
@@ -329,11 +331,11 @@ defmodule DokkitWeb.InboxLive do
           </div>
 
           <span
-            :if={told(@i.alert)}
+            :if={told(@i.alert, @night)}
             class={["tag", @i.alert.status == :failed && "warn"]}
             title={@i.alert.error}
           >
-            {told(@i.alert)}
+            {told(@i.alert, @night)}
           </span>
           <.link class="btn sm" navigate={where(@i)}>Open</.link>
           <span :if={@tab != :snoozed} class="end acts">
@@ -409,14 +411,14 @@ defmodule DokkitWeb.InboxLive do
   defp how(_), do: "Running service"
 
   # An alert is sent once per issue, so there is no count; its update time is when it went.
-  defp told(%{status: :sent, channel: channel, updated_at: at}) do
+  defp told(%{status: :sent, channel: channel, updated_at: at}, _) do
     verb = Dokkit.Alerts.sent_word(channel)
     verb && "#{verb} at #{DokkitWeb.Show.at(at)}"
   end
 
-  defp told(%{status: :held}), do: "Held until #{Dokkit.Alerts.night_ends()}"
-  defp told(%{status: :failed}), do: "Alert not sent"
-  defp told(_), do: nil
+  defp told(%{status: :held}, night), do: "Held until #{night}"
+  defp told(%{status: :failed}, _), do: "Alert not sent"
+  defp told(_, _), do: nil
 
   defp where(%Issue{service_id: nil, machine_id: id}), do: ~p"/all" <> "#m-#{id}"
   defp where(%Issue{service_id: id}), do: ~p"/s/#{id}"

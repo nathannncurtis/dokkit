@@ -104,7 +104,7 @@ defmodule DokkitWeb.McpController do
     {"unwatch", "act", "Stop watching a service. Its open issues close.", %{"id" => @text},
      ["id"]},
     {"routing", "act",
-     "Set where a service's issues go when it stops (down) and when it struggles (degraded), and with night false whether they wait for morning at night.",
+     "Set where a service's issues go when it stops (down) and when it struggles (degraded), and with night false whether they wait for morning at night. A field left out stays as it was; an empty down or degraded clears the route.",
      %{
        "id" => @text,
        "down" => @channel,
@@ -115,7 +115,7 @@ defmodule DokkitWeb.McpController do
      "Hold a service at a version, so a newer one is not offered. An empty or missing version lets it go.",
      %{"id" => @text, "version" => @text}, ["id"]},
     {"accept_proposal", "act",
-     "Accept a found service or port. Takes the id from proposals; a task there is accepted in the interface.",
+     "Accept a found service or port. Takes the id from proposals. A task there is accepted with accept_task.",
      %{"id" => @text}, ["id"]},
     {"dismiss_proposal", "act", "Dismiss a proposal. Takes the id from proposals.",
      %{"id" => @text}, ["id"]},
@@ -123,7 +123,7 @@ defmodule DokkitWeb.McpController do
      "Add an alert rule at the end of the list. kind is job, check, machine or empty for anything; state is down, degraded or empty for both.",
      @rule, []},
     {"update_rule", "admin",
-     "Replace what an alert rule says. Takes the id from rules. on false switches the rule off.",
+     "Change an alert rule. A field left out stays as it was; an empty one clears it. Takes the id from rules. on false switches the rule off.",
      Map.merge(@rule, %{"id" => @text, "on" => %{"type" => "boolean"}}), ["id"]},
     {"delete_rule", "admin", "Delete an alert rule.", %{"id" => @text}, ["id"]},
     {"set_checks", "admin",
@@ -181,7 +181,7 @@ defmodule DokkitWeb.McpController do
      "Keep the text of a service's errors from now on, or stop keeping it.",
      %{"id" => @text, "keep" => @bool}, ["id", "keep"]},
     {"set_job_timing", "act",
-     "Set when a job counts as late (grace) and as run too long (max_runtime), such as 30m or 2h. A field left out is cleared. A job from a dokkit.toml is changed in the file.",
+     "Set when a job counts as late (grace) and as run too long (max_runtime), such as 30m or 2h. A field left out stays as it was; an empty one clears it. A job from a dokkit.toml is changed in the file.",
      %{"id" => @text, "grace" => @text, "max_runtime" => @text}, ["id"]},
     {"accept_task", "admin",
      "Accept a task that is waiting, so its machine may run the command. Takes the id, command and pin from proposals. system true runs it as the system account.",
@@ -203,10 +203,11 @@ defmodule DokkitWeb.McpController do
        "max_runtime" => @text
      }, ["name", "machine"]},
     {"set_alert_settings", "admin",
-     "Change alert settings. A setting left out stays as it was, and a secret left blank keeps its value. Addresses must be https.",
+     "Change alert settings. A setting left out stays as it was; an empty secret clears it. If the address a secret is sent to changes (ntfy_url, smtp_host), send the secret again in the same call or it is cleared, and the answer says so. Addresses must be https, not this machine; mail ports are 25, 465, 587 and 2525.",
      @settings, []},
-    {"test_alert", "admin", "Send a test alert by one channel.", %{"channel" => @channel},
-     ["channel"]},
+    {"test_alert", "admin",
+     "Send a test alert by one channel. Answers sent, or one fixed reason. Four at once, then one every 25 seconds.",
+     %{"channel" => @channel}, ["channel"]},
     {"accept_suggestion", "admin",
      "Send that service's issues to the daily digest from now on. Takes the id from alert_suggestions.",
      %{"id" => @text}, ["id"]},
@@ -268,7 +269,9 @@ defmodule DokkitWeb.McpController do
   end
 
   defp answer("tools/call", %{"name" => name} = params, %{scopes: scopes} = key) do
-    args = (is_map(params["arguments"]) && params["arguments"]) || %{}
+    # A client may send null for an argument it has no value for.
+    args = if is_map(params["arguments"]), do: params["arguments"], else: %{}
+    args = Map.reject(args, fn {_, v} -> is_nil(v) end)
 
     case Enum.find(@tools, &(elem(&1, 0) == name)) do
       nil ->
@@ -358,7 +361,7 @@ defmodule DokkitWeb.McpController do
   defp tool("task_runs", _), do: Read.task_runs()
 
   defp tool("series", %{"id" => id} = args),
-    do: seen(Read.series(id, Map.update(args, "points", nil, &to_string/1)))
+    do: seen(Read.series(id, Map.update(args, "points", nil, &to_string(trunc(&1)))))
 
   defp tool("day", args), do: Api.the_day(args) |> r()
   defp tool("unsnooze", %{"id" => id}), do: known(Issues.unsnooze(id))
@@ -370,7 +373,7 @@ defmodule DokkitWeb.McpController do
   defp tool("hold", %{"id" => id} = args), do: Api.set_held(id, args["version"]) |> r()
   defp tool("accept_proposal", %{"id" => id}), do: Api.found(id, &Dokkit.Found.watch/1) |> r()
   defp tool("dismiss_proposal", %{"id" => id}), do: Api.found(id, &Dokkit.Found.dismiss/1) |> r()
-  defp tool("add_rule", args), do: Api.new_rule(args)
+  defp tool("add_rule", args), do: Api.new_rule(args) |> r()
   defp tool("update_rule", %{"id" => _} = args), do: Api.edit_rule(args) |> r()
   defp tool("delete_rule", %{"id" => id}), do: Api.drop_rule(id)
   defp tool("set_checks", %{"id" => _} = args), do: Api.set_service_checks(args) |> r()
@@ -390,7 +393,6 @@ defmodule DokkitWeb.McpController do
   defp tool("update_program", %{"id" => id}), do: Api.fetch_program(id, "an AI tool") |> r()
   defp tool("add_job", args), do: Api.new_job(args) |> r()
   defp tool("set_alert_settings", args), do: Api.save_alerts(args) |> r()
-  defp tool("test_alert", args), do: Api.try_alert(args) |> r()
 
   defp tool("accept_suggestion", %{"id" => id}),
     do: Api.suggestion(id, &Dokkit.Alerts.accept_suggestion/1) |> r()
@@ -402,6 +404,7 @@ defmodule DokkitWeb.McpController do
   defp tool(_, _), do: {:error, "That tool needs different arguments."}
 
   defp tool("make_key", args, key), do: Api.make_key(args, key) |> r()
+  defp tool("test_alert", args, key), do: Api.try_alert(args, key.id) |> r()
   defp tool(name, args, _), do: tool(name, args)
 
   # Every argument must be of the type the tool declares.
@@ -419,7 +422,7 @@ defmodule DokkitWeb.McpController do
 
   defp typed?("string", v, _), do: is_binary(v)
   defp typed?("boolean", v, _), do: is_boolean(v)
-  defp typed?("integer", v, _), do: is_integer(v)
+  defp typed?("integer", v, _), do: is_integer(v) or (is_float(v) and v == Float.round(v))
   defp typed?("object", v, _), do: is_map(v)
 
   defp typed?("array", v, schema),

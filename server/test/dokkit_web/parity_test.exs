@@ -1,70 +1,97 @@
 defmodule DokkitWeb.ParityTest do
-  # The first rule of the API: nothing can be done in the interface that the API cannot do.
-  # Every event of every page is listed with the API calls that do the same, or why it has none.
+  # The first rule of the API: nothing can be done in the interface that the API cannot do, and
+  # the API asks for no less than the interface does. Every event of every page is listed with
+  # the role the page lets do it (read from how the page guards the event) and the API calls
+  # that do the same. The role must match the scope the call needs: a viewer reads, a member
+  # acts, an owner has admin. Where they differ the stricter side wins.
   use ExUnit.Case, async: true
 
-  @view :view
-  @session :session
   # view: only changes what the page shows. session: the full-control token, which is made in
   # Settings on purpose.
+  @view :view
+  @session :session
+  @scopes %{viewer: ~w(read read-logs), member: ~w(act), owner: ~w(admin)}
+
   @events %{
     "AlertsLive" => %{
-      "save" => ["PUT /api/v1/alerts"],
+      "save" => {:owner, ["PUT /api/v1/alerts"]},
       "changed" => @view,
-      "rule" => ["POST /api/v1/rules", "PUT /api/v1/rules/:id", "DELETE /api/v1/rules/:id"],
-      "suggestion" => [
-        "POST /api/v1/alerts/suggestions/:id/accept",
-        "POST /api/v1/alerts/suggestions/:id/dismiss"
-      ],
-      "test" => ["POST /api/v1/alerts/test"]
+      "rule" =>
+        {:owner, ["POST /api/v1/rules", "PUT /api/v1/rules/:id", "DELETE /api/v1/rules/:id"]},
+      "suggestion" =>
+        {:owner,
+         [
+           "POST /api/v1/alerts/suggestions/:id/accept",
+           "POST /api/v1/alerts/suggestions/:id/dismiss"
+         ]},
+      "test" => {:owner, ["POST /api/v1/alerts/test"]}
     },
-    "DeploysLive" => %{"fetch" => ["POST /api/v1/machines/:id/update"]},
-    "EnrolLive" => %{"token" => ["POST /api/v1/keys"]},
+    "DeploysLive" => %{"fetch" => {:owner, ["POST /api/v1/machines/:id/update"]}},
+    "EnrolLive" => %{"token" => {:owner, ["POST /api/v1/keys"]}},
     "InboxLive" => %{
       "tab" => @view,
       "pick" => @view,
       "pick_all" => @view,
       "span" => @view,
-      "snooze" => ["POST /api/v1/issues/:id/snooze", "POST /api/v1/issues/bulk"],
-      "seen" => ["POST /api/v1/issues/:id/acknowledge"],
-      "back" => ["POST /api/v1/issues/:id/unsnooze"],
-      "watch" => ["POST /api/v1/proposals/:id/accept"],
-      "leave" => ["POST /api/v1/proposals/:id/dismiss"]
+      "snooze" => {:member, ["POST /api/v1/issues/:id/snooze", "POST /api/v1/issues/bulk"]},
+      "seen" => {:member, ["POST /api/v1/issues/:id/acknowledge"]},
+      "back" => {:member, ["POST /api/v1/issues/:id/unsnooze"]},
+      "watch" => {:member, ["POST /api/v1/proposals/:id/accept"]},
+      "leave" => {:member, ["POST /api/v1/proposals/:id/dismiss"]}
     },
-    "JobsLive" => %{"add" => ["POST /api/v1/jobs"]},
-    "LogsLive" => %{"filter" => ["GET /api/v1/logs"]},
+    "JobsLive" => %{"add" => {:owner, ["POST /api/v1/jobs"]}},
+    "LogsLive" => %{"filter" => {:viewer, ["GET /api/v1/logs"]}},
     "ServiceLive" => %{
       "timing_typed" => @view,
-      "timing" => ["PUT /api/v1/jobs/:id/timing"],
-      "route" => ["PUT /api/v1/services/:id/routing"],
-      "watching" => ["POST /api/v1/services/:id/watch", "POST /api/v1/services/:id/unwatch"],
-      "hold" => ["PUT /api/v1/services/:id/hold"],
-      "restart" => ["PUT /api/v1/services/:id/restart"],
-      "messages" => ["PUT /api/v1/services/:id/messages"],
-      "note" => ["POST /api/v1/issues/:id/notes"],
-      "seen" => ["POST /api/v1/issues/:id/acknowledge"],
-      "snooze" => ["POST /api/v1/issues/:id/snooze"],
-      "back" => ["POST /api/v1/issues/:id/unsnooze"]
+      "timing" => {:member, ["PUT /api/v1/jobs/:id/timing"]},
+      "route" => {:member, ["PUT /api/v1/services/:id/routing"]},
+      "watching" =>
+        {:member, ["POST /api/v1/services/:id/watch", "POST /api/v1/services/:id/unwatch"]},
+      "hold" => {:member, ["PUT /api/v1/services/:id/hold"]},
+      "restart" => {:owner, ["PUT /api/v1/services/:id/restart"]},
+      "messages" => {:member, ["PUT /api/v1/services/:id/messages"]},
+      "note" => {:member, ["POST /api/v1/issues/:id/notes"]},
+      "seen" => {:member, ["POST /api/v1/issues/:id/acknowledge"]},
+      "snooze" => {:member, ["POST /api/v1/issues/:id/snooze"]},
+      "back" => {:member, ["POST /api/v1/issues/:id/unsnooze"]}
     },
     "SettingsLive" => %{
-      "add" => ["POST /api/v1/users"],
-      "remove" => ["DELETE /api/v1/users/:id"],
-      "restore" => ["POST /api/v1/logs/archives/:name/restore"],
-      "revoke" => ["DELETE /api/v1/keys/:id"],
-      "token" => ["POST /api/v1/keys"],
+      "add" => {:owner, ["POST /api/v1/users"]},
+      "remove" => {:owner, ["DELETE /api/v1/users/:id"]},
+      "restore" => {:owner, ["POST /api/v1/logs/archives/:name/restore"]},
+      "revoke" => {:owner, ["DELETE /api/v1/keys/:id"]},
+      "token" => {:owner, ["POST /api/v1/keys"]},
       "full" => @view,
       "full_typed" => @view,
       "full_token" => @session
     },
     "TasksLive" => %{
-      "accepted" => ["POST /api/v1/tasks/:id/accept"],
-      "dismissed" => ["POST /api/v1/tasks/:id/dismiss"],
-      "sweep" => ["POST /api/v1/proposals/:id/accept", "POST /api/v1/proposals/:id/dismiss"],
-      "run" => ["POST /api/v1/tasks/:id/run"]
+      "accepted" => {:owner, ["POST /api/v1/tasks/:id/accept"]},
+      "dismissed" => {:owner, ["POST /api/v1/tasks/:id/dismiss"]},
+      "sweep" =>
+        {:member, ["POST /api/v1/proposals/:id/accept", "POST /api/v1/proposals/:id/dismiss"]},
+      "run" => {:member, ["POST /api/v1/tasks/:id/run"]}
     }
   }
 
+  # Routes served by a controller for a browser, not for a token. The theme is chosen in the
+  # browser and never reaches the server.
+  @session_only %{
+    "GET /login" => "Signing in is a person at a form; a token is its own proof.",
+    "POST /login" => "Signing in is a person at a form; a token is its own proof.",
+    "POST /logout" => "A session ends; a token is revoked with DELETE /api/v1/keys/:id.",
+    "GET /setup" => "First-run setup makes the first owner, once, with the code in the log.",
+    "POST /setup" => "First-run setup makes the first owner, once, with the code in the log.",
+    "GET /password" => "A person changes their own password; a token has none.",
+    "POST /password" => "A person changes their own password; a token has none."
+  }
+
+  @api_controllers [DokkitWeb.ApiController, DokkitWeb.McpController, DokkitWeb.IntakeController]
   @live Path.expand("../../lib/dokkit_web/live", __DIR__)
+
+  defp routes,
+    do:
+      Map.new(DokkitWeb.Router.__routes__(), &{String.upcase("#{&1.verb}") <> " " <> &1.path, &1})
 
   test "every event of every page is listed with the API calls that do the same" do
     for file <- Path.wildcard(Path.join(@live, "*.ex")) do
@@ -72,17 +99,37 @@ defmodule DokkitWeb.ParityTest do
       listed = @events |> Map.get(module, %{}) |> Map.keys() |> Enum.sort()
 
       assert events(file) == listed,
-             "#{module} events changed. List each in test/dokkit_web/parity_test.exs with the API calls that do the same, or as view or session."
+             "#{module} events changed. List each in test/dokkit_web/parity_test.exs with its role and the API calls that do the same, or as view or session."
     end
   end
 
   test "every API call listed is a route the server has" do
-    routes =
-      MapSet.new(DokkitWeb.Router.__routes__(), &(String.upcase("#{&1.verb}") <> " " <> &1.path))
+    routes = routes()
 
-    for {module, events} <- @events, {event, calls} <- events, is_list(calls), call <- calls do
-      assert call in routes, "#{module} #{event}: no route #{call}"
+    for {module, events} <- @events, {event, {_, calls}} <- events, call <- calls do
+      assert Map.has_key?(routes, call), "#{module} #{event}: no route #{call}"
     end
+  end
+
+  test "the role the page needs is the scope the API needs" do
+    for {module, events} <- @events, {event, {role, calls}} <- events, call <- calls do
+      [verb, path] = String.split(call, " ")
+      need = DokkitWeb.ApiController.needs(verb, String.split(path, "/", trim: true))
+
+      assert need in @scopes[role],
+             "#{module} #{event} is for #{role}, but #{call} needs #{need}. Make them agree; the stricter side wins."
+    end
+  end
+
+  test "every route a browser session alone reaches is listed with its reason" do
+    session =
+      for {call, route} <- routes(),
+          route.plug not in @api_controllers,
+          route.plug != Phoenix.LiveView.Plug,
+          do: call
+
+    assert Enum.sort(session) == Enum.sort(Map.keys(@session_only)),
+           "A controller route that is not the API changed. List it in @session_only with the reason a token does not need it, or give it an API call."
   end
 
   defp events(file) do

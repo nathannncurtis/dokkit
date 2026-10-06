@@ -256,6 +256,19 @@ defmodule Dokkit.Numbers do
         c.id not in soon_ids,
         do: Issues.record(c, :ok, at: now)
 
+    # A full-in-days note whose disk has no limit or no readings now is stale.
+    live = for r <- rows, limit, c = checks[{r.machine_id, r.name}], do: c.id
+
+    for c <-
+          Repo.all(
+            from c in Check,
+              join: s in assoc(c, :service),
+              where: s.slug == "machine" and fragment("? \\? 'full_in_days'", c.config),
+              preload: [service: s]
+          ),
+        c.id not in live,
+        do: set_full(c, nil)
+
     :ok
   end
 

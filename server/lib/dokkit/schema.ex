@@ -19,6 +19,7 @@ defmodule Dokkit.Machine do
     field :arch, :string
     field :program_version, :string
     field :last_seen_at, :utc_datetime_usec
+    field :seen_by, :binary_id
     has_many :services, Dokkit.Service
     timestamps()
   end

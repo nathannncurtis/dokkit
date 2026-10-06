@@ -186,7 +186,7 @@ defmodule DokkitWeb.ApiController do
 
   def checks(conn, params), do: reply(conn, set_service_checks(params))
 
-  # A task is a command a machine would run, so it is accepted by a person in the interface.
+  # A found service or port. A task is a command a machine would run, so it goes through accept_task.
   def accept(conn, %{"id" => id}), do: reply(conn, found(id, &Dokkit.Found.watch/1))
   def dismiss(conn, %{"id" => id}), do: reply(conn, found(id, &Dokkit.Found.dismiss/1))
 
@@ -199,10 +199,21 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
-  def new_rule(params), do: List.last(Dokkit.Alerts.add_rule(params))
+  def new_rule(params) do
+    case Dokkit.Alerts.rule_error(params) do
+      nil -> List.last(Dokkit.Alerts.add_rule(params))
+      why -> {:error, "bad_rule", why}
+    end
+  end
 
   def edit_rule(%{"id" => id} = params) do
-    Enum.find(Dokkit.Alerts.update_rule(id, params), &(&1["id"] == id)) || not_found()
+    case Dokkit.Alerts.rule_error(params) do
+      nil ->
+        Enum.find(Dokkit.Alerts.update_rule(id, params), &(&1["id"] == id)) || not_found()
+
+      why ->
+        {:error, "bad_rule", why}
+    end
   end
 
   def drop_rule(id) do
@@ -259,27 +270,33 @@ defmodule DokkitWeb.ApiController do
 
   def save_alerts(params) do
     case Dokkit.Alerts.update(params) do
-      {:ok, _} -> Dokkit.Alerts.view()
+      {:ok, _, nil} -> Dokkit.Alerts.view()
+      {:ok, _, note} -> Dokkit.Alerts.view() |> Map.put("note", note)
       {:error, why} -> {:error, "bad_settings", why}
     end
   end
 
   def set_alert_settings(conn, params), do: reply(conn, save_alerts(params))
 
-  def try_alert(%{"channel" => channel}) when is_binary(channel) do
-    if Dokkit.Alerts.sends?(channel) do
+  @test_cost 2_500
+
+  @doc "Sends a test alert. Answers ok, or one fixed reason. Four tests at once for each caller, then one every 25 seconds."
+  def try_alert(%{"channel" => channel}, who) when is_binary(channel) do
+    with true <- Dokkit.Alerts.sends?(channel),
+         :ok <- Dokkit.RateLimit.take({:alert_test, who}, @test_cost) do
       case Dokkit.Alerts.test(channel) do
         :ok -> %{ok: true}
         {:error, why} -> {:error, "send_failed", why}
       end
     else
-      {:error, "bad_channel", "channel is page, push, email, text, digest or webhook."}
+      false -> {:error, "bad_channel", "channel is page, push, email, text, digest or webhook."}
+      {:wait, s} -> {:error, "slow_down", "Too many tests. Wait #{s} seconds."}
     end
   end
 
-  def try_alert(_), do: {:error, "bad_channel", "Needs a channel."}
+  def try_alert(_, _), do: {:error, "bad_channel", "Needs a channel."}
 
-  def test_alert(conn, params), do: reply(conn, try_alert(params))
+  def test_alert(conn, params), do: reply(conn, try_alert(params, conn.assigns.key.id))
 
   def suggestions(conn, _), do: list(conn, Read.suggestions())
 
@@ -414,19 +431,20 @@ defmodule DokkitWeb.ApiController do
   # read-logs, keys, people, rules, alert settings, checks, restart, updating the program,
   # restoring logs, making a job and accepting a task need admin, and anything else
   # changes something.
-  defp scope(conn, _) do
-    path = Enum.map(conn.path_info, &URI.decode/1)
+  def needs(method, path) do
+    case {method, Enum.at(path, 2), List.last(path)} do
+      {_, area, _} when area in ["keys", "users"] -> "admin"
+      {"GET", "logs", _} -> "read-logs"
+      {"GET", _, _} -> "read"
+      {_, area, _} when area in ["rules", "alerts"] -> "admin"
+      {"POST", "tasks", last} when last in ["accept", "dismiss"] -> "admin"
+      {"POST", "jobs", "jobs"} -> "admin"
+      {_, _, last} -> if last in ~w(checks restart update restore), do: "admin", else: "act"
+    end
+  end
 
-    scope =
-      case {conn.method, Enum.at(path, 2), List.last(path)} do
-        {_, area, _} when area in ["keys", "users"] -> "admin"
-        {"GET", "logs", _} -> "read-logs"
-        {"GET", _, _} -> "read"
-        {_, area, _} when area in ["rules", "alerts"] -> "admin"
-        {"POST", "tasks", last} when last in ["accept", "dismiss"] -> "admin"
-        {"POST", "jobs", "jobs"} -> "admin"
-        {_, _, last} -> if last in ~w(checks restart update restore), do: "admin", else: "act"
-      end
+  defp scope(conn, _) do
+    scope = needs(conn.method, Enum.map(conn.path_info, &URI.decode/1))
 
     if scope in conn.assigns.key.scopes,
       do: conn,

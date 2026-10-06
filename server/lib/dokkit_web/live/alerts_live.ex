@@ -14,6 +14,7 @@ defmodule DokkitWeb.AlertsLive do
        rules: Alerts.rules(),
        suggestions: Alerts.suggestions(),
        saved: false,
+       note: nil,
        error: nil,
        typed: %{},
        tests: %{}
@@ -24,9 +25,20 @@ defmodule DokkitWeb.AlertsLive do
 
   def handle_event("save", %{"alerts" => params}, socket) do
     with true <- owner?(socket) do
-      case Alerts.update(params) do
-        {:ok, config} ->
-          {:noreply, assign(socket, config: config, typed: %{}, saved: true, error: nil)}
+      # A secret field left empty keeps the stored secret; its Clear box empties it.
+      kept =
+        Enum.reduce(@secrets, params, fn k, acc ->
+          cond do
+            acc["clear_" <> k] == "true" -> Map.put(acc, k, "")
+            acc[k] in [nil, ""] -> Map.delete(acc, k)
+            true -> acc
+          end
+        end)
+
+      case Alerts.update(kept) do
+        {:ok, config, note} ->
+          {:noreply,
+           assign(socket, config: config, typed: %{}, saved: true, error: nil, note: note)}
 
         {:error, error} ->
           {:noreply, typed(socket, params, error)}
@@ -39,7 +51,8 @@ defmodule DokkitWeb.AlertsLive do
   def handle_event("changed", %{"alerts" => params}, socket),
     do: {:noreply, typed(socket, params, nil)}
 
-  def handle_event("changed", _, socket), do: {:noreply, assign(socket, saved: false, error: nil)}
+  def handle_event("changed", _, socket),
+    do: {:noreply, assign(socket, saved: false, error: nil, note: nil)}
 
   def handle_event("rule", params, socket) do
     if owner?(socket) do
@@ -67,9 +80,12 @@ defmodule DokkitWeb.AlertsLive do
   def handle_event("test", %{"channel" => channel}, socket) do
     if owner?(socket) and Alerts.sends?(channel) do
       result =
-        case Alerts.test(channel) do
-          :ok -> {:ok, "Sent. Check that it arrived."}
-          {:error, text} -> {:error, text}
+        case DokkitWeb.ApiController.try_alert(
+               %{"channel" => channel},
+               socket.assigns.current_user.id
+             ) do
+          %{ok: true} -> {:ok, "Sent. Check that it arrived."}
+          {:error, _, text} -> {:error, text}
         end
 
       {:noreply, assign(socket, tests: Map.put(socket.assigns.tests, channel, result))}
@@ -86,6 +102,7 @@ defmodule DokkitWeb.AlertsLive do
       config: Map.merge(socket.assigns.config, plain),
       typed: secrets,
       saved: false,
+      note: nil,
       error: error
     )
   end
@@ -404,7 +421,7 @@ defmodule DokkitWeb.AlertsLive do
 
             <div class="foot">
               <span :if={!@owner}>Only the owner can change these.</span>
-              <span :if={@saved} role="status">Saved.</span>
+              <span :if={@saved} role="status">Saved. {@note}</span>
               <span :if={@error} role="alert">{@error}</span>
               <span class="end"><button class="btn primary" type="submit">Save</button></span>
             </div>
@@ -511,6 +528,9 @@ defmodule DokkitWeb.AlertsLive do
       value={@typed[@name]}
       placeholder={if @set, do: "#{@label}: kept, type to replace", else: @label}
     />
+    <label :if={@set} class="hint">
+      <input type="checkbox" name={"alerts[clear_#{@name}]"} value="true" /> Clear
+    </label>
     """
   end
 

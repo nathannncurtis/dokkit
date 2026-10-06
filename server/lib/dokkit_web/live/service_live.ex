@@ -49,7 +49,9 @@ defmodule DokkitWeb.ServiceLive do
   def handle_event(event, params, socket) when event in ~w(watching hold restart messages) do
     service = socket.assigns.service
 
-    if socket.assigns.current_user.role != :viewer do
+    role = socket.assigns.current_user.role
+
+    if role != :viewer and (event != "restart" or role == :owner) do
       case event do
         "watching" -> Estate.set_watched(service, !service.watched)
         "hold" -> Estate.set(service, :held, String.trim(params["version"] || ""))
@@ -385,7 +387,12 @@ defmodule DokkitWeb.ServiceLive do
               </dt>
 
               <dd :if={Enum.any?(@checks, &(&1.type in [:"windows-service", :systemd]))}>
-                <button class="btn sm" type="button" phx-click="restart">
+                <button
+                  class="btn sm"
+                  type="button"
+                  phx-click="restart"
+                  disabled={@current_user.role != :owner}
+                >
                   {if @service.restart, do: "Stop starting it again", else: "Start it again"}
                 </button>
 
@@ -393,6 +400,7 @@ defmodule DokkitWeb.ServiceLive do
                   {if @service.restart,
                     do: "The installed program starts it, at most once in ten minutes.",
                     else: "It is left stopped and you are told."}
+                  {if @current_user.role != :owner, do: "An owner changes this."}
                 </span>
               </dd>
             </dl>

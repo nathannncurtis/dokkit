@@ -16,7 +16,7 @@ defmodule DokkitWeb.ReviewFixesControllerTest do
     |> Map.fetch!("result")
   end
 
-  defp api(method, path, token, body \\ nil) do
+  defp api(method, path, token, body) do
     build_conn()
     |> put_req_header("authorization", "Bearer " <> token)
     |> dispatch(@endpoint, method, "/api/v1" <> path, body)

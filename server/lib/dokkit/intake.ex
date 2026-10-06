@@ -328,38 +328,47 @@ defmodule Dokkit.Intake do
       |> Enum.map(&String.slice(&1, 0, 100))
 
   @max_seen 500
+  @max_seen_per_key 200
 
   # An app says which host it runs on. That host becomes a machine that was seen, with no dokkit on it.
-  # An app key can make only so many of them, so a leaked key cannot fill the estate.
-  defp hosts(%Key{kind: :app}, hosts, now) do
-    names = host_names(hosts)
-    known = Repo.all(from m in Machine, where: m.name in ^names, select: m.name)
-    seen = Repo.aggregate(from(m in Machine, where: m.kind == :seen), :count)
-    {new, refused} = Enum.split(names -- known, max(@max_seen - seen, 0))
+  # Each app key can make 200 of them and the estate 500, so one leaked key cannot fill the estate or lock the others out.
+  defp hosts(%Key{kind: :app, id: key_id}, hosts, now) do
+    case host_names(hosts) do
+      [] ->
+        nil
 
-    if refused != [],
-      do:
-        Logger.warning(
-          "Refused #{length(refused)} new hosts named by an app: #{@max_seen} is the most."
+      names ->
+        known = Repo.all(from m in Machine, where: m.name in ^names, select: m.name)
+        seen = from(m in Machine, where: m.kind == :seen)
+        mine = Repo.aggregate(from(m in seen, where: m.seen_by == ^key_id), :count)
+        room = min(@max_seen_per_key - mine, @max_seen - Repo.aggregate(seen, :count))
+        {new, refused} = Enum.split(names -- known, max(room, 0))
+
+        if refused != [],
+          do:
+            Logger.warning(
+              "Refused #{length(refused)} new hosts named by an app: #{@max_seen_per_key} for each key and #{@max_seen} in all is the most."
+            )
+
+        rows =
+          for host <- known ++ new do
+            %{
+              id: Ecto.UUID.generate(),
+              name: host,
+              kind: :seen,
+              seen_by: key_id,
+              last_seen_at: now,
+              inserted_at: now,
+              updated_at: now
+            }
+          end
+
+        Repo.insert_all(Machine, rows,
+          on_conflict:
+            from(m in Machine, where: m.kind == :seen, update: [set: [last_seen_at: ^now]]),
+          conflict_target: :name
         )
-
-    rows =
-      for host <- known ++ new do
-        %{
-          id: Ecto.UUID.generate(),
-          name: host,
-          kind: :seen,
-          last_seen_at: now,
-          inserted_at: now,
-          updated_at: now
-        }
-      end
-
-    Repo.insert_all(Machine, rows,
-      on_conflict:
-        from(m in Machine, where: m.kind == :seen, update: [set: [last_seen_at: ^now]]),
-      conflict_target: :name
-    )
+    end
   end
 
   defp hosts(_, _, _), do: nil

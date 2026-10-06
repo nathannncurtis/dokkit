@@ -14,10 +14,10 @@
 ## What stops repeats
 
 - An open issue alerts once.
-- If it recovers and fails again inside 30 minutes, that is the same issue with a higher count. It does not alert again.
+- If it recovers and fails again inside 30 minutes, or falls back to the state it had, that is the same issue with a higher count. It always has a live alert: if the page was resolved in between, it pages again, because the resolve closed the incident. If nothing was resolved (the resolve was never sent, or the channel has nothing to resolve) nobody is told twice. Flapping every minute for ten minutes pages five times when each resolve went out before the next failure, and nobody when the alerts were not sent between flaps.
 - When a machine is down there is one alert for the machine. Everything on it goes quiet until it is back.
 - A snoozed issue never alerts. An alert held for the night is dropped if its issue was snoozed or marked as seen meanwhile.
-- A warning that becomes a failure (soon to not soon, degraded to down) closes the old issue, which resolves what it sent, and opens a new one that alerts by its own route. A failure that becomes a warning does the same the other way.
+- A warning that becomes a failure (soon to not soon, degraded to down) closes the old issue, which resolves what it sent, and opens a new one that alerts by its own route. A failure that becomes a warning does the same the other way. The new issue keeps the number (`DOK-n`) and the notes of the old one. It also keeps an unexpired snooze and the seen mark, unless it is an escalation (a warning or soon becoming down): that always comes back and alerts.
 - A `soon` issue never pages and never follows a rule. If its route is `page` it is sent as a push; with no push destination set, the send fails, is shown as failed and is tried five times.
 - Paging again when a page is not acknowledged is left to the paging service's own escalation. Dokkit does not duplicate it.
 
@@ -25,7 +25,7 @@
 
 One night is set for the whole server on the Alerts page: a start hour, an end hour and the hours from UTC (22, 7 and 0 unless changed). No time zone database is installed, so the night is a fixed offset and does not follow daylight saving.
 
-Each service has a switch, "Wake me at night for this", on by default. When it is off and an alert for that service would go out during the night, Dokkit holds it and sends it when the night ends, if the issue is still open. An issue that closed in the meantime sends nothing. A held alert is a row in the database, so it survives a restart, and the once-a-minute sweep sends it. The first screen says "Held until 07:00" for it. Turning the switch back on sends what is held for that service at once. The daily digest is not held.
+Each service has a switch, "Wake me at night for this", on by default. When it is off and an alert for that service would go out during the night, Dokkit holds it and sends it when the night ends, if the issue is still open. An issue that closed in the meantime sends nothing. A held alert is a row in the database, so it survives a restart, and the once-a-minute sweep sends it. Whether an alert is held follows the server's clock when the report arrives, never the time the sender wrote. The first screen says "Held until 07:00 UTC+2" for it, in the night's own offset. Turning the switch on sends what is held for that service, except for an issue that is snoozed or seen. Turning the switch back on sends what is held for that service at once. The daily digest is not held.
 
 ## Recovery
 
@@ -68,8 +68,18 @@ Learning what normal looks like and flagging the unusual. Limits are fixed numbe
 
 Every channel in the table, with one server-wide choice for `down` and one for `degraded`, each service's own routing, and rules. An issue's channel is its service's routing if it has one, else the first rule that fits, else the server-wide choice. A rule's condition is the kind of thing (a job, a check, a machine), what happened (stops, struggles) and optionally one machine. Everyone is one recipient so far: one email address and one text address in the settings.
 
-An alert is written with its issue and sent afterwards, and a send that fails is tried again a minute later, up to five times. An alert skipped while its issue was briefly closed is sent when the issue reopens. Mail goes through the mail server in the settings, always over TLS (port 465 from the first byte, any other port by STARTTLS), and has not been sent through a real one yet. A blank setting falls back to its default. The addresses for ntfy, the webhook and the heartbeat must be https and may not point at this machine or a link-local address, and only the owner sees them. The digest holds what opened without paging, errors first seen that day from any app, and thresholds, built-in ones included, within a tenth of their limit; an alert is marked sent only when the mail that carried it went out, and a failed digest is logged and tried again.
+An alert is written with its issue and sent afterwards, and a send that fails is tried again a minute later, up to five times. An alert skipped while its issue was briefly closed is sent when the issue reopens. Mail goes through the mail server in the settings, always over TLS (port 465 from the first byte, any other port by STARTTLS), and has not been sent through a real one yet. A blank setting falls back to its default. The addresses for ntfy, the webhook and the heartbeat must be https, and only the owner sees them. The digest holds what opened without paging, errors first seen that day from any app, and thresholds, built-in ones included, within a tenth of their limit; an alert is marked sent only when the mail that carried it went out, and a failed digest is logged and tried again.
 
 Each machine's own disks and memory are watched without a declaration, against two limits on the Alerts page (90 and 95 percent used unless changed; blank switches one off), by the usual three-in-a-row rule. A threshold a file declares for the same number replaces the built-in one.
 
 One suggestion is made: an issue that has opened six times or more in a month and is snoozed is offered the daily digest, on the Alerts page, and accepting sets that service's routing. Dismissing it stops the offer for that service. The settings, the test send and the suggestions are on the API and the MCP as well (`GET` and `PUT /alerts`, `POST /alerts/test`, `/alerts/suggestions`), and a secret or an address is never returned, only `set` or `not set`. Email and text go to every address in their setting, written with commas between them; who receives a page or a push is decided in PagerDuty, ntfy or Pushover.
+
+## Where an alert may be sent
+
+A server on a private network sends to hosts on it: an internal ntfy, an internal mail relay. So private ranges are allowed. What is refused, for every destination (ntfy, webhook, heartbeat, the mail server), is loopback (127.0.0.0/8, `::1`, `localhost`), link-local (169.254.0.0/16 with the cloud metadata address, `fe80::/10`) and the unspecified address. The name is looked up once and every address it gives is checked, and the connection goes to the address that was checked. `DOKKIT_ALLOW_LOCAL_ALERTS=1` in the server's environment allows them.
+
+The mail server may use ports 25, 465, 587 and 2525 only. The host is not looked up for mail exchangers.
+
+A secret goes only to the host it was saved for. If `ntfy_url` or `smtp_host` changes in a save and its secret (`ntfy_token`, `smtp_password`) is not sent in the same save, the secret is cleared and the answer says so. A secret is cleared on its own by sending it empty; in the interface, by ticking Clear beside it.
+
+A test send answers sent, or one fixed reason: "Dokkit could not deliver it there. The server log has the reason." Nothing the far end said (a banner, a body, a status) is shown; the log has it. Each token or person may send four tests at once, then one every 25 seconds.

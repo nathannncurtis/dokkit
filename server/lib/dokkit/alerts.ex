@@ -22,6 +22,7 @@ defmodule Dokkit.Alerts do
   @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user smtp_password)
   @plain ~w(disk_limit memory_limit ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to text_to digest_at heartbeat_url)
   @max_attempts 5
+  @smtp_ports [25, 465, 587, 2525]
   @kept_blank ~w(disk_limit memory_limit)
   @channels [
     {"Page", "page"},
@@ -48,6 +49,7 @@ defmodule Dokkit.Alerts do
   def sent_word(channel), do: @sent[channel]
 
   def secrets, do: @secrets
+  def smtp_ports, do: @smtp_ports
 
   def config do
     Map.merge(@defaults, unblank((Repo.get(Setting, "alerts") || %Setting{value: %{}}).value))
@@ -57,15 +59,42 @@ defmodule Dokkit.Alerts do
   defp unblank(map),
     do: Map.reject(map, fn {k, v} -> v == "" and k not in @secrets and k not in @kept_blank end)
 
-  @doc "Saves what was filled in. A secret left blank keeps its stored value."
+  # A secret is sent to one host. If that host changes, the secret goes with it only when it is
+  # sent again in the same save.
+  @bound [{"ntfy_url", "ntfy_token", :url}, {"smtp_host", "smtp_password", :host}]
+
+  @doc "The secrets a save of `params` clears because the host they are sent to changes and they are not sent again."
+  def cleared(params, old \\ config()) do
+    for {key, secret, kind} <- @bound,
+        is_binary(params[key]),
+        host(params[key], kind) != host(old[key], kind),
+        old[secret] not in [nil, ""],
+        String.trim(params[secret] || "") == "",
+        do: secret
+  end
+
+  defp host(value, :host), do: String.downcase(String.trim(value || ""))
+
+  defp host(value, :url),
+    do: (URI.parse(String.trim(value || "")).host || "") |> String.downcase()
+
+  @doc "The words that say a save cleared a secret, or nil."
+  def cleared_note(names) when names != [],
+    do:
+      "#{Enum.join(names, " and ")} #{if length(names) == 1, do: "was", else: "were"} cleared because the address it is sent to changed. Send it again in the same save to keep it."
+
+  def cleared_note(_), do: nil
+
+  @doc "Saves what was filled in. A secret that is not given keeps its value; an empty one clears it."
   def save(params) do
     old = config()
+    gone = cleared(params, old)
 
     new =
       for({k, v} <- Map.take(params, Map.keys(@defaults) ++ @secrets ++ @plain), into: old) do
-        v = String.trim(v)
-        {k, if(v == "" and k in @secrets, do: old[k], else: v)}
+        {k, String.trim(v)}
       end
+      |> Map.merge(Map.new(gone, &{&1, ""}))
       |> unblank()
 
     Repo.insert!(%Setting{key: "alerts", value: new},
@@ -87,14 +116,23 @@ defmodule Dokkit.Alerts do
     c |> Map.drop(@hidden) |> Map.merge(marks)
   end
 
-  @doc "Checks the settings, then saves them. `{:ok, config}` or `{:error, text}`."
+  @doc """
+  Checks the settings, then saves them. `{:ok, config, note}` or `{:error, text}`. The note says
+  which secrets the save cleared because their address changed, or is nil.
+  """
   def update(params) do
     params = Map.take(params, setting_keys())
 
     cond do
-      Enum.any?(params, fn {_, v} -> not is_binary(v) end) -> {:error, "Every setting is text."}
-      error = bad_choice(params) || night_error(params) || bad_address(params) -> {:error, error}
-      true -> {:ok, save(params)}
+      Enum.any?(params, fn {_, v} -> not is_binary(v) end) ->
+        {:error, "Every setting is text."}
+
+      error = bad_choice(params) || night_error(params) || bad_address(params) ->
+        {:error, error}
+
+      true ->
+        note = cleared_note(cleared(params))
+        {:ok, save(params), note}
     end
   end
 
@@ -119,7 +157,21 @@ defmodule Dokkit.Alerts do
       else
         _ -> nil
       end
-    end)
+    end) || bad_mail_server(params)
+  end
+
+  defp bad_mail_server(params) do
+    host = String.trim(params["smtp_host"] || "")
+    port = String.trim(params["smtp_port"] || "")
+
+    if port != "" and port not in Enum.map(@smtp_ports, &to_string/1) do
+      "smtp_port is one of #{Enum.join(@smtp_ports, ", ")}."
+    else
+      with true <- host != "",
+           {:error, why} <- resolve(host),
+           do: "smtp_host: #{why}",
+           else: (_ -> nil)
+    end
   end
 
   # No time zone database is installed, so the night is set in hours from UTC.
@@ -142,13 +194,12 @@ defmodule Dokkit.Alerts do
     end
   end
 
-  @doc "When the night ends, as it is said on the Alerts page."
-  def night_ends(config \\ config()),
-    do:
-      night_hour(config, "night_to", 0..23)
-      |> to_string()
-      |> String.pad_leading(2, "0")
-      |> Kernel.<>(":00")
+  @doc "When the night ends, in the night's own offset, such as \"07:00 UTC+2\"."
+  def night_ends(config \\ config()) do
+    hour = night_hour(config, "night_to", 0..23) |> to_string() |> String.pad_leading(2, "0")
+    offset = night_hour(config, "night_offset", -12..14)
+    "#{hour}:00 UTC#{if offset > 0, do: "+#{offset}", else: if(offset < 0, do: offset)}"
+  end
 
   @doc "An error for a night that is not whole hours, or nil."
   def night_error(params) do
@@ -191,10 +242,36 @@ defmodule Dokkit.Alerts do
     %{
       "kind" => pick(@kinds, params["kind"]),
       "state" => pick(@states, params["state"]),
-      "machine" => String.trim(params["machine"] || ""),
-      "channel" => pick(@channels, params["channel"]) || "none",
+      "machine" => if(is_binary(params["machine"]), do: String.trim(params["machine"]), else: ""),
+      "channel" => if((c = pick(@channels, params["channel"])) == "", do: "none", else: c),
       "on" => true
     }
+  end
+
+  @doc "An error for a rule whose fields are not text, a known word, or true or false; else nil."
+  def rule_error(params) do
+    words = %{"kind" => @kinds, "state" => @states, "channel" => @channels}
+
+    Enum.find_value(~w(kind state channel machine on), fn k ->
+      v = params[k]
+
+      cond do
+        not Map.has_key?(params, k) ->
+          nil
+
+        k == "on" ->
+          if not is_boolean(v), do: "on is true or false."
+
+        k == "machine" ->
+          if not is_binary(v), do: "machine is text."
+
+        is_binary(v) and (v == "" or List.keymember?(words[k], v, 1)) ->
+          nil
+
+        true ->
+          "#{k} is one of #{words[k] |> Enum.map(&elem(&1, 1)) |> Enum.reject(&(&1 == "")) |> Enum.join(", ")}, or empty."
+      end
+    end)
   end
 
   def toggle_rule(id),
@@ -334,23 +411,46 @@ defmodule Dokkit.Alerts do
   end
 
   @doc "Alerts held for a service go out now: it was set to wake someone at night."
-  def wake(%Service{id: id}) do
+  def wake(%Service{id: id}, now \\ DateTime.utc_now()) do
     Repo.update_all(
       from(a in Alert,
         join: i in assoc(a, :issue),
-        where: a.status == :held and i.service_id == ^id and is_nil(i.closed_at)
+        where:
+          a.status == :held and i.service_id == ^id and is_nil(i.closed_at) and
+            is_nil(i.acknowledged_at) and (is_nil(i.snoozed_until) or i.snoozed_until <= ^now)
       ),
       set: [status: :pending]
     )
   end
 
-  @doc "An alert that never went out is sent after all when its issue comes back."
-  def reopened(%Issue{id: id} = issue) do
-    held = Repo.preload(issue, :service).service |> holds?("page", DateTime.utc_now())
+  @doc """
+  An issue that is open again always has a live alert. One that never went out is sent after all.
+  One whose page was resolved is paged again, because the resolve closed the incident. One whose
+  resolve was never sent, or that has nothing to resolve, stays as it was: nobody is told twice.
+  """
+  def reopened(%Issue{id: id} = issue, now \\ DateTime.utc_now()) do
+    held = Repo.preload(issue, :service).service |> holds?("page", now)
+    live = is_nil(issue.acknowledged_at) and not snoozed?(issue, now)
 
     Repo.update_all(from(a in Alert, where: a.issue_id == ^id and a.status == :skipped),
       set: [status: :pending, attempts: 0, error: nil]
     )
+
+    Repo.update_all(
+      from(a in Alert, where: a.issue_id == ^id and a.status == :closing and a.attempts == 0),
+      set: [status: :sent]
+    )
+
+    resolved = from(a in Alert, where: a.issue_id == ^id and a.status in [:closing, :closed])
+    resolving = if config()["push_with"] == "pagerduty", do: ["page", "push"], else: ["page"]
+
+    if live,
+      do:
+        Repo.update_all(from(a in resolved, where: a.channel in ^resolving),
+          set: [status: :pending, attempts: 0, error: nil]
+        )
+
+    Repo.update_all(from(a in resolved, where: a.channel not in ^resolving), set: [status: :sent])
 
     if held,
       do:
@@ -361,6 +461,9 @@ defmodule Dokkit.Alerts do
           set: [status: :held]
         )
   end
+
+  defp snoozed?(%Issue{snoozed_until: nil}, _), do: false
+  defp snoozed?(%Issue{snoozed_until: at}, now), do: DateTime.compare(at, now) == :gt
 
   def closing(%Issue{id: id}) do
     Repo.update_all(
@@ -541,22 +644,42 @@ defmodule Dokkit.Alerts do
 
   defp summary(about), do: "#{about.title} (#{about.machine}, #{about.short})"
 
-  @doc "`:ok` for an https address that is not this machine or a link-local one."
-  def check_url(url) do
-    %URI{scheme: scheme, host: host} = URI.parse(url)
+  @local_error "The address points at this machine or a link-local address. Set DOKKIT_ALLOW_LOCAL_ALERTS=1 on the server to allow that."
+  @failed "Dokkit could not deliver it there. The server log has the reason."
 
-    cond do
-      scheme != "https" or host in [nil, ""] -> {:error, "The address must start with https://."}
-      local?(host) -> {:error, "The address points at this machine or its own network."}
-      true -> :ok
+  @doc "`:ok` for an https address that does not point at this machine or a link-local one."
+  def check_url(url) do
+    with {:ok, host} <- https_host(url), {:ok, _} <- resolve(host), do: :ok
+  end
+
+  defp https_host(url) do
+    case URI.parse(url) do
+      %URI{scheme: "https", host: host} when host not in [nil, ""] -> {:ok, host}
+      _ -> {:error, "The address must start with https://."}
     end
   end
 
-  defp local?(host) do
+  @doc """
+  Looks a host name up once. `{:ok, addresses}`, or an error when any address is loopback,
+  link-local or unspecified, unless `DOKKIT_ALLOW_LOCAL_ALERTS=1`. A server on a private
+  network may send to other hosts on it.
+  """
+  def resolve(host) do
     host = host |> String.downcase() |> String.trim_trailing(".")
+    ips = addrs(host)
 
-    host == "localhost" or String.ends_with?(host, ".localhost") or
-      Enum.any?(addrs(host), &local_ip?/1)
+    local =
+      host == "localhost" or String.ends_with?(host, ".localhost") or Enum.any?(ips, &local_ip?/1)
+
+    if local and System.get_env("DOKKIT_ALLOW_LOCAL_ALERTS") != "1",
+      do: {:error, @local_error},
+      else: {:ok, ips}
+  end
+
+  @doc "The one reason a send failed that is shown to a person. The detail goes to the log."
+  def failed(host, detail) do
+    Logger.warning("Sending to #{host} failed: #{detail}")
+    {:error, @failed}
   end
 
   defp addrs(host) do
@@ -569,13 +692,13 @@ defmodule Dokkit.Alerts do
   end
 
   # Connects to the address that was checked, so a second lookup cannot answer differently.
-  defp pin(url, opts) do
+  defp pin(url, opts, ips) do
     %URI{host: host} = uri = URI.parse(url)
     host = String.trim_trailing(host, ".")
 
     with false <- Keyword.has_key?(opts, :plug),
          {:error, _} <- :inet.parse_address(String.to_charlist(host)),
-         [ip | _] <- Enum.sort_by(addrs(host), &tuple_size/1) do
+         [ip | _] <- Enum.sort_by(ips, &tuple_size/1) do
       ip = ip |> :inet.ntoa() |> to_string()
       ip = if String.contains?(ip, ":"), do: "[#{ip}]", else: ip
 
@@ -603,17 +726,16 @@ defmodule Dokkit.Alerts do
       [retry: :transient, max_retries: 2, receive_timeout: 10_000, redirect: false] ++
         opts ++ Application.get_env(:dokkit, :req_options, [])
 
-    with :ok <- check_url(url) do
-      host = URI.parse(url).host
-      {url, opts} = pin(url, opts)
+    with {:ok, host} <- https_host(url), {:ok, ips} <- resolve(host) do
+      {pinned, opts} = pin(url, opts, ips)
 
-      case Req.post(url, opts) do
+      case Req.post(pinned, opts) do
         {:ok, %{status: s}} when s in 200..299 -> :ok
-        {:ok, %{status: s}} -> {:error, "#{host} answered #{s}."}
-        {:error, e} -> {:error, "#{host}: #{Exception.message(e)}"}
+        {:ok, %{status: s}} -> failed(host, "answered #{s}")
+        {:error, e} -> failed(host, Exception.message(e))
       end
     end
   rescue
-    e -> {:error, Exception.message(e)}
+    e -> failed(url |> URI.parse() |> Map.get(:host), Exception.message(e))
   end
 end

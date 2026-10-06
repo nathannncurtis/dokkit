@@ -83,6 +83,6 @@ Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift
 
 Each library folder has a README with install steps, and a manifest except the shell one, which is a single file to source. Nothing is published to a registry yet; they install from a clone of the repo by path. The install-from-git lines in the READMEs work once the repository is public.
 
-A log handler never queues what is logged while the library is sending, and the Rust one also ignores its HTTP client's own records, so sending cannot feed itself.
+A log handler never queues what is logged while the library is sending, so sending cannot feed itself. The Java one also drops records from the JDK HTTP client's loggers (which log from their own threads) and from the library, and stops taking handler records when the queue is half full. The Elixir one drops a record from the TLS or HTTP modules only when it comes from the sender process or carries the library's own metadata, so an app's own failed handshake is logged. The Rust one drops what is logged on the sending thread, whatever crate logged it.
 
 All of them send the host name, and the server records that host as a machine that was seen. When that host is not the machine the service lives on, the version the app starts with is kept for that host and is not a deploy, and the Versions page lists each such app with how many hosts are on each version.
