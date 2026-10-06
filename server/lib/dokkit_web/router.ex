@@ -35,6 +35,7 @@ defmodule DokkitWeb.Router do
       live "/jobs", JobsLive, :index
       live "/jobs/new", JobsLive, :new
       live "/s/:id", ServiceLive
+      live "/logs", LogsLive
       live "/alerts", AlertsLive
     end
   end

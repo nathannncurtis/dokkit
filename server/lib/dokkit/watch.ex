@@ -18,6 +18,8 @@ defmodule Dokkit.Watch do
     Process.send_after(self(), :sweep, @every)
     sweep()
     Issues.changed()
+    today = Date.utc_today()
+    Enum.each([today, Date.shift(today, month: 1)], &Dokkit.Logs.ensure_partition/1)
     {:noreply, state}
   end
 

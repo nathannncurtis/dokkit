@@ -1,6 +1,6 @@
 # The Dokkit API (v1)
 
-This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state` and `custom` lines, and the ping URLs.
+This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom` and `log` lines, the ping URLs, and `GET /ping`.
 
 ## One rule
 

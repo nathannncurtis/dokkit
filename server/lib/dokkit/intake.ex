@@ -10,13 +10,25 @@ defmodule Dokkit.Intake do
 
   def report(%Key{} = key, batch_id, body) do
     lines = String.split(body, "\n", trim: true)
-
     stored = batch_id && Repo.get_by(Batch, id: batch_id, key_id: key.id)
 
     cond do
-      length(lines) > @max_lines -> {:error, :too_large}
-      stored -> {:ok, answer(stored)}
-      true -> Repo.transaction(fn -> store(key, batch_id, lines) end)
+      length(lines) > @max_lines ->
+        {:error, :too_large}
+
+      stored ->
+        {:ok, answer(stored)}
+
+      true ->
+        now = DateTime.utc_now()
+        lines = Enum.map(lines, &Jason.decode/1)
+        # A month's partition is made before the transaction, never inside it.
+        Enum.each(lines, fn
+          {:ok, %{"type" => "log"} = line} -> Dokkit.Logs.ensure_partition(line, now)
+          _ -> nil
+        end)
+
+        Repo.transaction(fn -> store(key, batch_id, lines, now) end)
     end
     |> tap(fn _ -> Issues.changed() end)
   end
@@ -35,25 +47,27 @@ defmodule Dokkit.Intake do
     |> tap(fn _ -> Issues.changed() end)
   end
 
-  defp store(key, batch_id, lines) do
-    now = DateTime.utc_now()
+  defp store(key, batch_id, lines, now) do
     seen(key)
 
-    refused =
+    results =
       lines
       |> Enum.with_index(1)
-      |> Enum.flat_map(fn {text, n} ->
-        with {:ok, %{"type" => type} = line} <- Jason.decode(text),
-             :ok <- line(key, type, line, at(line, now)) do
-          []
+      |> Enum.map(fn {decoded, n} ->
+        with {:ok, %{"type" => type} = line} <- decoded,
+             ok when ok == :ok or elem(ok, 0) == :log <- line(key, type, line, at(line, now)) do
+          ok
         else
           {:error, code, message} ->
-            [%{"line" => n, "code" => code, "message" => message}]
+            %{"line" => n, "code" => code, "message" => message}
 
           _ ->
-            [%{"line" => n, "code" => "bad_line", "message" => "Not a JSON object with a type."}]
+            %{"line" => n, "code" => "bad_line", "message" => "Not a JSON object with a type."}
         end
       end)
+
+    Dokkit.Logs.insert(for {:log, row} <- results, do: row)
+    refused = Enum.filter(results, &is_map/1)
 
     batch = %Batch{
       id: batch_id,
@@ -93,8 +107,18 @@ defmodule Dokkit.Intake do
     end
   end
 
+  defp line(key, "log", line, at) do
+    with {:ok, service} <- log_service(key, line),
+         {:ok, row} <- Dokkit.Logs.row(line, machine(key, service), service && service.id, at) do
+      {:log, row}
+    else
+      {:error, _, _} = refusal -> refusal
+      _ -> {:error, "bad_line", "A log line needs msg."}
+    end
+  end
+
   # The other types are added with the features that read them.
-  defp line(_, type, _, _) when type in ~w(inventory metric beat stats log deploy),
+  defp line(_, type, _, _) when type in ~w(inventory metric beat stats deploy),
     do: {:error, "not_yet", "This server does not store #{type} lines yet."}
 
   defp line(_, type, _, _), do: {:error, "unknown_type", "Unknown type #{inspect(type)}."}
@@ -203,6 +227,15 @@ defmodule Dokkit.Intake do
   end
 
   defp service(_, _), do: {:error, "bad_line", "Needs a service."}
+
+  # A machine may log without naming a service.
+  defp log_service(%Key{kind: :machine}, line) when not is_map_key(line, "service"),
+    do: {:ok, nil}
+
+  defp log_service(key, line), do: service(key, line)
+
+  defp machine(%Key{machine_id: id}, nil), do: id
+  defp machine(_, service), do: service.machine_id
 
   defp check(service, name, type, fail_after) do
     Repo.get_by(Check, service_id: service.id, name: name) ||

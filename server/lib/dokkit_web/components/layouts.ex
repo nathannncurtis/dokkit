@@ -30,6 +30,9 @@ defmodule DokkitWeb.Layouts do
         <.link class={["nav", @active == :jobs && "on"]} navigate={~p"/jobs"}>
           <i class="ph ph-clock-countdown" aria-hidden="true"></i>Jobs
         </.link>
+        <.link class={["nav", @active == :logs && "on"]} navigate={~p"/logs"}>
+          <i class="ph ph-scroll" aria-hidden="true"></i>Logs
+        </.link>
         <h3>Manage</h3>
         <.link class={["nav", @active == :alerts && "on"]} navigate={~p"/alerts"}>
           <i class="ph ph-bell" aria-hidden="true"></i>Alerts

@@ -41,3 +41,7 @@ Postgres, one partition per month. Twelve months are kept live. Each older month
 ## Not now
 
 OpenTelemetry intake. It is the neutral standard, but its log libraries are unfinished in several languages and it carries a stack trace as one block of text. The API leaves room for it as another door later.
+
+## Built so far
+
+`log` lines in a `POST /report` batch, in Dokkit's format or CLEF, stored in monthly partitions, with the Logs page and each service's latest lines. A line dated in the future or more than 400 days back is stamped with the time it arrived. File reading, the library's handler and archiving old months are not built yet.

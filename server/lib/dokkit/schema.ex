@@ -157,6 +157,24 @@ defmodule Dokkit.Alert do
   end
 end
 
+defmodule Dokkit.Log do
+  use Ecto.Schema
+  @primary_key false
+  @foreign_key_type :binary_id
+
+  schema "logs" do
+    field :id, :integer
+    field :at, :utc_datetime_usec
+    field :received_at, :utc_datetime_usec
+    field :level, :string
+    field :msg, :string
+    field :fields, :map
+    field :cut, :boolean
+    belongs_to :machine, Dokkit.Machine
+    belongs_to :service, Dokkit.Service
+  end
+end
+
 defmodule Dokkit.Setting do
   use Ecto.Schema
   @primary_key {:key, :string, autogenerate: false}

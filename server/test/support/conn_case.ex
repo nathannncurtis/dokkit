@@ -37,7 +37,10 @@ defmodule DokkitWeb.ConnCase do
   end
 
   def signed_in(conn) do
-    user = Dokkit.Repo.insert!(%Dokkit.User{name: "sam", password_hash: "-", role: :owner})
+    user =
+      Dokkit.Repo.get_by(Dokkit.User, name: "sam") ||
+        Dokkit.Repo.insert!(%Dokkit.User{name: "sam", password_hash: "-", role: :owner})
+
     Plug.Test.init_test_session(conn, %{"user_id" => user.id})
   end
 end

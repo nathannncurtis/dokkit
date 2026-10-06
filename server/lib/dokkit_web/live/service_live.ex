@@ -49,6 +49,7 @@ defmodule DokkitWeb.ServiceLive do
       job: job,
       issue: Estate.open_issue(service),
       runs: Estate.runs(service),
+      logs: Dokkit.Logs.list(service: service.id, limit: 20),
       defaults: Alerts.config()
     )
   end
@@ -65,14 +66,15 @@ defmodule DokkitWeb.ServiceLive do
         <h1 tabindex="-1">
           <.lvl state={@service.state} /> {(@issue && @issue.title) || @service.name}
         </h1>
-        <div :if={@issue} class="end">
-          <button :if={!@issue.acknowledged_at} class="btn" type="button" phx-click="seen">
+        <div class="end">
+          <.link class="btn" navigate={~p"/logs?#{[s: @service.id]}"}><.ic name="scroll" />Logs</.link>
+          <button :if={@issue && !@issue.acknowledged_at} class="btn" type="button" phx-click="seen">
             <.ic name="eye" />Mark as seen
           </button>
-          <button :if={!snoozed?(@issue)} class="btn" type="button" phx-click="snooze">
+          <button :if={@issue && !snoozed?(@issue)} class="btn" type="button" phx-click="snooze">
             <.ic name="clock" />Snooze for a day
           </button>
-          <button :if={snoozed?(@issue)} class="btn" type="button" phx-click="back">
+          <button :if={@issue && snoozed?(@issue)} class="btn" type="button" phx-click="back">
             <.ic name="arrow-u-up-left" />Bring back
           </button>
         </div>
@@ -118,6 +120,14 @@ defmodule DokkitWeb.ServiceLive do
               <b><.lvl state={c.state} />{c.name}</b>
               <span class="st">{c.note || say(c.state)}</span>
             </div>
+          </div>
+          <div class="card">
+            <h2>Latest logs</h2>
+            <p :if={@logs == []} class="lead">
+              No log lines from this {String.downcase(kind(@service.kind))} yet.
+            </p>
+            <pre :if={@logs != []} class="logbox"><%= for l <- Enum.reverse(@logs) do %><span>{at(l.at)}  <b :if={l.level in ~w(error fatal)}>{l.level}</b><em :if={l.level not in ~w(error fatal)}>{l.level}</em>  {l.msg}
+    </span><% end %></pre>
           </div>
         </div>
         <div class="col">
