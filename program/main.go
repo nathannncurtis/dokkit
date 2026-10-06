@@ -184,6 +184,8 @@ type client struct {
 	pin             string
 	url, key, spool string
 	folders         []string
+	restartable     []string
+	hosts           []string
 	system          bool   // this machine's own config allows tasks accepted for the system account
 	updateSha       string // the hash a fetched update must have, when the config names one
 	http            *http.Client
@@ -257,6 +259,10 @@ type saved struct {
 	Key     string   `json:"key"`
 	Pin     string   `json:"pin,omitempty"`
 	Folders []string `json:"folders,omitempty"`
+	// Read only from the installed service's own configuration: services it may start, and
+	// other machines a check from the server may reach.
+	Restart []string `json:"restart,omitempty"`
+	Hosts   []string `json:"hosts,omitempty"`
 	SpoolMB int      `json:"spool_mb,omitempty"`
 	// SystemTasks lets tasks accepted for the system account run as it. UpdateSha256 is the
 	// SHA-256 a fetched update must have.
@@ -281,13 +287,21 @@ func load() (*client, error) {
 			json.Unmarshal(b, &s)
 		}
 	}
+	s.Restart, s.Hosts = nil, nil
 	// An installed service's configuration wins for whoever is allowed to read it.
 	if dir := machineDir(); dir != "" && os.Getenv("DOKKIT_CONFIG") == "" {
 		if b, err := os.ReadFile(filepath.Join(dir, "config.json")); err == nil && json.Unmarshal(b, &s) == nil && c.spool == "" {
 			c.spool = filepath.Join(dir, "spool")
 		}
 	}
-	c.folders, c.pin, c.system, c.updateSha = s.Folders, s.Pin, s.SystemTasks, strings.ToLower(s.UpdateSha256)
+	if p := listsPath(); p != "" {
+		var l saved
+		if b, err := os.ReadFile(p); err == nil && json.Unmarshal(b, &l) == nil {
+			s.Restart, s.Hosts = l.Restart, l.Hosts
+		}
+	}
+	c.folders, c.pin, c.restartable, c.hosts = s.Folders, s.Pin, s.Restart, s.Hosts
+	c.system, c.updateSha = s.SystemTasks, strings.ToLower(s.UpdateSha256)
 	c.spoolMB = int64(s.SpoolMB)
 	if n, err := strconv.Atoi(os.Getenv("DOKKIT_SPOOL_MB")); err == nil && n > 0 {
 		c.spoolMB = int64(n)

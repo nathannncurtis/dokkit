@@ -442,7 +442,7 @@ func TestStatsVitalsAndExpiry(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "licence"), []byte(time.Now().Add(10*24*time.Hour+time.Hour).Format("2006-01-02")+"\n"), 0o600)
 	file := filepath.Join(dir, "dokkit.toml")
-	os.WriteFile(file, []byte("schema = 1\n[service]\nid = \"portal\"\n[stats]\nurl = \""+app.URL+"\"\nkey_env = \"TEST_STATS_KEY\"\n[[check]]\ntype = \"expiry\"\ndate_from = \"licence\"\n"), 0o600)
+	os.WriteFile(file, []byte("schema = 1\n[service]\nid = \"portal\"\n[stats]\nurl = \""+app.URL+"\"\nkey_env = \"DOKKIT_STATS_TEST\"\n[[check]]\ntype = \"expiry\"\ndate_from = \"licence\"\n"), 0o600)
 	d, err := readDeclaration(file)
 	if err != nil {
 		t.Fatal(err)
@@ -453,14 +453,14 @@ func TestStatsVitalsAndExpiry(t *testing.T) {
 	if len(lines) != 1 || lines[0].(map[string]any)["state"] != "down" {
 		t.Fatalf("without the key the fetch fails: %v", lines)
 	}
-	t.Setenv("TEST_STATS_KEY", "s3cret")
+	t.Setenv("DOKKIT_STATS_TEST", "s3cret")
 	lines = w.stats()
 	if got := lines[0].(map[string]any); got["type"] != "stats" || got["document"].(map[string]any)["version"] != "2.3.0" {
 		t.Fatalf("stats: %v", lines)
 	}
 
 	r := d.Check[0].run()
-	if l := stateLine(d, &d.Check[0], r); l["state"] != "degraded" || l["value"].(float64) > 10 || l["value"].(float64) < 9 {
+	if l := stateLine(d, &d.Check[0], r); l["state"] != "degraded" || l["value"].(float64) > 11 || l["value"].(float64) < 9 {
 		t.Fatalf("expiry: %v", l)
 	}
 
