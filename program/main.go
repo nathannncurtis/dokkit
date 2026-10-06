@@ -26,12 +26,16 @@ const (
 	version   = "0.1.0"
 	usage     = `dokkit run --job <name> -- <command> [arguments]
 dokkit ping <name> [start|ok|fail]
+dokkit check [dokkit.toml]
+dokkit apply [dokkit.toml]
 dokkit enrol <address> <token>
 dokkit watch
 dokkit doctor
 
 Reads DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key),
-or the address and machine key that dokkit enrol saved.`
+or the address and machine key that dokkit enrol saved.
+dokkit watch reads dokkit.toml files from the folders in DOKKIT_FOLDERS
+or in the saved configuration, and from the folders directly inside them.`
 )
 
 // How often watch tells the server this machine is alive.
@@ -50,6 +54,9 @@ func cli(args []string) int {
 			return 2
 		}
 		return enrol(args[1], args[2])
+	}
+	if args[0] == "check" {
+		return checkOnce(fileArg(args))
 	}
 	c, err := load()
 	if err != nil {
@@ -75,11 +82,9 @@ func cli(args []string) int {
 		c.report(c.job(line{Name: args[1], Event: event}))
 		return c.settle(15 * time.Second)
 	case "watch":
-		fmt.Println("Reporting to", c.url, "every", beatEvery)
-		for {
-			c.beat()
-			time.Sleep(beatEvery)
-		}
+		return c.watch()
+	case "apply":
+		return c.apply(fileArg(args))
 	case "doctor":
 		return c.doctor()
 	}
@@ -89,7 +94,15 @@ func cli(args []string) int {
 
 type client struct {
 	url, key, spool string
+	folders         []string
 	http            *http.Client
+}
+
+func fileArg(args []string) string {
+	if len(args) > 1 {
+		return args[1]
+	}
+	return "dokkit.toml"
 }
 
 type line struct {
@@ -105,8 +118,9 @@ type line struct {
 }
 
 type saved struct {
-	URL string `json:"url"`
-	Key string `json:"key"`
+	URL     string   `json:"url"`
+	Key     string   `json:"key"`
+	Folders []string `json:"folders,omitempty"`
 }
 
 func configPath() (string, error) {
@@ -119,13 +133,17 @@ func configPath() (string, error) {
 
 func load() (*client, error) {
 	c := &client{url: os.Getenv("DOKKIT_URL"), key: os.Getenv("DOKKIT_KEY"), spool: os.Getenv("DOKKIT_SPOOL"), http: &http.Client{}}
-	if c.url == "" || c.key == "" {
-		var s saved
-		if p, err := configPath(); err == nil {
-			if b, err := os.ReadFile(p); err == nil {
-				json.Unmarshal(b, &s)
-			}
+	var s saved
+	if p, err := configPath(); err == nil {
+		if b, err := os.ReadFile(p); err == nil {
+			json.Unmarshal(b, &s)
 		}
+	}
+	c.folders = s.Folders
+	if f := os.Getenv("DOKKIT_FOLDERS"); f != "" {
+		c.folders = filepath.SplitList(f)
+	}
+	if c.url == "" || c.key == "" {
 		if s.URL == "" || s.Key == "" {
 			return nil, errors.New("set DOKKIT_URL and DOKKIT_KEY, or run dokkit enrol")
 		}
@@ -178,12 +196,9 @@ func enrol(address, token string) int {
 	return 0
 }
 
-// beat says this machine is alive and sends whatever is waiting.
+// beat says this machine is alive.
 func (c *client) beat() {
 	c.report(map[string]any{"type": "inventory", "at": now(), "os": runtime.GOOS, "arch": runtime.GOARCH, "dokkit": version})
-	if left, err := c.flush(20 * time.Second); left > 0 {
-		fmt.Fprintf(os.Stderr, "%s  %d report(s) waiting: %v\n", time.Now().Format("15:04:05"), left, err)
-	}
 }
 
 // job fills in what every job line carries. A machine key names the job as a service of its machine.

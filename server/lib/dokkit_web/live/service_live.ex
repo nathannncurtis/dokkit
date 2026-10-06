@@ -47,6 +47,7 @@ defmodule DokkitWeb.ServiceLive do
     assign(socket,
       service: service,
       job: job,
+      checks: Enum.reject(service.checks, &(&1.type == :job)),
       issue: Estate.open_issue(service),
       runs: Estate.runs(service),
       logs: Dokkit.Logs.list(service: service.id, limit: 20),
@@ -113,12 +114,17 @@ defmodule DokkitWeb.ServiceLive do
               <pre class="logbox">{r.tail || "No output was sent with this run."}</pre>
             </details>
           </div>
-          <div :if={!@job} class="card">
+          <div :if={!@job or @checks != []} class="card">
             <h2>Checks</h2>
-            <p :if={@service.checks == []} class="lead">No checks yet.</p>
-            <div :for={c <- @service.checks} class="est">
+            <p :if={@checks == []} class="lead">No checks yet.</p>
+            <div :for={c <- @checks} class="est">
               <b><.lvl state={c.state} />{c.name}</b>
               <span class="st">{c.note || say(c.state)}</span>
+              <span class="mute" style="grid-column: 1 / -1">
+                {target(c)}<span :if={c.checked_at}> · checked {at(c.checked_at)} UTC</span><span :if={
+                  c.source == :file
+                }> · from dokkit.toml</span>
+              </span>
             </div>
           </div>
           <div class="card">
@@ -210,6 +216,14 @@ defmodule DokkitWeb.ServiceLive do
 
   defp name(routes, value),
     do: Enum.find_value(routes, "Nobody", fn {text, v} -> v == value && text end)
+
+  defp target(%{type: :http, config: %{"url" => url}}), do: "http " <> url
+
+  defp target(%{type: :tcp, config: %{"port" => port} = c}),
+    do: "tcp #{c["host"] || "localhost"}:#{port}"
+
+  defp target(%{type: type, config: %{"name" => name}}), do: "#{type} #{name}"
+  defp target(%{type: type}), do: to_string(type)
 
   defp last_good(runs), do: Enum.find_value(runs, &(&1.result == :ok && &1.finished_at))
 

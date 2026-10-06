@@ -42,6 +42,7 @@ defmodule Dokkit.Service do
     field :note, :string
     field :route_down, :string
     field :route_degraded, :string
+    field :declared, :map
     belongs_to :machine, Dokkit.Machine
     has_many :checks, Dokkit.Check
     timestamps()

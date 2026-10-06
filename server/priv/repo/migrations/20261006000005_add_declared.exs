@@ -1,0 +1,9 @@
+defmodule Dokkit.Repo.Migrations.AddDeclared do
+  use Ecto.Migration
+
+  def change do
+    alter table(:services) do
+      add :declared, :map
+    end
+  end
+end

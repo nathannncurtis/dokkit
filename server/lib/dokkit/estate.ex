@@ -133,6 +133,124 @@ defmodule Dokkit.Estate do
     end
   end
 
+  @kinds ~w(service job dependency app)
+  @types ~w(http tcp process windows-service beat stats threshold expiry custom)
+
+  @doc """
+  Takes the contents of a dokkit.toml for a machine. The file owns the service and its
+  checks, so checks it no longer lists are removed. Sending the same file twice changes nothing.
+  """
+  def declare(machine_id, %{"service" => %{"id" => slug} = about} = doc) when is_binary(slug) do
+    checks = named(List.wrap(doc["check"]))
+    jobs = List.wrap(doc["job"])
+
+    cond do
+      doc["schema"] != 1 ->
+        {:error, "This server reads schema 1."}
+
+      not (slug =~ ~r/^[a-z0-9][a-z0-9._-]*$/) ->
+        {:error, "service.id may hold lower-case letters, digits, dots, dashes and underscores."}
+
+      about["kind"] not in [nil | @kinds] ->
+        {:error, "service.kind is one of #{Enum.join(@kinds, ", ")}."}
+
+      bad = Enum.find(checks, fn {_, c} -> c["type"] not in @types end) ->
+        {:error,
+         "A check has the type #{inspect(elem(bad, 1)["type"])}, which is not one Dokkit knows."}
+
+      Enum.any?(jobs, &(not is_binary(&1["id"]))) ->
+        {:error, "Every job needs an id."}
+
+      true ->
+        Repo.transaction(fn ->
+          service = Repo.get_by(Service, machine_id: machine_id, slug: slug)
+          alert = (is_map(doc["alert"]) && doc["alert"]) || %{}
+
+          attrs = [
+            name: about["name"] || slug,
+            kind: String.to_existing_atom(about["kind"] || "service"),
+            environment: about["environment"] || "production",
+            declared: doc
+          ]
+
+          service =
+            if service do
+              Repo.update!(Ecto.Changeset.change(service, attrs))
+            else
+              seed = [route_down: route(alert["down"]), route_degraded: route(alert["degraded"])]
+
+              Repo.insert!(
+                struct!(Service, [machine_id: machine_id, slug: slug] ++ attrs ++ seed)
+              )
+            end
+
+          wanted =
+            for(
+              {name, c} <- checks,
+              do: {name, c["type"], Map.drop(c, ~w(type name fail_after)), c["fail_after"] || 3}
+            ) ++
+              for(j <- jobs, do: {j["id"], "job", Map.drop(j, ["id"]), 1})
+
+          names = for {name, _, _, _} <- wanted, do: name
+
+          Repo.delete_all(
+            from c in Check,
+              where: c.service_id == ^service.id and c.source == :file and c.name not in ^names
+          )
+
+          for {name, type, config, fail_after} <- wanted do
+            type =
+              if type == "job",
+                do: :job,
+                else: Enum.find(Ecto.Enum.values(Check, :type), &(to_string(&1) == type))
+
+            case Repo.get_by(Check, service_id: service.id, name: name) do
+              nil ->
+                Repo.insert!(%Check{
+                  service_id: service.id,
+                  name: name,
+                  type: type,
+                  source: :file,
+                  config: config,
+                  fail_after: fail_after
+                })
+
+              check ->
+                Repo.update!(
+                  Ecto.Changeset.change(check,
+                    type: type,
+                    source: :file,
+                    config: config,
+                    fail_after: fail_after
+                  )
+                )
+            end
+          end
+
+          service
+        end)
+    end
+  end
+
+  def declare(_, _), do: {:error, "A declaration needs [service] with an id."}
+
+  # A check is called by its name, or by its type when the file gives none.
+  defp named(checks) do
+    checks
+    |> Enum.filter(&is_map/1)
+    |> Enum.reduce([], fn c, acc ->
+      base = (is_binary(c["name"]) && c["name"]) || to_string(c["type"])
+
+      taken =
+        Enum.count(acc, fn {name, _} -> name == base or String.starts_with?(name, base <> "-") end)
+
+      [{if(taken == 0, do: base, else: "#{base}-#{taken + 1}"), c} | acc]
+    end)
+    |> Enum.reverse()
+  end
+
+  defp route(value), do: Enum.find(@routes, &(&1 == value))
+
   def routes, do: @routes
 
   def set_routing(%Service{} = service, params) do

@@ -46,6 +46,7 @@ defmodule DokkitWeb.Router do
 
     post "/report", IntakeController, :report
     post "/enrol", IntakeController, :enrol
+    put "/declare", IntakeController, :declare
     get "/ping", IntakeController, :hello
     get "/in/:key/job/:name/:event", IntakeController, :ping
     post "/in/:key/job/:name/:event", IntakeController, :ping

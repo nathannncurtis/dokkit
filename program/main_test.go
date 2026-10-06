@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func server(t *testing.T, status *int, got *[]line, batches *[]string) *httptest.Server {
@@ -126,11 +127,120 @@ func TestEnrolSavesTheKeyAndWatchUsesIt(t *testing.T) {
 		t.Fatalf("saved config not used: %+v %v", c, err)
 	}
 	c.beat()
+	c.flush(5 * time.Second)
 	if inventory["type"] != "inventory" || inventory["dokkit"] != version {
 		t.Fatalf("inventory: %v", inventory)
 	}
 	if l := c.job(line{Name: "backup", Event: "ok"}); l.Service != "backup" || l.Type != "job" {
 		t.Fatalf("a machine key names the job as a service: %+v", l)
+	}
+}
+
+func TestWatchDeclaresAndRunsChecks(t *testing.T) {
+	var declared map[string]any
+	var states []map[string]any
+	app := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/broken" {
+			w.WriteHeader(500)
+		}
+	}))
+	defer app.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/declare" {
+			json.NewDecoder(r.Body).Decode(&declared)
+			w.Write([]byte(`{"service":"s1"}`))
+			return
+		}
+		z, _ := gzip.NewReader(r.Body)
+		s := bufio.NewScanner(z)
+		for s.Scan() {
+			var l map[string]any
+			json.Unmarshal(s.Bytes(), &l)
+			states = append(states, l)
+		}
+		w.Write([]byte(`{"accepted":1,"refused":[]}`))
+	}))
+	defer srv.Close()
+
+	folder := t.TempDir()
+	os.Mkdir(filepath.Join(folder, "portal"), 0o700)
+	file := filepath.Join(folder, "portal", "dokkit.toml")
+	port := strings.Split(app.URL, ":")[2]
+	os.WriteFile(file, []byte(`schema = 1
+[service]
+id = "portal"
+name = "Upload portal"
+
+[[check]]
+type = "http"
+url = "`+app.URL+`/healthz"
+every = "2s"
+
+[[check]]
+type = "http"
+url = "`+app.URL+`/broken"
+
+[[check]]
+type = "tcp"
+port = `+port+`
+
+[[check]]
+type = "custom"
+name = "queue-age"
+
+[[job]]
+id = "purge"
+schedule = "0 1 * * *"
+`), 0o600)
+
+	t.Setenv("DOKKIT_URL", srv.URL)
+	t.Setenv("DOKKIT_KEY", "dkm_machine")
+	t.Setenv("DOKKIT_SPOOL", t.TempDir())
+	t.Setenv("DOKKIT_CONFIG", filepath.Join(t.TempDir(), "none.json"))
+	t.Setenv("DOKKIT_FOLDERS", folder)
+
+	if code := cli([]string{"check", file}); code != 1 {
+		t.Fatalf("check should exit 1 when a check fails, got %d", code)
+	}
+	if declared != nil || len(states) != 0 {
+		t.Fatal("check must not send anything")
+	}
+
+	c, _ := load()
+	w := &watcher{c: c, folders: c.folders, files: map[string]*declaration{}, modified: map[string]time.Time{}}
+	w.refresh()
+	if declared["service"].(map[string]any)["id"] != "portal" || len(declared["job"].([]any)) != 1 {
+		t.Fatalf("declared: %v", declared)
+	}
+	at := time.Now()
+	if ran := w.tick(at); ran != 3 {
+		t.Fatalf("ran %d checks, want 3 (the custom one is the app's)", ran)
+	}
+	if ran := w.tick(at.Add(time.Second)); ran != 0 {
+		t.Fatalf("nothing is due after a second, ran %d", ran)
+	}
+	if ran := w.tick(at.Add(3 * time.Second)); ran != 1 {
+		t.Fatalf("only the 2s check is due, ran %d", ran)
+	}
+	c.flush(5 * time.Second)
+	got := map[string]string{}
+	for _, l := range states {
+		got[l["check"].(string)] = l["state"].(string)
+	}
+	if got["http"] != "ok" || got["http-2"] != "down" || got["tcp"] != "ok" {
+		t.Fatalf("states: %v", states)
+	}
+
+	os.WriteFile(file, []byte("schema = 2"), 0o600)
+	os.Chtimes(file, at.Add(time.Hour), at.Add(time.Hour))
+	w.refresh()
+	if len(w.files) != 1 {
+		t.Fatal("a file that stops parsing keeps its last good checks")
+	}
+	os.Remove(file)
+	w.refresh()
+	if len(w.files) != 0 {
+		t.Fatal("a file that is gone is forgotten")
 	}
 }
 

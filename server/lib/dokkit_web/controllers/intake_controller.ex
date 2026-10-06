@@ -39,6 +39,18 @@ defmodule DokkitWeb.IntakeController do
 
   def enrol(conn, _), do: fail(conn, 422, "bad_body", "Needs a token and a hostname.")
 
+  def declare(conn, params) do
+    with {:ok, %{kind: :machine, machine_id: machine}} <- bearer(conn),
+         {:ok, service} <- Dokkit.Estate.declare(machine, Map.drop(params, ["_format"])) do
+      Dokkit.Issues.changed(false)
+      json(conn, %{service: service.id})
+    else
+      {:error, message} when is_binary(message) -> fail(conn, 422, "bad_declaration", message)
+      {:ok, _} -> fail(conn, 403, "not_allowed", "A declaration needs a machine key.")
+      _ -> fail(conn, 401, "bad_key", "Missing or bad key.")
+    end
+  end
+
   @doc "Lets a machine check its address, its key and its clock."
   def hello(conn, _params) do
     case bearer(conn) do
