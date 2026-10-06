@@ -106,6 +106,7 @@ Four kinds of key: one to enrol a machine, one per machine, one per app that can
 | `docs/` | Wiring an app in, running the server, moving over from other tools, and the note on Sentry's SDKs. |
 | `interview/` | The requirements interview, and the small board it was answered on. |
 | `server/` | The server: Phoenix on Postgres. |
+| `program/` | The `dokkit` program, in Go. `go build -o dokkit.exe .` |
 
 To look at the mock:
 

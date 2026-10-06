@@ -81,3 +81,7 @@ Every Windows release is signed with a code-signing certificate, and is not pack
 ## Not in this design
 
 A listener on localhost. Earlier notes had `dokkit` listening on localhost so apps and the CLI could hand it data. The spool folder covers the CLI, and libraries send straight to the server, so nothing here needs it. It stays possible, and off.
+
+## Built so far
+
+`dokkit run`, `dokkit ping` and `dokkit doctor`, in `program/`. They read the server's address from `DOKKIT_URL` and an app key from `DOKKIT_KEY`, and spool to the user's cache folder, or to `DOKKIT_SPOOL`. Nothing that stays running is built yet, so they always send for themselves.

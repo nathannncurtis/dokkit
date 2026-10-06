@@ -176,6 +176,13 @@ defmodule DokkitWeb.JobsLive do
     do: DokkitWeb.Endpoint.url() <> "/api/v1/in/#{added.key}/job/#{added.service.slug}/#{event}"
 
   defp example(added) do
-    "curl -fsS #{ping(added, "start")}\n./the-job.sh && curl -fsS #{ping(added, "ok")} || curl -fsS #{ping(added, "fail")}"
+    """
+    # With the dokkit program, which also sends the exit code, the time taken and the output:
+    DOKKIT_URL=#{DokkitWeb.Endpoint.url()} DOKKIT_KEY=#{added.key} dokkit run --job #{added.service.slug} -- ./the-job.sh
+
+    # With nothing but curl:
+    curl -fsS #{ping(added, "start")}
+    ./the-job.sh && curl -fsS #{ping(added, "ok")} || curl -fsS #{ping(added, "fail")}
+    """
   end
 end

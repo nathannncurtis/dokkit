@@ -1,0 +1,289 @@
+// dokkit is the command-line tool and the program that runs on each machine.
+// The contract it follows is in ../spec/program.md and ../spec/api.md.
+package main
+
+import (
+	"bytes"
+	"compress/gzip"
+	"crypto/rand"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+)
+
+const (
+	tailBytes = 16 * 1024
+	spoolCap  = 500 * 1024 * 1024
+	usage     = `dokkit run --job <name> -- <command> [arguments]
+dokkit ping <name> [start|ok|fail]
+dokkit doctor
+
+Needs DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key).`
+)
+
+func main() { os.Exit(cli(os.Args[1:])) }
+
+func cli(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, usage)
+		return 2
+	}
+	c, err := load()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dokkit:", err)
+		return 2
+	}
+	switch args[0] {
+	case "run":
+		if len(args) < 5 || args[1] != "--job" || args[3] != "--" {
+			fmt.Fprintln(os.Stderr, usage)
+			return 2
+		}
+		return c.run(args[2], args[4:])
+	case "ping":
+		event := "ok"
+		if len(args) == 3 {
+			event = args[2]
+		}
+		if len(args) < 2 || len(args) > 3 || (event != "start" && event != "ok" && event != "fail") {
+			fmt.Fprintln(os.Stderr, usage)
+			return 2
+		}
+		c.report(line{Type: "job", Name: args[1], Event: event, At: now()})
+		return c.settle(15 * time.Second)
+	case "doctor":
+		return c.doctor()
+	}
+	fmt.Fprintln(os.Stderr, usage)
+	return 2
+}
+
+type client struct {
+	url, key, spool string
+	http            *http.Client
+}
+
+type line struct {
+	Type     string `json:"type"`
+	At       string `json:"at"`
+	Name     string `json:"name"`
+	Run      string `json:"run,omitempty"`
+	Event    string `json:"event"`
+	ExitCode *int   `json:"exit_code,omitempty"`
+	Duration *int64 `json:"duration_ms,omitempty"`
+	Tail     string `json:"tail,omitempty"`
+}
+
+func load() (*client, error) {
+	c := &client{url: strings.TrimRight(os.Getenv("DOKKIT_URL"), "/"), key: os.Getenv("DOKKIT_KEY"), spool: os.Getenv("DOKKIT_SPOOL"), http: &http.Client{}}
+	if c.url == "" || c.key == "" {
+		return nil, errors.New("set DOKKIT_URL and DOKKIT_KEY")
+	}
+	if c.spool == "" {
+		dir, err := os.UserCacheDir()
+		if err != nil {
+			return nil, err
+		}
+		c.spool = filepath.Join(dir, "dokkit", "spool")
+	}
+	return c, os.MkdirAll(c.spool, 0o700)
+}
+
+func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }
+
+func id() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	b[6], b[8] = b[6]&0x0f|0x40, b[8]&0x3f|0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+// run wraps a command: it reports the start, lets the command's output through
+// untouched, and reports how it ended. It exits as the command did.
+func (c *client) run(job string, command []string) int {
+	run := id()
+	c.report(line{Type: "job", Name: job, Run: run, Event: "start", At: now()})
+	c.flush(5 * time.Second)
+
+	tail := &ring{max: tailBytes}
+	cmd := exec.Command(command[0], command[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, io.MultiWriter(os.Stdout, tail), io.MultiWriter(os.Stderr, tail)
+	started := time.Now()
+	err := cmd.Run()
+	took := time.Since(started).Milliseconds()
+
+	code, event := 0, "ok"
+	var exit *exec.ExitError
+	switch {
+	case errors.As(err, &exit):
+		code, event = exit.ExitCode(), "fail"
+	case err != nil:
+		code, event = 127, "fail"
+		fmt.Fprintln(tail, "dokkit: could not start the command:", err)
+		fmt.Fprintln(os.Stderr, "dokkit: could not start the command:", err)
+	}
+	c.report(line{Type: "job", Name: job, Run: run, Event: event, At: now(), ExitCode: &code, Duration: &took, Tail: tail.String()})
+	c.settle(15 * time.Second)
+	return code
+}
+
+// report puts lines in the spool, where they stay until the server has them.
+func (c *client) report(lines ...line) {
+	var b bytes.Buffer
+	for _, l := range lines {
+		j, _ := json.Marshal(l)
+		b.Write(j)
+		b.WriteByte('\n')
+	}
+	name := fmt.Sprintf("%020d-%s.ndjson", time.Now().UnixNano(), id())
+	if err := os.WriteFile(filepath.Join(c.spool, name), b.Bytes(), 0o600); err != nil {
+		fmt.Fprintln(os.Stderr, "dokkit: could not write to the spool:", err)
+	}
+}
+
+// settle flushes and says so when something is still waiting. It never fails the caller's job.
+func (c *client) settle(wait time.Duration) int {
+	if left, err := c.flush(wait); left > 0 {
+		fmt.Fprintf(os.Stderr, "dokkit: %d report(s) kept in %s to send later: %v\n", left, c.spool, err)
+	}
+	return 0
+}
+
+// flush sends spooled batches oldest first and returns how many are left.
+func (c *client) flush(wait time.Duration) (int, error) {
+	files, _ := filepath.Glob(filepath.Join(c.spool, "*.ndjson"))
+	sort.Strings(files)
+	files = c.trim(files)
+	c.http.Timeout = wait
+	for i, f := range files {
+		body, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		batch := strings.TrimSuffix(filepath.Base(f)[21:], ".ndjson")
+		status, answer, err := c.post(batch, body)
+		switch {
+		case err != nil:
+			return len(files) - i, err
+		case status/100 == 2:
+			var a struct {
+				Refused []struct {
+					Line          int
+					Code, Message string
+				}
+			}
+			json.Unmarshal(answer, &a)
+			for _, r := range a.Refused {
+				fmt.Fprintf(os.Stderr, "dokkit: the server refused a line (%s): %s\n", r.Code, r.Message)
+			}
+			os.Remove(f)
+		case status == 413 || status == 422:
+			fmt.Fprintf(os.Stderr, "dokkit: the server will never take this batch (%d), dropping it\n", status)
+			os.Remove(f)
+		default:
+			return len(files) - i, fmt.Errorf("the server answered %d", status)
+		}
+	}
+	return 0, nil
+}
+
+func (c *client) post(batch string, body []byte) (int, []byte, error) {
+	var z bytes.Buffer
+	w := gzip.NewWriter(&z)
+	w.Write(body)
+	w.Close()
+	req, err := http.NewRequest("POST", c.url+"/api/v1/report", &z)
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.key)
+	req.Header.Set("Content-Type", "application/x-ndjson")
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Dokkit-Batch", batch)
+	res, err := c.http.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer res.Body.Close()
+	answer, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	return res.StatusCode, answer, nil
+}
+
+// trim drops the oldest batches when the spool is over its cap.
+func (c *client) trim(files []string) []string {
+	var total int64
+	sizes := make([]int64, len(files))
+	for i, f := range files {
+		if s, err := os.Stat(f); err == nil {
+			sizes[i] = s.Size()
+			total += sizes[i]
+		}
+	}
+	dropped := 0
+	for total > spoolCap && dropped < len(files) {
+		os.Remove(files[dropped])
+		total -= sizes[dropped]
+		dropped++
+	}
+	if dropped > 0 {
+		fmt.Fprintf(os.Stderr, "dokkit: the spool was full, dropped the %d oldest report(s)\n", dropped)
+	}
+	return files[dropped:]
+}
+
+func (c *client) doctor() int {
+	c.http.Timeout = 10 * time.Second
+	req, _ := http.NewRequest("GET", c.url+"/api/v1/ping", nil)
+	req.Header.Set("Authorization", "Bearer "+c.key)
+	sent := time.Now()
+	res, err := c.http.Do(req)
+	if err != nil {
+		fmt.Println("Cannot reach the server:", err)
+		return 1
+	}
+	defer res.Body.Close()
+	var a struct{ Time time.Time }
+	json.NewDecoder(res.Body).Decode(&a)
+	switch {
+	case res.StatusCode == 401:
+		fmt.Println("The server is there, but it does not know this key.")
+		return 1
+	case res.StatusCode != 200:
+		fmt.Println("The server answered", res.StatusCode)
+		return 1
+	}
+	fmt.Println("The server is reachable and knows this key.")
+	if off := a.Time.Sub(sent).Round(time.Second); off > 30*time.Second || off < -30*time.Second {
+		fmt.Printf("This machine's clock is %s away from the server's.\n", off)
+	}
+	if left, _ := c.flush(10 * time.Second); left > 0 {
+		fmt.Println(left, "report(s) are still waiting in", c.spool)
+		return 1
+	}
+	fmt.Println("Nothing is waiting in the spool.")
+	return 0
+}
+
+// ring keeps the last max bytes written to it.
+type ring struct {
+	max int
+	b   []byte
+}
+
+func (r *ring) Write(p []byte) (int, error) {
+	r.b = append(r.b, p...)
+	if len(r.b) > r.max {
+		r.b = r.b[len(r.b)-r.max:]
+	}
+	return len(p), nil
+}
+
+func (r *ring) String() string { return strings.ToValidUTF8(string(r.b), "") }

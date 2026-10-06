@@ -43,6 +43,7 @@ defmodule DokkitWeb.Router do
     pipe_through :api
 
     post "/report", IntakeController, :report
+    get "/ping", IntakeController, :hello
     get "/in/:key/job/:name/:event", IntakeController, :ping
     post "/in/:key/job/:name/:event", IntakeController, :ping
   end

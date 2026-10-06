@@ -26,6 +26,14 @@ defmodule DokkitWeb.IntakeController do
     end
   end
 
+  @doc "Lets a machine check its address, its key and its clock."
+  def hello(conn, _params) do
+    case bearer(conn) do
+      {:ok, _} -> json(conn, %{ok: true, time: DateTime.utc_now()})
+      _ -> fail(conn, 401, "bad_key", "Missing or bad key.")
+    end
+  end
+
   def ping(conn, %{"key" => text, "name" => name, "event" => event} = params)
       when event in ~w(start ok fail) do
     with {:ok, key} <- Keys.verify(text, :app), {:ok, tail, conn} <- body(conn) do
