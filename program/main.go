@@ -69,6 +69,13 @@ func cli(args []string) int {
 		fmt.Fprintln(os.Stderr, usage)
 		return 2
 	}
+	isHelp := func(s string) bool { return s == "help" || s == "--help" || s == "-h" }
+	if isHelp(args[0]) {
+		return help(args[1:])
+	}
+	if len(args) == 2 && isHelp(args[1]) {
+		return help(args[:1])
+	}
 	if args[0] == "enrol" {
 		if len(args) != 3 && len(args) != 4 {
 			fmt.Fprintln(os.Stderr, usage)

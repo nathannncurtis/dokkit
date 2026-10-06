@@ -743,3 +743,19 @@ func TestABareNameInTheTasksFolderRuns(t *testing.T) {
 		t.Fatalf("code %d: %s", code, out.take())
 	}
 }
+
+func TestHelp(t *testing.T) {
+	for _, args := range [][]string{{"help"}, {"--help"}, {"check", "--help"}} {
+		if code := cli(args); code != 0 {
+			t.Fatalf("%v should exit 0, got %d", args, code)
+		}
+	}
+	for _, tp := range topics {
+		if !strings.Contains(usage, "dokkit "+tp.name) || cli([]string{"help", tp.name}) != 0 {
+			t.Fatalf("help for %q does not match the usage", tp.name)
+		}
+	}
+	if cli([]string{"help", "nope"}) != 2 {
+		t.Fatal("help for an unknown command should exit 2")
+	}
+}
