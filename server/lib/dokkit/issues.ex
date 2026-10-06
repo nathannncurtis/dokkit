@@ -100,8 +100,12 @@ defmodule Dokkit.Issues do
 
   defp set(ids, change) do
     ids = for id <- List.wrap(ids), match?({:ok, _}, Ecto.UUID.cast(id)), do: id
-    Repo.update_all(from(i in Issue, where: i.id in ^ids and is_nil(i.closed_at)), set: change)
+
+    {count, _} =
+      Repo.update_all(from(i in Issue, where: i.id in ^ids and is_nil(i.closed_at)), set: change)
+
     changed(false)
+    count
   end
 
   def open_count, do: length(open_list())
@@ -152,6 +156,23 @@ defmodule Dokkit.Issues do
       Repo.update!(Ecto.Changeset.change(issue, closed_at: now))
       Dokkit.Alerts.closing(issue)
     end
+
+    # What opened while the machine was down was held back; now it can be told.
+    unalerted =
+      Repo.all(
+        from i in Issue,
+          left_join: a in assoc(i, :alert),
+          where:
+            i.machine_id in ^Enum.map(back, & &1.machine_id) and i.kind != "machine" and
+              is_nil(i.closed_at) and is_nil(i.acknowledged_at) and is_nil(a.id),
+          preload: :service
+      )
+
+    went = Map.new(back, &{&1.machine_id, &1.since})
+
+    for i <- unalerted,
+        DateTime.compare(i.since, went[i.machine_id]) != :lt,
+        do: Dokkit.Alerts.plan(i, i.service)
 
     length(gone) + length(back)
   end
@@ -206,6 +227,8 @@ defmodule Dokkit.Issues do
       )
 
     if recent do
+      Dokkit.Alerts.reopened(recent)
+
       Repo.update!(
         Ecto.Changeset.change(recent, closed_at: nil, state: state, count: recent.count + 1)
       )
@@ -227,7 +250,7 @@ defmodule Dokkit.Issues do
   end
 
   # A service is as bad as its worst check, and says what that check said.
-  defp refresh(service) do
+  def refresh(service) do
     checks =
       Repo.all(from c in Check, where: c.service_id == ^service.id, select: {c.state, c.note})
 

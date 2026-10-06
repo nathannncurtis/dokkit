@@ -6,10 +6,25 @@ import Config
 settings = Path.join(System.get_env("ProgramData") || "", "Dokkit/settings.env")
 
 if config_env() == :prod and Path.type(settings) == :absolute and File.regular?(settings) do
-  for line <- settings |> File.read!() |> String.split(~r/\r?\n/, trim: true),
+  # Notepad and PowerShell 5 write a byte order mark first; people leave spaces after values.
+  text = settings |> File.read!() |> String.trim_leading("﻿")
+
+  for line <- String.split(text, ~r/\r?\n/, trim: true),
       [name, value] <- [String.split(line, "=", parts: 2)],
+      name = String.trim(name),
+      name != "",
       System.get_env(name) == nil,
-      do: System.put_env(String.trim(name), value)
+      do: System.put_env(name, String.trim(value))
+end
+
+# A file log, for a service that has no console.
+if log_dir = System.get_env("DOKKIT_LOG_DIR") do
+  config :logger, :default_handler,
+    config: [
+      file: String.to_charlist(Path.join(log_dir, "dokkit.log")),
+      max_no_bytes: 10_000_000,
+      max_no_files: 5
+    ]
 end
 
 if System.get_env("PHX_SERVER") do
@@ -49,7 +64,10 @@ if config_env() == :prod do
     System.get_env("SECRET_KEY_BASE") ||
       raise "SECRET_KEY_BASE is missing. Make one with: mix phx.gen.secret"
 
-  host = System.get_env("PHX_HOST") || "example.com"
+  host =
+    System.get_env("PHX_HOST") ||
+      raise "PHX_HOST is missing. It is the name people and machines reach Dokkit by."
+
   cert = System.get_env("DOKKIT_CERT")
 
   # With a certificate of its own, Dokkit serves TLS itself and machines pin it when they enrol.
@@ -74,5 +92,7 @@ if config_env() == :prod do
       url: [host: host, port: 443, scheme: "https"],
       http: [ip: {0, 0, 0, 0, 0, 0, 0, 0}],
       secret_key_base: secret_key_base
+
+    config :dokkit, behind_proxy: true
   end
 end

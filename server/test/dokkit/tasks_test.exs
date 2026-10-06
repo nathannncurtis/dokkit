@@ -63,6 +63,7 @@ defmodule Dokkit.TasksTest do
              404
            )
 
+    send(view.pid, {:settled, :page})
     html = render(view)
     assert html =~ "Finished"
     assert html =~ "Started portal"
@@ -108,7 +109,8 @@ defmodule Dokkit.TasksTest do
     declare(key, "true")
     [task] = Tasks.waiting()
     :ok = Tasks.decide(task.id, "true", :accepted)
-    {:ok, run} = {:ok, Tasks.run(task.id, "sam")}
+    run = Tasks.run(task.id, "sam")
+    assert run
 
     assert %{"run" => id, "as" => "ordinary"} =
              json_response(get(as(key), "/api/v1/work?wait=0"), 200)
@@ -147,5 +149,28 @@ defmodule Dokkit.TasksTest do
              render_click(view, "fetch", %{"machine" => machine.id})
 
     assert %{"task" => "dokkit:update"} = json_response(get(as(key), "/api/v1/work?wait=0"), 200)
+  end
+
+  test "runs whose result never came, or that nobody took, are ended" do
+    m = Repo.insert!(%Machine{name: "stale-sweep-box", kind: :enrolled})
+    t = Repo.insert!(%Dokkit.Task{machine_id: m.id, name: "t", command: "c", accepted: "c"})
+    old = DateTime.add(DateTime.utc_now(), -2, :day)
+
+    stuck =
+      Repo.insert!(%Dokkit.TaskRun{
+        task_id: t.id,
+        state: :running,
+        started_at: old,
+        output: "kept"
+      })
+
+    waiting = Repo.insert!(%Dokkit.TaskRun{task_id: t.id, state: :queued, inserted_at: old})
+    fresh = Repo.insert!(%Dokkit.TaskRun{task_id: t.id, state: :queued})
+
+    assert Tasks.expire() == 2
+    assert Repo.reload!(stuck).state == :fail
+    assert Repo.reload!(stuck).output == "kept\nNo result arrived from the machine."
+    assert Repo.reload!(waiting).state == :refused
+    assert Repo.reload!(fresh).state == :queued
   end
 end

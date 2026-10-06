@@ -29,11 +29,57 @@ defmodule DokkitWeb.AlertsLiveTest do
            } = Alerts.config()
   end
 
+  test "an address that is not https is refused and not saved", %{conn: conn} do
+    {:ok, view, _} = live(signed_in(conn), "/alerts")
+
+    html =
+      view
+      |> form("#alerts-form", alerts: %{webhook_url: "http://hook-refused.example/x"})
+      |> render_submit()
+
+    assert html =~ "webhook: The address must start with https://."
+    refute html =~ "Saved."
+  end
+
+  test "someone who is not the owner is not shown the addresses and user", %{conn: conn} do
+    {:ok, view, _} = live(signed_in(conn), "/alerts")
+
+    view
+    |> form("#alerts-form",
+      alerts: %{
+        ntfy_url: "https://ntfy-seen.example/t",
+        webhook_url: "https://hook-seen.example/x",
+        heartbeat_url: "https://beat-seen.example/y",
+        smtp_user: "smtp-seen-user"
+      }
+    )
+    |> render_submit()
+
+    viewer = Repo.insert!(%User{name: "vic-sees", password_hash: "-", role: :viewer})
+
+    {:ok, _, html} =
+      live(
+        Plug.Test.init_test_session(conn, %{
+          "user_id" => viewer.id,
+          "signed_at" => Dokkit.Accounts.stamp()
+        }),
+        "/alerts"
+      )
+
+    for v <- ~w(ntfy-seen hook-seen beat-seen smtp-seen-user), do: refute(html =~ v)
+  end
+
   test "someone who is not the owner cannot change them", %{conn: conn} do
     viewer = Repo.insert!(%User{name: "vic", password_hash: "-", role: :viewer})
 
     {:ok, view, html} =
-      live(Plug.Test.init_test_session(conn, %{"user_id" => viewer.id}), "/alerts")
+      live(
+        Plug.Test.init_test_session(conn, %{
+          "user_id" => viewer.id,
+          "signed_at" => Dokkit.Accounts.stamp()
+        }),
+        "/alerts"
+      )
 
     assert html =~ "Only the owner can change these."
     render_submit(view, "save", %{"alerts" => %{"down" => "none"}})
@@ -68,13 +114,15 @@ defmodule DokkitWeb.AlertsLiveTest do
     {:ok, a} = Dokkit.Estate.add_job(%{"name" => "Flaky sync", "machine" => "attic"})
     {:ok, b} = Dokkit.Estate.add_job(%{"name" => "Noisy probe", "machine" => "attic"})
 
-    for job <- [a, b] do
+    # Each recovery and relapse reopens the same issue and counts once more.
+    for job <- [a, b], round <- 1..6 do
+      if round > 1, do: post(build_conn(), "/api/v1/in/#{job.key}/job/#{job.service.slug}/ok")
       post(build_conn(), "/api/v1/in/#{job.key}/job/#{job.service.slug}/fail")
     end
 
-    import Ecto.Query
-    until = DateTime.add(DateTime.utc_now(), 3600)
-    Dokkit.Repo.update_all(from(i in Dokkit.Issue), set: [count: 6, snoozed_until: until])
+    mine = [a.service.id, b.service.id]
+    ids = for i <- Dokkit.Issues.open_list(), i.service_id in mine, do: i.id
+    Dokkit.Issues.snooze(ids, 3600)
 
     {:ok, view, html} = live(signed_in(conn), "/alerts")
     assert html =~ "Flaky sync has needed a look 6 times"

@@ -10,7 +10,7 @@ One JSON object per line.
 |---|---|---|
 | `t` | Yes | When it happened. RFC 3339. |
 | `level` | Yes | `trace`, `debug`, `info`, `warn`, `error` or `fatal`. |
-| `msg` | Yes | The line. |
+| `msg` | No | The line. A line without it is kept whole, as JSON, as its message. |
 | `service` | No | The service id. Filled in from `dokkit.toml` or the app key when absent. |
 | `fields` | No | Anything else, as a flat object. Searchable. |
 
@@ -18,7 +18,7 @@ A line that is not JSON is kept as `msg` with level `info` and the time it was r
 
 ## Ways in
 
-1. **`dokkit` reads files** named under `[logs]` in `dokkit.toml`. A file's read position only moves forward after the server confirms it has the lines, so a line can arrive twice and never goes missing. Files are recognised by their first bytes, so rotation and renames are followed.
+1. **`dokkit` reads files** named under `[logs]` in `dokkit.toml`. A file's read position only moves forward after the server confirms it has the lines, so a line can arrive twice and never goes missing. Files are recognised by their first bytes, so rotation and renames are followed. Every line is sent as the file's service; a `service` field of the line's own is kept in `fields`, or as `service_name` on a CLEF line. A line without `msg` uses `message`, then `event`, then the whole line.
 2. **The library's log handler** plugs into the language's normal logging and sends lines in batches.
 3. **Anything else** can put `log` lines in a `POST /report` batch.
 
@@ -44,4 +44,4 @@ OpenTelemetry intake. It is the neutral standard, but its log libraries are unfi
 
 ## Built so far
 
-`log` lines in a `POST /report` batch, in Dokkit's format or CLEF, stored in monthly partitions, with the Logs page and each service's latest lines. A line dated in the future or more than 400 days back is stamped with the time it arrived. `dokkit watch` reads the files named under `[logs]` every five seconds, up to 1 MB and 5,000 lines of each at a time, and knows a file by its first line. The libraries' log handlers send lines too, and months older than a year are archived to a folder when one is set. The Settings page lists the archived months and loads one back for a week, after which it is archived again.
+`log` lines in a `POST /report` batch, in Dokkit's format or CLEF, stored in monthly partitions, with the Logs page and each service's latest lines. A line with no `msg` is kept whole, as JSON, in its message. A line dated in the future or a year or more back is stamped with the time it arrived. `dokkit watch` reads the files named under `[logs]` every five seconds, up to 1 MB and 5,000 lines of each at a time, and knows a file by its first line. The libraries' log handlers send lines too, and months older than a year are archived to a folder when one is set. The Settings page lists the archived months and loads one back for a week, after which it is archived again.
