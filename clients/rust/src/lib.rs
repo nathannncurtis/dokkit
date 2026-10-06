@@ -20,6 +20,16 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 const QUEUE: usize = 1000;
+const MAX_BYTES: usize = 8 << 20;
+const MAX_LINE: usize = 1 << 20;
+const MAX_BATCH: usize = 4 << 20; // the server refuses an unzipped batch over 5 MB
+
+/// What one request carries. One that fails is kept for a second try.
+struct Batch {
+    path: &'static str,
+    items: Vec<String>,
+    tried: bool,
+}
 
 struct State {
     url: String,
@@ -29,8 +39,12 @@ struct State {
     host: String,
     lines: VecDeque<String>,
     errors: VecDeque<String>,
+    bytes: usize,
+    held: Option<Batch>,
     dropped: usize,
 }
+
+static FLUSHING: Mutex<()> = Mutex::new(());
 
 static STATE: OnceLock<Mutex<State>> = OnceLock::new();
 
@@ -88,6 +102,25 @@ fn id() -> String {
     format!("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}", a >> 32, (a >> 16) & 0xffff, a & 0xffff, b >> 48, b & 0xffff_ffff_ffff)
 }
 
+// Off for an http address to another machine, unless DOKKIT_INSECURE=1.
+fn secure(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("http://") else { return true };
+    let authority = rest.split('/').next().unwrap_or("");
+    let host = if let Some(v6) = authority.strip_prefix('[') { v6.split(']').next().unwrap_or("") } else { authority.split(':').next().unwrap_or("") };
+    let local = host == "localhost" || host == "::1" || host.starts_with("127.");
+    if local || std::env::var("DOKKIT_INSECURE").as_deref() == Ok("1") {
+        return true;
+    }
+    eprintln!("dokkit: off, the address is http and not this machine; use https or set DOKKIT_INSECURE=1");
+    false
+}
+
+fn hostname() -> Option<String> {
+    let from_file = std::fs::read_to_string("/etc/hostname").ok();
+    let from_command = || std::process::Command::new("hostname").output().ok().and_then(|o| String::from_utf8(o.stdout).ok());
+    from_file.or_else(from_command).map(|h| h.trim().to_string()).filter(|h| !h.is_empty())
+}
+
 /// Turns the library on. With no address or key it stays off and every call does nothing.
 pub fn start(version: &str) {
     let var = |name| std::env::var(name).unwrap_or_default();
@@ -96,7 +129,7 @@ pub fn start(version: &str) {
 
 /// `start` with the address and key given instead of read from the environment.
 pub fn start_with(version: &str, url: &str, key: &str) {
-    if url.is_empty() || key.is_empty() {
+    if url.is_empty() || key.is_empty() || !secure(url) {
         return;
     }
     let var = |name| std::env::var(name).ok().filter(|v| !v.is_empty());
@@ -105,9 +138,11 @@ pub fn start_with(version: &str, url: &str, key: &str) {
         key: key.to_string(),
         version: version.to_string(),
         environment: var("DOKKIT_ENV"),
-        host: var("COMPUTERNAME").or(var("HOSTNAME")).unwrap_or_else(|| "unknown".into()),
+        host: var("COMPUTERNAME").or(var("HOSTNAME")).or_else(hostname).unwrap_or_else(|| "unknown".into()),
         lines: VecDeque::new(),
         errors: VecDeque::new(),
+        bytes: 0,
+        held: None,
         dropped: 0,
     };
     if STATE.set(Mutex::new(state)).is_err() {
@@ -129,14 +164,20 @@ fn add(kind: &str, pairs: &[(&str, J)]) {
     let more = object(pairs);
     // Two objects joined into one.
     let line = if more.len() > 2 { format!("{},{}", &line[..line.len() - 1], &more[1..]) } else { line };
-    if s.lines.len() >= QUEUE {
-        s.lines.pop_front();
+    if line.len() > MAX_LINE {
+        s.dropped += 1;
+        return;
+    }
+    while !s.lines.is_empty() && (s.lines.len() >= QUEUE || s.bytes + line.len() > MAX_BYTES) {
+        let old = s.lines.pop_front().map_or(0, |l| l.len());
+        s.bytes -= old;
         s.dropped += 1;
     }
+    s.bytes += line.len();
     s.lines.push_back(line);
 }
 
-/// How many lines were dropped because the queue was full.
+/// How many lines were dropped: the queue was full, or they could not be sent.
 pub fn dropped() -> usize {
     STATE.get().and_then(|s| s.lock().ok().map(|s| s.dropped)).unwrap_or(0)
 }
@@ -162,7 +203,7 @@ pub fn log(level: &str, msg: &str) {
 
 /// Sends a stats document already written as JSON, for an app dokkit cannot reach.
 pub fn stats(document_json: &str) {
-    add("stats", &[("document", J::Raw(document_json.to_string()))]);
+    add("stats", &[("document", J::Raw(document_json.replace(['\r', '\n'], " ")))]);
 }
 
 /// One run of a job.
@@ -188,13 +229,21 @@ impl Run {
 pub fn job<T, E: 'static>(name: &str, work: impl FnOnce(&Run) -> Result<T, E>) -> Result<T, E> {
     let (run, began, from) = (Run { name: name.to_string(), id: id() }, Instant::now(), Location::caller());
     run.send("start", &[]);
-    let result = work(&run);
+    let function = std::any::type_name_of_val(&work).trim_end_matches("::{{closure}}").to_string();
+    let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| work(&run))) {
+        Ok(result) => result,
+        Err(panic) => {
+            run.send("fail", &[("exit_code", J::I(1)), ("duration_ms", J::I(began.elapsed().as_millis() as i64))]);
+            report("panic", false, from, Some(&function));
+            std::panic::resume_unwind(panic);
+        }
+    };
     let took = J::I(began.elapsed().as_millis() as i64);
     match &result {
         Ok(_) => run.send("ok", &[("exit_code", J::I(0)), ("duration_ms", took)]),
         Err(_) => {
             run.send("fail", &[("exit_code", J::I(1)), ("duration_ms", took)]);
-            report(std::any::type_name::<E>(), false, from);
+            report(std::any::type_name::<E>(), false, from, Some(&function));
         }
     }
     result
@@ -203,7 +252,7 @@ pub fn job<T, E: 'static>(name: &str, work: impl FnOnce(&Run) -> Result<T, E>) -
 /// Sends an error: its type and where `capture` was called from, never its message.
 #[track_caller]
 pub fn capture<E: ?Sized>(_error: &E) {
-    report(std::any::type_name::<E>(), true, Location::caller());
+    report(std::any::type_name::<E>(), true, Location::caller(), None);
 }
 
 /// Also reports panics, then lets them carry on as before.
@@ -211,21 +260,30 @@ pub fn catch_unhandled() {
     let before = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         if let Some(from) = info.location() {
-            report("panic", false, from);
+            report("panic", false, from, None);
             flush();
         }
         before(info);
     }));
 }
 
+// The folder of a path on this machine is not sent: only the file name.
+fn relative(file: &str) -> &str {
+    let absolute = file.starts_with(['/', '\\']) || file.as_bytes().get(1) == Some(&b':');
+    if absolute { file.rsplit(['/', '\\']).next().unwrap_or(file) } else { file }
+}
+
 // Rust keeps no stack with an error, so the report has one frame: where it was reported from.
-fn report(kind: &str, handled: bool, from: &Location) {
+// The function is known only for a job, from the type of its closure.
+fn report(kind: &str, handled: bool, from: &Location, function: Option<&str>) {
     let Some(state) = STATE.get() else { return };
     let Ok(mut s) = state.lock() else { return };
     if s.errors.len() >= 100 {
         return;
     }
-    let frame = object(&[("file", J::S(from.file())), ("function", J::S(from.file())), ("line", J::I(from.line() as i64)), ("own", J::B(true))]);
+    let file = from.file();
+    let own = !(file.contains("/registry/src/") || file.contains("\\registry\\src\\") || file.starts_with("/rustc/"));
+    let frame = object(&[("file", J::S(relative(file))), ("function", opt(function)), ("line", J::I(from.line() as i64)), ("own", J::B(own))]);
     let report = object(&[
         ("type", J::S(kind)),
         ("handled", J::B(handled)),
@@ -241,27 +299,77 @@ fn report(kind: &str, handled: bool, from: &Location) {
 /// Sends what is waiting. Call it before the app exits.
 pub fn flush() {
     let Some(state) = STATE.get() else { return };
+    let Ok(_flushing) = FLUSHING.lock() else { return };
     loop {
-        let (url, key, error, batch) = {
+        let (url, key, mut batch) = {
             let Ok(mut s) = state.lock() else { return };
-            let error = s.errors.pop_front();
-            let n = if error.is_some() { 0 } else { s.lines.len().min(500) };
-            let batch: Vec<String> = s.lines.drain(..n).collect();
-            (s.url.clone(), s.key.clone(), error, batch)
+            let batch = match s.held.take() {
+                Some(held) => held,
+                None => match s.errors.pop_front() {
+                    Some(error) => Batch { path: "/api/v1/errors", items: vec![error], tried: false },
+                    None => {
+                        let (mut n, mut size) = (0, 0);
+                        while n < s.lines.len() && n < 500 && (n == 0 || size + s.lines[n].len() <= MAX_BATCH) {
+                            size += s.lines[n].len();
+                            n += 1;
+                        }
+                        s.bytes -= size;
+                        Batch { path: "/api/v1/report", items: s.lines.drain(..n).collect(), tried: false }
+                    }
+                },
+            };
+            (s.url.clone(), s.key.clone(), batch)
         };
-        let post = |path: &str, kind: &str, body: &str| {
-            // What cannot be sent is dropped. The app is never told.
-            let _ = ureq::post(&format!("{url}{path}"))
-                .timeout(Duration::from_secs(10))
-                .set("Authorization", &format!("Bearer {key}"))
-                .set("Content-Type", kind)
-                .set("Dokkit-Batch", &id())
-                .send_string(body);
-        };
-        match error {
-            Some(error) => post("/api/v1/errors", "application/json", &error),
-            None if !batch.is_empty() => post("/api/v1/report", "application/x-ndjson", &batch.join("\n")),
-            None => return,
+        if batch.items.is_empty() {
+            return;
         }
+        let (kind, body) = if batch.path == "/api/v1/errors" { ("application/json", batch.items[0].clone()) } else { ("application/x-ndjson", batch.items.join("\n")) };
+        let sent = ureq::post(&format!("{url}{}", batch.path))
+            .timeout(Duration::from_secs(10))
+            .set("Authorization", &format!("Bearer {key}"))
+            .set("Content-Type", kind)
+            .set("Dokkit-Batch", &id())
+            .send_string(&body);
+        // A refusal is not retried; an unreachable server or a server error is, once.
+        if matches!(sent, Err(ureq::Error::Transport(_)) | Err(ureq::Error::Status(500.., _))) {
+            let Ok(mut s) = state.lock() else { return };
+            if batch.tried {
+                s.dropped += batch.items.len();
+            } else {
+                batch.tried = true;
+                s.held = Some(batch);
+            }
+            return;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_https_or_this_machine() {
+        assert!(secure("https://dokkit.example.com") && secure("http://localhost:4000") && secure("http://127.0.0.1:4000/") && secure("http://[::1]:4000"));
+        assert!(!secure("http://dokkit.example.com:4000"));
+    }
+
+    #[test]
+    fn paths_lose_their_folders() {
+        assert_eq!(relative("/home/bob/.cargo/registry/src/x/a.rs"), "a.rs");
+        assert_eq!(relative(r"C:\Users\bob\a.rs"), "a.rs");
+        assert_eq!(relative("src/main.rs"), "src/main.rs");
+    }
+
+    #[test]
+    fn a_full_queue_drops_the_oldest_and_counts_it() {
+        let state = State { url: String::new(), key: String::new(), version: String::new(), environment: None, host: "h".into(), lines: VecDeque::new(), errors: VecDeque::new(), bytes: 0, held: None, dropped: 0 };
+        let _ = STATE.set(Mutex::new(state));
+        let big = "x".repeat(900 << 10);
+        for _ in 0..12 {
+            log("info", &big);
+        }
+        let s = STATE.get().unwrap().lock().unwrap();
+        assert!(s.bytes <= MAX_BYTES && s.dropped > 0);
     }
 }
