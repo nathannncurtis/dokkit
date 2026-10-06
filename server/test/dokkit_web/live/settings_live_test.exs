@@ -53,6 +53,28 @@ defmodule DokkitWeb.SettingsLiveTest do
 
     [token] = Regex.run(~r/dku_\w{36}/, html)
     assert {:ok, %{scopes: ["read", "read-logs"]}} = Keys.verify(token, :user)
+
+    # The ordinary form cannot make a token that manages keys and people.
+    html = render_submit(view, "token", %{"token" => %{"label" => "sly", "admin" => "true"}})
+    assert html =~ "at least one thing"
+
+    # Full control is asked for on its own, and wants the address typed and a box ticked.
+    assert view |> element("#full-open") |> render_click() =~ "A token that can do everything"
+    wrong = %{"label" => "ops tool", "confirm" => "nope", "sure" => "true"}
+
+    assert render_change(view, "full_typed", %{"full" => wrong}) =~
+             ~r/class="btn danger"[^>]*disabled/
+
+    assert render_submit(view, "full_token", %{"full" => wrong}) =~ "exactly"
+    right = %{wrong | "confirm" => DokkitWeb.Endpoint.host()}
+
+    refute render_change(view, "full_typed", %{"full" => right}) =~
+             ~r/class="btn danger"[^>]*disabled/
+
+    html = render_submit(view, "full_token", %{"full" => right})
+    [full] = Regex.run(~r/dku_\w{36}/, html)
+    assert {:ok, %{scopes: ["read", "read-logs", "act", "admin"]}} = Keys.verify(full, :user)
+    assert html =~ "Full control"
   end
 
   test "a viewer sees no forms and can change nothing", %{conn: conn} do

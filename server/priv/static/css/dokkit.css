@@ -218,6 +218,9 @@ a.li:hover, .li.hov:hover { background: var(--raise); }
 .chart line { stroke: var(--line); } .chart text { fill: var(--mute); font: 400 12px var(--mono); }
 .logbox { margin: 0; padding: 12px 16px; font: 400 12.5px/1.75 var(--mono); color: var(--mute); overflow-x: auto; white-space: pre; }
 .logbox b { color: var(--bad); font-weight: 500; } .logbox em { color: var(--ok); font-style: normal; }
+.sure { margin: 4px 16px 16px; padding: 16px; display: grid; gap: 12px; max-width: 76ch; border: 1px solid color-mix(in srgb, var(--bad) 55%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--bad) 6%, var(--panel)); }
+.sure h3 { font-size: 14px; font-weight: 600; color: var(--bad); } .sure ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; } .sure label { display: grid; gap: 6px; } .sure .tick { display: flex; gap: 8px; align-items: start; } .sure .end { display: flex; gap: 8px; justify-content: flex-end; }
+.btn.danger { background: var(--bad); color: #fff; border-color: transparent; font-weight: 600; } .btn.danger:disabled { opacity: 0.4; cursor: not-allowed; }
 .lead { padding: 14px 16px; color: var(--mute); max-width: 90ch; text-wrap: pretty; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 .stat { padding: 14px 16px; border-right: 1px solid var(--line); }

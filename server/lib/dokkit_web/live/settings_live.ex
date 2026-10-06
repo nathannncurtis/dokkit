@@ -7,7 +7,16 @@ defmodule DokkitWeb.SettingsLive do
   @kinds %{enrol: "Enrolment token", machine: "Machine key", app: "App key", user: "User token"}
 
   def mount(_params, _session, socket) do
-    {:ok, load(assign(socket, page_title: "Settings", error: nil, new_token: nil))}
+    {:ok,
+     load(
+       assign(socket,
+         page_title: "Settings",
+         error: nil,
+         new_token: nil,
+         full: false,
+         full_ok: false
+       )
+     )}
   end
 
   def handle_info(:issues_changed, socket), do: {:noreply, socket}
@@ -49,7 +58,7 @@ defmodule DokkitWeb.SettingsLive do
 
   def handle_event("token", %{"token" => t}, socket) do
     owner(socket, fn ->
-      scopes = for s <- ~w(read read-logs act admin), t[s] == "true", do: s
+      scopes = for s <- ~w(read read-logs act), t[s] == "true", do: s
       label = String.trim(t["label"] || "")
 
       if label == "" or scopes == [] do
@@ -66,6 +75,37 @@ defmodule DokkitWeb.SettingsLive do
       end
     end)
   end
+
+  def handle_event("full", _, socket),
+    do: {:noreply, assign(socket, full: !socket.assigns.full, full_ok: false)}
+
+  def handle_event("full_typed", %{"full" => f}, socket),
+    do: {:noreply, assign(socket, full_ok: sure?(f))}
+
+  # Everything a person can do, so it is asked for on its own and confirmed by typing the address.
+  def handle_event("full_token", %{"full" => f}, socket) do
+    owner(socket, fn ->
+      label = String.trim(f["label"] || "")
+
+      if sure?(f) and label != "" do
+        {text, _} =
+          Keys.mint(:user, %{
+            label: label,
+            scopes: ~w(read read-logs act admin),
+            user_id: socket.assigns.current_user.id
+          })
+
+        assign(socket, new_token: text, error: nil, full: false, full_ok: false)
+      else
+        assign(socket, error: "Type #{DokkitWeb.Endpoint.host()} exactly, and tick the box.")
+      end
+    end)
+  end
+
+  defp sure?(f),
+    do:
+      String.trim(f["confirm"] || "") == DokkitWeb.Endpoint.host() and f["sure"] == "true" and
+        String.trim(f["label"] || "") != ""
 
   defp owner(socket, fun) do
     socket = if socket.assigns.current_user.role == :owner, do: fun.(), else: socket
@@ -88,6 +128,7 @@ defmodule DokkitWeb.SettingsLive do
         key_cols: @key_cols,
         roles: @roles,
         kinds: @kinds,
+        host: DokkitWeb.Endpoint.host(),
         owner: assigns.current_user.role == :owner
       )
 
@@ -97,13 +138,13 @@ defmodule DokkitWeb.SettingsLive do
         <h1 tabindex="-1">Settings</h1>
          <a class="btn ghost sm" href={~p"/password"}>Change password</a>
       </div>
-
+      
       <div class="body set">
         <p :if={@error} class="lead bad" role="alert">{@error}</p>
-
+        
         <div class="card">
           <h2>People<span class="cnt">{length(@people)}</span></h2>
-
+          
           <div :for={p <- @people} class="est" id={"person-#{p.id}"}>
             <b>{p.name}</b>
             <span style="display:flex; gap:8px; align-items:center">
@@ -120,14 +161,16 @@ defmodule DokkitWeb.SettingsLive do
               </button>
             </span>
           </div>
+          
           <form :if={@owner} class="foot" phx-submit="add" id="person-form">
             <input class="inp" name="person[name]" placeholder="Name" aria-label="Name" required />
             <span class="dd">
               <select class="inp" name="person[role]" aria-label="Role">
                 <option :for={{text, value} <- @roles} value={value}>{text}</option>
               </select>
-              <.ic name="caret-down" />
+               <.ic name="caret-down" />
             </span>
+            
             <input
               class="inp"
               type="password"
@@ -138,25 +181,34 @@ defmodule DokkitWeb.SettingsLive do
               required
             /> <span class="end"><button class="btn primary" type="submit">Add person</button></span>
           </form>
-
+          
           <p class="lead">
             A member can do everything except manage people, keys and alert channels. A viewer can look and change nothing.
           </p>
         </div>
+        
         <div class="card">
           <h2>Keys<span class="cnt">{length(@keys)}</span></h2>
+          
           <p :if={@keys == []} class="lead">No keys yet. Adding a job or a machine makes one.</p>
+          
           <div :if={@keys != []} class="lh cols-key" style={@key_cols}>
             <span>Key</span><span>Kind</span><span>Made</span><span>Last used</span><span></span>
           </div>
+          
           <div :for={k <- @keys} class="li slim cols-key" style={@key_cols} id={"key-#{k.id}"}>
             <div>
               <div class="ti"><span>{k.label || holder(k)}</span></div>
+              
               <div class="sub mono">
                 {k.hint}{if k.scopes != [], do: "  " <> Enum.join(k.scopes, ", ")}
               </div>
             </div>
-             <span class="tag">{@kinds[k.kind]}</span> <span class="mono">{at(k.inserted_at)}</span>
+            
+            <span class={["tag", "admin" in k.scopes && "bad"]}>
+              {if "admin" in k.scopes, do: "Full control", else: @kinds[k.kind]}
+            </span>
+             <span class="mono">{at(k.inserted_at)}</span>
             <span :if={k.used_at} class="mono">{at(k.used_at)}</span>
             <span :if={!k.used_at} class="mute">Never</span>
             <button
@@ -169,15 +221,17 @@ defmodule DokkitWeb.SettingsLive do
             >
               Revoke
             </button>
-            <span :if={!@owner}></span>
+             <span :if={!@owner}></span>
           </div>
         </div>
+        
         <div :if={@owner} class="card">
           <h2>Access for scripts and AI tools</h2>
+          
           <p class="lead">
             A user token reads Dokkit through the API. Give it only what it needs: log contents are a separate permission, and so is acting on issues.
           </p>
-          <pre :if={@new_token} class="logbox" id="new-token">{@new_token}</pre>
+           <pre :if={@new_token} class="logbox" id="new-token">{@new_token}</pre>
           <form class="foot" phx-submit="token" id="token-form">
             <input
               class="inp"
@@ -187,15 +241,72 @@ defmodule DokkitWeb.SettingsLive do
               required
             /> <label><input type="checkbox" name="token[read]" value="true" checked /> Read</label>
             <label><input type="checkbox" name="token[read-logs]" value="true" /> Read logs</label>
-            <label><input type="checkbox" name="token[act]" value="true" /> Act: snooze, acknowledge, watch, route, run tasks</label>
-            <label><input type="checkbox" name="token[admin]" value="true" /> Manage keys, people, rules, checks and restart</label>
+            <label><input type="checkbox" name="token[act]" value="true" />
+            Act: snooze, acknowledge, watch, route, run tasks</label>
             <span :if={@new_token}>Shown only now.</span>
             <span class="end"><button class="btn primary" type="submit">Make a token</button></span>
           </form>
+          
+          <div :if={!@full} class="est">
+            <span>Let a script or an AI tool do everything you can do here.</span>
+            <button class="btn sm" type="button" phx-click="full" id="full-open">Full control</button>
+          </div>
+          
+          <form
+            :if={@full}
+            class="sure"
+            phx-change="full_typed"
+            phx-submit="full_token"
+            id="full-form"
+          >
+            <h3>A token that can do everything</h3>
+            
+            <p>
+              Whatever holds this token can do anything you can do in Dokkit, and nobody is asked first:
+            </p>
+            
+            <ul>
+              <li>Make and revoke keys, and add and remove people, owners included</li>
+              
+              <li>Change who is told, and silence an alert for good</li>
+              
+              <li>Accept what a scan found, change checks, and let services be restarted</li>
+              
+              <li>Read everything, log contents included</li>
+            </ul>
+            
+            <p>
+              An AI tool acts on what it reads, and it reads log lines and error text that your apps wrote. Give this only to a tool you would hand your own password.
+            </p>
+            
+            <label>
+              What it is for <input class="inp" name="full[label]" required />
+            </label>
+            
+            <label>
+              <span>Type <b>{@host}</b> to confirm</span>
+              <input class="inp" name="full[confirm]" autocomplete="off" spellcheck="false" />
+            </label>
+            
+            <label class="tick">
+              <input type="checkbox" name="full[sure]" value="true" />
+              I understand this token can remove people and keys, mine included.
+            </label>
+            
+            <span class="end">
+              <button class="btn" type="button" phx-click="full">Cancel</button>
+              <button class="btn danger" type="submit" disabled={!@full_ok}>
+                Make a full-control token
+              </button>
+            </span>
+          </form>
         </div>
+        
         <div :if={@archives != []} class="card">
           <h2>Archived logs<span class="cnt">{length(@archives)}</span></h2>
+          
           <p class="lead">Months older than a year. One loaded back can be searched for a week.</p>
+          
           <div
             :for={a <- @archives}
             class="li slim"
@@ -220,10 +331,13 @@ defmodule DokkitWeb.SettingsLive do
             </button>
           </div>
         </div>
+        
         <div class="card">
           <h2>Appearance</h2>
+          
           <dl class="kv">
             <dt>Theme</dt>
+            
             <dd>
               <button class="btn" type="button" onclick="dokkitTheme('light')"><.ic name="sun" />Light</button>
               <button class="btn" type="button" onclick="dokkitTheme('dark')"><.ic name="moon" />Dark</button>
