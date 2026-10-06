@@ -4,7 +4,7 @@ One place that watches everything I run and tells me what needs my attention.
 
 This is a personal project. It is private while it is in development and will be open source once the install-specific material listed at the bottom is out of it and there is a proper demo.
 
-The server and the `dokkit` program are being built, against the contract in `spec/`. What works and what does not is under "Where it stands". The repo also holds the decisions, a clickable mock of the interface, and the explorations that led to it.
+The server and the `dokkit` program are being built, against the contract in `spec/`. What works and what does not is under "Where it stands". The repo also holds the decisions and a clickable mock of the interface.
 
 ## Where it stands
 
@@ -124,11 +124,8 @@ Four kinds of key: one to enrol a machine, one per machine, one per app that can
 | Path | What it is |
 |---|---|
 | `gallery/app/` | The current mock, filled with an invented company's data. Open `index.html` through a web server. Settings switches theme, dark base and accent. `node check.js` renders every route. |
-| `gallery/app/logos/` | The generated logo images. The mock uses a vector traced from `d2.png`. |
-| `gallery/earlier/` | The explorations that came before, kept for reference. `demo/data.js` is the real inventory they are filled from. |
 | `spec/` | The contract: the API, `dokkit.toml`, alerts, log lines, errors, the `dokkit` program, the library, the MCP, and the stats document two applications already implement. |
 | `docs/` | Wiring an app in, running the server, moving over from other tools, and the note on Sentry's SDKs. |
-| `interview/` | The requirements interview, and the small board it was answered on. |
 | `server/` | The server: Phoenix on Postgres. Its pages use the mock's stylesheet, copied to `server/priv/static/css/dokkit.css`. |
 | `program/` | The `dokkit` program, in Go. |
 
@@ -142,13 +139,11 @@ Then open `http://localhost:7912/app/`.
 
 ## Before this goes public
 
-The current mock in `gallery/app/` runs on invented data. Everything older is filled with one real install's inventory and has to be replaced or removed first:
+The mock and the product run on invented data. What is left to do first:
 
-- `gallery/earlier/`: every page names real machines and services, and `demo/data.js` holds their versions and ports.
-- `interview/`: the interview refers to the same install.
+- The earlier galleries and the requirements interview were filled with one real install's inventory. They are gone from the tree and still in the history, which has to be rewritten or left behind.
 - `spec/stats-v1.md`: written for two specific applications.
 - The interface was built with another product's layout as the reference. It mostly stays as it is; the parts that are recognisably theirs get changed, and the description under "The look" is reworded to match.
-- The earlier galleries and the interview files still say Docket.
 - `docs/sentry-compatibility.md` is followed everywhere the project describes itself.
 
 ## Licence
