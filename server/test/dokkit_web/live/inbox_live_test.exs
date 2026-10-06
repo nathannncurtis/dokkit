@@ -1,6 +1,7 @@
 defmodule DokkitWeb.InboxLiveTest do
   use DokkitWeb.ConnCase, async: true
   import Phoenix.LiveViewTest
+  import Ecto.Query
   alias Dokkit.{Check, Intake, Keys, Machine, Repo, Service, Watch}
 
   setup do
@@ -151,7 +152,7 @@ defmodule DokkitWeb.InboxLiveTest do
   test "a degraded expiry is soon, not needs you, and stops being soon when it goes down" do
     m = Repo.insert!(%Machine{name: "inbox-soon"})
     {_, check} = bad_check(m, "cert", "production", :expiry, :degraded)
-    assert %{needs_you: [], soon: [%{title: "cert: cert is degraded"}]} = Dokkit.Read.inbox()
+    assert %{needs_you: [], soon: [%{title: "cert is degraded"}]} = Dokkit.Read.inbox()
 
     Dokkit.Issues.record(check, :down)
     assert %{needs_you: [%{soon: false}], soon: []} = Dokkit.Read.inbox()
@@ -201,7 +202,13 @@ defmodule DokkitWeb.InboxLiveTest do
     {_, key} = Keys.mint(:app, %{service_id: service.id})
     Intake.ping(key, "backup", "fail", nil, "")
     [issue] = Dokkit.Issues.open_list()
-    Repo.update!(Ecto.Changeset.change(Repo.get_by!(Dokkit.Alert, issue_id: issue.id), channel: "email", status: :sent))
+
+    Repo.update!(
+      Ecto.Changeset.change(Repo.get_by!(Dokkit.Alert, issue_id: issue.id),
+        channel: "email",
+        status: :sent
+      )
+    )
 
     {:ok, view, html} = live(conn, "/")
     assert html =~ "<details"
@@ -234,6 +241,70 @@ defmodule DokkitWeb.InboxLiveTest do
     assert html =~ "Nothing here needs you"
     assert html =~ ~r/class="grp">\s*dev/
     assert html =~ "staging-api"
+  end
+
+  test "a down issue shows a circle, a degraded one a diamond, and a count of one is left out", %{
+    conn: conn
+  } do
+    m = Repo.insert!(%Machine{name: "inbox-shape"})
+    {_, down} = bad_check(m, "api-down", "production", :custom, :down)
+    bad_check(m, "api-slow", "production", :custom, :degraded)
+
+    {:ok, _, html} = live(conn, "/")
+    assert html =~ ~r/class="lvl bad"[^>]*aria-label="Down"/
+    assert html =~ ~r/class="lvl warn"[^>]*aria-label="Needs a look"/
+    refute html =~ "<small>"
+
+    Repo.update_all(from(i in Dokkit.Issue, where: i.check_id == ^down.id), set: [count: 3])
+    {:ok, _, html} = live(conn, "/")
+    assert html =~ "3<small>times</small>"
+  end
+
+  test "an opened row and the tab are kept across live updates", %{conn: conn, service: service} do
+    {_, key} = Keys.mint(:app, %{service_id: service.id})
+    Intake.ping(key, "backup", "fail", nil, "")
+    [issue] = Dokkit.Issues.open_list()
+
+    {:ok, view, html} = live(conn, "/")
+    assert html =~ ~r/<details[^>]*id="issue-#{issue.id}-open"[^>]*ignore_attrs/
+    refute html =~ ~r/<summary[^>]*>[^<]*<input/
+
+    view |> element("button[phx-value-tab=soon]") |> render_click()
+    send(view.pid, {:settled, :page})
+    assert has_element?(view, "#tab-soon[aria-selected=true]")
+    assert has_element?(view, "#tab-soon[aria-controls=inbox-panel]")
+    assert has_element?(view, "#inbox-panel[role=tabpanel]")
+  end
+
+  test "a machine counts only what is under Needs you; Soon reads soon", %{conn: conn} do
+    m = Repo.insert!(%Machine{name: "inbox-count"})
+    bad_check(m, "cert", "production", :expiry, :degraded)
+    {:ok, _, html} = live(conn, "/")
+    assert html =~ "1 soon"
+    refute html =~ "1 needs a look"
+
+    d = Repo.insert!(%Machine{name: "inbox-dev"})
+    bad_check(d, "staging", "dev", :custom, :down)
+    {:ok, _, html} = live(conn, "/")
+    refute html =~ "1 needs a look"
+  end
+
+  test "the job timing form keeps what was typed until it is saved", %{
+    conn: conn,
+    service: service
+  } do
+    Repo.insert!(%Check{service_id: service.id, name: "backup", type: :job, config: %{}})
+    {:ok, view, _} = live(conn, "/s/#{service.id}")
+
+    html = view |> form("#timing-form", timing: %{grace: "45m"}) |> render_change()
+    assert html =~ ~s(value="45m")
+    html = view |> form("#timing-form", timing: %{max_runtime: "x"}) |> render_change()
+    assert html =~ ~s(value="45m")
+
+    html = view |> form("#timing-form") |> render_submit()
+    assert html =~ ~s(value="45m")
+    assert html =~ ~s(value="x")
+    assert html =~ "30m, 2h, 1d"
   end
 
   test "a burst of changes on the inbox is coalesced into one pending reload", %{conn: conn} do

@@ -36,7 +36,7 @@ defmodule Dokkit.Watch do
         [
           fn -> if Dokkit.Alerts.release(now) > 0, do: Dokkit.Alerts.flush() end,
           fn -> Dokkit.Tasks.expire() end,
-          fn -> Dokkit.Numbers.forecast(now) end,
+          fn -> if now.minute in [0, 30], do: Dokkit.Numbers.forecast(now) end,
           fn -> prune(now) end,
           fn -> Dokkit.Digest.tick(now, Dokkit.Alerts.config()) end,
           fn -> Dokkit.Self.tick(now, Dokkit.Alerts.config(), booted) end,
@@ -115,6 +115,8 @@ defmodule Dokkit.Watch do
   end
 
   # Two beats late and a minute more, so one slow loop is not an alarm.
+  defp verdict(%Check{config: %{"waiting" => true}}, _, _), do: nil
+
   defp verdict(
          %Check{type: :beat, checked_at: %DateTime{} = last, config: config} = check,
          now,

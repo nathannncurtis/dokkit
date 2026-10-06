@@ -52,7 +52,7 @@ defmodule Dokkit.SoonTest do
 
     for _ <- 1..3, do: Numbers.record(m.id, nil, name, 94, DateTime.utc_now())
 
-    assert [%{state: :down, soon: false} = issue] =
+    assert [%{state: :degraded, soon: false} = issue] =
              Repo.all(from i in Issue, where: i.machine_id == ^m.id)
 
     assert issue.title == "Disk E is nearly full"
@@ -91,7 +91,7 @@ defmodule Dokkit.SoonTest do
     assert [%{title: "Job nightly ran long", soon: true}] =
              Repo.all(from i in Issue, where: i.check_id == ^c.id)
 
-    assert Repo.get!(Check, c.id).note == "It took 2 min 0 s. The limit is 1m."
+    assert Repo.get!(Check, c.id).note == "It took 2 minutes. The limit is 1m."
 
     report(key, [line.("b", 90_000)])
     assert Repo.get!(Check, c.id).note =~ "That is 2 times in the last 7 days."

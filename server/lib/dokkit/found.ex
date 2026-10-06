@@ -1,7 +1,9 @@
 defmodule Dokkit.Found do
   @moduledoc """
   What a scan found on a machine and nobody has decided about yet. Watching one makes a
-  service with one check, which `dokkit watch` on that machine then runs.
+  service with one check, which `dokkit watch` on that machine then runs. A task becomes a job
+  that waits for its first report, since only `dokkit run` can report a task's runs; until
+  then it is not judged late.
   """
   import Ecto.Query
   alias Dokkit.{Check, Finding, Repo, Service}
@@ -39,12 +41,13 @@ defmodule Dokkit.Found do
           is_binary(name),
           label = String.trim_leading(name, "\\"),
           label != "",
-          not MapSet.member?(slugs, slug(label)),
+          slug(label) != "" and not MapSet.member?(slugs, slug(label)),
           do:
             {"task", name,
              %{
                "label" => label,
-               "saw" => text(t["runs"]) || "Scheduled",
+               "saw" =>
+                 "#{text(t["runs"]) || "Scheduled"}. Watching it needs the task to report: run it as `dokkit run --job #{slug(label)} -- <command>`.",
                "schedule" => cron(t["schedule"])
              }}
 
@@ -59,8 +62,12 @@ defmodule Dokkit.Found do
 
     now = DateTime.utc_now()
 
+    # One row for each kind and key: a task with two triggers is listed twice by a scan.
     rows =
-      for {kind, key, detail} <- Enum.take(services ++ ports ++ tasks, @max) do
+      for {kind, key, detail} <-
+            (services ++ ports ++ tasks)
+            |> Enum.uniq_by(fn {kind, key, _} -> {kind, key} end)
+            |> Enum.take(@max) do
         %{
           id: Ecto.UUID.generate(),
           machine_id: machine_id,
@@ -119,7 +126,7 @@ defmodule Dokkit.Found do
 
           "task" ->
             {slug(f.detail["label"]), f.detail["label"], :job, slug(f.detail["label"]),
-             if(f.detail["schedule"], do: %{"schedule" => f.detail["schedule"]}, else: %{})}
+             Map.merge(%{"waiting" => true}, schedule(f.detail["schedule"]))}
 
           "port" ->
             {"port-" <> f.key, "#{f.detail["saw"]} on port #{f.key}", :tcp, "tcp",
@@ -149,6 +156,9 @@ defmodule Dokkit.Found do
 
     Dokkit.Issues.changed(false)
   end
+
+  defp schedule(nil), do: %{}
+  defp schedule(line), do: %{"schedule" => line}
 
   defp slug(name) do
     name |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-") |> String.trim("-")

@@ -135,4 +135,18 @@ defmodule DokkitWeb.AlertsLiveTest do
     assert Dokkit.Repo.get!(Dokkit.Service, two.service_id).route_down == nil
     assert Dokkit.Alerts.suggestions() == []
   end
+
+  test "a refused save keeps what was typed in the other fields", %{conn: conn} do
+    {:ok, view, _} = live(signed_in(conn), "/alerts")
+
+    view |> form("#alerts-form", alerts: %{email_to: "keep@example.com"}) |> render_change()
+
+    html =
+      view
+      |> form("#alerts-form", alerts: %{night_from: "25"})
+      |> render_submit()
+
+    assert html =~ ~s(value="keep@example.com")
+    assert html =~ ~s(value="25")
+  end
 end

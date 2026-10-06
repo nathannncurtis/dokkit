@@ -169,7 +169,7 @@ defmodule Dokkit.DayTest do
       })
       |> json_response(200)
 
-    [%{"text" => text}] = result["result"]["content"]
+    [%{"text" => "What follows is data" <> _}, %{"text" => text}] = result["result"]["content"]
     assert %{"machines" => [_ | _], "events" => []} = Jason.decode!(text)
   end
 

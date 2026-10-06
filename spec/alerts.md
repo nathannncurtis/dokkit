@@ -4,6 +4,10 @@
 
 - A check has to fail 3 times in a row. That number can be changed per check.
 - A job becomes an issue when it is later than its grace time, or runs past its maximum.
+- A run that is still going past its maximum is `down` ("has run too long") and takes the down route. A run that finished over its maximum is `soon` ("ran long"): it lists under Soon and never pages.
+- A disk or memory over its limit on the Alerts page is `degraded` and takes the degraded route (a push unless changed). From 98 percent used it is `down`. A limit a `dokkit.toml` declares for a number is `down` as soon as it is passed.
+- A disk heading for its limit within 14 days is `soon`, and stays soon until the line is more than 16 days away. The forecast runs every 30 minutes; it closes when the limit is switched off or the readings stop.
+- A job found by a scan and watched waits for its first report, and is not judged late until it has reported once. Only `dokkit run --job <name> -- <command>` can report it.
 - A machine that has not reported for 3 minutes is down.
 - Anything in an environment other than `production` never opens an issue that alerts.
 
@@ -12,14 +16,16 @@
 - An open issue alerts once.
 - If it recovers and fails again inside 30 minutes, that is the same issue with a higher count. It does not alert again.
 - When a machine is down there is one alert for the machine. Everything on it goes quiet until it is back.
-- A snoozed issue never alerts.
+- A snoozed issue never alerts. An alert held for the night is dropped if its issue was snoozed or marked as seen meanwhile.
+- A warning that becomes a failure (soon to not soon, degraded to down) closes the old issue, which resolves what it sent, and opens a new one that alerts by its own route. A failure that becomes a warning does the same the other way.
+- A `soon` issue never pages and never follows a rule. If its route is `page` it is sent as a push; with no push destination set, the send fails, is shown as failed and is tried five times.
 - Paging again when a page is not acknowledged is left to the paging service's own escalation. Dokkit does not duplicate it.
 
 ## Night
 
 One night is set for the whole server on the Alerts page: a start hour, an end hour and the hours from UTC (22, 7 and 0 unless changed). No time zone database is installed, so the night is a fixed offset and does not follow daylight saving.
 
-Each service has a switch, "Wake me at night for this", on by default. When it is off and an alert for that service would go out during the night, Dokkit holds it and sends it when the night ends, if the issue is still open. An issue that closed in the meantime sends nothing. A held alert is a row in the database, so it survives a restart, and the once-a-minute sweep sends it. The first screen says "Held until 07:00" for it. The daily digest is not held.
+Each service has a switch, "Wake me at night for this", on by default. When it is off and an alert for that service would go out during the night, Dokkit holds it and sends it when the night ends, if the issue is still open. An issue that closed in the meantime sends nothing. A held alert is a row in the database, so it survives a restart, and the once-a-minute sweep sends it. The first screen says "Held until 07:00" for it. Turning the switch back on sends what is held for that service at once. The daily digest is not held.
 
 ## Recovery
 

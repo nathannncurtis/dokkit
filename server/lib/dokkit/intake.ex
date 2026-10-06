@@ -5,6 +5,7 @@ end
 defmodule Dokkit.Intake do
   @moduledoc "Everything that arrives from machines and apps. See spec/api.md, Intake."
   import Ecto.Query
+  require Logger
   alias Dokkit.{Batch, Check, Issues, JobRun, Key, Machine, Repo, Service}
   alias Dokkit.Intake.Refused
 
@@ -35,6 +36,7 @@ defmodule Dokkit.Intake do
         end)
 
         Repo.transaction(fn -> store(key, batch_id, lines, now) end)
+        |> tap(&heard(&1, key, for({:ok, %{"host" => h}} <- lines, do: h), now))
     end
     |> tap(fn _ -> Issues.changed() end)
   end
@@ -308,14 +310,44 @@ defmodule Dokkit.Intake do
 
   defp elsewhere(_, _, _), do: nil
 
+  # Slots are written once the batch is stored, so a rolled back batch leaves no mark.
+  defp heard({:ok, _}, %Key{kind: :machine, machine_id: id}, _, now),
+    do: Dokkit.Slots.touch(id, now)
+
+  defp heard({:ok, _}, %Key{kind: :app}, hosts, now),
+    do: Dokkit.Slots.touch_named(host_names(hosts), now)
+
+  defp heard(_, _, _, _), do: :ok
+
+  defp host_names(hosts),
+    do:
+      hosts
+      |> Enum.filter(&(is_binary(&1) and &1 != ""))
+      |> Enum.uniq()
+      |> Enum.take(50)
+      |> Enum.map(&String.slice(&1, 0, 100))
+
+  @max_seen 500
+
   # An app says which host it runs on. That host becomes a machine that was seen, with no dokkit on it.
+  # An app key can make only so many of them, so a leaked key cannot fill the estate.
   defp hosts(%Key{kind: :app}, hosts, now) do
+    names = host_names(hosts)
+    known = Repo.all(from m in Machine, where: m.name in ^names, select: m.name)
+    seen = Repo.aggregate(from(m in Machine, where: m.kind == :seen), :count)
+    {new, refused} = Enum.split(names -- known, max(@max_seen - seen, 0))
+
+    if refused != [],
+      do:
+        Logger.warning(
+          "Refused #{length(refused)} new hosts named by an app: #{@max_seen} is the most."
+        )
+
     rows =
-      for host <-
-            hosts |> Enum.filter(&(is_binary(&1) and &1 != "")) |> Enum.uniq() |> Enum.take(50) do
+      for host <- known ++ new do
         %{
           id: Ecto.UUID.generate(),
-          name: String.slice(host, 0, 100),
+          name: host,
           kind: :seen,
           last_seen_at: now,
           inserted_at: now,
@@ -328,8 +360,6 @@ defmodule Dokkit.Intake do
         from(m in Machine, where: m.kind == :seen, update: [set: [last_seen_at: ^now]]),
       conflict_target: :name
     )
-
-    Dokkit.Slots.touch_named(Enum.map(rows, & &1.name), now)
   end
 
   defp hosts(_, _, _), do: nil
@@ -338,7 +368,9 @@ defmodule Dokkit.Intake do
   def error(%Key{} = key, report) do
     report = clean(report)
     seen(key)
-    hosts(key, [report["host"]], DateTime.utc_now())
+    now = DateTime.utc_now()
+    hosts(key, [report["host"]], now)
+    heard({:ok, nil}, key, [report["host"]], now)
     with {:ok, service} <- service(key, report), do: Dokkit.Errors.report(service, report)
   end
 
@@ -354,6 +386,13 @@ defmodule Dokkit.Intake do
   defp job(key, service, line, at) do
     name = line["name"] || service.slug
     check = check(key, service, name, :job, 1)
+
+    check =
+      if check.config["waiting"],
+        do:
+          Repo.update!(Ecto.Changeset.change(check, config: Map.delete(check.config, "waiting"))),
+        else: check
+
     event = line["event"]
     run = find_run(check, line["run"], event)
 
@@ -510,10 +549,8 @@ defmodule Dokkit.Intake do
     service = key.service_id && Repo.get!(Service, key.service_id)
     machine = key.machine_id || (service && service.machine_id)
 
-    if key.kind == :machine do
-      Repo.update_all(from(m in Machine, where: m.id == ^machine), set: [last_seen_at: now])
-      Dokkit.Slots.touch(machine, now)
-    end
+    if key.kind == :machine,
+      do: Repo.update_all(from(m in Machine, where: m.id == ^machine), set: [last_seen_at: now])
 
     Repo.update_all(from(k in Key, where: k.id == ^key.id), set: [used_at: now])
     service

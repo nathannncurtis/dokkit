@@ -17,7 +17,7 @@ type = "http"
 url = "http://localhost:8080/healthz"
 every = "30s"
 timeout = "5s"
-slow = "2s"                     # an answer slower than this is degraded, not down
+slow = "2s"                     # an answer slower than this is degraded, not down; http only, above 0, below timeout
 
 [stats]
 url = "http://localhost:8080/internal/stats"

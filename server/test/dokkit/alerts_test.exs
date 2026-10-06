@@ -111,7 +111,7 @@ defmodule Dokkit.AlertsTest do
     Intake.report(key, nil, Enum.join([line.("down"), line.("down"), line.("down")], "\n"))
 
     assert Alerts.deliver_pending() == 1
-    assert_received {:mail, "me@example.com", "Spooler: http is down" <> _, body}
+    assert_received {:mail, "me@example.com", "Spooler is down" <> _, body}
     assert body =~ "On press."
 
     Intake.report(key, nil, Enum.join([line.("ok"), line.("ok"), line.("ok")], "\n"))

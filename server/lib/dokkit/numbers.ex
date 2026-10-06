@@ -7,6 +7,7 @@ defmodule Dokkit.Numbers do
   alias Dokkit.{Check, Issues, Metric, Repo, Service}
 
   @keep_days 30
+  @disk "disk.used_percent."
   @max_document 256 * 1024
 
   @doc "Stores one number for a machine, or for one of its services."
@@ -43,13 +44,11 @@ defmodule Dokkit.Numbers do
       # A declared threshold replaces the built-in one, which then reads as fine.
       if value > limit and not (declared? and check.source != :file),
         do:
-          Issues.record(check, :down,
+          Issues.record(check, over_state(check, value),
             at: at,
             value: value / 1,
             title: machine_title(check.config["limit_from"], name),
-            note:
-              "#{name} is #{round1(value)}, over the limit of #{limit}" <>
-                full_in(check.config["full_in_days"])
+            note: over_note(name, value, limit) <> full_in(check.config["full_in_days"])
           ),
         else: Issues.record(check, :ok, at: at, value: value / 1)
     end
@@ -83,11 +82,29 @@ defmodule Dokkit.Numbers do
     end
   end
 
+  # Over a limit from the Alerts page is a struggle, and a failure from 98 percent. A limit a file declares is a failure.
+  defp over_state(%Check{config: %{"limit_from" => _}}, value) when value < 98, do: :degraded
+  defp over_state(_, _), do: :down
+
+  defp over_note(@disk <> _, value, limit),
+    do: "It is #{num(value)} percent full. The limit is #{num(limit)}."
+
+  defp over_note(name, value, limit),
+    do: "#{name} is #{num(value)}, over the limit of #{num(limit)}."
+
+  @full_in ~r/ At this week's rate it is full in about \d+ days?\./
+
   defp full_in(days) when is_integer(days),
     do:
-      ". At this week's rate it is full in about #{days} #{if days == 1, do: "day", else: "days"}."
+      " At this week's rate it is full in about #{days} #{if days == 1, do: "day", else: "days"}."
 
   defp full_in(_), do: ""
+
+  # Whole numbers are written whole.
+  defp num(value) do
+    value = value / 1
+    if value == Float.round(value), do: trunc(value), else: Float.round(value, 1)
+  end
 
   defp machine_title("disk_limit", name),
     do: "Disk #{String.replace_prefix(name, "disk.used_percent.", "")} is nearly full"
@@ -132,12 +149,15 @@ defmodule Dokkit.Numbers do
   def stats(_, _, _), do: {:error, "bad_line", "Needs a stats document with schema 1."}
 
   @forecast_days 14
-  @disk "disk.used_percent."
+  # Once soon, it stays soon until the line is this far from the limit, so noise does not flap it.
+  @close_days 16
+  @longest_full 60
 
   @doc """
-  Once a sweep: a disk under its limit that a straight line through its last 7 days of
-  readings carries to the limit within 14 days opens a soon issue, which closes when the
-  line no longer gets there. A disk over its limit says in its note when it will be full.
+  Every half hour: a disk under its limit that a straight line through its last 7 days of
+  readings carries to the limit within 14 days opens a soon issue. It closes when the line
+  is more than 16 days from the limit, the limit is switched off, or the readings stop.
+  A disk over its limit says in its note when it will be full, if that is within 60 days.
   """
   def forecast(now \\ DateTime.utc_now()) do
     limit =
@@ -176,61 +196,82 @@ defmodule Dokkit.Numbers do
       )
       |> Map.new(&{{&1.service.machine_id, &1.name}, &1})
 
-    for r <- rows, limit, watched = checks[{r.machine_id, r.name}] do
-      per_day = if r.slope, do: r.slope * 86_400, else: 0
-      known = DateTime.diff(r.last, r.first) >= 2 * 86_400 and per_day > 0
-      days = fn target -> max(1, round((target - r.current) / per_day)) end
-      disk = String.replace_prefix(r.name, @disk, "")
-      over? = r.current >= limit
-      full = if known and over? and r.current < 100, do: days.(100)
+    soon_ids =
+      for r <- rows, limit, watched = checks[{r.machine_id, r.name}], reduce: [] do
+        kept ->
+          per_day = if r.slope, do: r.slope * 86_400, else: 0
 
-      soon =
-        if known and not over? and r.current + per_day * @forecast_days >= limit, do: days.(limit)
+          known =
+            DateTime.diff(r.last, r.first) >= 2 * 86_400 and DateTime.diff(now, r.last) <= 86_400 and
+              per_day > 0
 
-      if watched.config["full_in_days"] != full do
-        config =
-          if full,
-            do: Map.put(watched.config, "full_in_days", full),
-            else: Map.delete(watched.config, "full_in_days")
+          days = fn target -> max(1, round((target - r.current) / per_day)) end
+          disk = String.replace_prefix(r.name, @disk, "")
+          over? = r.current >= limit
 
-        Repo.update!(Ecto.Changeset.change(watched, config: config))
+          full =
+            if known and over? and r.current < 100 and days.(100) <= @longest_full, do: days.(100)
+
+          name = "forecast." <> r.name
+          check = checks[{r.machine_id, name}]
+          horizon = if check && check.state == :degraded, do: @close_days, else: @forecast_days
+
+          soon =
+            if known and not over? and r.current + per_day * horizon >= limit, do: days.(limit)
+
+          set_full(watched, full)
+
+          if soon do
+            check =
+              check ||
+                Repo.insert!(%Check{
+                  service_id: watched.service_id,
+                  name: name,
+                  type: :custom,
+                  fail_after: 1
+                })
+
+            Issues.record(check, :degraded,
+              at: now,
+              soon: true,
+              title:
+                "Disk #{disk} on #{names[r.machine_id]} fills in about #{soon} #{if soon == 1, do: "day", else: "days"}",
+              note: "It is #{num(r.current)} percent full. The limit is #{num(limit)}."
+            )
+
+            [check.id | kept]
+          else
+            kept
+          end
       end
 
-      name = "forecast." <> r.name
-      check = checks[{r.machine_id, name}]
-
-      cond do
-        soon ->
-          check =
-            check ||
-              Repo.insert!(%Check{
-                service_id: watched.service_id,
-                name: name,
-                type: :custom,
-                fail_after: 1
-              })
-
-          Issues.record(check, :degraded,
-            at: now,
-            soon: true,
-            title:
-              "Disk #{disk} on #{names[r.machine_id]} fills in about #{soon} #{if soon == 1, do: "day", else: "days"}",
-            note:
-              "It is #{round1(r.current)} percent full. The limit is #{if limit == trunc(limit), do: trunc(limit), else: limit}."
-          )
-
-        check ->
-          Issues.record(check, :ok, at: now)
-
-        true ->
-          nil
-      end
-    end
+    # What no longer has a reason to be soon closes, including when there is no limit or no readings.
+    for c <-
+          Repo.all(
+            from c in Check,
+              join: s in assoc(c, :service),
+              where: s.slug == "machine" and like(c.name, "forecast.%") and c.state != :ok,
+              select: c
+          ),
+        c.id not in soon_ids,
+        do: Issues.record(c, :ok, at: now)
 
     :ok
   end
 
-  defp round1(value), do: Float.round(value / 1, 1)
+  # The note of an over-limit disk says when it will be full as soon as that is known.
+  defp set_full(%Check{config: config} = watched, full) do
+    if config["full_in_days"] != full do
+      config =
+        if full,
+          do: Map.put(config, "full_in_days", full),
+          else: Map.delete(config, "full_in_days")
+
+      note = watched.note && Regex.replace(@full_in, watched.note, "") <> full_in(full)
+      Repo.update!(Ecto.Changeset.change(watched, config: config, note: note))
+      if note != watched.note, do: Issues.refresh(watched.service)
+    end
+  end
 
   @doc "The latest machine-wide numbers of every machine, as %{machine id => %{name => value}}."
   def vitals do

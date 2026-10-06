@@ -52,8 +52,22 @@ defmodule DokkitWeb.Show do
 
   def took(nil), do: ""
   def took(ms) when ms < 1000, do: "#{ms} ms"
-  def took(ms) when ms < 60_000, do: "#{div(ms, 1000)} s"
-  def took(ms), do: "#{div(ms, 60_000)} min #{rem(div(ms, 1000), 60)} s"
+  def took(ms) when ms < 120_000, do: "#{div(ms, 1000)} s"
+
+  def took(ms) do
+    minutes = round(ms / 60_000)
+
+    cond do
+      minutes < 120 -> "#{minutes} minutes"
+      minutes < 2880 -> "#{whole(minutes / 60)} hours"
+      true -> "#{whole(minutes / 1440)} days"
+    end
+  end
+
+  defp whole(n) do
+    n = Float.round(n, 1)
+    if n == trunc(n), do: trunc(n), else: n
+  end
 
   def kind(:job), do: "Job"
   def kind(:dependency), do: "Dependency"

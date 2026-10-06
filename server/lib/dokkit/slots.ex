@@ -25,35 +25,28 @@ defmodule Dokkit.Slots do
     end
   end
 
-  @doc "The same for machines named by an app, which are known by name."
+  @doc "The same for machines an app names. Only a machine that was seen, never an enrolled one, is marked by its name."
   def touch_named(names, now \\ DateTime.utc_now()) do
-    case fresh(names, slot(now)) do
-      [] ->
-        :ok
-
-      names ->
-        ids = Repo.all(from m in Machine, where: m.name in ^names, select: m.id)
-        write(ids, slot(now))
-    end
+    ids = Repo.all(from m in Machine, where: m.name in ^names and m.kind == :seen, select: m.id)
+    touch(ids, now)
   end
 
-  # One entry for each key keeps the table as small as the estate.
-  defp fresh(keys, slot) do
-    Enum.filter(keys, fn key ->
-      case :ets.lookup(@table, key) do
-        [{_, ^slot}] -> false
-        _ -> :ets.insert(@table, {key, slot})
-      end
-    end)
+  # One entry for each machine id keeps the table as small as the estate. An id is marked after its row is written.
+  defp fresh(ids, slot) do
+    unix = DateTime.to_unix(slot)
+    Enum.reject(ids, &match?([{_, ^unix}], :ets.lookup(@table, &1)))
   end
 
   defp write(ids, slot) do
     rows = for id <- ids, do: %{machine_id: id, slot: slot}
     Repo.insert_all(MachineSlot, rows, on_conflict: :nothing)
+    for id <- ids, do: :ets.insert(@table, {id, DateTime.to_unix(slot)})
     :ok
   end
 
   def prune(now) do
+    :ets.select_delete(@table, [{{:_, :"$1"}, [{:<, :"$1", DateTime.to_unix(slot(now))}], [true]}])
+
     Repo.delete_all(
       from s in MachineSlot, where: s.slot < ^DateTime.add(now, -@keep_days * 86_400)
     )

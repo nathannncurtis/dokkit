@@ -197,8 +197,8 @@ A login session, or a user token with `read`. Log contents need `read-logs`: wit
 
 | Call | Gives |
 |---|---|
-| `GET /inbox` | `needs_you`, `soon`, `not_watched`, `snoozed`, `other_environments` (grouped by environment, never counted as needing you) and `fine` (`services` and `machines` with nothing open). |
-| `GET /day` | The last 24 hours in 48 half hours: `from`, `to`, `machines` (each with `cells`, 48 states of `down`, `degraded`, `quiet` or `none` for no signal) and `events` (the issues that opened, oldest first, with `sent` and `closed_at`). The last cell is the half hour that holds `to`. Takes `to` (RFC 3339), default now. An issue counts in its last state. Soon issues and other environments colour nothing. |
+| `GET /inbox` | `needs_you`, `soon`, `not_watched`, `snoozed`, `other_environments` (grouped by environment, never counted as needing you) and `fine` (`services` is the production services with nothing open, on machines that are reporting; `machines` is how many machines those are on). |
+| `GET /day` | The last 24 hours in 48 half hours: `from`, `to`, `machines` (each with `cells`, 48 states of `down`, `degraded`, `quiet` or `none` for no signal) and `events` (the issues that opened, oldest first, with `sent` and `closed_at`; `sent` says what was done to tell someone and stays after the issue closes). The last cell is the half hour that holds `to`. Takes `to` (RFC 3339), default now. An issue counts in its last state. Soon issues and other environments colour nothing. |
 | `GET /machines`, `GET /machines/<id>` | Machines, their vitals and thresholds. |
 | `GET /services`, `GET /services/<id>` | Services. One service includes its checks, facts, routing, version on each machine, recent deploys and open issues. |
 | `GET /services/<id>/series` | Chart data. Takes `metric`, `from`, `to` and `points`. |
@@ -225,11 +225,11 @@ A login session, or a user token with `act`. Rules, checks and restart need `adm
 | `POST /issues/bulk` | Any of the above for a list of issues. |
 | `POST /services/<id>/watch`, `/unwatch` | Start or stop watching a found service. |
 | `PUT /services/<id>/checks` (`admin`) | Edit checks added in the interface. Checks that came from a file are changed in the file. |
-| `PUT /services/<id>/routing` | Who is told, by which channel, for `down` and for `degraded`. `night: false` holds this service's alerts during the night until it ends. |
+| `PUT /services/<id>/routing` | Who is told, by which channel, for `down` and for `degraded`. A field that is not sent stays as it was. `night: false` holds this service's alerts during the night until it ends; `night: true` sends what is held. |
 | `PUT /services/<id>/hold` | Mark a version on a machine as held on purpose. |
 | `PUT /services/<id>/restart` (`admin`) | Allow or stop automatic restart. |
 | `POST /proposals/<id>/accept`, `/dismiss` | Accept all or some of a proposal, or dismiss it. |
 | `POST /rules`, `PUT /rules/<id>`, `DELETE /rules/<id>` (`admin`) | Alert rules. |
 | `POST /tasks/<id>/run` | Run an accepted task on its machine. Answers with the run id. |
 
-Keys, tokens and users are managed with the `admin` scope and are never offered through the MCP.
+Keys, tokens and users are managed with the `admin` scope. A token can make a token only with scopes it holds itself, and never one with `admin`: that is made in Settings.

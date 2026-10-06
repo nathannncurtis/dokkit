@@ -77,6 +77,31 @@ defmodule DokkitWeb.SettingsLiveTest do
     assert html =~ "Full control"
   end
 
+  test "typing in the full-control form keeps every field and enables the button last", %{
+    conn: conn
+  } do
+    {:ok, view, _} = live(signed_in(conn), "/settings")
+    view |> element("#full-open") |> render_click()
+    host = DokkitWeb.Endpoint.host()
+
+    html = view |> form("#full-form", full: %{label: "ops tool"}) |> render_change()
+    assert html =~ ~s(value="ops tool")
+    assert html =~ ~r/class="btn danger"[^>]*disabled/
+
+    html = view |> form("#full-form", full: %{confirm: host}) |> render_change()
+    assert html =~ ~s(value="ops tool")
+    assert html =~ ~s(value="#{host}")
+    assert html =~ ~r/class="btn danger"[^>]*disabled/
+
+    html = view |> form("#full-form", full: %{sure: "true"}) |> render_change()
+    assert html =~ ~s(value="ops tool")
+    assert html =~ ~r/name="full\[sure\]"[^>]*checked/
+    refute html =~ ~r/class="btn danger"[^>]*disabled/
+
+    html = view |> form("#full-form") |> render_submit()
+    assert html =~ "Full control"
+  end
+
   test "a viewer sees no forms and can change nothing", %{conn: conn} do
     viewer = Repo.insert!(%User{name: "vic", password_hash: "-", role: :viewer})
     {_, key} = Keys.mint(:app, %{label: "x"})

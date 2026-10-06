@@ -37,15 +37,25 @@ defmodule DokkitWeb.ApiController do
 
   defp reply(conn, {:error, "not_found", _}), do: missing(conn)
   defp reply(conn, {:error, code, message}), do: fail(conn, 422, code, message)
-  defp reply(conn, data), do: json(conn, data)
+  defp reply(conn, data), do: json(conn, clean(conn, data))
 
   @doc "Makes a token for a script, a key for an app, or a one-use token to enrol a machine. Shown once."
-  def make_key(%{"kind" => "user"} = p, user_id) do
+  def make_key(%{"kind" => "user"} = p, %{user_id: user_id, scopes: held}) do
     scopes = for s <- List.wrap(p["scopes"]), s in @scopes, do: s
 
-    if scopes == [] or blank?(p["label"]),
-      do: {:error, "bad_key", "A token needs a label and scopes."},
-      else: minted(Keys.mint(:user, %{label: p["label"], scopes: scopes, user_id: user_id}))
+    cond do
+      scopes == [] or blank?(p["label"]) ->
+        {:error, "bad_key", "A token needs a label and scopes."}
+
+      "admin" in scopes ->
+        {:error, "bad_key", "A token with admin is made in Settings, not here."}
+
+      scopes -- held != [] ->
+        {:error, "bad_key", "A token can only make a token with scopes it has itself."}
+
+      true ->
+        minted(Keys.mint(:user, %{label: p["label"], scopes: scopes, user_id: user_id}))
+    end
   end
 
   def make_key(%{"kind" => "app", "service" => id}, _) do
@@ -67,7 +77,7 @@ defmodule DokkitWeb.ApiController do
   defp minted({text, key}), do: %{id: key.id, key: text}
   defp blank?(text), do: not is_binary(text) or String.trim(text) == ""
 
-  def add_key(conn, p), do: reply(conn, make_key(p, conn.assigns.key.user_id))
+  def add_key(conn, p), do: reply(conn, make_key(p, conn.assigns.key))
 
   def drop_key(id) do
     Keys.revoke(id)

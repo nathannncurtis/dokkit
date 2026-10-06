@@ -1,6 +1,7 @@
 defmodule DokkitWeb.InboxLive do
   use DokkitWeb, :live_view
   alias Dokkit.{Found, Issue, Issues}
+  alias Phoenix.LiveView.JS
 
   @spans [{"1 hour", 3600}, {"4 hours", 14_400}, {"1 day", 86_400}, {"1 week", 604_800}]
   @tabs [{:now, "Needs you"}, {:soon, "Soon"}, {:found, "Not watched"}, {:snoozed, "Snoozed"}]
@@ -16,8 +17,17 @@ defmodule DokkitWeb.InboxLive do
   def handle_info({:settled, :page}, socket),
     do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
 
+  def handle_params(params, _uri, socket) do
+    tab =
+      if params["tab"] in ~w(soon found snoozed),
+        do: String.to_existing_atom(params["tab"]),
+        else: :now
+
+    {:noreply, assign(socket, tab: tab, picked: MapSet.new())}
+  end
+
   def handle_event("tab", %{"tab" => tab}, socket) when tab in ~w(now soon found snoozed),
-    do: {:noreply, assign(socket, tab: String.to_existing_atom(tab), picked: MapSet.new())}
+    do: {:noreply, push_patch(socket, to: if(tab == "now", do: ~p"/", else: ~p"/?tab=#{tab}"))}
 
   def handle_event("pick", %{"id" => id}, socket) do
     picked = socket.assigns.picked
@@ -81,7 +91,16 @@ defmodule DokkitWeb.InboxLive do
       snoozed: length(assigns.snoozed)
     }
 
-    assigns = assign(assigns, spans: @spans, tabs: @tabs, rows: rows(assigns), counts: counts)
+    shell = %{assigns.shell | machines: with_counts(assigns.shell.machines, assigns)}
+
+    assigns =
+      assign(assigns,
+        spans: @spans,
+        tabs: @tabs,
+        rows: rows(assigns),
+        counts: counts,
+        shell: shell
+      )
 
     ~H"""
     <Layouts.app active={:inbox} shell={@shell} user={@current_user}>
@@ -110,11 +129,13 @@ defmodule DokkitWeb.InboxLive do
         </form>
       </div>
 
-      <div class="tabs" role="tablist">
+      <div class="tabs" role="tablist" aria-label="Inbox sections">
         <button
           :for={{tab, label} <- @tabs}
           type="button"
           role="tab"
+          id={"tab-#{tab}"}
+          aria-controls="inbox-panel"
           aria-selected={to_string(@tab == tab)}
           class={@tab == tab && "on"}
           phx-click="tab"
@@ -125,7 +146,7 @@ defmodule DokkitWeb.InboxLive do
       </div>
 
       <div class="body rail">
-        <div class="card">
+        <div class="card" id="inbox-panel" role="tabpanel" aria-labelledby={"tab-#{@tab}"}>
           <div :if={@rows == [] and @tab == :now} class="empty">
             <.ic name="check-circle" />Nothing here needs you. Everything else is fine.
           </div>
@@ -191,14 +212,22 @@ defmodule DokkitWeb.InboxLive do
         </div>
 
         <div :if={@tab == :now} class="card wide" id="day">
-          <h2>The last day<span class="end">UTC</span></h2>
+          <h2>The last day<span class="end">UTC, now at the right</span></h2>
+
           <div class="day">
             <div :if={@day.machines == []} class="empty">No machines yet.</div>
+
             <div :if={@day.machines != []} class="lanes">
               <span></span>
               <div class="ticks" aria-hidden="true">
-                <span :for={n <- 0..5}>{hm(DateTime.add(@day.from, n * 8 * 1800))}</span>
+                <span
+                  :for={{n, label} <- ticks(@day.from)}
+                  style={"left: clamp(16px, #{Float.round((n + 0.5) / 48 * 100, 2)}%, calc(100% - 16px))"}
+                >
+                  {label}
+                </span>
               </div>
+
               <div :for={m <- @day.machines} class="ln">
                 <.link :if={m.id in @linked} navigate={~p"/all" <> "#m-#{m.id}"}>{m.name}</.link>
                 <span :if={m.id not in @linked}>{m.name}</span>
@@ -213,11 +242,12 @@ defmodule DokkitWeb.InboxLive do
                 </div>
               </div>
             </div>
+
             <div class="evs">
               <p :if={@day.events == []} class="mute">Nothing opened in the last day.</p>
+
               <p :for={e <- @day.events}>
-                <b class="mono">{hm(e.at)}</b> {e.title}
-                <span class="mute">{event_tail(e)}</span>
+                <b class="mono">{hm(e.at)}</b> {e.title} <span class="mute">{event_tail(e)}</span>
               </p>
             </div>
           </div>
@@ -229,8 +259,8 @@ defmodule DokkitWeb.InboxLive do
           <div :if={@shell.machines == []} class="empty">No machines yet.</div>
 
           <.link :for={m <- @shell.machines} class="est" navigate={~p"/all" <> "#m-#{m.id}"}>
-            <b><span class={["lvl", m.state]}></span>{m.name}</b>
-            <span class={["st", m.bad > 0 && "warn"]}>{estate(m)}</span>
+            <b><span class={["lvl", m.attention > 0 && "warn"]}></span>{m.name}</b>
+            <span class={["st", m.attention > 0 && "warn"]}>{estate(m)}</span>
           </.link>
         </div>
       </div>
@@ -245,76 +275,99 @@ defmodule DokkitWeb.InboxLive do
 
   defp issue_row(assigns) do
     ~H"""
-    <details class="run" id={"issue-#{@i.id}"}>
-      <summary class="li hov cols-inbox">
-        <input
-          :if={@tab in [:now, :soon]}
-          class="chk"
-          type="checkbox"
-          checked={@i.id in @picked}
-          phx-click="pick"
-          phx-value-id={@i.id}
-          aria-label="Select"
-        /> <span :if={@tab not in [:now, :soon]}></span>
-        <div>
-          <div class="ti"><.lvl state={@i.state} /><span>{@i.title}</span></div>
+    <div class="irow" id={"issue-#{@i.id}"}>
+      <input
+        :if={@tab in [:now, :soon]}
+        class="chk"
+        type="checkbox"
+        checked={@i.id in @picked}
+        phx-click="pick"
+        phx-value-id={@i.id}
+        aria-label={"Select " <> @i.title}
+      />
+      <button
+        :if={@tab == :snoozed}
+        class="btn ghost bring"
+        type="button"
+        phx-click="back"
+        phx-value-id={@i.id}
+        aria-label={"Bring back " <> @i.title}
+      >
+        <.ic name="arrow-u-up-left" />
+      </button>
 
-          <div class="meta">
-            <span class="tag">{issue_kind(@i)}</span> <span class="mono">{Issue.short_id(@i)}</span>
-            <span>Since {at(@i.since)} UTC</span>
-            <span :if={@tab == :snoozed}>Back {at(@i.snoozed_until)} UTC</span>
-            <span :if={@i.acknowledged_at} class="tag">Seen</span>
+      <details class="run" id={"issue-#{@i.id}-open"} phx-mounted={JS.ignore_attributes(["open"])}>
+        <summary class="li hov cols-inbox">
+          <span class="ck"></span>
+          <div>
+            <div class="ti">
+              <span
+                class={["lvl", if(@i.state == :down, do: "bad", else: "warn")]}
+                role="img"
+                aria-label={if @i.state == :down, do: "Down", else: "Needs a look"}
+              ></span><span>{@i.title}</span>
+            </div>
+
+            <div class="meta">
+              <span class="tag">{issue_kind(@i)}</span> <span class="mono">{Issue.short_id(@i)}</span>
+              <span>Since {at(@i.since)} UTC</span>
+              <span :if={@tab == :snoozed}>Back {at(@i.snoozed_until)} UTC</span>
+              <span :if={@i.acknowledged_at} class="tag">Seen</span>
+            </div>
           </div>
-        </div>
-        <span></span>
-        <div class="num">
-          {@i.count}<small>{if @i.count == 1, do: "time", else: "times"}</small>
-        </div>
-        <span class="tag">{@i.machine.name}</span>
-        <button
-          :if={@tab == :snoozed}
-          class="btn ghost"
-          type="button"
-          phx-click="back"
-          phx-value-id={@i.id}
-          aria-label="Bring back"
-        >
-          <.ic name="arrow-u-up-left" />
-        </button>
-        <.ic :if={@tab != :snoozed} name="caret-down" />
-      </summary>
+          <span></span>
+          <div class="num">
+            <span :if={@i.count > 1}>{@i.count}<small>times</small></span>
+          </div>
+          <span class="tag">{@i.machine.name}</span> <span :if={@tab == :snoozed}></span>
+          <.ic :if={@tab != :snoozed} name="caret-down" />
+        </summary>
 
-      <div class="foot">
-        <div style="flex-basis:100%">
-          {(@i.check && @i.check.note) || "Dokkit has nothing more to say about this."}
-        </div>
+        <div class="foot">
+          <div style="flex-basis:100%">
+            {(@i.check && @i.check.note) || "Dokkit has nothing more to say about this."}
+          </div>
 
-        <span
-          :if={told(@i.alert)}
-          class={["tag", @i.alert.status == :failed && "warn"]}
-          title={@i.alert.error}
-        >
-          {told(@i.alert)}
-        </span>
-        <.link class="btn sm" navigate={where(@i)}>Open</.link>
-        <span :if={@tab != :snoozed} class="end" style="display:flex; gap:6px; flex-wrap:wrap">
-          <button
-            :for={{{text, seconds}, n} <- Enum.with_index(@spans)}
-            class={["btn sm", n > 0 && "ghost"]}
-            type="button"
-            phx-click="snooze"
-            phx-value-id={@i.id}
-            phx-value-span={seconds}
+          <span
+            :if={told(@i.alert)}
+            class={["tag", @i.alert.status == :failed && "warn"]}
+            title={@i.alert.error}
           >
-            {if n == 0, do: "Snooze an hour", else: text}
-          </button>
+            {told(@i.alert)}
+          </span>
+          <.link class="btn sm" navigate={where(@i)}>Open</.link>
+          <span :if={@tab != :snoozed} class="end acts">
+            <button
+              class="btn sm primary"
+              type="button"
+              phx-click="snooze"
+              phx-value-id={@i.id}
+              phx-value-span={elem(hd(@spans), 1)}
+            >
+              Snooze an hour
+            </button>
 
-          <button class="btn sm" type="button" phx-click="seen" phx-value-id={@i.id}>
-            Mark as seen
-          </button>
-        </span>
-      </div>
-    </details>
+            <button class="btn sm" type="button" phx-click="seen" phx-value-id={@i.id}>
+              Mark as seen
+            </button>
+
+            <span class="quiet" role="group" aria-label="Snooze for longer">
+              <button
+                :for={{text, seconds} <- tl(@spans)}
+                class="btn sm ghost"
+                type="button"
+                phx-click="snooze"
+                phx-value-id={@i.id}
+                phx-value-span={seconds}
+                aria-label={"Snooze for " <> text}
+              >
+                {text}
+              </button>
+            </span>
+          </span>
+        </div>
+      </details>
+    </div>
     """
   end
 
@@ -372,8 +425,25 @@ defmodule DokkitWeb.InboxLive do
   defp issue_kind(%Issue{kind: "job"}), do: "Job"
   defp issue_kind(_), do: "Check"
 
-  defp estate(%{bad: 0, services: 0}), do: "nothing on it yet"
-  defp estate(%{bad: 0}), do: "fine"
-  defp estate(%{bad: 1}), do: "1 needs a look"
-  defp estate(%{bad: n}), do: "#{n} need a look"
+  defp estate(%{attention: 1}), do: "1 needs a look"
+  defp estate(%{attention: n}) when n > 1, do: "#{n} need a look"
+  defp estate(%{soon: n}) when n > 0, do: "#{n} soon"
+  defp estate(%{services: 0}), do: "nothing on it yet"
+  defp estate(_), do: "fine"
+
+  # Only what is under Needs you counts. Swap for Issues.attention_by_machine/0 when it exists.
+  defp with_counts(machines, %{now: now, soon: soon}) do
+    attention = Enum.frequencies_by(now, & &1.machine_id)
+    soon = Enum.frequencies_by(soon, & &1.machine_id)
+
+    for m <- machines,
+        do: Map.merge(m, %{attention: attention[m.id] || 0, soon: soon[m.id] || 0})
+  end
+
+  defp ticks(from) do
+    for n <- 0..47,
+        t = DateTime.add(from, n * 1800),
+        t.minute == 0 and t.hour in [0, 6, 12, 18],
+        do: {n, hm(t)}
+  end
 end

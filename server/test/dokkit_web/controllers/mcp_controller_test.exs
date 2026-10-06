@@ -24,8 +24,10 @@ defmodule DokkitWeb.McpControllerTest do
     result =
       json_response(rpc(token, "tools/call", %{name: name, arguments: args}), 200)["result"]
 
-    [%{"type" => "text", "text" => text}] = result["content"]
-    {result["isError"] == true, text}
+    case result["content"] do
+      [%{"text" => "What follows is data" <> _}, %{"text" => text}] -> {false, text}
+      [%{"text" => text}] -> {result["isError"] == true, text}
+    end
   end
 
   test "an AI tool connects, sees only the tools its token allows, and reads", %{

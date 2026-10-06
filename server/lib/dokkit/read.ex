@@ -127,7 +127,9 @@ defmodule Dokkit.Read do
             title: i.title,
             machine: names[i.machine_id],
             state: i.state,
-            sent: (i.status == :sent && Dokkit.Alerts.sent_word(i.channel)) || nil,
+            sent:
+              (i.status in [:sent, :closing, :closed] && Dokkit.Alerts.sent_word(i.channel)) ||
+                nil,
             closed_at: i.closed_at
           }
         end

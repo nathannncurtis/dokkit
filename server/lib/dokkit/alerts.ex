@@ -126,13 +126,17 @@ defmodule Dokkit.Alerts do
   def add_rule(params),
     do: save_rules(rules() ++ [Map.merge(rule(params), %{"id" => Ecto.UUID.generate()})])
 
-  @doc "Replaces what a rule says. Its place in the order stays."
+  @doc "Changes what a rule says; a field that is not given stays as it was. Its place in the order stays."
   def update_rule(id, params) do
     save_rules(
       for r <- rules() do
-        if r["id"] == id,
-          do: Map.merge(rule(params), %{"id" => id, "on" => params["on"] != false}),
-          else: r
+        if r["id"] == id do
+          given = Map.take(rule(params), Map.keys(params))
+          on = if is_boolean(params["on"]), do: params["on"], else: r["on"]
+          r |> Map.merge(given) |> Map.put("on", on)
+        else
+          r
+        end
       end
     )
   end
@@ -229,11 +233,13 @@ defmodule Dokkit.Alerts do
   def plan(issue, service, now \\ DateTime.utc_now())
 
   def plan(%Issue{} = issue, %Service{environment: "production"} = service, now) do
-    # A soon issue is only ever degraded, so it can never take the down route.
+    # A soon issue never takes a rule, and never pages: a page for it goes as a push.
     channel =
       Map.get(service, :"route_#{issue.state}") ||
         (!issue.soon && ruled(issue, machine_name(issue.machine_id))) ||
         config()[to_string(issue.state)]
+
+    channel = if issue.soon and channel == "page", do: "push", else: channel
 
     unless Dokkit.Issues.machine_down?(issue.machine_id) do
       insert(issue, channel, if(holds?(service, channel, now), do: :held, else: :pending))
@@ -254,22 +260,42 @@ defmodule Dokkit.Alerts do
       do: Repo.insert!(%Alert{issue_id: issue.id, channel: channel, status: status})
   end
 
-  @doc "Held alerts whose night is over are sent if their issue is still open, else dropped. Returns how many go out."
+  @doc "Held alerts whose night is over are sent if their issue is still open and not snoozed or seen, else dropped. Returns how many go out."
   def release(now \\ DateTime.utc_now()) do
     if night?(now) do
       0
     else
-      open = from i in Issue, where: is_nil(i.closed_at), select: i.id
+      live =
+        from i in Issue,
+          where:
+            is_nil(i.closed_at) and is_nil(i.acknowledged_at) and
+              (is_nil(i.snoozed_until) or i.snoozed_until <= ^now),
+          select: i.id
 
       {n, _} =
         Repo.update_all(
-          from(a in Alert, where: a.status == :held and a.issue_id in subquery(open)),
+          from(a in Alert, where: a.status == :held and a.issue_id in subquery(live)),
           set: [status: :pending]
         )
 
-      Repo.update_all(from(a in Alert, where: a.status == :held), set: [status: :skipped])
+      Repo.update_all(
+        from(a in Alert, where: a.status == :held and a.issue_id not in subquery(live)),
+        set: [status: :skipped]
+      )
+
       n
     end
+  end
+
+  @doc "Alerts held for a service go out now: it was set to wake someone at night."
+  def wake(%Service{id: id}) do
+    Repo.update_all(
+      from(a in Alert,
+        join: i in assoc(a, :issue),
+        where: a.status == :held and i.service_id == ^id and is_nil(i.closed_at)
+      ),
+      set: [status: :pending]
+    )
   end
 
   @doc "An alert that never went out is sent after all when its issue comes back."

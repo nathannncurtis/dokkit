@@ -35,7 +35,10 @@ defmodule DokkitWeb.Layouts do
         <h3 :if={@shell.machines != []}>Machines</h3>
 
         <.link :for={m <- @shell.machines} class="nav" navigate={~p"/all" <> "#m-#{m.id}"}>
-          <span class={["dot", m.state]}></span>{m.name}<span :if={m.bad > 0} class="q">{m.bad}</span>
+          <span class={["dot", attention(m) > 0 && "warn"]}></span>{m.name}<span
+            :if={attention(m) > 0}
+            class="q"
+          >{attention(m)}</span><span :if={attention(m) == 0 and soon(m) > 0} class="q">{soon(m)} soon</span>
         </.link>
         <span class="grow"></span>
         <div class="me">
@@ -56,6 +59,9 @@ defmodule DokkitWeb.Layouts do
     </div>
     """
   end
+
+  defp attention(m), do: Map.get(m, :attention, m.bad)
+  defp soon(m), do: Map.get(m, :soon, 0)
 
   defp count(%{open: n}, :inbox) when n > 0, do: n
   defp count(%{waiting: n}, :found) when n > 0, do: n

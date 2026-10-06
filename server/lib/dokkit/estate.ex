@@ -401,8 +401,10 @@ defmodule Dokkit.Estate do
   def set_checks(_, _), do: {:error, "Needs checks, a list."}
 
   def set_routing(%Service{} = service, params) do
+    # A field that is not given stays as it was.
     change =
       for {field, key} <- [route_down: "down", route_degraded: "degraded"],
+          Map.has_key?(params, key),
           do: {field, route(params[key])}
 
     change =
@@ -412,7 +414,14 @@ defmodule Dokkit.Estate do
         _ -> change
       end
 
-    Repo.update!(Ecto.Changeset.change(service, change))
+    service = Repo.update!(Ecto.Changeset.change(service, change))
+
+    if change[:night] do
+      Dokkit.Alerts.wake(service)
+      Dokkit.Issues.changed()
+    end
+
+    service
   end
 
   @doc "Changes when a job counts as late and as run too long. A job from a dokkit.toml is read-only."

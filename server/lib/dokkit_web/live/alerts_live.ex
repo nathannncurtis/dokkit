@@ -2,6 +2,7 @@ defmodule DokkitWeb.AlertsLive do
   use DokkitWeb, :live_view
   alias Dokkit.Alerts
 
+  @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user smtp_password)
   @push [{"ntfy", "ntfy"}, {"Pushover", "pushover"}, {"PagerDuty low urgency", "pagerduty"}]
 
   def mount(_params, _session, socket) do
@@ -14,6 +15,7 @@ defmodule DokkitWeb.AlertsLive do
        suggestions: Alerts.suggestions(),
        saved: false,
        error: nil,
+       typed: %{},
        tests: %{}
      )}
   end
@@ -26,12 +28,16 @@ defmodule DokkitWeb.AlertsLive do
         {:noreply, socket}
 
       error = Alerts.night_error(params) || bad_address(params) ->
-        {:noreply, assign(socket, error: error, saved: false)}
+        {:noreply, typed(socket, params, error)}
 
       true ->
-        {:noreply, assign(socket, config: Alerts.save(params), saved: true, error: nil)}
+        {:noreply,
+         assign(socket, config: Alerts.save(params), typed: %{}, saved: true, error: nil)}
     end
   end
+
+  def handle_event("changed", %{"alerts" => params}, socket),
+    do: {:noreply, typed(socket, params, nil)}
 
   def handle_event("changed", _, socket), do: {:noreply, assign(socket, saved: false, error: nil)}
 
@@ -70,6 +76,18 @@ defmodule DokkitWeb.AlertsLive do
     else
       {:noreply, socket}
     end
+  end
+
+  # Keep what was typed, so a page update does not put the saved values back over it.
+  defp typed(socket, params, error) do
+    {secrets, plain} = Map.split(params, @secrets)
+
+    assign(socket,
+      config: Map.merge(socket.assigns.config, plain),
+      typed: secrets,
+      saved: false,
+      error: error
+    )
   end
 
   defp bad_address(params) do
@@ -179,8 +197,12 @@ defmodule DokkitWeb.AlertsLive do
               <dt>Page</dt>
 
               <dd>
-                <.secret name="pagerduty_key" config={@config} label="PagerDuty routing key" />
-                <.send_test channel="page" tests={@tests} />
+                <.secret
+                  typed={@typed}
+                  name="pagerduty_key"
+                  config={@config}
+                  label="PagerDuty routing key"
+                /> <.send_test channel="page" tests={@tests} />
                 <span class="hint">
                   Through PagerDuty, for what cannot wait until morning. The key is the integration key of an Events API v2 integration. The page is resolved when the issue closes.
                 </span>
@@ -219,8 +241,12 @@ defmodule DokkitWeb.AlertsLive do
               <dt>Pushover</dt>
 
               <dd>
-                <.secret name="pushover_token" config={@config} label="Application token" />
-                <.secret name="pushover_user" config={@config} label="User key" />
+                <.secret
+                  typed={@typed}
+                  name="pushover_token"
+                  config={@config}
+                  label="Application token"
+                /> <.secret typed={@typed} name="pushover_user" config={@config} label="User key" />
               </dd>
 
               <dt>Webhook</dt>
@@ -256,7 +282,7 @@ defmodule DokkitWeb.AlertsLive do
                   value={(@owner || name != "smtp_user") && @config[name]}
                   placeholder={label}
                   aria-label={label}
-                /> <.secret name="smtp_password" config={@config} label="Password" />
+                /> <.secret typed={@typed} name="smtp_password" config={@config} label="Password" />
                 <input
                   class="inp"
                   style="flex: 1 1 240px"
@@ -480,6 +506,7 @@ defmodule DokkitWeb.AlertsLive do
 
   attr :name, :string, required: true
   attr :config, :map, required: true
+  attr :typed, :map, default: %{}
   attr :label, :string, required: true
 
   defp secret(assigns) do
@@ -493,6 +520,7 @@ defmodule DokkitWeb.AlertsLive do
       name={"alerts[#{@name}]"}
       autocomplete="off"
       aria-label={@label}
+      value={@typed[@name]}
       placeholder={if @set, do: "#{@label}: kept, type to replace", else: @label}
     />
     """

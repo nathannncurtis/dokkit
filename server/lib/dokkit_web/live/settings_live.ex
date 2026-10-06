@@ -77,17 +77,17 @@ defmodule DokkitWeb.SettingsLive do
   end
 
   def handle_event("full", _, socket),
-    do: {:noreply, assign(socket, full: !socket.assigns.full, full_ok: false)}
+    do: {:noreply, assign(socket, full: !socket.assigns.full, full_ok: false, full_form: %{})}
 
   def handle_event("full_typed", %{"full" => f}, socket),
-    do: {:noreply, assign(socket, full_ok: sure?(f))}
+    do: {:noreply, assign(socket, full_ok: sure?(f), full_form: f)}
 
   # Everything a person can do, so it is asked for on its own and confirmed by typing the address.
   def handle_event("full_token", %{"full" => f}, socket) do
     owner(socket, fn ->
       label = String.trim(f["label"] || "")
 
-      if sure?(f) and label != "" do
+      if sure?(f) do
         {text, _} =
           Keys.mint(:user, %{
             label: label,
@@ -95,9 +95,14 @@ defmodule DokkitWeb.SettingsLive do
             user_id: socket.assigns.current_user.id
           })
 
-        assign(socket, new_token: text, error: nil, full: false, full_ok: false)
+        assign(socket, new_token: text, error: nil, full: false, full_ok: false, full_form: %{})
       else
-        assign(socket, error: "Type #{DokkitWeb.Endpoint.host()} exactly, and tick the box.")
+        text =
+          if label == "",
+            do: "Say what the token is for.",
+            else: "Type #{DokkitWeb.Endpoint.host()} exactly, and tick the box."
+
+        assign(socket, error: text, full_form: f)
       end
     end)
   end
@@ -280,17 +285,28 @@ defmodule DokkitWeb.SettingsLive do
             </p>
 
             <label>
-              What it is for <input class="inp" name="full[label]" required />
+              What it is for
+              <input class="inp" name="full[label]" value={@full_form["label"]} required />
             </label>
 
             <label>
               <span>Type <b>{@host}</b> to confirm</span>
-              <input class="inp" name="full[confirm]" autocomplete="off" spellcheck="false" />
+              <input
+                class="inp"
+                name="full[confirm]"
+                value={@full_form["confirm"]}
+                autocomplete="off"
+                spellcheck="false"
+              />
             </label>
 
             <label class="tick">
-              <input type="checkbox" name="full[sure]" value="true" />
-              I understand this token can remove people and keys, mine included.
+              <input
+                type="checkbox"
+                name="full[sure]"
+                value="true"
+                checked={@full_form["sure"] == "true"}
+              /> I understand this token can remove people and keys, mine included.
             </label>
 
             <span class="end">

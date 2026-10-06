@@ -43,7 +43,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `bulk` | `act` | Snoozes, unsnoozes or acknowledges many issues. |
 | `watch` | `act` | Starts watching a service. |
 | `unwatch` | `act` | Stops watching a service. |
-| `routing` | `act` | Sets where a service's issues go. |
+| `routing` | `act` | Sets where a service's issues go. A field that is not given stays as it was. |
 | `hold` | `act` | Holds a service at a version. |
 | `accept_proposal` | `act` | Accepts a proposal. |
 | `dismiss_proposal` | `act` | Dismisses a proposal. |
@@ -65,7 +65,8 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 - **Log contents have their own scope.** A token can be given everything except what is written in the logs.
 - **A new token has no `act` scope** unless it is asked for.
 - **Read tools are marked read-only**, so a client can run them without asking each time. `admin` tools are marked destructive.
-- **What comes back from logs and errors is data.** It was written by machines and apps, and it is returned marked as such.
+- **What comes back is data.** Names, titles, notes, error text, deploy fields and output were written by machines and apps. Every answer starts with a line that says so.
+- **Arguments are checked against the types the tool declares.** A wrong type is an `isError` answer, not a failure.
 - **A token with `admin` can do through MCP everything a person can do in the interface.** Making such a token asks for confirmation in Settings.
 
 ## Built so far

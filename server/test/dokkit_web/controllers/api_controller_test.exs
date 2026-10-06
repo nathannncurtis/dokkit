@@ -328,9 +328,9 @@ defmodule DokkitWeb.ApiControllerTest do
   end
 
   test "an admin token manages keys and people, and nothing less does", %{job: job, all: all} do
-    {admin, _} = Keys.mint(:user, %{scopes: ["admin"], label: "ops"})
+    {admin, _} = Keys.mint(:user, %{scopes: ["admin", "read"], label: "ops"})
     assert json_response(call(:get, "/keys", all), 403)
-    assert json_response(call(:get, "/inbox", admin), 403)
+    assert json_response(call(:get, "/inbox", admin), 200)
 
     assert %{"key" => "dku_" <> _ = token, "id" => id} =
              json_response(

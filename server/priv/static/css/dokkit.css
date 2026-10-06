@@ -88,7 +88,7 @@ h1, h2, h3, p, dl { margin: 0; }
 #page:focus, h1:focus { outline: 0; }
 kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px; background: var(--chip); font: 500 12px var(--mono); color: var(--mute); }
 .tabs { display: flex; gap: 22px; margin: 14px 28px 0; border-bottom: 1px solid var(--line); }
-.tabs button { position: relative; padding: 0 0 11px; border: 0; background: none; color: var(--mute); cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 7px; transition: color 160ms var(--ease); }
+.tabs button { white-space: nowrap; flex: none; position: relative; padding: 0 0 11px; border: 0; background: none; color: var(--mute); cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 7px; transition: color 160ms var(--ease); }
 .tabs button:hover { color: var(--ink); }
 .tabs button.on { color: var(--ink); }
 .tabs button.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--brand); }
@@ -344,7 +344,7 @@ button.li:hover .ti { color: var(--ink); }
   .li.cols-inbox.soon { grid-template-columns: minmax(200px, 1fr) 80px 72px 124px; }
   .li.cols-inbox.cols-err { grid-template-columns: minmax(200px, 1fr) 56px 72px 90px; }
   .li.cols-inbox.nw { grid-template-columns: minmax(200px, 1fr) 100px auto; row-gap: 0; }
-  .li.cols-inbox > .chk { grid-column: 1; grid-row: 1 / 3; }
+  .li.cols-inbox > :is(.chk, .ck) { grid-column: 1; grid-row: 1 / 3; }
   .li.cols-inbox > :has(> .ti) { grid-column: -5; grid-row: 1 / 3; }
   .li.cols-inbox > .spark { grid-column: -4 / -1; grid-row: 1; justify-self: end; }
   .li.cols-inbox > .num { grid-column: -4; grid-row: 2; }
@@ -442,7 +442,7 @@ button.li:hover .ti { color: var(--ink); }
   .li.cols-inbox.soon { grid-template-columns: minmax(96px, 1fr) 72px 64px 118px; }
   .li.cols-inbox.cols-err { grid-template-columns: minmax(118px, 1fr) 56px 72px 90px; }
   .li.cols-inbox.nw { grid-template-columns: minmax(0, 1fr) auto auto; }
-  .li.cols-inbox > .chk { grid-row: 1; }
+  .li.cols-inbox > :is(.chk, .ck) { grid-row: 1; }
   .li.cols-inbox > :has(> .ti) { grid-column: 2 / -2; grid-row: 1; }
   .li.cols-inbox > .spark { grid-column: -2; }
   .li.cols-inbox:is(.soon, .nw, .cols-err) > :has(> .ti) { grid-column: 1 / -1; grid-row: 1; }
@@ -577,8 +577,23 @@ input, select { accent-color: var(--brand); caret-color: var(--brand); }
 .lanes { display: grid; grid-template-columns: minmax(0, 7rem) minmax(0, 1fr); gap: 8px 10px; align-items: end; }
 .ln { display: contents; }
 .ln > :first-child { font: 12px var(--mono); color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ticks { display: grid; grid-template-columns: repeat(6, 1fr); font: 11px var(--mono); color: var(--mute); }
+.ticks { position: relative; height: 14px; font: 11px var(--mono); color: var(--mute); } .ticks span { position: absolute; top: 0; transform: translateX(-50%); }
 .lane { display: grid; grid-template-columns: repeat(48, minmax(0, 1fr)); gap: 1px; align-items: end; height: 22px; }
 .lane i { height: 10px; border-radius: 2px; background: var(--chip); } .lane .warn { height: 16px; background: var(--warn); } .lane .bad { height: 22px; background: var(--bad); }
 .lane .none { background: none; border: 1px dashed var(--mute); }
 .evs { display: grid; gap: 4px; font-size: 13px; } .evs b { margin-right: 6px; }
+
+/* server: first screen rows */
+.lvl.bad { border-radius: 50%; }
+.irow { position: relative; }
+.irow > .chk { position: absolute; left: 16px; top: 24px; z-index: 1; }
+.irow > .bring { position: absolute; right: 16px; top: 15px; z-index: 1; }
+.irow:has(> .chk:checked) summary.li { background: color-mix(in srgb, var(--brand) 6%, var(--panel)); }
+.irow:last-child .run:not([open]) summary.li { border-bottom: 0; }
+.foot .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.foot .quiet { display: flex; gap: 2px; margin-left: 6px; padding-left: 8px; border-left: 1px solid var(--line); }
+.irow .btn:focus-visible { outline-offset: 1px; }
+@media (max-width: 760px) {
+  .lane .none { border-style: solid; border-color: var(--line); }
+}
+

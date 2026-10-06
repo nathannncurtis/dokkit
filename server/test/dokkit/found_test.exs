@@ -82,9 +82,9 @@ defmodule Dokkit.FoundTest do
     Found.watch(Enum.map(found, & &1.id))
 
     assert %{config: %{"name" => "nginx"}, type: :systemd} = check(machine, "nginx")
-    assert %{config: %{"schedule" => "0 1 * * *"}, type: :job} = check(machine, "nightly")
+    assert %{config: %{"schedule" => "0 1 * * *", "waiting" => true}, type: :job} = check(machine, "nightly")
     assert %{config: config, type: :job} = check(machine, "odd")
-    assert config == %{}
+    assert config == %{"waiting" => true}
     assert %{type: :job} = check(machine, "backup-timer")
 
     assert %{"items" => [%{"type" => "systemd", "name" => "systemd"}]} =

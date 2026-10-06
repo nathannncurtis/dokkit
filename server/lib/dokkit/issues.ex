@@ -43,32 +43,28 @@ defmodule Dokkit.Issues do
       )
 
     service = Repo.get!(Service, check.service_id)
+    soon = soon?(check, confirmed, opts)
 
     case {confirmed, open_for(check)} do
       {:ok, %Issue{} = issue} ->
-        Repo.update!(Ecto.Changeset.change(issue, closed_at: at))
-        Dokkit.Alerts.closing(issue)
+        close(issue, at)
 
       {:ok, nil} ->
         nil
 
-      {bad, %Issue{state: bad}} ->
-        nil
+      {bad, %Issue{soon: ^soon, state: bad} = issue} ->
+        Repo.update!(Ecto.Changeset.change(issue, title: opts[:title] || issue.title))
 
+      # A different state or soon is a different issue: a warning that becomes a failure alerts as a new failure.
       {bad, %Issue{} = issue} ->
-        Repo.update!(
-          Ecto.Changeset.change(issue,
-            state: bad,
-            soon: soon?(check, bad, opts),
-            title: opts[:title] || issue.title
-          )
-        )
+        close(issue, at)
+        open(check, service, bad, at, opts[:title], soon)
 
       {:unknown, nil} ->
         nil
 
       {bad, nil} ->
-        open(check, service, bad, at, opts[:title], soon?(check, bad, opts))
+        open(check, service, bad, at, opts[:title], soon)
     end
 
     refresh(service)
@@ -80,24 +76,39 @@ defmodule Dokkit.Issues do
     Repo.all(from i in listed(), where: is_nil(i.snoozed_until) or i.snoozed_until <= ^now)
   end
 
-  @doc "Open issues that are not snoozed, split: `needs_you`, `soon`, and `other` (not production)."
+  @doc "Open issues that are not snoozed, split: `soon`, `other` (not production, not soon), and `needs_you`."
   def groups(now \\ DateTime.utc_now()) do
-    {other, mine} =
-      Enum.split_with(open_list(now), &(&1.service && &1.service.environment != "production"))
+    {soon, rest} = Enum.split_with(open_list(now), & &1.soon)
 
-    {soon, needs_you} = Enum.split_with(mine, & &1.soon)
+    {other, needs_you} =
+      Enum.split_with(rest, &(&1.service && &1.service.environment != "production"))
+
     %{needs_you: needs_you, soon: soon, other: other}
   end
 
-  @doc "Watched services with no open issue, and the machines."
+  @doc "How many issues need someone, for each machine id: only what is under Needs you."
+  def attention_by_machine, do: Enum.frequencies_by(groups().needs_you, & &1.machine_id)
+
+  @doc "Production services that are fine, and how many machines they are on. A machine that stopped reporting has none."
   def fine do
     busy =
       from i in Issue,
         where: is_nil(i.closed_at) and not is_nil(i.service_id),
         select: i.service_id
 
-    quiet = from s in Service, where: s.watched and s.id not in subquery(busy)
-    %{services: Repo.aggregate(quiet, :count), machines: length(machines())}
+    down =
+      from i in Issue, where: i.kind == "machine" and is_nil(i.closed_at), select: i.machine_id
+
+    quiet =
+      from s in Service,
+        where:
+          s.watched and s.environment == "production" and
+            s.id not in subquery(busy) and s.machine_id not in subquery(down)
+
+    %{
+      services: Repo.aggregate(quiet, :count),
+      machines: Repo.one(from s in quiet, select: count(s.machine_id, :distinct))
+    }
   end
 
   def snoozed_list(now \\ DateTime.utc_now()) do
@@ -138,7 +149,7 @@ defmodule Dokkit.Issues do
     count
   end
 
-  def open_count, do: length(open_list())
+  def open_count, do: length(groups().needs_you)
 
   def subscribe, do: Phoenix.PubSub.subscribe(Dokkit.PubSub, "issues")
   @doc "Call after the change is committed: pages reload, and alerts waiting to go are sent."
@@ -215,6 +226,10 @@ defmodule Dokkit.Issues do
   end
 
   def machines do
+    %{needs_you: now, soon: soon} = groups()
+    attention = Enum.frequencies_by(now, & &1.machine_id)
+    soon = Enum.frequencies_by(soon, & &1.machine_id)
+
     down =
       Repo.all(
         from i in Issue, where: i.kind == "machine" and is_nil(i.closed_at), select: i.machine_id
@@ -239,8 +254,20 @@ defmodule Dokkit.Issues do
     )
     |> Enum.map(fn m ->
       gone = m.id in down
-      Map.merge(m, %{down: gone, state: if(gone or m.bad > 0, do: "warn", else: "")})
+      n = attention[m.id] || 0
+
+      Map.merge(m, %{
+        down: gone,
+        attention: n,
+        soon: soon[m.id] || 0,
+        state: if(gone or n > 0, do: "warn", else: "")
+      })
     end)
+  end
+
+  defp close(issue, at) do
+    Repo.update!(Ecto.Changeset.change(issue, closed_at: at))
+    Dokkit.Alerts.closing(issue)
   end
 
   defp open_for(check),
@@ -254,7 +281,8 @@ defmodule Dokkit.Issues do
       Repo.one(
         from i in Issue,
           where:
-            i.check_id == ^check.id and i.closed_at > ^DateTime.add(at, -@same_issue_seconds),
+            i.check_id == ^check.id and i.soon == ^soon and i.state == ^state and
+              i.closed_at > ^DateTime.add(at, -@same_issue_seconds),
           order_by: [desc: i.closed_at],
           limit: 1
       )
@@ -279,13 +307,22 @@ defmodule Dokkit.Issues do
           kind: to_string(check.type),
           state: state,
           soon: soon,
-          title: title || "#{service.name}: #{check.name} is #{state}",
+          title: title || plain_title(service, check, state),
           since: at
         })
 
       Dokkit.Alerts.plan(issue, service, at)
       issue
     end
+  end
+
+  # A service with one check, or a check named like the service or `up`, is named alone.
+  defp plain_title(service, check, state) do
+    only? = Repo.aggregate(from(c in Check, where: c.service_id == ^service.id), :count) == 1
+
+    if only? or String.downcase(check.name) in ["up", String.downcase(service.name), service.slug],
+      do: "#{service.name} is #{state}",
+      else: "#{service.name}: #{check.name} is #{state}"
   end
 
   # A service is as bad as its worst check, and says what that check said.
