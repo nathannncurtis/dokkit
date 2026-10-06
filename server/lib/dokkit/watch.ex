@@ -5,19 +5,24 @@ defmodule Dokkit.Watch do
   alias Dokkit.{Check, Issues, JobRun, Repo}
 
   @every :timer.minutes(1)
+  @settle 300
   @units %{"s" => 1, "m" => 60, "h" => 3600, "d" => 86_400}
 
   def start_link(_), do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
 
   def init(_) do
     Process.send_after(self(), :sweep, @every)
-    {:ok, nil}
+    {:ok, DateTime.utc_now()}
   end
 
-  def handle_info(:sweep, state) do
+  def handle_info(:sweep, started) do
     Process.send_after(self(), :sweep, @every)
-    sweep()
-    Issues.machines_sweep(DateTime.utc_now())
+
+    if settled?(started) do
+      sweep()
+      Issues.machines_sweep(DateTime.utc_now())
+    end
+
     Dokkit.Numbers.prune(DateTime.utc_now())
     Dokkit.Digest.tick(DateTime.utc_now(), Dokkit.Alerts.config())
     Dokkit.Self.tick(DateTime.utc_now(), Dokkit.Alerts.config())
@@ -26,8 +31,11 @@ defmodule Dokkit.Watch do
     Issues.changed()
     today = Date.utc_today()
     Enum.each([today, Date.shift(today, month: 1)], &Dokkit.Logs.ensure_partition/1)
-    {:noreply, state}
+    {:noreply, started}
   end
+
+  @doc "A machine that was quiet while Dokkit was down is given time to report before it is flagged."
+  def settled?(started, now \\ DateTime.utc_now()), do: DateTime.diff(now, started) > @settle
 
   @doc "Returns how many jobs and beats it flagged."
   def sweep(now \\ DateTime.utc_now()) do
