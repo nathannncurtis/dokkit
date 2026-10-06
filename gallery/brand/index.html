@@ -43,7 +43,8 @@
         <button class="on" data-tab="need"><i class="s warn"></i>Needs you<em id="nNeed">3</em></button>
         <button data-tab="soon"><i class="s ok"></i>Soon<em>2</em></button>
         <button data-tab="found"><i class="s none"></i>Not watched<em id="nFound">4</em></button>
-        <p>Open a row. Snooze it. This is the real first screen with made-up data.</p>
+        <button data-tab="snoozed"><i class="s none"></i>Snoozed<em id="nSnoozed">1</em></button>
+        <p>Open a row. Snooze it. These are the real first screen's lists, with made-up data.</p>
       </aside>
       <div class="pane">
         <h2 id="paneTitle">This needs your attention.</h2>
@@ -56,7 +57,7 @@
     <div class="wrap">
       <div class="head">
         <h2>One quiet day. <span>Three&nbsp;things</span> needed you.</h2>
-        <p>Seven machines, every half hour of yesterday. Nearly all of it is quiet, which is the point. Point at a cell.</p>
+        <p>Seven machines, every half hour of the last day. Nearly all of it is quiet, which is the point. Point at a cell.</p>
       </div>
       <div class="panel">
         <div class="ticks"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span></div>
@@ -64,9 +65,9 @@
         <p class="tip" id="tip">front-desk-pc was switched off overnight. That is not a problem, so it is not coloured like one.</p>
       </div>
       <div class="events">
-        <p><i class="s bad"></i><b>01:00</b>nightly-purge did not run<em>paged once</em></p>
-        <p><i class="s warn"></i><b>09:12</b>nas disk at 91%<em>silent push</em></p>
-        <p><i class="s warn"></i><b>09:40</b>upload portal slow<em>closed itself 11:05</em></p>
+        <p><i class="s bad"></i><b>01:30</b>nightly-purge did not run<em>paged</em></p>
+        <p><i class="s warn"></i><b>09:12</b>nas disk at 91%<em>pushed</em></p>
+        <p><i class="s warn"></i><b>09:40</b>upload portal slow<em>pushed, closed itself 11:05</em></p>
       </div>
     </div>
   </section>
@@ -82,7 +83,7 @@
     </div>
     <div class="saidcol">
       <p class="said" id="said"></p>
-      <p class="quiet">Change the controls. The sentence is what Dokkit will do.</p>
+      <p class="quiet">Change the controls. The sentence is what Dokkit will do. A job declared in a <code>dokkit.toml</code> sets its timing there.</p>
     </div>
   </section>
 
@@ -95,14 +96,14 @@
       <div class="doors">
         <div class="panel rows" id="token">
           <div class="chead"><i class="s ok"></i><div><b>A token for an agent</b><code>dku_&hellip; &middot; made in Settings</code></div></div>
-          <div class="crow"><span>Read states, issues, jobs and errors</span><code>always</code></div>
+          <div class="crow"><span>Read states, issues, jobs and errors</span><code>on</code></div>
           <div class="crow"><span>Read what is written in the logs</span><label class="sw"><input type="checkbox" id="scLogs"><span></span></label></div>
           <div class="crow"><span>Snooze, mark as seen, watch, run tasks you accepted</span><label class="sw"><input type="checkbox" id="scAct"><span></span></label></div>
           <div class="crow"><span>Everything you can do: keys, people, rules, checks</span><label class="sw"><input type="checkbox" id="scAll"><span></span></label></div>
           <div class="sure" id="sure" hidden>
             <b>A token that can do everything</b>
-            <p>Whatever holds it can make and revoke keys, add and remove people, and change who is told, with nobody asked first. Dokkit makes you say so twice.</p>
-            <label><span>Type <code>brightwater</code> to confirm</span><input id="sureText" autocomplete="off" spellcheck="false"></label>
+            <p>Whatever holds it can make and revoke keys, add and remove people, and change who is told, with nobody asked first. Dokkit makes you type its own address and tick a box.</p>
+            <label><span>Type <code>dokkit.brightwater.example</code> to confirm</span><input id="sureText" autocomplete="off" spellcheck="false"></label>
             <div class="acts"><button class="btn sm" id="sureNo" type="button">Cancel</button><button class="btn sm bad" id="sureYes" type="button" disabled>Give it full control</button></div>
           </div>
           <div class="tools" id="tools"></div>
@@ -117,7 +118,7 @@
             <button data-q="4">Page me if db-01 goes down</button>
           </div>
           <div class="talk" id="talk" aria-live="polite"></div>
-          <p class="tip">Sample answers on the sample data. The tool calls are the real ones, and they follow the token on the left.</p>
+          <p class="tip">Sample answers on the sample data. The tools are the real ones, with ids and times shortened here, and they follow the token on the left.</p>
         </div>
       </div>
       <div class="ways">
@@ -161,8 +162,8 @@ path = "logs/*.jsonl"</pre></div>
       <div><dt>The app describes itself</dt><dd>A <code>dokkit.toml</code> in the app's own repo says what it is and how to tell it is healthy. Nothing is wired in by hand on the server.</dd></div>
       <div><dt>Nothing privileged listens</dt><dd>The program on each machine opens no port. Work reaches it over a connection it makes itself, and only tasks you accepted can run.</dd></div>
       <div><dt>Scanning is offered, never required</dt><dd>Let it look over a machine and propose what to watch, or list things yourself. Nobody is asked to turn off antivirus.</dd></div>
-      <div><dt>On your hardware</dt><dd>A Windows service or a Docker container, on Postgres. Logs stay a year live, then go to your own archive.</dd></div>
-      <div><dt>One list, not six tools</dt><dd>Checks, scheduled jobs, logs, errors, versions and deploys feed the same short list. An issue closes by itself when the thing recovers.</dd></div>
+      <div><dt>On your hardware</dt><dd>A Windows service or a Docker container, on Postgres. Logs stay a year live, then go to an archive folder you name.</dd></div>
+      <div><dt>One list, not six tools</dt><dd>Checks and scheduled jobs feed one short list. Logs, errors, versions and deploys sit one click from each item on it. An issue closes by itself when the thing recovers.</dd></div>
       <div><dt>In eleven languages</dt><dd>A small library adds what only the app knows: <code>beat</code>, <code>job</code>, <code>check</code>, <code>capture</code> and <code>log</code>, with a handler for the language's own logging where it has one. Python, .NET, JavaScript, Go, Rust, Java, PHP, Elixir, Swift, PowerShell and shell.</dd></div>
     </dl>
   </section>
@@ -187,6 +188,7 @@ path = "logs/*.jsonl"</pre></div>
           <ol>
             <li><b>On each machine you want watched, get the program</b><div class="cmd"><code id="c10">curl -fsSL https://dokkit.dev/get.sh | sh</code><button class="btn" data-copy="c10">Copy</button></div><div class="cmd"><code id="c11">irm https://dokkit.dev/get.ps1 | iex</code><button class="btn" data-copy="c11">Copy</button></div></li>
             <li><b>Join it to your server</b><div class="cmd"><code id="c3">dokkit enrol https://your.domain.com &lt;token&gt;</code><button class="btn" data-copy="c3">Copy</button></div></li>
+            <li><b>Keep it running with nobody signed in, on Windows or Linux</b><div class="cmd"><code id="c12">dokkit service install</code><button class="btn" data-copy="c12">Copy</button></div></li>
             <li><b>In each app's own repo</b><div class="cmd"><code id="c4">dokkit init</code><button class="btn" data-copy="c4">Copy</button></div></li>
           </ol>
         </div>
@@ -199,7 +201,7 @@ path = "logs/*.jsonl"</pre></div>
             <tr><th>Processor</th><td>1 core</td><td>2 cores</td></tr>
             <tr><th>Memory</th><td>1 GB</td><td>2 GB</td></tr>
             <tr><th>Disk</th><td>20 GB</td><td>40 GB, more if you keep a lot of logs</td></tr>
-            <tr><th>System</th><td colspan="2">Debian or Ubuntu for the one-line install, any Linux with Docker by hand, or Windows 10, 11 or Server as a service. Postgres 15 or newer.</td></tr>
+            <tr><th>System</th><td colspan="2">Debian or Ubuntu for the one-line install, any Linux with Docker by hand, or Windows 10, 11 or Server as a service. Postgres 15 or newer; 17 is what it is tested on.</td></tr>
           </tbody>
         </table>
         <p class="quiet">Estimates for about ten machines and sixty services. They have not been measured yet. The program on each watched machine needs next to nothing.</p>

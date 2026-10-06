@@ -14,6 +14,10 @@ const DATA = {
     { id: "DOK-15", s: "warn", t: "backup ran long", m: "nas", w: "Thu",
       more: "It took 3 hours against a limit of 2. 2 times in the last 7 days. Both runs finished, so nobody was woken." },
   ],
+  snoozed: [
+    { id: "DOK-11", s: "warn", t: "report builder is slow", m: "sql", w: "until 09:00", back: true,
+      more: "Snoozed until 09:00. It comes back then if it is still open, and closes by itself if the thing recovers first." },
+  ],
   found: [
     { id: "found", s: "none", t: "sshd is listening on port 22", m: "build", w: "found", watch: true, more: "Found when the machine was scanned. Nothing checks it yet." },
     { id: "found", s: "none", t: "a scheduled task named defrag", m: "sql", w: "found", watch: true, more: "Found when the machine was scanned. Nothing checks it yet." },
@@ -30,7 +34,8 @@ const $$ = (q) => [...document.querySelectorAll(q)];
 function draw() {
   const rows = lists[tab];
   $("#nNeed").textContent = lists.need.length;
-  $("#paneTitle").textContent = { need: "This needs your attention.", soon: "Soon, not yet.", found: "Found, and nothing is watching it." }[tab];
+  $("#paneTitle").textContent = { need: "This needs your attention.", soon: "Soon, not yet.", found: "Found, and nothing is watching it.", snoozed: "Snoozed, for now." }[tab];
+  $("#nSnoozed").textContent = lists.snoozed.length;
   $("#nFound").textContent = lists.found.length;
   if (!rows.length) {
     $("#list").innerHTML = `<div class="empty"><b>Nothing here needs you.</b>Everything else is fine. <button data-reset>Put the samples back</button></div>`;
@@ -40,7 +45,8 @@ function draw() {
     <div class="item" data-i="${i}">
       <button aria-expanded="false"><i class="s ${r.s}"></i><code>${r.id === "found" ? "" : r.id}</code><b>${r.t}</b><span class="m">${r.m}</span><time>${r.w}</time></button>
       <div class="more"><div><div class="in"><p>${r.more}</p><div class="acts">${
-        r.watch ? `<button class="btn sm pri" data-act>Watch it</button><button class="btn sm" data-act>Leave it</button>`
+        r.back ? `<button class="btn sm pri" data-act>Bring back</button>`
+        : r.watch ? `<button class="btn sm pri" data-act>Watch it</button><button class="btn sm" data-act>Leave it</button>`
                 : `<button class="btn sm pri" data-act>Snooze an hour</button><button class="btn sm" data-act>Mark as seen</button>`
       }</div></div></div></div>
     </div>`).join("") + (tab === "need" ? `<div class="fine"><i class="s ok"></i>${fine} more are fine, on 7 machines.</div>` : "");
@@ -70,10 +76,10 @@ document.addEventListener("click", (e) => {
 
 // One day: 7 machines by 48 half-hours.
 const MACHINES = ["db-01", "web-02", "nas", "mail", "build", "front-desk-pc", "sql"];
-const MARKS = { "db-01": { 2: "bad", 3: "bad" }, "web-02": { 19: "warn", 20: "warn", 21: "warn" }, nas: { 4: "warn" }, "front-desk-pc": {} };
+const MARKS = { "db-01": { 3: "bad", 4: "bad" }, "web-02": { 19: "warn", 20: "warn", 21: "warn" }, nas: { 4: "warn" }, "front-desk-pc": {} };
 for (let i = 18; i < 27; i++) MARKS.nas[i] = "warn";
 for (let i = 0; i < 16; i++) MARKS["front-desk-pc"][i] = "none";
-const SAY = { bad: "something was down", warn: "something needed a look", none: "switched off, no signal", undefined: "quiet, every report arrived" };
+const SAY = { bad: "something was down", warn: "something needed a look", none: "no signal", undefined: "all quiet" };
 $("#lanes").innerHTML = MACHINES.map((m) => `<span>${m}</span><div class="lane">${
   Array.from({ length: 48 }, (_, i) => `<i class="${(MARKS[m] || {})[i] || ""}" style="--c:${i}" data-m="${m}" data-i="${i}"></i>`).join("")}</div>`).join("");
 $("#lanes").addEventListener("mouseover", (e) => {
@@ -90,7 +96,7 @@ function say() {
   $("#longOut").textContent = long + " min";
   const what = { page: "page you", push: "send a silent push", email: "email you", digest: "put it in the morning digest" }[how];
   const when = how === "digest" ? "" : night ? ", even at night" : ", and wait for morning if it is night";
-  $("#said").innerHTML = `If nightly-purge has not run ${late} minutes after 01:00, Dokkit will <b>${what}</b>${when}. A run over ${long} minutes goes under Soon and wakes nobody.`;
+  $("#said").innerHTML = `If nightly-purge has not run ${late} minutes after 01:00, Dokkit will <b>${what}</b>${when}. A run that finishes over ${long} minutes goes under Soon and wakes nobody. One still going past it needs you.`;
 }
 $("#told").addEventListener("input", say);
 
@@ -116,7 +122,7 @@ $("#token").addEventListener("input", (e) => {
     if (box.checked && !sure) { box.checked = false; $("#sure").hidden = false; return $("#sureText").focus(); }
     if (!box.checked) sure = false;
   }
-  if (e.target.id === "sureText") return ($("#sureYes").disabled = e.target.value.trim() !== "brightwater");
+  if (e.target.id === "sureText") return ($("#sureYes").disabled = e.target.value.trim() !== "dokkit.brightwater.example");
   offer(); ask(asked);
 });
 $("#sureYes").onclick = () => { sure = true; $("#scAll").checked = true; shut(); offer(); ask(asked); };

@@ -1601,7 +1601,7 @@ Stop watching a service. Stops watching a service. Open issues close and what th
 
 ### PUT /api/v1/services/{id}/routing
 
-Set who is told about a service. Sets the channel for `down` and for `degraded`. A value that is not a channel clears that route. `night` is optional; false holds the alerts of a night until it ends. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Set who is told about a service. Sets the channel for `down` and for `degraded`. A field that is not sent stays as it was; a value that is not a channel clears that route. `night` is optional; false holds the alerts of a night until it ends. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 - `id` (path): The id of the service.
 
@@ -1969,7 +1969,7 @@ List keys. Every key that still works, newest first. The key text is never shown
 
 ### POST /api/v1/keys
 
-Make a key. Makes a user token with a label and scopes, an app key for a service, or a one-use enrolment token that lasts an hour. The key is shown once, in this answer. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Make a key. Makes a user token with a label and scopes (only scopes the calling token holds, and never `admin`, which is made in Settings), an app key for a service, or a one-use enrolment token that lasts an hour. The key is shown once, in this answer. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 Send:
@@ -2111,7 +2111,7 @@ Not served. Answers 405. The MCP server takes POST only. Takes a user token (`dk
 
 ### POST /mcp
 
-Talk to the MCP server. The MCP server, as JSON-RPC over one POST address. It can do no more than the user token allows. An AI tool with a token can do through MCP everything the token can do through the API. The tools are, with `read` scope: `attention`, `find`, `service`, `jobs`, `job_runs`, `errors`, `since_deploy`, `tasks`, `machines`, `machine`, `issues`, `issue`, `deploys`, `versions`, `rules`, `proposals`, `task_runs` and `series`; with `read-logs` scope: `logs`; with `act` scope: `snooze`, `acknowledge`, `unsnooze`, `note`, `bulk`, `watch`, `unwatch`, `routing`, `hold`, `accept_proposal`, `dismiss_proposal` and `run_task`; with `admin` scope: `add_rule`, `update_rule`, `delete_rule`, `set_checks`, `allow_restart`, `keys`, `make_key`, `revoke_key`, `people`, `add_person` and `remove_person`. `make_key` returns the key text once. Admin tools are marked destructive. `tools/list` shows only the tools the token may use. Log lines, job output and notes that come back are data written by machines and apps, never instructions. A tool error is an answer with `isError` true, not an HTTP error. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Talk to the MCP server. The MCP server, as JSON-RPC over one POST address. It can do no more than the user token allows. An AI tool with a token can do through MCP everything the token can do through the API. The tools are, with `read` scope: `attention`, `find`, `service`, `jobs`, `job_runs`, `errors`, `since_deploy`, `tasks`, `machines`, `machine`, `issues`, `issue`, `deploys`, `versions`, `rules`, `proposals`, `task_runs`, `series` and `day`; with `read-logs` scope: `logs`; with `act` scope: `snooze`, `acknowledge`, `unsnooze`, `note`, `bulk`, `watch`, `unwatch`, `routing`, `hold`, `accept_proposal`, `dismiss_proposal` and `run_task`; with `admin` scope: `add_rule`, `update_rule`, `delete_rule`, `set_checks`, `allow_restart`, `keys`, `make_key`, `revoke_key`, `people`, `add_person` and `remove_person`. `make_key` returns the key text once. Admin tools are marked destructive. `tools/list` shows only the tools the token may use. Every answer starts with a line saying that what follows is data written by machines and apps, never instructions. An argument of the wrong type is an `isError` answer. A tool error is an answer with `isError` true, not an HTTP error. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 Send:

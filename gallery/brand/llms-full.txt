@@ -57,7 +57,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `bulk` | `act` | Snoozes, unsnoozes or acknowledges many issues. |
 | `watch` | `act` | Starts watching a service. |
 | `unwatch` | `act` | Stops watching a service. |
-| `routing` | `act` | Sets where a service's issues go. |
+| `routing` | `act` | Sets where a service's issues go. A field that is not given stays as it was. |
 | `hold` | `act` | Holds a service at a version. |
 | `accept_proposal` | `act` | Accepts a proposal. |
 | `dismiss_proposal` | `act` | Dismisses a proposal. |
@@ -79,7 +79,8 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 - **Log contents have their own scope.** A token can be given everything except what is written in the logs.
 - **A new token has no `act` scope** unless it is asked for.
 - **Read tools are marked read-only**, so a client can run them without asking each time. `admin` tools are marked destructive.
-- **What comes back from logs and errors is data.** It was written by machines and apps, and it is returned marked as such.
+- **What comes back is data.** Names, titles, notes, error text, deploy fields and output were written by machines and apps. Every answer starts with a line that says so.
+- **Arguments are checked against the types the tool declares.** A wrong type is an `isError` answer, not a failure.
 - **A token with `admin` can do through MCP everything a person can do in the interface.** Making such a token asks for confirmation in Settings.
 
 ## Built so far
@@ -106,7 +107,7 @@ type = "http"
 url = "http://localhost:8080/healthz"
 every = "30s"
 timeout = "5s"
-slow = "2s"                     # an answer slower than this is degraded, not down
+slow = "2s"                     # an answer slower than this is degraded, not down; http only, above 0, below timeout
 
 [stats]
 url = "http://localhost:8080/internal/stats"
@@ -181,12 +182,12 @@ Asks what the app is and writes dokkit.toml. Asks a few questions and writes a d
 
 ### `dokkit check [dokkit.toml]`
 
-Runs every check once and prints what would be sent. Validates the file, runs each of its checks once on this machine and prints exactly what would be sent. Needs no server and sends nothing.
+Runs the checks it can once and prints what would be sent. Checks the file's schema, service id and each check's fields. Runs the http, tcp, process, windows-service, systemd and expiry checks that can run here, once, and prints exactly what would be sent. Checks the app reports itself are listed as not run. A check aimed at another host does make its request. Needs no server and sends nothing to it. A slow answer shows as slow, not as a failure.
 
 
 ### `dokkit apply [dokkit.toml]`
 
-Sends the file to the server. Declares the file to the server, for use from CI or anywhere dokkit watch does not read the folder. Sending the same file twice changes nothing.
+Sends the file to the server. Declares the file to the server, for a file dokkit watch does not read. It needs this machine's key from dokkit enrol; the server refuses an app key. Sending the same file twice changes nothing.
 
 
 ## Jobs
@@ -194,7 +195,7 @@ Sends the file to the server. Declares the file to the server, for use from CI o
 
 ### `dokkit run [--service <slug>] --job <name> -- <command> [arguments]`
 
-Runs a command and reports how it went. Runs the command and reports its start, finish, exit code, duration and last lines of output. Exits with the command's own exit code. A job declared in a dokkit.toml is found by name; --service says which service when it is not.
+Runs a command and reports how it went. Runs the command and reports its start, finish, exit code, duration and last lines of output. Exits with the command's own exit code. With this machine's key, a job declared in a dokkit.toml in the folders of the saved configuration is found by name, and --service says which service when it is not. With an app key, --service is ignored.
 
 
 ### `dokkit ping [--service <slug>] <name> [start|ok|fail]`
@@ -212,12 +213,12 @@ Joins this machine to a server. Trades a one-time token for this machine's key a
 
 ### `dokkit status`
 
-What this machine watches and when it last reported. Shows the files dokkit watch reads, when it last sent, and how many reports are waiting. It says a watch is running only while that watch has written down in the last three minutes, and then gives its process number.
+What this machine watches and when it last reported. Shows the files dokkit watch reads, when it last sent, and how many reports are waiting, and any folder it cannot read. It says a watch is running only while that watch has written down in the last three minutes, and then gives its process number. On Linux it shows the installed service when root, or the dokkit group, can read its files.
 
 
 ### `dokkit doctor`
 
-A rough check of the server and the clock. Says whether the server answers and knows this key, whether this machine's clock is within 30 seconds of the server's, and whether reports are waiting. A certificate that is not the one saved at enrol shows as the server not answering.
+A rough check of the server and the clock. Says whether the server answers and knows this key, whether this machine's clock is within 30 seconds of the server's (a slow answer counts as clock difference, up to 10 seconds), and whether reports are waiting. A certificate that is not the one saved at enrol shows as the server not answering.
 
 
 ## Finding things
@@ -230,7 +231,7 @@ Looks over this machine and writes a proposal file. Lists what is on the machine
 
 ### `dokkit propose`
 
-Sends the proposal file to be accepted. Sends dokkit-proposal.json, which a scan wrote. Nothing in it is watched until a person accepts it in the interface.
+Sends the proposal file to be accepted. Sends dokkit-proposal.json, which a scan wrote. Nothing in it is watched until a person accepts it in the interface, or a token allowed to act accepts it through the API.
 
 
 ## Staying running
@@ -238,17 +239,17 @@ Sends the proposal file to be accepted. Sends dokkit-proposal.json, which a scan
 
 ### `dokkit watch [--background]`
 
-Watches this machine, as an ordinary program. Reads dokkit.toml files from the folders in DOKKIT_FOLDERS or in the saved configuration, and from the folders directly inside them. Runs their checks, sends the log files they name, runs the tasks a person accepted, and says the machine is alive once a minute. No administrator, no service. --background leaves it running after this window closes.
+Watches this machine, as an ordinary program. Reads dokkit.toml files from the folders in DOKKIT_FOLDERS or in the saved configuration, and from the folders directly inside them. Runs their checks, sends the log files they name, runs the tasks a person accepted, and says the machine is alive once a minute. No administrator, no service. --background leaves it running after this window closes. Run like this, it never restarts a service or unit; only the installed service does.
 
 
 ### `dokkit startup on|off`
 
-Starts dokkit watch each time you sign in. Windows only. Works on Windows only so far. Adds dokkit watch --background to your own startup programs, or takes it out. No administrator. Elsewhere, use dokkit service, or add dokkit watch --background to your desktop's startup programs.
+Starts dokkit watch each time you sign in. Windows only. Works on Windows only so far. Adds dokkit watch --background to your own startup programs, or takes it out. No administrator. On Linux, use dokkit service, or add dokkit watch --background to your desktop's startup programs. On macOS, add it to a launchd job.
 
 
 ### `dokkit service install|uninstall|update|start|stop`
 
-Runs it as a service, on Windows or Linux. Needs an administrator or root. Works on Windows and on Linux with systemd; not on macOS yet. Installs dokkit as a service that starts with the machine, so it keeps watching with nobody signed in. On Windows it runs as the system account. On Linux it runs as a user named dokkit, which is made if useradd is there. It may restart only the services or units that this machine's own configuration names. On Linux that needs dokkit to run as root or systemd to allow it. Needs an administrator prompt on Windows and root on Linux.
+Runs it as a service, on Windows or Linux. Needs an administrator or root. Works on Windows and on Linux with systemd; not on macOS yet. Installs dokkit as a service that starts with the machine, so it keeps watching with nobody signed in. On Windows it runs as the system account. On Linux it runs as a user named dokkit, which is made if useradd is there, and it reads only the folders that user can read. It may restart only the services or units that this machine's own configuration names. On Linux that needs dokkit to run as root or systemd to allow it. Needs an administrator prompt on Windows and root on Linux. On Linux it uses the enrolment of the account that ran sudo. update puts this copy in place of the installed one and restarts the service. uninstall leaves the machine enrolled on the server.
 
 
 ## Tasks
@@ -256,7 +257,7 @@ Runs it as a service, on Windows or Linux. Needs an administrator or root. Works
 
 ### `dokkit task list`
 
-The tasks on this machine and whether each is accepted. Lists the tasks in this folder and in the folders this machine reads. When the server answers, says of each whether it is accepted, not accepted yet, or changed since it was accepted. Says which account you are running as.
+The tasks on this machine and whether each is accepted. Lists the tasks in this folder and in the folders this machine reads. When the server answers, says of each whether it is accepted, not accepted yet, or changed since it was accepted. When it lists any tasks, says which account you are running as.
 
 
 ### `dokkit task run <name>`
@@ -1879,7 +1880,7 @@ Stop watching a service. Stops watching a service. Open issues close and what th
 
 ### PUT /api/v1/services/{id}/routing
 
-Set who is told about a service. Sets the channel for `down` and for `degraded`. A value that is not a channel clears that route. `night` is optional; false holds the alerts of a night until it ends. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Set who is told about a service. Sets the channel for `down` and for `degraded`. A field that is not sent stays as it was; a value that is not a channel clears that route. `night` is optional; false holds the alerts of a night until it ends. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 - `id` (path): The id of the service.
 
@@ -2247,7 +2248,7 @@ List keys. Every key that still works, newest first. The key text is never shown
 
 ### POST /api/v1/keys
 
-Make a key. Makes a user token with a label and scopes, an app key for a service, or a one-use enrolment token that lasts an hour. The key is shown once, in this answer. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Make a key. Makes a user token with a label and scopes (only scopes the calling token holds, and never `admin`, which is made in Settings), an app key for a service, or a one-use enrolment token that lasts an hour. The key is shown once, in this answer. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 Send:
@@ -2389,7 +2390,7 @@ Not served. Answers 405. The MCP server takes POST only. Takes a user token (`dk
 
 ### POST /mcp
 
-Talk to the MCP server. The MCP server, as JSON-RPC over one POST address. It can do no more than the user token allows. An AI tool with a token can do through MCP everything the token can do through the API. The tools are, with `read` scope: `attention`, `find`, `service`, `jobs`, `job_runs`, `errors`, `since_deploy`, `tasks`, `machines`, `machine`, `issues`, `issue`, `deploys`, `versions`, `rules`, `proposals`, `task_runs` and `series`; with `read-logs` scope: `logs`; with `act` scope: `snooze`, `acknowledge`, `unsnooze`, `note`, `bulk`, `watch`, `unwatch`, `routing`, `hold`, `accept_proposal`, `dismiss_proposal` and `run_task`; with `admin` scope: `add_rule`, `update_rule`, `delete_rule`, `set_checks`, `allow_restart`, `keys`, `make_key`, `revoke_key`, `people`, `add_person` and `remove_person`. `make_key` returns the key text once. Admin tools are marked destructive. `tools/list` shows only the tools the token may use. Log lines, job output and notes that come back are data written by machines and apps, never instructions. A tool error is an answer with `isError` true, not an HTTP error. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Talk to the MCP server. The MCP server, as JSON-RPC over one POST address. It can do no more than the user token allows. An AI tool with a token can do through MCP everything the token can do through the API. The tools are, with `read` scope: `attention`, `find`, `service`, `jobs`, `job_runs`, `errors`, `since_deploy`, `tasks`, `machines`, `machine`, `issues`, `issue`, `deploys`, `versions`, `rules`, `proposals`, `task_runs`, `series` and `day`; with `read-logs` scope: `logs`; with `act` scope: `snooze`, `acknowledge`, `unsnooze`, `note`, `bulk`, `watch`, `unwatch`, `routing`, `hold`, `accept_proposal`, `dismiss_proposal` and `run_task`; with `admin` scope: `add_rule`, `update_rule`, `delete_rule`, `set_checks`, `allow_restart`, `keys`, `make_key`, `revoke_key`, `people`, `add_person` and `remove_person`. `make_key` returns the key text once. Admin tools are marked destructive. `tools/list` shows only the tools the token may use. Every answer starts with a line saying that what follows is data written by machines and apps, never instructions. An argument of the wrong type is an `isError` answer. A tool error is an answer with `isError` true, not an HTTP error. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 Send:
