@@ -35,6 +35,7 @@ struct State {
 static STATE: OnceLock<Mutex<State>> = OnceLock::new();
 
 /// One value in a line. `None` is left out of the line.
+#[derive(Clone)]
 enum J<'a> {
     S(&'a str),
     N(f64),
@@ -173,12 +174,7 @@ pub struct Run {
 impl Run {
     fn send(&self, event: &str, more: &[(&str, J)]) {
         let mut pairs = vec![("name", J::S(&self.name)), ("run", J::S(&self.id)), ("event", J::S(event))];
-        for (name, value) in more {
-            pairs.push((name, match value {
-                J::I(i) => J::I(*i),
-                _ => J::None,
-            }));
-        }
+        pairs.extend(more.iter().cloned());
         add("job", &pairs);
     }
 
