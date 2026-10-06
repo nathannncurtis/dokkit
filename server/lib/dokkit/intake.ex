@@ -204,6 +204,12 @@ defmodule Dokkit.Intake do
 
   defp line(_, type, _, _), do: {:error, "unknown_type", "Unknown type #{inspect(type)}."}
 
+  @doc "An error report, in the format of spec/errors.md."
+  def error(%Key{} = key, report) do
+    seen(key)
+    with {:ok, service} <- service(key, report), do: Dokkit.Errors.report(service, report)
+  end
+
   @doc "A deploy told to the server on its own, as CI does."
   def deploy(%Key{} = key, params) do
     seen(key)

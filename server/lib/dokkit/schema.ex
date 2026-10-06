@@ -183,6 +183,37 @@ defmodule Dokkit.Deploy do
   end
 end
 
+defmodule Dokkit.ErrorGroup do
+  use Dokkit.Schema
+
+  schema "error_groups" do
+    field :fingerprint, :string
+    field :type, :string
+    field :top, :string
+    field :count, :integer
+    field :first_seen, :utc_datetime_usec
+    field :last_seen, :utc_datetime_usec
+    field :release, :string
+    field :host, :string
+    field :handled, :boolean
+    belongs_to :service, Dokkit.Service
+  end
+end
+
+defmodule Dokkit.ErrorEvent do
+  use Dokkit.Schema
+
+  schema "error_events" do
+    field :at, :utc_datetime_usec
+    field :release, :string
+    field :host, :string
+    field :handled, :boolean
+    field :frames, {:array, :map}, default: []
+    field :tags, :map, default: %{}
+    belongs_to :group, Dokkit.ErrorGroup
+  end
+end
+
 defmodule Dokkit.User do
   use Dokkit.Schema
 

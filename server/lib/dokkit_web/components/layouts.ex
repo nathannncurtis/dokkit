@@ -68,7 +68,8 @@ defmodule DokkitWeb.Layouts do
          {:inbox, "tray", "Inbox", ~p"/"},
          {:all, "squares-four", "Everything", ~p"/all"},
          {:jobs, "clock-countdown", "Jobs", ~p"/jobs"},
-         {:logs, "scroll", "Logs", ~p"/logs"}
+         {:logs, "scroll", "Logs", ~p"/logs"},
+         {:errors, "bug", "Errors", ~p"/errors"}
        ]},
       {"Changes", [{:deploys, "rocket-launch", "Deploys", ~p"/deploys"}]},
       {"Manage",

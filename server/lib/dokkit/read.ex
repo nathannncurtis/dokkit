@@ -101,12 +101,12 @@ defmodule Dokkit.Read do
     end
   end
 
-  @doc "The latest deploy of a service and the issues that opened after it."
+  @doc "The latest deploy of a service, and the issues and errors first seen after it."
   def since_deploy(id) do
     with %{} = s <- Estate.service(id) do
       case deploys(service: s.id, limit: 1) do
         [] ->
-          %{deploy: nil, issues_since: []}
+          %{deploy: nil, issues_since: [], errors_since: []}
 
         [deploy] ->
           issues =
@@ -117,9 +117,30 @@ defmodule Dokkit.Read do
                 preload: [:machine, :service, :check, :alert]
             )
 
-          %{deploy: deploy, issues_since: Enum.map(issues, &issue/1)}
+          %{
+            deploy: deploy,
+            issues_since: Enum.map(issues, &issue/1),
+            errors_since: errors(service: s.id, since: deploy.at)
+          }
       end
     end
+  end
+
+  def errors(opts \\ []), do: Enum.map(Dokkit.Errors.list(opts), &error_group/1)
+
+  def error(id) do
+    with %{group: group, latest: latest} <- Dokkit.Errors.get(id) do
+      Map.merge(error_group(group), %{
+        frames: (latest && latest.frames) || [],
+        tags: (latest && latest.tags) || %{}
+      })
+    end
+  end
+
+  defp error_group(g) do
+    g
+    |> Map.take([:id, :type, :top, :count, :first_seen, :last_seen, :release, :host, :handled])
+    |> Map.merge(%{service: g.service_id, name: g.service.name, machine: g.service.machine.name})
   end
 
   def tasks do

@@ -1,0 +1,124 @@
+defmodule Dokkit.Errors do
+  @moduledoc """
+  Errors an app reports, grouped by type and the app's own frames. See spec/errors.md.
+  Message text is never kept: no service can be set to keep it yet.
+  """
+  import Ecto.Query
+  alias Dokkit.{ErrorEvent, ErrorGroup, Repo, Service}
+
+  @max_frames 100
+  @keep 100
+
+  @doc "Takes one report for a service."
+  def report(%Service{} = service, %{"type" => type} = report) when is_binary(type) do
+    type = String.slice(type, 0, 200)
+    frames = frames(report["frames"])
+    own = Enum.filter(frames, & &1["own"])
+    # Line numbers stay out of the group, so an edit above the line does not split it.
+    basis = for f <- if(own == [], do: frames, else: own), do: [f["file"], f["function"]]
+
+    fingerprint =
+      :crypto.hash(:sha256, :erlang.term_to_binary({type, basis})) |> Base.encode16(case: :lower)
+
+    top = List.last(own) || List.last(frames)
+    now = DateTime.utc_now()
+    at = at(report["at"], now)
+
+    seen = [
+      count: 1,
+      last_seen: at,
+      release: text(report["release"]),
+      host: text(report["host"]),
+      handled: report["handled"] == true
+    ]
+
+    {_, [group]} =
+      Repo.insert_all(
+        ErrorGroup,
+        [
+          [
+            id: Ecto.UUID.generate(),
+            service_id: service.id,
+            fingerprint: fingerprint,
+            type: type,
+            top: top && "#{top["file"]} in #{top["function"]}",
+            first_seen: at
+          ] ++ seen
+        ],
+        on_conflict: [inc: [count: 1], set: Keyword.delete(seen, :count)],
+        conflict_target: [:service_id, :fingerprint],
+        returning: [:id, :count]
+      )
+
+    # A group keeps its first reports and then one in a hundred, so a crash loop cannot fill the table.
+    if group.count <= @keep or rem(group.count, 100) == 0 do
+      Repo.insert!(%ErrorEvent{
+        group_id: group.id,
+        at: at,
+        release: seen[:release],
+        host: seen[:host],
+        handled: seen[:handled],
+        frames: frames,
+        tags: tags(report["tags"])
+      })
+    end
+
+    Dokkit.Issues.changed(false)
+    :ok
+  end
+
+  def report(_, _), do: {:error, "bad_report", "An error needs a type."}
+
+  defp frames(list) when is_list(list) do
+    for %{} = f <- Enum.take(list, -@max_frames) do
+      %{
+        "file" => text(f["file"]),
+        "function" => text(f["function"]),
+        "line" => is_integer(f["line"]) && f["line"],
+        "own" => f["own"] == true
+      }
+    end
+  end
+
+  defp frames(_), do: []
+
+  defp tags(%{} = tags) do
+    for {k, v} <- Enum.take(tags, 20), is_binary(k), is_binary(v) or is_number(v), into: %{} do
+      {String.slice(k, 0, 50), v |> to_string() |> String.slice(0, 200)}
+    end
+  end
+
+  defp tags(_), do: %{}
+
+  defp text(value), do: if(is_binary(value), do: String.slice(value, 0, 300))
+
+  defp at(text, now) do
+    with true <- is_binary(text),
+         {:ok, at, _} <- DateTime.from_iso8601(text),
+         true <- DateTime.compare(at, now) != :gt do
+      at
+    else
+      _ -> now
+    end
+  end
+
+  def list(opts \\ []) do
+    query = from g in ErrorGroup, order_by: [desc: g.last_seen], preload: [service: :machine]
+    query = if id = opts[:service], do: where(query, [g], g.service_id == ^id), else: query
+    query = if t = opts[:since], do: where(query, [g], g.first_seen >= ^t), else: query
+    Repo.all(limit(query, 200))
+  end
+
+  @doc "One group with its latest report. nil when there is none."
+  def get(id) do
+    with {:ok, id} <- Ecto.UUID.cast(id),
+         %ErrorGroup{} = group <- Repo.get(ErrorGroup, id) do
+      latest =
+        Repo.one(from e in ErrorEvent, where: e.group_id == ^id, order_by: [desc: e.at], limit: 1)
+
+      %{group: Repo.preload(group, service: :machine), latest: latest}
+    else
+      _ -> nil
+    end
+  end
+end
