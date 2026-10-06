@@ -43,4 +43,54 @@ defmodule DokkitWeb.SessionControllerTest do
     assert redirected_to(out) == "/login"
     assert redirected_to(get(recycle(out), "/")) == "/login"
   end
+
+  test "repeated wrong passwords for one name are refused before the password is checked", %{
+    conn: conn
+  } do
+    {:ok, _} = Accounts.add("throttled-tess", "member", @password)
+
+    for _ <- 1..10,
+        do: assert(response(post(conn, "/login", %{name: "throttled-tess", password: "no"}), 401))
+
+    blocked = post(conn, "/login", %{name: "Throttled-Tess", password: @password})
+    assert html_response(blocked, 429) =~ "Too many attempts"
+    assert get_resp_header(blocked, "retry-after") == ["600"]
+  end
+
+  test "signing out ends copies of the session, and old sessions expire", %{conn: conn} do
+    {:ok, user} = Accounts.add("session-sue", "member", @password)
+    inside = post(conn, "/login", %{name: "session-sue", password: @password})
+    copy = recycle(inside)
+    assert html_response(get(copy, "/"), 200) =~ "Inbox"
+
+    post(recycle(inside), "/logout")
+    assert redirected_to(get(copy, "/")) == "/login"
+
+    old = Accounts.stamp() - 15 * 86_400 * 1_000_000
+    stale = Plug.Test.init_test_session(build_conn(), %{"user_id" => user.id, "signed_at" => old})
+    assert redirected_to(get(stale, "/")) == "/login"
+  end
+
+  test "changing a password needs the old one, ends other sessions and keeps this one", %{
+    conn: conn
+  } do
+    {:ok, _} = Accounts.add("password-pat", "member", @password)
+    inside = post(conn, "/login", %{name: "password-pat", password: @password})
+    other = recycle(inside)
+
+    wrong =
+      post(recycle(inside), "/password", %{old: "not it at all", new: "another long phrase"})
+
+    assert html_response(wrong, 422) =~ "not your current password"
+
+    short = post(recycle(inside), "/password", %{old: @password, new: "short"})
+    assert html_response(short, 422) =~ "at least 12"
+
+    done = post(recycle(inside), "/password", %{old: @password, new: "another long phrase"})
+    assert html_response(done, 200) =~ "is changed"
+    assert html_response(get(recycle(done), "/"), 200) =~ "Inbox"
+    assert redirected_to(get(other, "/")) == "/login"
+    assert {:ok, _} = Accounts.authenticate("password-pat", "another long phrase")
+    assert Accounts.authenticate("password-pat", @password) == :error
+  end
 end

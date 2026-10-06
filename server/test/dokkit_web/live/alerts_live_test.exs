@@ -33,7 +33,13 @@ defmodule DokkitWeb.AlertsLiveTest do
     viewer = Repo.insert!(%User{name: "vic", password_hash: "-", role: :viewer})
 
     {:ok, view, html} =
-      live(Plug.Test.init_test_session(conn, %{"user_id" => viewer.id}), "/alerts")
+      live(
+        Plug.Test.init_test_session(conn, %{
+          "user_id" => viewer.id,
+          "signed_at" => Dokkit.Accounts.stamp()
+        }),
+        "/alerts"
+      )
 
     assert html =~ "Only the owner can change these."
     render_submit(view, "save", %{"alerts" => %{"down" => "none"}})

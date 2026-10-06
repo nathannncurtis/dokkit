@@ -5,6 +5,8 @@ defmodule DokkitWeb.Auth do
   import Phoenix.Controller, only: [redirect: 2]
   alias Dokkit.Accounts
 
+  @session_seconds 14 * 86_400
+
   def fetch_user(conn, _), do: assign(conn, :current_user, user(get_session(conn)))
 
   def require_user(%{assigns: %{current_user: nil}} = conn, _),
@@ -26,9 +28,32 @@ defmodule DokkitWeb.Auth do
     socket
     |> assign_shell()
     |> Phoenix.LiveView.attach_hook(:shell, :handle_info, fn
-      :issues_changed, socket -> {:cont, assign_shell(socket)}
+      :issues_changed, socket -> {:cont, debounce(socket, :shell, &assign_shell/1)}
+      {:settled, :shell}, socket -> {:halt, settle(socket, :shell, &assign_shell/1)}
       _, socket -> {:cont, socket}
     end)
+  end
+
+  @doc "Reloads at once, then at most once per `ms`, however many changes arrive."
+  def debounce(socket, key, load, ms \\ 1000) do
+    case Process.get({:debounce, key}) do
+      nil ->
+        Process.put({:debounce, key}, true)
+        Process.send_after(self(), {:settled, key}, ms)
+        load.(socket)
+
+      _ ->
+        Process.put({:debounce, key}, :pending)
+        socket
+    end
+  end
+
+  @doc "Run when the {:settled, key} timer fires: reloads once if changes came in meanwhile."
+  def settle(socket, key, load, ms \\ 1000) do
+    case Process.delete({:debounce, key}) do
+      :pending -> debounce(socket, key, load, ms)
+      _ -> socket
+    end
   end
 
   defp assign_shell(socket) do
@@ -46,10 +71,13 @@ defmodule DokkitWeb.Auth do
     |> configure_session(renew: true)
     |> clear_session()
     |> put_session(:user_id, user.id)
+    |> put_session(:signed_at, Accounts.stamp())
     |> put_session(:live_socket_id, "user:#{user.id}")
   end
 
   def sign_out(conn) do
+    if user = conn.assigns[:current_user], do: Accounts.sign_out_everywhere(user)
+
     if id = get_session(conn, :live_socket_id),
       do: DokkitWeb.Endpoint.broadcast(id, "disconnect", %{})
 
@@ -58,6 +86,12 @@ defmodule DokkitWeb.Auth do
 
   def door, do: if(Accounts.any?(), do: ~p"/login", else: ~p"/setup")
 
-  defp user(%{"user_id" => id}), do: Accounts.get(id)
+  defp user(%{"user_id" => id, "signed_at" => at}) when is_integer(at) do
+    user = Accounts.get(id)
+
+    if user && at >= user.sessions_after && Accounts.stamp() - at < @session_seconds * 1_000_000,
+      do: user
+  end
+
   defp user(_), do: nil
 end

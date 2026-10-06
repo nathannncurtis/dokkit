@@ -11,7 +11,11 @@ defmodule DokkitWeb.ServiceLive do
     end
   end
 
-  def handle_info(:issues_changed, socket), do: {:noreply, load(socket)}
+  def handle_info(:issues_changed, socket),
+    do: {:noreply, DokkitWeb.Auth.debounce(socket, :page, &load/1)}
+
+  def handle_info({:settled, :page}, socket),
+    do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
 
   def handle_event("route", %{"route" => params}, socket) do
     if socket.assigns.current_user.role != :viewer,
@@ -99,23 +103,28 @@ defmodule DokkitWeb.ServiceLive do
       <div class="crumb">
         <.link navigate={~p"/all"}>Everything</.link><.ic name="caret-right" /><span>{@service.machine.name}</span><.ic name="caret-right" /><span>{@service.name}</span>
       </div>
+
       <div class="head">
         <h1 tabindex="-1">
           <.lvl state={@service.state} /> {(@issue && @issue.title) || @service.name}
         </h1>
+
         <div class="end">
           <.link class="btn" navigate={~p"/logs?#{[s: @service.id]}"}><.ic name="scroll" />Logs</.link>
           <button :if={@issue && !@issue.acknowledged_at} class="btn" type="button" phx-click="seen">
             <.ic name="eye" />Mark as seen
           </button>
+
           <button :if={@issue && !snoozed?(@issue)} class="btn" type="button" phx-click="snooze">
             <.ic name="clock" />Snooze for a day
           </button>
+
           <button :if={@issue && snoozed?(@issue)} class="btn" type="button" phx-click="back">
             <.ic name="arrow-u-up-left" />Bring back
           </button>
         </div>
       </div>
+
       <div class="filters" style="padding-top:10px">
         <span class={[
           "tag",
@@ -124,21 +133,26 @@ defmodule DokkitWeb.ServiceLive do
         ]}>
           {say(@service.state)}
         </span>
+
         <span :if={@issue} class="st">
           <span class="mono">{Issue.short_id(@issue)}</span> since {at(@issue.since)} UTC
         </span>
+
         <span :if={@issue && snoozed?(@issue)} class="tag">Snoozed until {at(@issue.snoozed_until)} UTC</span>
         <span :if={@issue && @issue.acknowledged_at} class="tag">Seen</span>
       </div>
+
       <div class="body rail">
         <div class="col">
           <div :if={@issue} class="card">
             <h2>Notes<span :if={@issue.notes != []} class="cnt">{length(@issue.notes)}</span></h2>
+
             <div :for={n <- @issue.notes} class="li slim" style="--cols: minmax(0,1fr) auto">
               <span>{n["text"]}</span>
               <span class="st">{n["by"]}, {String.slice(to_string(n["at"]), 0, 16)
               |> String.replace("T", " ")} UTC</span>
             </div>
+
             <form phx-submit="note" id="note-form" style="display: flex; gap: 8px; padding: 10px 14px">
               <input
                 class="inp"
@@ -147,34 +161,37 @@ defmodule DokkitWeb.ServiceLive do
                 placeholder="What you found or did"
                 aria-label="Add a note to this issue"
                 autocomplete="off"
-              />
-              <button class="btn sm" type="submit">Add</button>
+              /> <button class="btn sm" type="submit">Add</button>
             </form>
           </div>
+
           <div :if={@job} class="card">
             <h2>Runs<span :if={@runs != []} class="end">Newest first</span></h2>
+
             <p :if={@runs == []} class="lead">No run seen yet.</p>
+
             <div :if={@runs != []} class="lh" style={"--cols:" <> @cols}>
               <span>Started</span><span>Result</span><span class="r">Took</span><span class="r">Exit code</span><span></span><span></span>
             </div>
+
             <details :for={r <- @runs} class="run" style={"--cols:" <> @cols} id={"run-#{r.id}"}>
               <summary class="li slim" style={"--cols:" <> @cols}>
                 <span class="mono">{at(r.started_at || r.finished_at)}</span>
                 <DokkitWeb.JobsLive.result run={r} />
                 <span class="mono r">{took(r.duration_ms || between(r))}</span>
-                <span class="mono r">{r.exit_code}</span>
-                <span></span>
-                <.ic name="caret-down" />
+                <span class="mono r">{r.exit_code}</span> <span></span> <.ic name="caret-down" />
               </summary>
               <pre class="logbox">{r.tail || "No output was sent with this run."}</pre>
             </details>
           </div>
+
           <div :if={!@job or @checks != []} class="card">
             <h2>Checks</h2>
+
             <p :if={@checks == []} class="lead">No checks yet.</p>
+
             <div :for={c <- @checks} class="est">
-              <b><.lvl state={c.state} />{c.name}</b>
-              <span class="st">{c.note || say(c.state)}</span>
+              <b><.lvl state={c.state} />{c.name}</b> <span class="st">{c.note || say(c.state)}</span>
               <span class="mute" style="grid-column: 1 / -1">
                 {target(c)}<span :if={c.checked_at}> · checked {at(c.checked_at)} UTC</span><span :if={
                   c.source == :file
@@ -182,20 +199,23 @@ defmodule DokkitWeb.ServiceLive do
               </span>
             </div>
           </div>
+
           <div :if={@numbers != []} class="card">
             <h2>Numbers<span class="end">The last 24 hours</span></h2>
+
             <div
               :for={{name, values, last} <- @numbers}
               class="li slim"
               style="--cols: minmax(0,1fr) 120px 90px"
             >
-              <span class="mono">{name}</span>
-              <.spark values={values} />
+              <span class="mono">{name}</span> <.spark values={values} />
               <span class="mono r">{last && Float.round(last, 2)}</span>
             </div>
           </div>
+
           <div class="card">
             <h2>Latest logs</h2>
+
             <p :if={@logs == []} class="lead">
               No log lines from this {String.downcase(kind(@service.kind))} yet.
             </p>
@@ -203,36 +223,52 @@ defmodule DokkitWeb.ServiceLive do
     </span><% end %></pre>
           </div>
         </div>
+
         <div class="col">
           <div class="card">
             <h2>Details</h2>
+
             <dl class="kv">
               <dt>Machine</dt>
+
               <dd>{@service.machine.name}</dd>
+
               <dt>Kind</dt>
+
               <dd>{kind(@service.kind)}</dd>
+
               <dt :if={@job}>Schedule</dt>
+
               <dd :if={@job}>
                 <span :if={@job.config["schedule"]} class="mono">{@job.config["schedule"]}</span>
                 <span :if={!@job.config["schedule"]} class="mute">Not set</span>
               </dd>
+
               <dt :if={@job}>Last good run</dt>
+
               <dd :if={@job}><.time at={last_good(@runs)} none="None yet" /></dd>
+
               <dt :if={@job}>Next expected</dt>
+
               <dd :if={@job}><.time at={Estate.next_expected(@job)} none="Not scheduled" /></dd>
             </dl>
           </div>
+
           <div class="card">
             <h2>Watching</h2>
+
             <dl class="kv">
               <dt>{if @service.watched, do: "Watched", else: "Not watched"}</dt>
+
               <dd>
                 <button class="btn sm" type="button" phx-click="watching">
                   {if @service.watched, do: "Stop watching", else: "Watch again"}
                 </button>
                 <span :if={!@service.watched} class="hint">Nothing it reports opens an issue.</span>
               </dd>
+
               <dt>Held version</dt>
+
               <dd>
                 <form phx-submit="hold" id="hold-form" style="display: flex; gap: 8px">
                   <input
@@ -242,16 +278,18 @@ defmodule DokkitWeb.ServiceLive do
                     value={@service.held}
                     placeholder="None"
                     aria-label="Version held on purpose"
-                  />
-                  <button class="btn sm" type="submit">Save</button>
+                  /> <button class="btn sm" type="submit">Save</button>
                 </form>
                 <span class="hint">A version kept on purpose, so being behind is not news.</span>
               </dd>
+
               <dt>Error messages</dt>
+
               <dd>
                 <button class="btn sm" type="button" phx-click="messages">
                   {if @service.keep_messages, do: "Stop keeping them", else: "Keep them"}
                 </button>
+
                 <span class="hint">
                   {if @service.keep_messages,
                     do: "The text of each error is stored with it.",
@@ -259,11 +297,14 @@ defmodule DokkitWeb.ServiceLive do
                       "Only the type and the stack are stored. Messages are where personal data ends up."}
                 </span>
               </dd>
+
               <dt :if={Enum.any?(@checks, &(&1.type == :"windows-service"))}>If it stops</dt>
+
               <dd :if={Enum.any?(@checks, &(&1.type == :"windows-service"))}>
                 <button class="btn sm" type="button" phx-click="restart">
                   {if @service.restart, do: "Stop starting it again", else: "Start it again"}
                 </button>
+
                 <span class="hint">
                   {if @service.restart,
                     do: "The installed program starts it, at most once in ten minutes.",
@@ -272,10 +313,13 @@ defmodule DokkitWeb.ServiceLive do
               </dd>
             </dl>
           </div>
+
           <form class="card" phx-change="route" id="route-form">
             <h2>Who hears about it</h2>
+
             <dl class="kv">
               <dt>{if @job, do: "If a run fails", else: "If it stops"}</dt>
+
               <dd>
                 <.route
                   name="down"
@@ -284,7 +328,9 @@ defmodule DokkitWeb.ServiceLive do
                   default={@defaults["down"]}
                 />
               </dd>
+
               <dt :if={!@job}>If it degrades</dt>
+
               <dd :if={!@job}>
                 <.route
                   name="degraded"
@@ -322,6 +368,7 @@ defmodule DokkitWeb.ServiceLive do
         <option value="" selected={@value == nil}>
           As set on Alerts ({name(@routes, @default)})
         </option>
+
         <option :for={{text, value} <- @routes} value={value} selected={value == @value}>
           {text}
         </option>

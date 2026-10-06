@@ -28,7 +28,10 @@ defmodule DokkitWeb.ConnCase do
       Dokkit.Repo.get_by(Dokkit.User, name: "sam") ||
         Dokkit.Repo.insert!(%Dokkit.User{name: "sam", password_hash: "-", role: :owner})
 
-    Plug.Test.init_test_session(conn, %{"user_id" => user.id})
+    Plug.Test.init_test_session(conn, %{
+      "user_id" => user.id,
+      "signed_at" => Dokkit.Accounts.stamp()
+    })
   end
 
   @doc "Posts lines to the report address. A line is a map, or text sent as it is."

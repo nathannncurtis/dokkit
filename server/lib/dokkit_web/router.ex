@@ -16,6 +16,10 @@ defmodule DokkitWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :cors do
+    plug DokkitWeb.Cors
+  end
+
   scope "/", DokkitWeb do
     pipe_through :browser
 
@@ -28,6 +32,9 @@ defmodule DokkitWeb.Router do
 
   scope "/", DokkitWeb do
     pipe_through [:browser, :require_user]
+
+    get "/password", SessionController, :password
+    post "/password", SessionController, :change_password
 
     live_session :user, on_mount: {DokkitWeb.Auth, :user} do
       live "/", InboxLive
@@ -61,16 +68,27 @@ defmodule DokkitWeb.Router do
     post "/:project/envelope", IntakeController, :envelope
   end
 
+  # App keys are write-only and ship inside browser pages, so these answer any origin.
+  scope "/api/v1", DokkitWeb do
+    pipe_through [:api, :cors]
+
+    post "/report", IntakeController, :report
+    post "/errors", IntakeController, :error
+    get "/in/:key/job/:name/:event", IntakeController, :ping
+    post "/in/:key/job/:name/:event", IntakeController, :ping
+    options "/report", IntakeController, :report
+    options "/errors", IntakeController, :error
+    options "/in/:key/job/:name/:event", IntakeController, :ping
+  end
+
   scope "/api/v1", DokkitWeb do
     pipe_through :api
 
-    post "/report", IntakeController, :report
     post "/enrol", IntakeController, :enrol
     put "/declare", IntakeController, :declare
     get "/ping", IntakeController, :hello
     post "/proposals", IntakeController, :propose
     post "/deploys", IntakeController, :deploy
-    post "/errors", IntakeController, :error
     get "/checks", IntakeController, :checks
     get "/tasks/accepted", IntakeController, :accepted
     get "/program/:target", IntakeController, :program
@@ -120,7 +138,5 @@ defmodule DokkitWeb.Router do
     post "/issues/:id/snooze", ApiController, :snooze
     post "/issues/:id/unsnooze", ApiController, :unsnooze
     post "/issues/:id/acknowledge", ApiController, :acknowledge
-    get "/in/:key/job/:name/:event", IntakeController, :ping
-    post "/in/:key/job/:name/:event", IntakeController, :ping
   end
 end
