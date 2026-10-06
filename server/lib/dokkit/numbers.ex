@@ -29,16 +29,19 @@ defmodule Dokkit.Numbers do
         where: fragment("?->>'metric' = ?", c.config, ^name),
         preload: [service: s]
 
+    if is_nil(service) and not Repo.exists?(thresholds), do: machine_check(machine_id, name)
+
     # A threshold in a service's file reads that service's number, or the machine's.
     for check <- Repo.all(thresholds),
         is_nil(service) or check.service_id == service.id,
-        limit = check.config["limit"],
+        limit = check.config["limit"] || machine_limit(check.config["limit_from"]),
         is_number(limit) do
       if value > limit,
         do:
           Issues.record(check, :down,
             at: at,
             value: value / 1,
+            title: machine_title(check.config["limit_from"], name),
             note: "#{name} is #{round1(value)}, over the limit of #{limit}"
           ),
         else: Issues.record(check, :ok, at: at, value: value / 1)
@@ -48,6 +51,46 @@ defmodule Dokkit.Numbers do
   end
 
   def record(_, _, _, _, _), do: {:error, "bad_line", "A metric needs a name and a number."}
+
+  @machine_limits [{"disk.used_percent.", "disk_limit"}, {"memory.used_percent", "memory_limit"}]
+
+  # A machine's own disk and memory are watched without anyone declaring it, against the
+  # limits on the Alerts page. A threshold a file declares for the same number replaces this.
+  defp machine_check(machine_id, name) do
+    with {_, from} <-
+           Enum.find(@machine_limits, fn {start, _} -> String.starts_with?(name, start) end) do
+      service =
+        Repo.get_by(Service, machine_id: machine_id, slug: "machine") ||
+          Repo.insert!(%Service{
+            machine_id: machine_id,
+            slug: "machine",
+            name: "The machine itself"
+          })
+
+      Repo.insert!(%Check{
+        service_id: service.id,
+        name: name,
+        type: :threshold,
+        config: %{"metric" => name, "limit_from" => from}
+      })
+    end
+  end
+
+  defp machine_title("disk_limit", name),
+    do: "Disk #{String.replace_prefix(name, "disk.used_percent.", "")} is nearly full"
+
+  defp machine_title("memory_limit", _), do: "Memory is nearly all in use"
+  defp machine_title(_, _), do: nil
+
+  # nil when the limit on the Alerts page is blank, which switches it off.
+  defp machine_limit(nil), do: nil
+
+  defp machine_limit(setting) do
+    case Float.parse(Dokkit.Alerts.config()[setting] || "") do
+      {limit, _} -> limit
+      :error -> nil
+    end
+  end
 
   @doc "Keeps a service's latest stats document and the numbers worth charting from it."
   def stats(%Service{} = service, %{"schema" => 1} = document, at) do

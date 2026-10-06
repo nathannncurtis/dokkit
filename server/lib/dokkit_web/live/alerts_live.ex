@@ -252,6 +252,30 @@ defmodule DokkitWeb.AlertsLive do
                 <.send_test channel="text" tests={@tests} />
                 <span class="hint">An address that turns a mail into a text message.</span>
               </dd>
+              <dt>A machine's disk</dt>
+              <dd>
+                <input
+                  class="inp"
+                  style="flex: 0 1 90px"
+                  name="alerts[disk_limit]"
+                  value={@config["disk_limit"]}
+                  inputmode="numeric"
+                  aria-label="Disk percent used that needs a look"
+                />
+                <span class="hint">Percent used, on any disk, that needs a look. Blank switches it off.</span>
+              </dd>
+              <dt>A machine's memory</dt>
+              <dd>
+                <input
+                  class="inp"
+                  style="flex: 0 1 90px"
+                  name="alerts[memory_limit]"
+                  value={@config["memory_limit"]}
+                  inputmode="numeric"
+                  aria-label="Memory percent used that needs a look"
+                />
+                <span class="hint">Percent used that needs a look, three minutes running. Blank switches it off.</span>
+              </dd>
               <dt>Outside heartbeat</dt>
               <dd>
                 <input

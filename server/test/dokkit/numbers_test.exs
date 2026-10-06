@@ -73,4 +73,34 @@ defmodule Dokkit.NumbersTest do
     assert html =~ "cpu"
     assert html =~ "93%"
   end
+
+  test "a machine's own disk is watched against the limit on the Alerts page, with nothing declared" do
+    # Its own machine name: tests run side by side and a shared name makes them wait on each other.
+    machine = Repo.insert!(%Dokkit.Machine{name: "garret", kind: :enrolled})
+    {mkey, _} = Keys.mint(:machine, %{machine_id: machine.id})
+    full = %{type: "metric", name: "disk.used_percent.D", value: 93.2}
+
+    report(mkey, [full, full, %{type: "metric", name: "cpu.percent", value: 99}])
+    assert Issues.open_list() == []
+    report(mkey, [full])
+
+    assert [
+             %{
+               title: "Disk D is nearly full",
+               note: "disk.used_percent.D is 93.2, over the limit of 90.0",
+               machine: %{name: "garret"}
+             }
+           ] = Issues.open_list()
+
+    assert %{thresholds: %{disk_used_percent: "90"}, services: [%{slug: "machine"}]} =
+             Read.machine(machine.id)
+
+    Dokkit.Alerts.save(%{"disk_limit" => "95"})
+    report(mkey, [full, full, full])
+    assert Issues.open_list() == []
+
+    Dokkit.Alerts.save(%{"disk_limit" => ""})
+    report(mkey, for(_ <- 1..4, do: %{full | value: 99.9}))
+    assert Issues.open_list() == []
+  end
 end

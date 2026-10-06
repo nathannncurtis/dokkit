@@ -32,8 +32,17 @@ defmodule Dokkit.Read do
   def users, do: for(u <- Dokkit.Accounts.list(), do: Map.take(u, [:id, :name, :role]))
 
   def machine(id) do
-    with %{} = m <- Enum.find(machines(), &(&1.id == id)),
-         do: Map.put(m, :services, services(%{"machine" => id}))
+    with %{} = m <- Enum.find(machines(), &(&1.id == id)) do
+      config = Dokkit.Alerts.config()
+
+      Map.merge(m, %{
+        services: services(%{"machine" => id}),
+        thresholds: %{
+          disk_used_percent: config["disk_limit"],
+          memory_used_percent: config["memory_limit"]
+        }
+      })
+    end
   end
 
   @doc "Which version of each service is on which machine."
