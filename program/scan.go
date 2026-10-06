@@ -226,18 +226,30 @@ type task struct {
 	dir              string
 }
 
-// tasks reads the tasks these dokkit.toml files define. The first file to name a task has it.
+// tasks reads the tasks these dokkit.toml files define. A name that two files both
+// declare belongs to neither: a file dropped in another folder cannot take over a task.
 func tasks(files []string) map[string]task {
-	all := map[string]task{}
+	all, clash, read := map[string]task{}, map[string]bool{}, map[string]bool{}
 	for _, p := range files {
+		if abs, err := filepath.Abs(p); err == nil {
+			p = abs
+		}
+		if read[p] {
+			continue
+		}
+		read[p] = true
 		if d, err := readDeclaration(p); err == nil {
 			for _, t := range d.Task {
-				if _, taken := all[t.ID]; !taken {
-					t.dir = filepath.Dir(p)
-					all[t.ID] = t
+				if _, taken := all[t.ID]; taken {
+					clash[t.ID] = true
 				}
+				t.dir = filepath.Dir(p)
+				all[t.ID] = t
 			}
 		}
+	}
+	for id := range clash {
+		delete(all, id)
 	}
 	return all
 }
@@ -329,9 +341,12 @@ func (t task) run(stdout, stderr io.Writer, prepare func(*exec.Cmd) (func(), err
 			shell = append([]string{"powershell", "-NoProfile", "-File"}, strings.Fields(run)...)
 		}
 	}
-	// On Windows the time limit stops the shell; what the shell started may outlive it.
+	// The time limit stops the shell; what the shell started may outlive it, so waiting for its output ends too.
 	cmd := exec.CommandContext(ctx, shell[0], shell[1:]...)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = t.dir, stdout, stderr
+	cmd.WaitDelay = killWait
+	// cmd looks in the task's own folder first unless told not to.
+	cmd.Env = append(os.Environ(), "NoDefaultCurrentDirectoryInExePath=1")
 	if prepare != nil {
 		after, err := prepare(cmd)
 		if err != nil {
@@ -355,6 +370,11 @@ func (t task) run(stdout, stderr io.Writer, prepare func(*exec.Cmd) (func(), err
 	return 0
 }
 
+// killWait is how long a stopped task's output is waited for.
+var resultWait = 2 * time.Second
+
+var killWait = 5 * time.Second
+
 // ordinary makes a command run under an ordinary account instead of this program's own.
 // The installed service sets it, because it is the system account. Under a login it is
 // nil and a task runs as that person.
@@ -366,38 +386,61 @@ const updateTask = "dokkit:update"
 // it beside the spool. It replaces nothing: a person finishes the update on the machine.
 func (c *client) update(run string) {
 	said, code := "", 0
-	path, err := c.fetchUpdate()
+	path, sum, err := c.fetchUpdate()
 	if err != nil {
 		said, code = "Not fetched: "+err.Error(), 1
 	} else {
-		said = "The newer copy is at " + path + ".\n" + finishUpdate(path)
+		said = "The newer copy is at " + path + ".\nIts SHA-256 is " + sum + ".\n"
+		if c.updateSha == "" {
+			said += "Compare it with the hash published for that release before running it.\n"
+		}
+		said += finishUpdate(path)
 	}
 	fmt.Println(time.Now().Format("15:04:05"), "", said)
 	c.call("POST", "/api/v1/work/"+run+"/output", "text/plain", []byte(said+"\n"), nil)
 	body, _ := json.Marshal(map[string]any{"exit_code": code, "duration_ms": 0})
-	c.call("POST", "/api/v1/work/"+run+"/result", "application/json", body, nil)
+	c.postResult("/api/v1/work/"+run+"/result", body)
 }
 
-func (c *client) fetchUpdate() (string, error) {
+// postResult sends a run's result, trying again while the server cannot be reached or fails.
+// A refusal by the server is final.
+func (c *client) postResult(path string, body []byte) {
+	for i := 0; i < 8; i++ {
+		if status, err := c.call("POST", path, "application/json", body, nil); err == nil && status < 500 {
+			return
+		}
+		time.Sleep(resultWait << i)
+	}
+}
+
+// fetchUpdate leaves the newer copy in place and returns its SHA-256. A copy that does not
+// match the hash in this machine's config is removed.
+func (c *client) fetchUpdate() (string, string, error) {
 	name := "dokkit"
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
 	dir := filepath.Join(filepath.Dir(c.spool), "update")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
+		return "", "", err
 	}
 	path := filepath.Join(dir, name)
 	file, err := os.OpenFile(path+".part", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	status, err := c.call("GET", "/api/v1/program/"+runtime.GOOS+"-"+runtime.GOARCH, "", nil, io.Writer(file))
+	hash := sha256.New()
+	status, err := c.call("GET", "/api/v1/program/"+runtime.GOOS+"-"+runtime.GOARCH, "", nil, io.MultiWriter(file, hash))
 	file.Close()
 	if err != nil || status != 200 {
-		return "", fmt.Errorf("the server has no newer copy for this kind of machine (%d)", status)
+		return "", "", fmt.Errorf("the server has no newer copy for this kind of machine (%d)", status)
 	}
-	return path, os.Rename(path+".part", path)
+	sum := hex.EncodeToString(hash.Sum(nil))
+	if c.updateSha != "" && c.updateSha != sum {
+		os.Remove(path + ".part")
+		return "", "", fmt.Errorf("the fetched copy has SHA-256 %s, not the %s this machine expects", sum, c.updateSha)
+	}
+	return path, sum, os.Rename(path+".part", path)
 }
 
 // work asks the server for task runs, holding each request open, and runs them one at a time.
@@ -424,7 +467,11 @@ func (c *client) work() {
 		sum := sha256.Sum256([]byte(t.Run))
 		// Only the command a person accepted runs. A file edited since then is refused.
 		if !defined || hex.EncodeToString(sum[:]) != job.Sha {
-			c.call("POST", result, "application/json", []byte(`{"refused":"This machine has no task with that name and that command."}`), nil)
+			c.postResult(result, []byte(`{"refused":"This machine has no task with that name and that command."}`))
+			continue
+		}
+		if job.As == "system" && !c.system {
+			c.postResult(result, []byte(`{"refused":"This task was accepted for the system account, and this machine's own configuration does not allow that. Set system_tasks to true in its config file."}`))
 			continue
 		}
 		fmt.Printf("%s  running task %s\n", time.Now().Format("15:04:05"), job.Task)
@@ -456,7 +503,7 @@ func (c *client) work() {
 		close(done)
 		<-sent
 		body, _ := json.Marshal(map[string]any{"exit_code": code, "duration_ms": time.Since(started).Milliseconds()})
-		c.call("POST", result, "application/json", body, nil)
+		c.postResult(result, body)
 	}
 }
 

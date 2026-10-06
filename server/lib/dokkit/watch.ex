@@ -18,6 +18,7 @@ defmodule Dokkit.Watch do
     Process.send_after(self(), :sweep, @every)
     sweep()
     Issues.machines_sweep(DateTime.utc_now())
+    Dokkit.Tasks.expire()
     Dokkit.Numbers.prune(DateTime.utc_now())
     Dokkit.Digest.tick(DateTime.utc_now(), Dokkit.Alerts.config())
     Dokkit.Self.tick(DateTime.utc_now(), Dokkit.Alerts.config())

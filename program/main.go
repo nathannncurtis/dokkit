@@ -179,6 +179,8 @@ type client struct {
 	pin             string
 	url, key, spool string
 	folders         []string
+	system          bool   // this machine's own config allows tasks accepted for the system account
+	updateSha       string // the hash a fetched update must have, when the config names one
 	http            *http.Client
 }
 
@@ -206,6 +208,10 @@ type saved struct {
 	Key     string   `json:"key"`
 	Pin     string   `json:"pin,omitempty"`
 	Folders []string `json:"folders,omitempty"`
+	// SystemTasks lets tasks accepted for the system account run as it. UpdateSha256 is the
+	// SHA-256 a fetched update must have.
+	SystemTasks  bool   `json:"system_tasks,omitempty"`
+	UpdateSha256 string `json:"update_sha256,omitempty"`
 }
 
 func configPath() (string, error) {
@@ -231,7 +237,7 @@ func load() (*client, error) {
 			c.spool = filepath.Join(dir, "spool")
 		}
 	}
-	c.folders, c.pin = s.Folders, s.Pin
+	c.folders, c.pin, c.system, c.updateSha = s.Folders, s.Pin, s.SystemTasks, strings.ToLower(s.UpdateSha256)
 	pinTo(s.Pin)
 	if f := os.Getenv("DOKKIT_FOLDERS"); f != "" {
 		c.folders = filepath.SplitList(f)
