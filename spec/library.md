@@ -36,7 +36,7 @@ An app using the library reports its host name. The host shows up in Dokkit as a
 
 ## Languages
 
-Python and C# first. Any other language can use the plain API or the ping URLs in `api.md` until it has a library.
+Python, C#, JavaScript, Go, Elixir and Rust. Any other language can use the plain API or the ping URLs in `api.md` until it has a library.
 
 ## Built so far
 
@@ -44,4 +44,12 @@ Python and C# first. Any other language can use the plain API or the ping URLs i
 
 `clients/dotnet/Dokkit/Dokkit.cs`: one file for .NET Standard 2.0, no packages. `Start`, `Beat`, `Job`, `Check`, `Metric`, `Stats`, `Log`, `Capture` and `CatchUnhandled`. It has no provider for `Microsoft.Extensions.Logging` yet; an app that writes Serilog's compact format to a file can have `dokkit` read it.
 
-Both send the host name, and the server records that host as a machine that was seen. The app's version on each host is not kept per host yet.
+`clients/javascript/dokkit.js`: one file, no packages, for Node 18 or later and for browsers. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture` and `catchUnhandled`.
+
+`clients/go/dokkit.go`: one file, standard library only. `Start`, `Beat`, `Job`, `Check`, `Metric`, `Stats`, `Log`, `Capture`, `Recover` for panics, and `Handler` for `log/slog`. Go keeps no stack with an error, so a report carries the stack of the place that reported it.
+
+`clients/elixir/lib/dokkit.ex`: one file, no packages, Elixir 1.18 or later. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture`, and the module is itself a `:logger` handler.
+
+`clients/rust/src/lib.rs`: one file and one package, `ureq`, for HTTPS. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture` and `catch_unhandled` for panics. A report carries one frame, the file and line that reported it, and lines carry no time of their own: the server stamps them when they arrive.
+
+All of them send the host name, and the server records that host as a machine that was seen. The app's version on each host is not kept per host yet.
