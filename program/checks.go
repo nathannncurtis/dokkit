@@ -36,6 +36,7 @@ type declaration struct {
 	}
 	Task  []task
 	Check []check
+	Job   []struct{ ID string }
 }
 
 type check struct {
@@ -373,6 +374,7 @@ type watcher struct {
 	modified map[string]time.Time
 	logs     map[string]int64
 	sent     time.Time
+	unsaved  bool
 }
 
 // refresh re-reads files that are new or changed, declares them, and forgets files that are gone.

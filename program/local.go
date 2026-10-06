@@ -134,7 +134,7 @@ func (w *watcher) saveStatus(at time.Time) {
 		s.Services = append(s.Services, line+"   "+d.path)
 	}
 	b, _ := json.Marshal(s)
-	os.WriteFile(filepath.Join(w.c.spool, "status.json"), b, 0o600)
+	writeFile(filepath.Join(w.c.spool, "status.json"), b)
 }
 
 func (c *client) status() int {
