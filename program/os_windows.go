@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 )
@@ -26,12 +27,7 @@ func asService() bool {
 	if is, _ := svc.IsWindowsService(); !is {
 		return false
 	}
-	log := filepath.Join(machineDir(), "dokkit.log")
-	flags := os.O_CREATE | os.O_WRONLY | os.O_APPEND
-	if info, err := os.Stat(log); err == nil && info.Size() > 5<<20 {
-		flags = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
-	}
-	if out, err := os.OpenFile(log, flags, 0o600); err == nil {
+	if out, err := openLog(filepath.Join(machineDir(), "dokkit.log")); err == nil {
 		os.Stdout, os.Stderr = out, out
 	}
 	svc.Run(serviceName, service{})
@@ -143,6 +139,33 @@ func install(m *mgr.Mgr) error {
 	defer s.Close()
 	s.SetRecoveryActions([]mgr.RecoveryAction{{Type: mgr.ServiceRestart, Delay: time.Minute}}, 86400)
 	return s.Start()
+}
+
+// detach lets a command outlive this one, with no window of its own.
+func detach(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &windows.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW | windows.CREATE_NEW_PROCESS_GROUP}
+}
+
+const runKey = `Software\Microsoft\Windows\CurrentVersion\Run`
+
+// startup makes dokkit watch start when this person signs in, or stops that. It needs no administrator.
+func startup(on bool) error {
+	k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.SET_VALUE)
+	if err != nil {
+		return err
+	}
+	defer k.Close()
+	if !on {
+		if err := k.DeleteValue("Dokkit"); err != nil && err != registry.ErrNotExist {
+			return err
+		}
+		return nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	return k.SetStringValue("Dokkit", `"`+exe+`" watch --background`)
 }
 
 func findDisks() (all []found) {

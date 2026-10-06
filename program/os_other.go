@@ -3,15 +3,24 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 func machineDir() string { return "" }
 
 func asService() bool { return false }
+
+func detach(cmd *exec.Cmd) { cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} }
+
+func startup(bool) error {
+	return errors.New("starting at sign-in is built for Windows so far. Elsewhere, add dokkit watch --background to your desktop's startup programs")
+}
 
 func findDisks() (all []found) {
 	for _, l := range output("df", "-P", "-k") {

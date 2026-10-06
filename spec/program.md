@@ -16,7 +16,9 @@ One Go binary, `dokkit`. The same file is the command-line tool and the thing th
 | | `dokkit doctor` | Can it reach the server, does the certificate match, is the clock right. |
 | Discovery | `dokkit scan` | Looks at what is on the machine and writes a proposal file. Sends nothing. |
 | | `dokkit propose` | Sends the proposal file to be accepted in the interface. |
-| Staying running | `dokkit watch` | Runs in the foreground under a login. |
+| Staying running | `dokkit watch` | Runs in the foreground under a login. An ordinary program: no administrator, no service. |
+| | `dokkit watch --background` | The same, left running with no window. |
+| | `dokkit startup on`, `off` | Starts `dokkit watch --background` each time this person signs in. No administrator. |
 | | `dokkit service install`, `uninstall`, `start`, `stop` | Runs as a service. Needs an administrator once. |
 | Tasks | `dokkit task list` | The tasks defined on this machine and whether each is accepted. |
 | | `dokkit task run <name>` | Runs a task locally to try it. |
@@ -87,6 +89,8 @@ A listener on localhost. Earlier notes had `dokkit` listening on localhost so ap
 In `program/`: `dokkit init`, `run`, `ping`, `check`, `apply`, `enrol`, `watch`, `status`, `doctor`, `service`, `scan` and `task`. With `DOKKIT_URL` and `DOKKIT_KEY` set they use that key; otherwise they use the address and machine key that `dokkit enrol` saved in the user's configuration folder.
 
 `dokkit watch` reads `dokkit.toml` files from the folders in `DOKKIT_FOLDERS` or in the saved configuration, and from the folders directly inside them. It declares each file, runs its `http`, `tcp`, `process` and `windows-service` checks on their own timing, sends the log files it names, says the machine is alive once a minute, and re-reads a file when it changes. `dokkit status` shows what `watch` last wrote down: the files it reads, when the spool was last emptied, and how much is waiting.
+
+`dokkit watch --background` starts the same program detached, writing to `watch.log` in the spool folder, and does nothing when one is already running. `dokkit startup on` is for Windows and adds it to the signed-in person's own startup programs. `dokkit status` shows the process number to stop it by.
 
 `dokkit service install` is for Windows. It copies the program to `Program Files\Dokkit` and the saved address, key and folders to `ProgramData\dokkit`, which only administrators and the system account can read, then registers a service that starts with Windows and restarts a minute after a failure. From an administrator prompt, `dokkit status` and `dokkit doctor` read that configuration. On other systems, `dokkit watch` runs from a systemd unit.
 

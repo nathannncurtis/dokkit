@@ -30,7 +30,8 @@ dokkit init
 dokkit check [dokkit.toml]
 dokkit apply [dokkit.toml]
 dokkit enrol <address> <token>
-dokkit watch
+dokkit watch [--background]
+dokkit startup on|off
 dokkit status
 dokkit doctor
 dokkit service install|uninstall|start|stop
@@ -42,7 +43,9 @@ Reads DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key),
 or the address and machine key that dokkit enrol saved.
 dokkit watch reads dokkit.toml files from the folders in DOKKIT_FOLDERS
 or in the saved configuration, and from the folders directly inside them.
-It runs their checks and sends the log files they name.`
+It runs their checks and sends the log files they name. It is an ordinary program:
+no administrator, no service. --background leaves it running with no window, and
+dokkit startup on starts it that way each time you sign in.`
 )
 
 // How often watch tells the server this machine is alive.
@@ -114,7 +117,21 @@ func cli(args []string) int {
 		c.report(c.job(line{Name: args[1], Event: event}))
 		return c.settle(15 * time.Second)
 	case "watch":
+		if len(args) > 1 && args[1] == "--background" {
+			return c.background()
+		}
 		return c.watch()
+	case "startup":
+		if len(args) != 2 || (args[1] != "on" && args[1] != "off") {
+			fmt.Fprintln(os.Stderr, usage)
+			return 2
+		}
+		if err := startup(args[1] == "on"); err != nil {
+			fmt.Fprintln(os.Stderr, "dokkit:", err)
+			return 1
+		}
+		fmt.Println("Starting at sign-in is", args[1]+".")
+		return 0
 	case "apply":
 		return c.apply(fileArg(args))
 	case "status":

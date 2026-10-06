@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -59,12 +60,13 @@ func initFile(path string, in io.Reader) int {
 // What dokkit watch writes down each minute for dokkit status to read.
 type status struct {
 	At, Sent time.Time
+	Pid      int
 	URL      string
 	Services []string
 }
 
 func (w *watcher) saveStatus(at time.Time) {
-	s := status{At: at, Sent: w.sent, URL: w.c.url}
+	s := status{At: at, Sent: w.sent, Pid: os.Getpid(), URL: w.c.url}
 	for _, d := range w.files {
 		line := fmt.Sprintf("%-24s %d check(s)", d.Service.ID, len(d.Check))
 		if d.Logs.Path != "" {
@@ -102,5 +104,44 @@ func (c *client) status() int {
 		fmt.Println("dokkit watch is not running. It last wrote this", ago(s.At)+".")
 		return 1
 	}
+	fmt.Println("dokkit watch is running as process", s.Pid)
+	return 0
+}
+
+// openLog opens a log to add to, starting it again once it is over 5 MB.
+func openLog(path string) (*os.File, error) {
+	flags := os.O_CREATE | os.O_WRONLY | os.O_APPEND
+	if info, err := os.Stat(path); err == nil && info.Size() > 5<<20 {
+		flags = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+	}
+	return os.OpenFile(path, flags, 0o600)
+}
+
+// background starts watch as an ordinary program that keeps running after this one ends.
+func (c *client) background() int {
+	var s status
+	if b, err := os.ReadFile(filepath.Join(c.spool, "status.json")); err == nil && json.Unmarshal(b, &s) == nil && time.Since(s.At) < 90*time.Second {
+		fmt.Println("dokkit watch is already running as process", s.Pid)
+		return 0
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dokkit:", err)
+		return 1
+	}
+	log := filepath.Join(c.spool, "watch.log")
+	out, err := openLog(log)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dokkit:", err)
+		return 1
+	}
+	cmd := exec.Command(exe, "watch")
+	cmd.Stdout, cmd.Stderr = out, out
+	detach(cmd)
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintln(os.Stderr, "dokkit:", err)
+		return 1
+	}
+	fmt.Printf("dokkit watch is running as process %d. It writes to %s\n", cmd.Process.Pid, log)
 	return 0
 }
