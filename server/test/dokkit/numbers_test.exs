@@ -87,7 +87,7 @@ defmodule Dokkit.NumbersTest do
     assert [
              %{
                title: "Disk D is nearly full",
-               note: "disk.used_percent.D is 93.2, over the limit of 90.0",
+               check: %{note: "disk.used_percent.D is 93.2, over the limit of 90.0"},
                machine: %{name: "garret"}
              }
            ] = Issues.open_list()
