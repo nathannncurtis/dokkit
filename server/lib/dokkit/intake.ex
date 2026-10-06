@@ -81,6 +81,7 @@ defmodule Dokkit.Intake do
 
   defp store(key, batch_id, lines, now) do
     seen(key)
+    hosts(key, for({:ok, %{"host" => host}} <- lines, do: host), now)
 
     results =
       lines
@@ -220,9 +221,33 @@ defmodule Dokkit.Intake do
 
   defp line(_, type, _, _), do: {:error, "unknown_type", "Unknown type #{inspect(type)}."}
 
+  # An app says which host it runs on. That host becomes a machine that was seen, with no dokkit on it.
+  defp hosts(%Key{kind: :app}, hosts, now) do
+    rows =
+      for host <-
+            hosts |> Enum.filter(&(is_binary(&1) and &1 != "")) |> Enum.uniq() |> Enum.take(50) do
+        %{
+          id: Ecto.UUID.generate(),
+          name: String.slice(host, 0, 100),
+          kind: :seen,
+          last_seen_at: now,
+          inserted_at: now,
+          updated_at: now
+        }
+      end
+
+    Repo.insert_all(Machine, rows,
+      on_conflict: {:replace, [:last_seen_at]},
+      conflict_target: :name
+    )
+  end
+
+  defp hosts(_, _, _), do: nil
+
   @doc "An error report, in the format of spec/errors.md."
   def error(%Key{} = key, report) do
     seen(key)
+    hosts(key, [report["host"]], DateTime.utc_now())
     with {:ok, service} <- service(key, report), do: Dokkit.Errors.report(service, report)
   end
 

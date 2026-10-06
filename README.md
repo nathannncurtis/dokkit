@@ -22,9 +22,10 @@ Working, with tests:
 - **Found.** `dokkit scan` writes what is on a machine to a file and `dokkit propose` sends it. Running Windows services and listening ports wait on the Found page, and watching one adds a check that `dokkit watch` runs on that machine.
 - **Tasks.** A `dokkit.toml` offers a named command. The owner accepts it on the Found page, it is run from the Tasks page, and `dokkit watch` on its machine carries it out and sends back the output. A command that changes has to be accepted again.
 - **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Errors, Deploys, Found, Tasks, Alerts and Settings. People sign in; the first one claims the server with a setup code.
+- **Libraries.** For Python and .NET, one file each: beats, job progress, an app's own checks, errors, logs.
 - **The API and the MCP**, for user tokens made in Settings.
 
-Not built yet: alert suggestions, the libraries, the installer and the Docker image.
+Not built yet: alert suggestions, the installer and the Docker image.
 
 To run it for development, with Postgres on localhost:
 

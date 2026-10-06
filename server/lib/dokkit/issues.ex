@@ -156,6 +156,8 @@ defmodule Dokkit.Issues do
         left_join: s in assoc(m, :services),
         group_by: m.id,
         order_by: m.name,
+        # A PC that only an app reported from has nothing of its own to list.
+        having: m.kind != :seen or count(s.id) > 0,
         select: %{
           id: m.id,
           name: m.name,

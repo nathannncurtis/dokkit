@@ -37,3 +37,11 @@ An app using the library reports its host name. The host shows up in Dokkit as a
 ## Languages
 
 Python and C# first. Any other language can use the plain API or the ping URLs in `api.md` until it has a library.
+
+## Built so far
+
+`clients/python/dokkit.py`: one file, standard library only. `start`, `beat`, `job`, `check`, `metric`, `stats`, `capture`, `catch_unhandled` and `handler` for the logging module.
+
+`clients/dotnet/Dokkit/Dokkit.cs`: one file for .NET Standard 2.0, no packages. `Start`, `Beat`, `Job`, `Check`, `Metric`, `Stats`, `Log`, `Capture` and `CatchUnhandled`. It has no provider for `Microsoft.Extensions.Logging` yet; an app that writes Serilog's compact format to a file can have `dokkit` read it.
+
+Both send the host name, and the server records that host as a machine that was seen. The app's version on each host is not kept per host yet.

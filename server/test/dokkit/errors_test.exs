@@ -38,6 +38,8 @@ defmodule Dokkit.ErrorsTest do
              Read.errors() |> Enum.sort_by(& &1.count)
 
     assert group.top == "app/worker.py in run_job"
+    report(app, [%{type: "beat", name: "ui", host: "PC-014"}])
+    assert %{kind: :seen, last_seen_at: %DateTime{}} = Repo.get_by(Machine, name: "PC-014")
     one = Read.error(group.id)
     assert one.tags == %{"route" => "/upload"}
     refute inspect(Repo.all(Dokkit.ErrorEvent)) =~ "4411"
