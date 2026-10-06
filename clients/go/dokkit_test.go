@@ -160,3 +160,59 @@ func TestFramesCarryNoFolders(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+type nilErr struct{ s string }
+
+func (e *nilErr) Error() string { return e.s }
+
+func TestNilErrorAttributeDoesNotPanic(t *testing.T) {
+	reset()
+	StartWith("", "http://127.0.0.1:1", "dka_test")
+	var e *nilErr
+	slog.New(Handler(slog.LevelInfo)).Info("m", "err", e)
+}
+
+func TestRefusedBatchIsCountedAndNotRetried(t *testing.T) {
+	reset()
+	hits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits++; w.WriteHeader(401) }))
+	defer server.Close()
+	StartWith("", server.URL, "dka_test")
+	Beat("w", 1)
+	Flush()
+	Flush()
+	if hits != 1 || Dropped() != 1 {
+		t.Fatalf("hits=%d dropped=%d", hits, Dropped())
+	}
+}
+
+func TestErrorPostIsNotRetried(t *testing.T) {
+	reset()
+	hits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits++; w.WriteHeader(503) }))
+	defer server.Close()
+	StartWith("", server.URL, "dka_test")
+	Capture(errors.New("bad"))
+	Flush()
+	Flush()
+	if hits != 1 || Dropped() != 1 {
+		t.Fatalf("hits=%d dropped=%d", hits, Dropped())
+	}
+}
+
+func TestCapturedFramesHaveNoAbsolutePath(t *testing.T) {
+	reset()
+	StartWith("", "http://127.0.0.1:1", "dka_test")
+	Capture(errors.New("bad"))
+	mu.Lock()
+	defer mu.Unlock()
+	for _, e := range errs {
+		var d struct{ Frames []struct{ File string } }
+		json.Unmarshal(e, &d)
+		for _, f := range d.Frames {
+			if strings.HasPrefix(f.File, "/") || strings.Contains(f.File, ":\\") || (len(f.File) > 1 && f.File[1] == ':') {
+				t.Fatal(f.File)
+			}
+		}
+	}
+}

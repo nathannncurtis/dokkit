@@ -16,6 +16,7 @@ use std::collections::hash_map::RandomState;
 use std::collections::VecDeque;
 use std::hash::{BuildHasher, Hasher};
 use std::panic::Location;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -46,6 +47,9 @@ struct State {
 }
 
 static FLUSHING: Mutex<()> = Mutex::new(());
+
+// Set once catch_unhandled is on: the hook reports panics, so job does not.
+static HOOKED: AtomicBool = AtomicBool::new(false);
 
 static STATE: OnceLock<Mutex<State>> = OnceLock::new();
 
@@ -105,10 +109,12 @@ fn id() -> String {
 
 // Off for an http address to another machine, unless DOKKIT_INSECURE=1.
 fn secure(url: &str) -> bool {
-    let Some(rest) = url.strip_prefix("http://") else { return true };
-    let authority = rest.split('/').next().unwrap_or("");
+    let lower = url.to_ascii_lowercase();
+    let Some(rest) = lower.strip_prefix("http://") else { return true };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let authority = authority.rsplit('@').next().unwrap_or("");
     let host = if let Some(v6) = authority.strip_prefix('[') { v6.split(']').next().unwrap_or("") } else { authority.split(':').next().unwrap_or("") };
-    let local = host == "localhost" || host == "::1" || host.starts_with("127.");
+    let local = host == "localhost" || host.parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback());
     if local || std::env::var("DOKKIT_INSECURE").as_deref() == Ok("1") {
         return true;
     }
@@ -235,7 +241,10 @@ pub fn job<T, E: 'static>(name: &str, work: impl FnOnce(&Run) -> Result<T, E>) -
         Ok(result) => result,
         Err(panic) => {
             run.send("fail", &[("exit_code", J::I(1)), ("duration_ms", J::I(began.elapsed().as_millis() as i64))]);
-            report("panic", false, from, Some(&function));
+            if !HOOKED.load(Ordering::Relaxed) {
+                report("panic", false, from, Some(&function));
+            }
+            flush();
             std::panic::resume_unwind(panic);
         }
     };
@@ -258,6 +267,7 @@ pub fn capture<E: ?Sized>(_error: &E) {
 
 /// Also reports panics, then lets them carry on as before.
 pub fn catch_unhandled() {
+    HOOKED.store(true, Ordering::Relaxed);
     let before = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         if let Some(from) = info.location() {
@@ -268,10 +278,22 @@ pub fn catch_unhandled() {
     }));
 }
 
-// The folder of a path on this machine is not sent: only the file name.
-fn relative(file: &str) -> &str {
-    let absolute = file.starts_with(['/', '\\']) || file.as_bytes().get(1) == Some(&b':');
-    if absolute { file.rsplit(['/', '\\']).next().unwrap_or(file) } else { file }
+// The folder of a path on this machine is not sent. A crate or the standard library keeps its
+// crate-relative path; any other absolute path is cut to the file name.
+fn relative(file: &str) -> String {
+    let f = file.replace('\\', "/");
+    if let Some(i) = f.find("/registry/src/") {
+        if let Some((_, rest)) = f[i + 14..].split_once('/') {
+            return rest.to_string();
+        }
+    }
+    if let Some((_, rest)) = f.strip_prefix("/rustc/").and_then(|r| r.split_once('/')) {
+        return rest.to_string();
+    }
+    if f.starts_with('/') || f.as_bytes().get(1) == Some(&b':') {
+        return f.rsplit('/').next().unwrap_or(&f).to_string();
+    }
+    file.to_string()
 }
 
 // Rust keeps no stack with an error, so the report has one frame: where it was reported from.
@@ -284,7 +306,7 @@ fn report(kind: &str, handled: bool, from: &Location, function: Option<&str>) {
     }
     let file = from.file();
     let own = !(file.contains("/registry/src/") || file.contains("\\registry\\src\\") || file.starts_with("/rustc/"));
-    let frame = object(&[("file", J::S(relative(file))), ("function", opt(function)), ("line", J::I(from.line() as i64)), ("own", J::B(own))]);
+    let frame = object(&[("file", J::S(&relative(file))), ("function", opt(function)), ("line", J::I(from.line() as i64)), ("own", J::B(own))]);
     let report = object(&[
         ("type", J::S(kind)),
         ("handled", J::B(handled)),
@@ -331,10 +353,18 @@ pub fn flush() {
             .set("Content-Type", kind)
             .set("Dokkit-Batch", &batch.id)
             .send_string(&body);
-        // A refusal is not retried; an unreachable server or a server error is, once.
-        if matches!(sent, Err(ureq::Error::Transport(_)) | Err(ureq::Error::Status(500.., _))) {
+        // A refusal is counted and not retried. An unreachable server or a server error is retried
+        // once, except an error post, which the server would count twice.
+        if let Err(ureq::Error::Status(code, _)) = &sent {
+            if *code < 500 {
+                let Ok(mut s) = state.lock() else { return };
+                s.dropped += batch.items.len();
+                continue;
+            }
+        }
+        if sent.is_err() {
             let Ok(mut s) = state.lock() else { return };
-            if batch.tried {
+            if batch.tried || batch.path == "/api/v1/errors" {
                 s.dropped += batch.items.len();
             } else {
                 batch.tried = true;
@@ -353,11 +383,23 @@ mod tests {
     fn only_https_or_this_machine() {
         assert!(secure("https://dokkit.example.com") && secure("http://localhost:4000") && secure("http://127.0.0.1:4000/") && secure("http://[::1]:4000"));
         assert!(!secure("http://dokkit.example.com:4000"));
+        for bad in ["http://127.0.0.1.example.com", "http://127.example.com", "http://localhost:x@other.example.com/", "HTTP://other.example.com"] {
+            assert!(!secure(bad), "{bad}");
+        }
+        assert!(secure("HTTP://LOCALHOST:4000"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hostname_is_found() {
+        assert!(hostname().is_some());
     }
 
     #[test]
     fn paths_lose_their_folders() {
-        assert_eq!(relative("/home/bob/.cargo/registry/src/x/a.rs"), "a.rs");
+        assert_eq!(relative("/home/bob/.cargo/registry/src/index.crates.io-1/ureq-2.9.0/src/lib.rs"), "ureq-2.9.0/src/lib.rs");
+        assert_eq!(relative("/rustc/abc123/library/core/src/mod.rs"), "library/core/src/mod.rs");
+        assert_eq!(relative("/home/bob/app/a.rs"), "a.rs");
         assert_eq!(relative(r"C:\Users\bob\a.rs"), "a.rs");
         assert_eq!(relative("src/main.rs"), "src/main.rs");
     }

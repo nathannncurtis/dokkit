@@ -338,9 +338,14 @@ func Flush() {
 		if b == nil {
 			return
 		}
-		if !send(b) {
+		switch send(b) {
+		case refused:
 			mu.Lock()
-			if b.tried {
+			dropped += len(b.items)
+			mu.Unlock()
+		case failed:
+			mu.Lock()
+			if b.tried || b.path == "/api/v1/errors" {
 				dropped += len(b.items)
 			} else {
 				b.tried = true
@@ -352,8 +357,15 @@ func Flush() {
 	}
 }
 
-// send is false when the server could not be reached or failed; a refusal is not retried.
-func send(b *batch) bool {
+const (
+	sent = iota
+	refused
+	failed
+)
+
+// send tells whether the batch was taken, refused (not tried again) or not delivered.
+// An error post has no batch id on the server, so it is never sent twice.
+func send(b *batch) int {
 	body, kind, zipped := b.items[0], "application/json", false
 	if b.path == "/api/v1/report" {
 		var text bytes.Buffer
@@ -364,7 +376,7 @@ func send(b *batch) bool {
 	}
 	req, err := http.NewRequest("POST", address+b.path, bytes.NewReader(body))
 	if err != nil {
-		return true
+		return refused
 	}
 	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("Content-Type", kind)
@@ -374,10 +386,16 @@ func send(b *batch) bool {
 	}
 	res, err := client.Do(req)
 	if err != nil {
-		return false
+		return failed
 	}
 	res.Body.Close()
-	return res.StatusCode < 500
+	switch {
+	case res.StatusCode >= 500:
+		return failed
+	case res.StatusCode >= 400:
+		return refused
+	}
+	return sent
 }
 
 type handler struct {
@@ -414,7 +432,12 @@ func (h *handler) Handle(_ context.Context, r slog.Record) error {
 }
 
 // plain resolves a LogValuer first, and turns an error into its text, which marshals as {}.
-func plain(v slog.Value) any {
+func plain(v slog.Value) (out any) {
+	defer func() {
+		if recover() != nil {
+			out = nil
+		}
+	}()
 	a := v.Resolve().Any()
 	if err, ok := a.(error); ok {
 		return err.Error()

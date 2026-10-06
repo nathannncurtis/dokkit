@@ -41,7 +41,6 @@ fn stats_stay_on_one_line_and_a_panicking_job_fails() {
         let _: Result<(), ()> = dokkit::job("crash", |_| panic!("boom"));
     });
     assert!(caught.is_err());
-    dokkit::flush();
 
     let all = got.lock().unwrap();
     assert!(all.contains(r#"{"type":"stats","host":"#), "{all}");

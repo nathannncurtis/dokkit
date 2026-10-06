@@ -125,7 +125,7 @@ defmodule DokkitTest do
     Dokkit.flush()
     assert Dokkit.dropped() == 0
     Dokkit.flush()
-    assert Dokkit.dropped() == 1
+    assert Dokkit.dropped() == 1, inspect(:sys.get_state(Dokkit))
   end
 
   test "the queue is bounded by bytes" do
@@ -141,5 +141,52 @@ defmodule DokkitTest do
     assert [ssl: ssl] = Dokkit.ssl_options("https://example.com")
     assert ssl[:verify] == :verify_peer
     assert Dokkit.ssl_options("http://127.0.0.1") == []
+    assert [ssl: _] = Dokkit.ssl_options("HTTPS://example.com")
+  end
+
+  test "a clean exit from a job is a success" do
+    Dokkit.start(url: mock(), key: "dka_test")
+    assert catch_exit(Dokkit.job("c", fn _ -> exit(:shutdown) end)) == :shutdown
+    assert catch_exit(Dokkit.job("d", fn _ -> exit({:shutdown, 1}) end)) == {:shutdown, 1}
+    Dokkit.flush()
+    got = received([])
+    assert Enum.count(got, fn {_, body} -> body =~ ~s("event":"ok") end) == 2
+    assert for({"/api/v1/errors", _} <- got, do: 1) == []
+  end
+
+  test "a refused batch is counted at once and an error post is never sent twice" do
+    {:ok, listen} = :gen_tcp.listen(0, [:binary, packet: :http_bin, active: false, reuseaddr: true])
+    {:ok, port} = :inet.port(listen)
+
+    spawn_link(fn ->
+      {:ok, socket} = :gen_tcp.accept(listen)
+      {:ok, {:http_request, _, _, _}} = :gen_tcp.recv(socket, 0)
+      headers = headers(socket, %{})
+      :inet.setopts(socket, packet: :raw)
+      {:ok, _} = :gen_tcp.recv(socket, String.to_integer(headers["content-length"]))
+      :gen_tcp.send(socket, "HTTP/1.1 401 Unauthorized\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
+      :gen_tcp.close(socket)
+    end)
+
+    Dokkit.start(url: "http://127.0.0.1:#{port}", key: "dka_test")
+    Dokkit.beat("worker")
+    Dokkit.flush()
+    assert Dokkit.dropped() == 1
+
+    Dokkit.capture(%RuntimeError{}, [])
+    Dokkit.flush()
+    assert Dokkit.dropped() == 2
+  end
+
+  test "a frame is the app's own unless it belongs to another app" do
+    Dokkit.start(url: "http://127.0.0.1:1", key: "dka_test", app: :mine)
+
+    Dokkit.capture(%RuntimeError{}, [
+      {Enum, :map, 2, [file: ~c"enum.ex", line: 1]},
+      {DokkitTest, :x, 0, [file: ~c"x.ex", line: 2]}
+    ])
+
+    [report] = :sys.get_state(Dokkit).errors
+    assert [%{"own" => true}, %{"own" => false}] = JSON.decode!(report)["frames"]
   end
 end

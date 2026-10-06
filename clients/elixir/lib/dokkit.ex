@@ -109,6 +109,11 @@ defmodule Dokkit do
       send.("ok", %{exit_code: 0, duration_ms: took.()})
       result
     catch
+      :exit, reason
+      when reason in [:normal, :shutdown] or (is_tuple(reason) and elem(reason, 0) == :shutdown) ->
+        send.("ok", %{exit_code: 0, duration_ms: took.()})
+        :erlang.raise(:exit, reason, __STACKTRACE__)
+
       kind, reason ->
         stacktrace = __STACKTRACE__
         send.("fail", %{exit_code: 1, duration_ms: took.()})
@@ -242,7 +247,7 @@ defmodule Dokkit do
     failed =
       case reason do
         {:sent, failed} -> failed
-        _ -> batches
+        _ -> Enum.map(batches, &{:failed, &1})
       end
 
     s = Enum.reduce(failed, %{s | sender: nil}, &retry_or_drop/2)
@@ -259,8 +264,11 @@ defmodule Dokkit do
   def handle_info(_, s), do: {:noreply, s}
 
   # A batch that failed is kept for one more try, then counted as dropped.
-  defp retry_or_drop(%{tried: true} = batch, s), do: %{s | dropped: s.dropped + batch.n}
-  defp retry_or_drop(batch, s), do: %{s | held: s.held ++ [%{batch | tried: true}]}
+  # A refusal is counted at once, and so is an error post, which the server would count twice.
+  defp retry_or_drop({:refused, batch}, s), do: %{s | dropped: s.dropped + batch.n}
+  defp retry_or_drop({_, %{tried: true} = batch}, s), do: %{s | dropped: s.dropped + batch.n}
+  defp retry_or_drop({_, %{path: "/api/v1/errors"} = batch}, s), do: %{s | dropped: s.dropped + batch.n}
+  defp retry_or_drop({_, batch}, s), do: %{s | held: s.held ++ [%{batch | tried: true}]}
 
   # One that cannot be encoded is dropped.
   defp encode(term) do
@@ -300,7 +308,10 @@ defmodule Dokkit do
       s
     else
       conf = %{url: s.url, key: s.key}
-      {pid, ref} = spawn_monitor(fn -> exit({:sent, Enum.reject(batches, &post(conf, &1))}) end)
+
+      {pid, ref} =
+        spawn_monitor(fn -> exit({:sent, for(b <- batches, (r = post(conf, b)) != :ok, do: {r, b})}) end)
+
       %{s | sender: {pid, ref, batches}}
     end
   end
@@ -327,7 +338,7 @@ defmodule Dokkit do
     end
   end
 
-  # True when the batch got an answer. A refusal is not tried again; no answer or a server error is.
+  # :ok, :refused (not tried again) or :failed (no answer, or a server error).
   defp post(conf, batch) do
     {kind, body, headers} =
       case batch.path do
@@ -343,15 +354,20 @@ defmodule Dokkit do
     request = {to_charlist(conf.url <> batch.path), headers, to_charlist(kind), body}
 
     case :httpc.request(:post, request, [timeout: 10_000] ++ ssl_options(conf.url), []) do
-      {:ok, {{_, status, _}, _, _}} -> status < 500
-      _ -> false
+      {:ok, {{_, status, _}, _, _}} when status < 400 -> :ok
+      {:ok, {{_, status, _}, _, _}} when status < 500 -> :refused
+      _ -> :failed
     end
   catch
-    _, _ -> false
+    _, _ -> :failed
   end
 
   @doc false
-  def ssl_options("https://" <> _) do
+  def ssl_options(url) do
+    if URI.parse(url).scheme == "https", do: https_options(), else: []
+  end
+
+  defp https_options do
     [
       ssl: [
         verify: :verify_peer,
@@ -360,6 +376,4 @@ defmodule Dokkit do
       ]
     ]
   end
-
-  def ssl_options(_), do: []
 end
