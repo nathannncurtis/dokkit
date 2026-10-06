@@ -45,6 +45,22 @@ type check struct {
 	DateFrom              string `toml:"date_from"`
 	name, dir             string
 	next                  time.Time
+	restart               bool
+}
+
+// startService starts a stopped Windows service. Only the installed service can.
+var startService func(name string) error
+
+// restarted is when each service was last started here, so one that will not stay up is
+// tried once in ten minutes and no more.
+var restarted = map[string]time.Time{}
+
+func (c *check) tryRestart() bool {
+	if !c.restart || startService == nil || time.Since(restarted[c.Name]) < 10*time.Minute {
+		return false
+	}
+	restarted[c.Name] = time.Now()
+	return startService(c.Name) == nil
 }
 
 type result struct {
@@ -208,7 +224,9 @@ func (c *check) run() result {
 	case "process":
 		err = processRunning(c.Name)
 	case "windows-service":
-		err = serviceRunning(c.Name)
+		if err = serviceRunning(c.Name); err != nil && c.tryRestart() {
+			return result{ok: true, note: "had stopped; started it again"}
+		}
 	}
 	if err != nil {
 		return result{note: short(err)}
@@ -399,6 +417,7 @@ func (w *watcher) pull() {
 			Service, Name string
 			Type          string
 			Config        map[string]any
+			Restart       bool
 		}
 	}
 	if status, err := w.c.call("GET", "/api/v1/checks", "", nil, &a); err != nil || status != 200 {
@@ -409,7 +428,7 @@ func (w *watcher) pull() {
 		var c check
 		b, _ := json.Marshal(item.Config)
 		json.Unmarshal(b, &c)
-		c.Type, c.name = item.Type, item.Name
+		c.Type, c.name, c.restart = item.Type, item.Name, item.Restart
 		if runs, _ := c.problem(); runs {
 			d := &declaration{Check: []check{c}}
 			d.Service.ID = item.Service

@@ -32,6 +32,19 @@ func asService() bool {
 		os.Stdout, os.Stderr = out, out
 	}
 	takesWork = false
+	startService = func(name string) error {
+		m, err := mgr.Connect()
+		if err != nil {
+			return err
+		}
+		defer m.Disconnect()
+		s, err := m.OpenService(name)
+		if err != nil {
+			return err
+		}
+		defer s.Close()
+		return s.Start()
+	}
 	svc.Run(serviceName, service{})
 	return true
 }

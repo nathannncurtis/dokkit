@@ -106,4 +106,6 @@ Each minute `dokkit watch` reads the first line of the file a `version_from` nam
 
 Each minute it also sends the machine's processor, memory and disk use as `metric` lines and fetches the stats document of each service with a `[stats]` section, sending the key from the variable `key_env` names as `X-Stats-Key`. An `expiry` check reads its date from `date_from`: an `https` address or `host:port` for a certificate, or a file whose first line is a date. It is degraded inside 30 days and down once past.
 
+The installed service starts a stopped Windows service again when its service page allows that, at most once in ten minutes, and says so on the check. `dokkit watch` under a login never does. This has not been run against a real service yet.
+
 Not built yet: `dokkit task list` showing what is accepted, the account tasks run under, and the built-in update task.

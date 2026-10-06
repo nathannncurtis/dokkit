@@ -38,6 +38,9 @@ defmodule Dokkit.Service do
     field :note, :string
     field :route_down, :string
     field :route_degraded, :string
+    field :watched, :boolean, default: true
+    field :held, :string
+    field :restart, :boolean, default: false
     field :declared, :map
     field :stats, :map
     field :stats_at, :utc_datetime_usec

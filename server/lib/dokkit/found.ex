@@ -110,8 +110,15 @@ defmodule Dokkit.Found do
     Repo.all(
       from c in Check,
         join: s in assoc(c, :service),
-        where: s.machine_id == ^machine_id and c.source != :file and c.type in ^@runs,
-        select: %{service: s.slug, name: c.name, type: c.type, config: c.config}
+        where:
+          s.machine_id == ^machine_id and s.watched and c.source != :file and c.type in ^@runs,
+        select: %{
+          service: s.slug,
+          name: c.name,
+          type: c.type,
+          config: c.config,
+          restart: s.restart and c.type == :"windows-service"
+        }
     )
   end
 end

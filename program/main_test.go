@@ -518,3 +518,21 @@ func TestAPinnedServerIsTheOnlyOneTrusted(t *testing.T) {
 		t.Fatal("and refuse any other server")
 	}
 }
+
+func TestAStoppedServiceIsStartedOnlyWhenAllowedAndNotOver(t *testing.T) {
+	defer func() { startService = nil }()
+	started := 0
+	startService = func(string) error { started++; return nil }
+	no, yes := &check{Name: "no-such-service-a"}, &check{Name: "no-such-service-b", restart: true}
+	if no.tryRestart() || started != 0 {
+		t.Fatal("a service nobody allowed is left alone")
+	}
+	if !yes.tryRestart() || yes.tryRestart() || started != 1 {
+		t.Fatalf("an allowed one is started once in ten minutes, was %d", started)
+	}
+	startService = nil
+	restarted = map[string]time.Time{}
+	if yes.tryRestart() {
+		t.Fatal("only the installed service starts things")
+	}
+}

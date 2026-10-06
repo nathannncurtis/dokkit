@@ -35,7 +35,7 @@ defmodule Dokkit.Read do
       %{
         slug: slug,
         name: name,
-        on: Enum.map(rows, &Map.take(&1, [:machine, :version, :environment]))
+        on: Enum.map(rows, &Map.take(&1, [:machine, :version, :held, :environment]))
       }
     end)
   end
@@ -85,6 +85,7 @@ defmodule Dokkit.Read do
       Map.merge(service_row(s, s.machine), %{
         checks: checks,
         routing: %{down: s.route_down, degraded: s.route_degraded},
+        restart: s.restart,
         stats: s.stats,
         stats_at: s.stats_at,
         open_issue: open && issue(Repo.preload(open, [:machine, :service, :check, :alert]))
@@ -266,9 +267,10 @@ defmodule Dokkit.Read do
       name: s.name,
       kind: s.kind,
       environment: s.environment,
-      state: s.state,
+      state: if(s.watched, do: s.state, else: :unwatched),
       note: s.note,
       version: s.version,
+      held: s.held,
       machine: m.name
     }
   end

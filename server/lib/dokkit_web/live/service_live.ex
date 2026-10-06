@@ -20,6 +20,20 @@ defmodule DokkitWeb.ServiceLive do
     {:noreply, load(socket)}
   end
 
+  def handle_event(event, params, socket) when event in ~w(watching hold restart) do
+    service = socket.assigns.service
+
+    if socket.assigns.current_user.role != :viewer do
+      case event do
+        "watching" -> Estate.set_watched(service, !service.watched)
+        "hold" -> Estate.set_hold(service, String.trim(params["version"] || ""))
+        "restart" -> Estate.set_restart(service, !service.restart)
+      end
+    end
+
+    {:noreply, load(socket)}
+  end
+
   def handle_event(event, _, socket) when event in ~w(seen snooze back) do
     id = socket.assigns.issue && socket.assigns.issue.id
 
@@ -177,6 +191,44 @@ defmodule DokkitWeb.ServiceLive do
               <dd :if={@job}><.time at={last_good(@runs)} none="None yet" /></dd>
               <dt :if={@job}>Next expected</dt>
               <dd :if={@job}><.time at={Estate.next_expected(@job)} none="Not scheduled" /></dd>
+            </dl>
+          </div>
+          <div class="card">
+            <h2>Watching</h2>
+            <dl class="kv">
+              <dt>{if @service.watched, do: "Watched", else: "Not watched"}</dt>
+              <dd>
+                <button class="btn sm" type="button" phx-click="watching">
+                  {if @service.watched, do: "Stop watching", else: "Watch again"}
+                </button>
+                <span :if={!@service.watched} class="hint">Nothing it reports opens an issue.</span>
+              </dd>
+              <dt>Held version</dt>
+              <dd>
+                <form phx-submit="hold" id="hold-form" style="display: flex; gap: 8px">
+                  <input
+                    class="inp"
+                    style="flex: 1 1 120px"
+                    name="version"
+                    value={@service.held}
+                    placeholder="None"
+                    aria-label="Version held on purpose"
+                  />
+                  <button class="btn sm" type="submit">Save</button>
+                </form>
+                <span class="hint">A version kept on purpose, so being behind is not news.</span>
+              </dd>
+              <dt :if={Enum.any?(@checks, &(&1.type == :"windows-service"))}>If it stops</dt>
+              <dd :if={Enum.any?(@checks, &(&1.type == :"windows-service"))}>
+                <button class="btn sm" type="button" phx-click="restart">
+                  {if @service.restart, do: "Stop starting it again", else: "Start it again"}
+                </button>
+                <span class="hint">
+                  {if @service.restart,
+                    do: "The installed program starts it, at most once in ten minutes.",
+                    else: "It is left stopped and you are told."}
+                </span>
+              </dd>
             </dl>
           </div>
           <form class="card" phx-change="route" id="route-form">

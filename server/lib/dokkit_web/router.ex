@@ -101,6 +101,11 @@ defmodule DokkitWeb.Router do
     put "/rules/:id", ApiController, :update_rule
     delete "/rules/:id", ApiController, :delete_rule
     put "/services/:id/routing", ApiController, :routing
+    post "/services/:id/watch", ApiController, :watch
+    post "/services/:id/unwatch", ApiController, :unwatch
+    put "/services/:id/checks", ApiController, :checks
+    put "/services/:id/hold", ApiController, :hold
+    put "/services/:id/restart", ApiController, :restart
     post "/issues/bulk", ApiController, :bulk
     get "/issues/:id", ApiController, :issue
     post "/issues/:id/notes", ApiController, :note

@@ -100,4 +100,31 @@ defmodule DokkitWeb.InboxLiveTest do
     assert render_click(page, "snooze") =~ "Snoozed until"
     assert render_click(page, "back") =~ "Snooze for a day"
   end
+
+  test "the service page stops and starts watching, holds a version and allows a restart", %{
+    conn: conn,
+    service: service
+  } do
+    Repo.insert!(%Check{
+      service_id: service.id,
+      name: "svc",
+      type: :"windows-service",
+      config: %{"name" => "Spooler"}
+    })
+
+    {:ok, view, html} = live(conn, "/s/#{service.id}")
+    assert html =~ "Stop watching"
+
+    assert render_click(view, "watching") =~ "Watch again"
+    refute Repo.get!(Dokkit.Service, service.id).watched
+    {:ok, _, all} = live(conn, "/all")
+    assert all =~ "Not watched"
+    assert render_click(view, "watching") =~ "Stop watching"
+
+    render_submit(view, "hold", %{"version" => " 1.4.2 "})
+    assert Repo.get!(Dokkit.Service, service.id).held == "1.4.2"
+
+    assert render_click(view, "restart") =~ "Stop starting it again"
+    assert [%{restart: true}] = Dokkit.Found.checks(service.machine_id)
+  end
 end

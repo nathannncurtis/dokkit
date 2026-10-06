@@ -187,4 +187,54 @@ defmodule DokkitWeb.ApiControllerTest do
     assert %{"items" => []} = json_response(call(:get, "/proposals", read), 200)
     assert %{"services" => [_]} = json_response(call(:get, "/machines/#{m.id}", read), 200)
   end
+
+  test "a service is unwatched and watched again, its checks edited, a version held, restart allowed",
+       %{read: read, all: all} do
+    %{"needs_you" => [%{"service" => id}]} = json_response(call(:get, "/inbox", read), 200)
+    assert json_response(call(:post, "/services/#{id}/unwatch", read), 403)
+
+    assert %{"state" => "unwatched"} =
+             json_response(call(:post, "/services/#{id}/unwatch", all), 200)
+
+    assert %{"needs_you" => [], "snoozed" => []} = json_response(call(:get, "/inbox", read), 200)
+
+    # What it reports while nobody is watching opens nothing.
+    check = Dokkit.Repo.get_by!(Dokkit.Check, service_id: id)
+    for _ <- 1..4, do: Dokkit.Issues.record(check, :down)
+    assert %{"needs_you" => []} = json_response(call(:get, "/inbox", read), 200)
+
+    assert %{"state" => "unknown"} = json_response(call(:post, "/services/#{id}/watch", all), 200)
+
+    assert %{"error" => %{"code" => "bad_checks"}} =
+             json_response(
+               call(:put, "/services/#{id}/checks", all, %{checks: [%{name: "x", type: "job"}]}),
+               422
+             )
+
+    web = %{
+      name: "web",
+      type: "http",
+      config: %{url: "http://localhost:8080/healthz"},
+      fail_after: 2
+    }
+
+    assert %{"checks" => checks} =
+             json_response(call(:put, "/services/#{id}/checks", all, %{checks: [web]}), 200)
+
+    assert %{"type" => "http", "config" => %{"url" => "http://localhost:8080/healthz"}} =
+             Enum.find(checks, &(&1["name"] == "web"))
+
+    assert %{"checks" => [_job]} =
+             json_response(call(:put, "/services/#{id}/checks", all, %{checks: []}), 200)
+
+    assert %{"held" => "1.4.2"} =
+             json_response(call(:put, "/services/#{id}/hold", all, %{version: "1.4.2"}), 200)
+
+    assert %{"held" => nil} = json_response(call(:put, "/services/#{id}/hold", all, %{}), 200)
+
+    assert %{"restart" => true} =
+             json_response(call(:put, "/services/#{id}/restart", all, %{allow: true}), 200)
+
+    assert json_response(call(:put, "/services/nope/restart", all, %{allow: true}), 404)
+  end
 end

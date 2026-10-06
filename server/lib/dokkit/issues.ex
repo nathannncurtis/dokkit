@@ -7,6 +7,13 @@ defmodule Dokkit.Issues do
   @rank %{ok: 0, unknown: 1, degraded: 2, down: 3}
 
   def record(%Check{} = check, state, opts \\ []) when state in [:ok, :degraded, :down] do
+    # A service nobody is watching keeps no state and opens nothing.
+    if Repo.exists?(from s in Service, where: s.id == ^check.service_id and not s.watched),
+      do: check,
+      else: recorded(check, state, opts)
+  end
+
+  defp recorded(check, state, opts) do
     at = opts[:at] || DateTime.utc_now()
 
     {fails, passes} =

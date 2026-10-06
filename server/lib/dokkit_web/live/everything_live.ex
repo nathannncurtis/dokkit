@@ -57,7 +57,9 @@ defmodule DokkitWeb.EverythingLive do
               <span class="mono mute">{s.listens}</span>
               <span class="mute">{kind(s.kind)}</span>
               <span></span>
-              <span class={["tag", s.state in [:degraded, :down] && "warn"]}>{s.note || say(s.state)}</span>
+              <span class={["tag", s.state in [:degraded, :down] && "warn"]}>{(!s.watched &&
+                                                                                 "Not watched") ||
+                s.note || say(s.state)}</span>
               <.ic name="caret-right" />
             </.link>
           <% end %>

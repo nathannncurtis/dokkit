@@ -251,6 +251,102 @@ defmodule Dokkit.Estate do
   defp route(value),
     do: Enum.find_value(Dokkit.Alerts.channels(), fn {_, v} -> v == value && v end)
 
+  @doc "Starts or stops watching. Stopping closes what is open and forgets what the checks said."
+  def set_watched(%Service{} = service, watched) when is_boolean(watched) do
+    unless watched do
+      now = DateTime.utc_now()
+
+      for issue <-
+            Repo.all(
+              from i in Dokkit.Issue, where: i.service_id == ^service.id and is_nil(i.closed_at)
+            ) do
+        Repo.update!(Ecto.Changeset.change(issue, closed_at: now))
+        Dokkit.Alerts.closing(issue)
+      end
+
+      Repo.update_all(from(c in Check, where: c.service_id == ^service.id),
+        set: [state: :unknown, fails: 0, passes: 0, note: nil]
+      )
+    end
+
+    change = if watched, do: [watched: true], else: [watched: false, state: :unknown, note: nil]
+    service = Repo.update!(Ecto.Changeset.change(service, change))
+    Dokkit.Issues.changed()
+    service
+  end
+
+  @doc "Marks a version as held on purpose, so being behind is not news. nil lets go."
+  def set_hold(%Service{} = service, version),
+    do:
+      Repo.update!(
+        Ecto.Changeset.change(service,
+          held: (is_binary(version) && version != "" && version) || nil
+        )
+      )
+
+  @doc "Allows the installed program to start this service's Windows service when it has stopped."
+  def set_restart(%Service{} = service, allow),
+    do: Repo.update!(Ecto.Changeset.change(service, restart: allow == true))
+
+  @runs ~w(http tcp process windows-service)
+
+  @doc """
+  Replaces the checks added in the interface. Checks that came from a file are left alone:
+  they change in the file.
+  """
+  def set_checks(%Service{} = service, list) when is_list(list) do
+    wanted =
+      for %{"name" => name, "type" => type} = c <- list,
+          is_binary(name) and name != "" and type in @runs,
+          do:
+            {name, String.to_existing_atom(type), (is_map(c["config"]) && c["config"]) || %{},
+             c["fail_after"]}
+
+    names = Enum.map(wanted, &elem(&1, 0))
+
+    mine =
+      from c in Check,
+        where:
+          c.service_id == ^service.id and c.source != :file and
+            c.type in ^Enum.map(@runs, &String.to_existing_atom/1)
+
+    from_file =
+      Repo.all(
+        from c in Check, where: c.service_id == ^service.id and c.source == :file, select: c.name
+      )
+
+    cond do
+      length(wanted) != length(list) ->
+        {:error, "Each check needs a name and a type of http, tcp, process or windows-service."}
+
+      names != Enum.uniq(names) or Enum.any?(names, &(&1 in from_file)) ->
+        {:error, "Two checks of a service cannot share a name."}
+
+      true ->
+        Repo.delete_all(from c in mine, where: c.name not in ^names)
+
+        for {name, type, config, fail_after} <- wanted do
+          check =
+            Repo.get_by(Check, service_id: service.id, name: name) ||
+              %Check{service_id: service.id, name: name}
+
+          after_n =
+            if is_integer(fail_after) and fail_after in 1..100,
+              do: fail_after,
+              else: check.fail_after
+
+          Repo.insert_or_update!(
+            Ecto.Changeset.change(check, type: type, config: config, fail_after: after_n)
+          )
+        end
+
+        Dokkit.Issues.changed(false)
+        {:ok, service(service.id)}
+    end
+  end
+
+  def set_checks(_, _), do: {:error, "Needs checks, a list."}
+
   def set_routing(%Service{} = service, params) do
     change =
       for {field, key} <- [route_down: "down", route_degraded: "degraded"],

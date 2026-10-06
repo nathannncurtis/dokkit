@@ -40,6 +40,11 @@ defmodule DokkitWeb.ApiController do
               :note,
               :bulk,
               :routing,
+              :watch,
+              :unwatch,
+              :checks,
+              :hold,
+              :restart,
               :accept,
               :dismiss,
               :add_rule,
@@ -96,6 +101,36 @@ defmodule DokkitWeb.ApiController do
       service ->
         s = Dokkit.Estate.set_routing(service, params)
         json(conn, %{down: s.route_down, degraded: s.route_degraded})
+    end
+  end
+
+  def watch(conn, %{"id" => id}), do: change(conn, id, &Dokkit.Estate.set_watched(&1, true))
+  def unwatch(conn, %{"id" => id}), do: change(conn, id, &Dokkit.Estate.set_watched(&1, false))
+
+  def hold(conn, %{"id" => id} = p),
+    do: change(conn, id, &Dokkit.Estate.set_hold(&1, p["version"]))
+
+  def restart(conn, %{"id" => id} = p),
+    do: change(conn, id, &Dokkit.Estate.set_restart(&1, p["allow"]))
+
+  def checks(conn, %{"id" => id} = params) do
+    with %{} = service <- Dokkit.Estate.service(id),
+         {:ok, _} <- Dokkit.Estate.set_checks(service, params["checks"]) do
+      json(conn, Read.service(id))
+    else
+      nil -> missing(conn)
+      {:error, why} -> fail(conn, 422, "bad_checks", why)
+    end
+  end
+
+  defp change(conn, id, act) do
+    case Dokkit.Estate.service(id) do
+      nil ->
+        missing(conn)
+
+      service ->
+        act.(service)
+        json(conn, Read.service(id))
     end
   end
 
