@@ -3,7 +3,7 @@
 //     php test.php
 // Served by PHP's own web server, this same file is the server: it writes down what it is sent.
 if (PHP_SAPI !== 'cli') {
-    file_put_contents(__DIR__ . '/out/got.txt', $_SERVER['REQUEST_URI'] . ' ' . ($_SERVER['HTTP_AUTHORIZATION'] ?? '') . "\n" . file_get_contents('php://input') . "\n", FILE_APPEND);
+    file_put_contents(__DIR__ . '/out/got.txt', $_SERVER['REQUEST_URI'] . ' ' . ($_SERVER['HTTP_AUTHORIZATION'] ?? '') . ' batch=' . ($_SERVER['HTTP_DOKKIT_BATCH'] ?? '') . "\n" . file_get_contents('php://input') . "\n", FILE_APPEND);
     echo '{}';
     return;
 }
@@ -41,6 +41,9 @@ $want = [
     '"event":"fail","exit_code":1', '/api/v1/errors Bearer dka_test', '"type":"DomainException","handled":false', '"function":"purge","line":28,"own":true}]',
 ];
 $missing = array_filter($want, fn ($w) => !str_contains($all, $w));
+if (!preg_match('/^\/api\/v1\/report .* batch=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/m', $all)) {
+    $missing[] = 'dashed Dokkit-Batch';
+}
 if ($missing || str_contains($all, '4411') || str_contains($all, 'ignored')) {
     echo "FAIL\nmissing: " . implode(' | ', $missing) . "\n$all";
     exit(1);

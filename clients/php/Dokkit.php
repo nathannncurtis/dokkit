@@ -153,7 +153,7 @@ final class Dokkit
     // What cannot be sent is dropped. The app is never told.
     private static function post(string $path, string $body, string $kind): void
     {
-        $headers = ['Authorization: Bearer ' . self::$on['key'], "Content-Type: $kind", 'Dokkit-Batch: ' . bin2hex(random_bytes(16))];
+        $headers = ['Authorization: Bearer ' . self::$on['key'], "Content-Type: $kind", 'Dokkit-Batch: ' . vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex(random_bytes(16)), 4))];
         $context = stream_context_create(['http' => ['method' => 'POST', 'header' => implode("\r\n", $headers), 'content' => $body, 'timeout' => 5, 'ignore_errors' => true]]);
         @file_get_contents(self::$on['url'] . $path, false, $context);
     }
