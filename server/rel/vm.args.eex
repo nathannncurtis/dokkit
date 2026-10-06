@@ -1,0 +1,4 @@
+## -mode/-name/-sname/-setcookie are configured via env vars, do not set them here
+
+## A node that does listen (the Windows service) listens on this machine only.
+-kernel inet_dist_use_interface {127,0,0,1}

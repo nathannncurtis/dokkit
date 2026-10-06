@@ -37,3 +37,56 @@ test("everything is off until started, then sends", async () => {
   assert.ok(error.frames.at(-1).own && error.frames.at(-1).line === 13);
   assert.ok(!JSON.stringify(got).includes("4411") && !JSON.stringify(got).includes("ignored"));
 });
+
+// Runs a snippet with the module imported and started, against a local server.
+async function snippet(code, { status = 200, url = (port) => `http://127.0.0.1:${port}/` } = {}) {
+  const got = [];
+  const server = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      got.push({ batch: req.headers["dokkit-batch"], lines: body.split("\n").map((l) => JSON.parse(l)) });
+      res.statusCode = status;
+      res.end("{}");
+    });
+  });
+  await new Promise((done) => server.listen(0, "127.0.0.1", done));
+  const dir = new URL(".", import.meta.url).pathname.replace(/^\/(\w:)/, "$1");
+  const script = `Import-Module '${dir}Dokkit.psm1'; Start-Dokkit -Url '${url(server.address().port)}' -Key k; ${code}`;
+  const run = await new Promise((done) =>
+    execFile("pwsh", ["-NoProfile", "-Command", script], (error, stdout, stderr) => done({ stdout, stderr })),
+  );
+  server.close();
+  return { got, ...run };
+}
+
+test("zero values and empty messages are kept, and a nested job leaves the outer one's run alone", async () => {
+  const r = await snippet(`
+    Send-DokkitMetric depth 0
+    Send-DokkitCheck c ok -Value 0
+    Write-DokkitLog info ''
+    Invoke-DokkitJob outer { Invoke-DokkitJob inner { }; Send-DokkitProgress 0 5 }
+    Send-Dokkit`);
+  const lines = r.got.flatMap((g) => g.lines);
+  assert.strictEqual(lines.find((l) => l.type === "metric").value, 0);
+  assert.strictEqual(lines.find((l) => l.type === "custom").value, 0);
+  assert.ok(lines.find((l) => l.type === "log"));
+  const ok = lines.find((l) => l.event === "ok" && l.name === "inner");
+  assert.strictEqual(ok.exit_code, 0);
+  const progress = lines.find((l) => l.event === "progress");
+  assert.strictEqual(progress.done, 0);
+  assert.strictEqual(progress.run, lines.find((l) => l.event === "start" && l.name === "outer").run);
+});
+
+test("plain http to another host keeps it off", async () => {
+  const r = await snippet(`Send-DokkitBeat x; Send-Dokkit`, { url: () => "http://example.com" });
+  assert.strictEqual(r.got.length, 0);
+  assert.match(r.stderr, /dokkit: http:\/\//);
+});
+
+test("a failed batch is sent once more with the same id, then dropped and counted", async () => {
+  const r = await snippet(`Send-DokkitBeat x; Send-Dokkit; & (Get-Module Dokkit) { $script:Dropped }`, { status: 503 });
+  assert.strictEqual(r.got.length, 2);
+  assert.strictEqual(r.got[0].batch, r.got[1].batch);
+  assert.strictEqual(r.stdout.trim(), "1");
+});

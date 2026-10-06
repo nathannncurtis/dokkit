@@ -32,6 +32,10 @@ defmodule Dokkit.Accounts do
 
   def announce do
     unless any?(), do: Logger.warning("No account yet. Setup code: #{setup_code()}")
+  rescue
+    e ->
+      Logger.warning("Could not check for an account: #{Exception.message(e)}")
+      Logger.warning("If there is no account yet, the setup code is: #{setup_code()}")
   end
 
   def create_owner(code, name, password) do
@@ -95,6 +99,10 @@ defmodule Dokkit.Accounts do
         if owners == [id] do
           {:error, "Someone has to be an owner."}
         else
+          Repo.update_all(from(k in Dokkit.Key, where: k.user_id == ^id and is_nil(k.revoked_at)),
+            set: [revoked_at: DateTime.utc_now()]
+          )
+
           Repo.delete_all(from u in User, where: u.id == ^id)
           DokkitWeb.Endpoint.broadcast("user:#{id}", "disconnect", %{})
           :ok
@@ -115,6 +123,35 @@ defmodule Dokkit.Accounts do
   end
 
   def authenticate(_, _), do: :error
+
+  @doc "Ends every session this person has, on every device."
+  def sign_out_everywhere(%User{id: id}) do
+    Repo.update_all(from(u in User, where: u.id == ^id), set: [sessions_after: stamp()])
+    DokkitWeb.Endpoint.broadcast("user:#{id}", "disconnect", %{})
+    :ok
+  end
+
+  @doc "Microseconds, the time a session carries and is compared by."
+  def stamp, do: System.os_time(:microsecond)
+
+  def change_password(%User{} = user, old, new) do
+    cond do
+      not is_binary(old) or not is_binary(new) or not check(old, user.password_hash) ->
+        {:error, :wrong, "That is not your current password."}
+
+      String.length(new) < @min_password ->
+        {:error, "Use a password of at least #{@min_password} characters."}
+
+      true ->
+        {1, _} =
+          Repo.update_all(from(u in User, where: u.id == ^user.id),
+            set: [password_hash: hash(new), sessions_after: stamp()]
+          )
+
+        DokkitWeb.Endpoint.broadcast("user:#{user.id}", "disconnect", %{})
+        {:ok, get(user.id)}
+    end
+  end
 
   defp normal(code), do: (code || "") |> String.trim() |> String.upcase()
 

@@ -9,7 +9,11 @@ defmodule DokkitWeb.InboxLive do
      load(assign(socket, page_title: "Inbox", tab: :now, picked: MapSet.new(), span: 86_400))}
   end
 
-  def handle_info(:issues_changed, socket), do: {:noreply, load(socket)}
+  def handle_info(:issues_changed, socket),
+    do: {:noreply, DokkitWeb.Auth.debounce(socket, :page, &load/1)}
+
+  def handle_info({:settled, :page}, socket),
+    do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
 
   def handle_event("tab", %{"tab" => tab}, socket) when tab in ~w(now snoozed),
     do: {:noreply, assign(socket, tab: String.to_existing_atom(tab))}

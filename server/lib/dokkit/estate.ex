@@ -70,15 +70,24 @@ defmodule Dokkit.Estate do
   def next_expected(check, now \\ DateTime.utc_now())
 
   def next_expected(%Check{config: %{"schedule" => cron}}, now) do
-    with {:ok, expr} <- Crontab.CronExpression.Parser.parse(cron),
-         {:ok, at} <- Crontab.Scheduler.get_next_run_date(expr, DateTime.to_naive(now)) do
-      DateTime.from_naive!(at, "Etc/UTC")
-    else
-      _ -> nil
-    end
+    with {:ok, at} <- next_run(cron, now), do: DateTime.from_naive!(at, "Etc/UTC")
   end
 
   def next_expected(_, _), do: nil
+
+  # Schedules are read as UTC. @reboot and the like parse but have no next run.
+  defp next_run(cron, now) when is_binary(cron) do
+    with {:ok, expr} <- Crontab.CronExpression.Parser.parse(cron),
+         {:ok, at} <- Crontab.Scheduler.get_next_run_date(expr, DateTime.to_naive(now)) do
+      {:ok, at}
+    else
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp next_run(_, _), do: nil
 
   @doc "Adds a job to watch. The key in the answer is shown once."
   def add_job(params) do
@@ -97,8 +106,7 @@ defmodule Dokkit.Estate do
       machine == "" or slug == "" ->
         {:error, "A job needs a name and the machine it runs on."}
 
-      config["schedule"] &&
-          match?({:error, _}, Crontab.CronExpression.Parser.parse(config["schedule"])) ->
+      config["schedule"] && is_nil(next_run(config["schedule"], DateTime.utc_now())) ->
         {:error,
          "The schedule is not a cron line Dokkit can read. Five fields, for example 0 1 * * *."}
 
@@ -156,8 +164,18 @@ defmodule Dokkit.Estate do
         {:error,
          "A check has the type #{inspect(elem(bad, 1)["type"])}, which is not one Dokkit knows."}
 
-      Enum.any?(jobs, &(not is_binary(&1["id"]))) ->
+      Enum.any?(jobs, &(not is_map(&1) or not is_binary(&1["id"]))) ->
         {:error, "Every job needs an id."}
+
+      Enum.any?(jobs, &(&1["schedule"] && is_nil(next_run(&1["schedule"], DateTime.utc_now())))) ->
+        {:error, "A job's schedule is not a cron line Dokkit can read."}
+
+      Enum.any?(
+        List.wrap(doc["check"]),
+        &(is_map(&1) and
+              not (is_nil(&1["fail_after"]) or &1["fail_after"] in 1..100//1))
+      ) ->
+        {:error, "fail_after is a whole number from 1 to 100."}
 
       true ->
         Repo.transaction(fn ->
@@ -185,15 +203,17 @@ defmodule Dokkit.Estate do
           wanted =
             for(
               {name, c} <- checks,
-              do: {name, c["type"], Map.drop(c, ~w(type name fail_after)), c["fail_after"] || 3}
+              do: {name, c["type"], Map.drop(c, config_drop(c["type"])), c["fail_after"] || 3}
             ) ++
               for(j <- jobs, do: {j["id"], "job", Map.drop(j, ["id"]), 1})
 
           names = for {name, _, _, _} <- wanted, do: name
 
-          Repo.delete_all(
-            from c in Check,
+          drop_checks(
+            from(c in Check,
               where: c.service_id == ^service.id and c.source == :file and c.name not in ^names
+            ),
+            service
           )
 
           for {name, type, config, fail_after} <- wanted do
@@ -233,19 +253,46 @@ defmodule Dokkit.Estate do
 
   def declare(_, _), do: {:error, "A declaration needs [service] with an id."}
 
-  # A check is called by its name, or by its type when the file gives none.
+  # Process and service checks are named by type, so their own name stays in the config.
+  defp config_drop(type) when type in ~w(process windows-service), do: ~w(type fail_after)
+  defp config_drop(_), do: ~w(type name fail_after)
+
+  # Named as the program names them: by the type for process and windows-service, otherwise
+  # by the name or the type, numbered when a base repeats.
   defp named(checks) do
-    checks
-    |> Enum.filter(&is_map/1)
-    |> Enum.reduce([], fn c, acc ->
-      base = (is_binary(c["name"]) && c["name"]) || to_string(c["type"])
+    {list, _} =
+      checks
+      |> Enum.filter(&is_map/1)
+      |> Enum.map_reduce(%{}, fn c, seen ->
+        type = to_string(c["type"])
 
-      taken =
-        Enum.count(acc, fn {name, _} -> name == base or String.starts_with?(name, base <> "-") end)
+        base =
+          if is_binary(c["name"]) and c["name"] != "" and type not in ~w(process windows-service),
+            do: c["name"],
+            else: type
 
-      [{if(taken == 0, do: base, else: "#{base}-#{taken + 1}"), c} | acc]
-    end)
-    |> Enum.reverse()
+        n = Map.get(seen, base, 0) + 1
+        {{if(n == 1, do: base, else: "#{base}-#{n}"), c}, Map.put(seen, base, n)}
+      end)
+
+    list
+  end
+
+  # Open issues of a dropped check close, and tell the alerting, before the check goes.
+  defp drop_checks(query, service) do
+    ids = Repo.all(from c in query, select: c.id)
+    now = DateTime.utc_now()
+
+    open =
+      Repo.all(from i in Dokkit.Issue, where: i.check_id in ^ids and is_nil(i.closed_at))
+
+    for issue <- open do
+      Repo.update!(Ecto.Changeset.change(issue, closed_at: now, check_id: nil))
+      Dokkit.Alerts.closing(issue)
+    end
+
+    Repo.delete_all(from c in Check, where: c.id in ^ids)
+    Dokkit.Issues.refresh(service)
   end
 
   defp route(value),
@@ -324,7 +371,7 @@ defmodule Dokkit.Estate do
         {:error, "Two checks of a service cannot share a name."}
 
       true ->
-        Repo.delete_all(from c in mine, where: c.name not in ^names)
+        drop_checks(from(c in mine, where: c.name not in ^names), service)
 
         for {name, type, config, fail_after} <- wanted do
           check =

@@ -144,16 +144,35 @@ defmodule Dokkit.Read do
     with %{} = s <- Estate.service(id), do: Enum.map(Estate.runs(s, 100), &run/1)
   end
 
-  @doc "nil when a service is named and does not exist."
+  @log_keys [:tail, :output, :message, :notes, :note]
+
+  @doc "The answer without job output, task output, error messages and issue notes, for a token that may not read logs."
+  def without_logs(%{__struct__: _} = x), do: x
+
+  def without_logs(%{} = m),
+    do: m |> Map.drop(@log_keys) |> Map.new(fn {k, v} -> {k, without_logs(v)} end)
+
+  def without_logs(list) when is_list(list), do: Enum.map(list, &without_logs/1)
+  def without_logs(x), do: x
+
+  @doc "nil when a service or machine is named and does not exist, or a time is not one."
   def logs(params) do
     service = params["service"] && Estate.service(params["service"])
 
-    unless params["service"] && !service do
+    machine =
+      params["machine"] && Enum.find(Issues.machines(), &(params["machine"] in [&1.id, &1.name]))
+
+    with true <- !((params["service"] && !service) || (params["machine"] && !machine)),
+         {:ok, from} <- time(params["from"], nil),
+         {:ok, to} <- time(params["to"], nil) do
       for l <-
             Logs.list(
               q: params["q"],
               level: params["level"],
               service: service && service.id,
+              machine: machine && machine.id,
+              from: from,
+              to: to,
               limit: 500
             ) do
         %{
@@ -165,6 +184,8 @@ defmodule Dokkit.Read do
           service: l.service && l.service.slug
         }
       end
+    else
+      _ -> nil
     end
   end
 
@@ -248,9 +269,11 @@ defmodule Dokkit.Read do
 
   defp time(nil, default), do: {:ok, default}
 
-  defp time(text, _) do
+  defp time(text, _) when is_binary(text) do
     with {:ok, at, _} <- DateTime.from_iso8601(text), do: {:ok, at}
   end
+
+  defp time(_, _), do: :error
 
   def rules, do: Dokkit.Alerts.rules()
 

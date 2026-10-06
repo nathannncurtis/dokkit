@@ -3,7 +3,7 @@
 //     php test.php
 // Served by PHP's own web server, this same file is the server: it writes down what it is sent.
 if (PHP_SAPI !== 'cli') {
-    file_put_contents(__DIR__ . '/out/got.txt', $_SERVER['REQUEST_URI'] . ' ' . ($_SERVER['HTTP_AUTHORIZATION'] ?? '') . ' batch=' . ($_SERVER['HTTP_DOKKIT_BATCH'] ?? '') . "\n" . file_get_contents('php://input') . "\n", FILE_APPEND);
+    file_put_contents(__DIR__ . '/out/got.txt', $_SERVER['REQUEST_URI'] . ' ' . ($_SERVER['HTTP_AUTHORIZATION'] ?? '') . "\n" . file_get_contents('php://input') . "\n", FILE_APPEND);
     echo '{}';
     return;
 }
@@ -41,8 +41,52 @@ $want = [
     '"event":"fail","exit_code":1', '/api/v1/errors Bearer dka_test', '"type":"DomainException","handled":false', '"function":"purge","line":28,"own":true}]',
 ];
 $missing = array_filter($want, fn ($w) => !str_contains($all, $w));
-if (!preg_match('/^\/api\/v1\/report .* batch=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/m', $all)) {
-    $missing[] = 'dashed Dokkit-Batch';
+// What the library does with its own pieces, and when the server cannot be reached.
+$call = fn (string $name, ...$args) => (new ReflectionMethod('Dokkit', $name))->invoke(null, ...$args);
+$bad = [];
+if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $call('uuid'))) {
+    $bad[] = 'batch id is not a dashed uuid';
+}
+if (!preg_match('/\.\d{3}Z$/', $call('now'))) {
+    $bad[] = 'times carry no milliseconds';
+}
+if (!str_contains($call('encode', ['msg' => "bad ± byte"]), '"msg"')) {
+    $bad[] = 'a line with invalid UTF-8 vanished';
+}
+if (str_contains($all, '"type":"deploy"') !== (PHP_SAPI === 'cli')) {
+    $bad[] = 'deploy line is for the command line only';
+}
+$on = new ReflectionProperty('Dokkit', 'on');
+$state = $on->getValue();
+$on->setValue(null, ['url' => 'http://127.0.0.1:1'] + $state);
+Dokkit::beat('a');
+Dokkit::beat('b');
+$began = microtime(true);
+Dokkit::flush();
+if (Dokkit::$dropped !== 2 || microtime(true) - $began > 5) {
+    $bad[] = 'a batch that failed twice is not counted as dropped in one flush';
+}
+$on->setValue(null, null);
+Dokkit::start('1', 'http://example.com', 'k');
+if ($on->getValue() !== null) {
+    $bad[] = 'plain http to a non-local host is not refused';
+}
+@mkdir(__DIR__ . '/out/app/www', 0777, true);
+file_put_contents(__DIR__ . '/out/app/composer.json', '{}');
+chdir(__DIR__ . '/out/app/www');
+$root = new ReflectionMethod('Dokkit', 'root');
+if (realpath($root->invoke(null)) !== realpath(__DIR__ . '/out/app')) {
+    $bad[] = 'the app root is not the folder holding composer.json';
+}
+if (str_contains($all, trim(json_encode(__DIR__), '"'))) {
+    $bad[] = 'a stack frame carries an absolute path';
+}
+if ($bad) {
+    echo "FAIL
+" . implode("
+", $bad) . "
+";
+    exit(1);
 }
 if ($missing || str_contains($all, '4411') || str_contains($all, 'ignored')) {
     echo "FAIL\nmissing: " . implode(' | ', $missing) . "\n$all";

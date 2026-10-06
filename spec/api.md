@@ -1,6 +1,6 @@
 # The Dokkit API (v1)
 
-This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom`, `beat`, `metric`, `stats`, `deploy` and `log` lines, `GET /services/<id>/series`, versions in `inventory`, `POST /deploys`, `POST /errors`, the ping URLs, `GET /ping`, `PUT /declare`, `POST /proposals`, `GET /checks`, taking work, and the read and act calls for issues (with notes and bulk actions), machines, services, versions, jobs, logs, errors, deploys, rules, proposals and tasks,, and for a service its routing, watching, interface-added checks, held version and restart. The `admin` calls are `GET`, `POST` and `DELETE` on `/keys` and `/users`: a new key is shown once, in the answer that made it, and the last owner cannot be removed. A token can accept or dismiss a found thing; a task is accepted by a person in the interface.
+This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom`, `beat`, `metric`, `stats`, `deploy` and `log` lines, `GET /services/<id>/series`, versions in `inventory`, `POST /deploys`, `POST /errors`, the ping URLs, `GET /ping`, `PUT /declare`, `POST /proposals`, `GET /checks`, taking work, and the read and act calls for issues (with notes and bulk actions), machines, services, versions, jobs, logs, errors, deploys, rules, proposals and tasks,, and for a service its routing, watching, interface-added checks, held version and restart. The `admin` calls are `GET`, `POST` and `DELETE` on `/keys` and `/users`, the rule calls, `PUT /services/<id>/checks` and `PUT /services/<id>/restart`: a new key is shown once, in the answer that made it, and the last owner cannot be removed. A token can accept or dismiss a found thing; a task is accepted by a person in the interface.
 
 ## One rule
 
@@ -48,7 +48,7 @@ Every key has a recognisable prefix and a built-in checksum, so a leaked one can
 | App key | `dka_` | A library, or a script inside an app | Write-only, for one service. It can read nothing, is rate-limited and can be revoked, so it is safe inside a desktop or phone app. |
 | User token | `dku_` | Scripts and the MCP | Scopes: `read`, `read-logs`, `act`, `admin`. |
 
-The web interface uses a login session, not a token.
+The web interface uses a login session, not a token. A session lasts 14 days, and signing out or changing the password ends every session of that person. Every sign-in or password change is counted before the password is checked: after 10 from one name and address together, or 30 from one address, in ten minutes, the answer is `429` with `Retry-After` until the window passes. Many attempts on one name from different addresses are slowed, not refused. Behind a proxy the address is the last `X-Forwarded-For` entry. A user token made by a person stops working when that person is removed; user tokens made before that was recorded are not tied to anyone and have to be revoked and made again.
 
 Roles for people: `owner`, `member`, and `viewer`. A viewer sees everything except secrets and keys.
 
@@ -57,11 +57,12 @@ Roles for people: `owner`, `member`, and `viewer`. A viewer sees everything exce
 - Base path `/api/v1`. Within v1, changes only ever add. Unknown fields are ignored by both sides.
 - Requests and answers are JSON unless stated.
 - Keys travel as `Authorization: Bearer <key>`.
+- `POST /report`, `POST /errors` and the ping URLs answer `OPTIONS` and send `Access-Control-Allow-Origin: *`, so a browser page can use an app key.
 - Times are RFC 3339 in UTC.
 - Lists use cursors. A list answer is `{"items": [...], "next": "<cursor or null>"}` and the next page is asked for with `?cursor=`.
 - Lists take `q` (search), `machine`, `service`, `environment`, `from` and `to` wherever those make sense.
 - An error answer is `{"error": {"code": "...", "message": "..."}}`.
-- `401` for a missing or bad key, `403` for a key without the scope, `404` for something that does not exist or that the key may not know exists, `413` for too large, `422` for a body that does not fit this contract, `429` with `Retry-After` when the server is busy.
+- `401` for a missing or bad key, `403` for a key without the scope, `404` for something that does not exist or that the key may not know exists, `413` for too large, `422` for a body that does not fit this contract, `429` with `Retry-After` when the server is busy or a key has used up its request bucket.
 
 ### Encryption
 
@@ -74,7 +75,7 @@ There is no switch that skips verification.
 
 ### Clocks
 
-The server stamps every item with its own receive time and records the sender's clock offset. "Last seen" is always the server's time. An item dated in the future is clamped to the receive time.
+The server stamps every item with its own receive time and a log line keeps both its own time and the time it arrived; the difference is the sender's clock offset, and is zero when the line's time was clamped or missing. "Last seen" is always the server's time. An item dated in the future is clamped to the receive time.
 
 ### Limits
 
@@ -94,7 +95,7 @@ Machine key or app key.
 {"token": "dke_...", "hostname": "host-01", "os": "windows", "arch": "amd64", "dokkit": "0.1.0"}
 ```
 
-Answers `{"machine": "<id>", "key": "dkm_..."}`. The token is spent.
+Answers `{"machine": "<id>", "key": "dkm_..."}`. The token is spent. A name that is already enrolled answers `409` and the token is kept, unless the token was made for that machine (`POST /keys` with `{"kind": "enrol", "machine": "host-01"}`); then it enrols again and revokes that machine's earlier keys.
 
 ### `POST /report`
 
@@ -106,7 +107,7 @@ The answer:
 {"accepted": 412, "refused": [{"line": 17, "code": "unknown_service", "message": "..."}]}
 ```
 
-A refused line does not fail the batch.
+A refused line does not fail the batch, including a line the database cannot store. An app key is limited to a bucket of 10,000 lines refilling at 100 a second and answers `429` with `Retry-After` when it is empty. It may make 100 checks per service.
 
 Every line has `type` and `at`. With a machine key the machine is known. With an app key the service is known, and the line may carry `host` so the machine can be recorded as seen.
 
@@ -151,10 +152,10 @@ The checks added in the interface for this machine, for `dokkit` to run: `{"item
 ### `POST /deploys`
 
 ```json
-{"service": "upload-portal", "version": "2.3.0", "machine": "<id>", "commit": "abc123", "by": "ci"}
+{"service": "upload-portal", "version": "2.3.0", "host": "<name>", "commit": "abc123", "by": "ci"}
 ```
 
-For CI. A deploy is also recorded automatically whenever a service's reported version changes, so most apps never call this.
+For CI. `host` is the machine the version went onto, when that is not the machine the service lives on. A deploy is also recorded automatically whenever a service's reported version changes, so most apps never call this.
 
 ### Taking work
 
@@ -191,7 +192,7 @@ POST /api/<project>/envelope/       reports from Sentry's open-source SDKs
 
 ## Read
 
-A login session, or a user token with `read`. Log contents need `read-logs`.
+A login session, or a user token with `read`. Log contents need `read-logs`: without it, job output, task output, error messages and the notes on issues, services and checks are left out of every answer.
 
 | Call | Gives |
 |---|---|
@@ -201,7 +202,7 @@ A login session, or a user token with `read`. Log contents need `read-logs`.
 | `GET /services/<id>/series` | Chart data. Takes `metric`, `from`, `to` and `points`. |
 | `GET /issues`, `GET /issues/<id>` | Issues and their history. |
 | `GET /jobs`, `GET /jobs/<id>/runs` | Jobs with schedule, last run, last good run and next expected run; then the runs. |
-| `GET /logs` | Log search. Takes `q`, `level`, `machine`, `service`, `from`, `to`. |
+| `GET /logs` | Log search. Takes `q`, `level`, `machine` (id or name), `service`, `from` and `to` (RFC 3339). An unknown machine or service, or a time that is not one, answers `404`. |
 | `GET /errors`, `GET /errors/<id>` | Errors grouped by type and place; then the individual reports. |
 | `GET /deploys` | Deploy history. |
 | `GET /versions` | Which version of each service is on which machine, and under `apps`, each app that runs on many hosts with the hosts on each version. |
@@ -211,22 +212,22 @@ A login session, or a user token with `read`. Log contents need `read-logs`.
 
 ## Act
 
-A login session, or a user token with `act`.
+A login session, or a user token with `act`. Rules, checks and restart need `admin`.
 
 | Call | Does |
 |---|---|
-| `POST /issues/<id>/snooze` | Snooze until a time. `{"until": "..."}` |
+| `POST /issues/<id>/snooze` | Snooze until a time. `{"until": "..."}`. An unknown issue answers `404`, here and for `unsnooze` and `acknowledge`. |
 | `POST /issues/<id>/unsnooze` | Bring it back. |
 | `POST /issues/<id>/acknowledge` | Mark as seen. |
 | `POST /issues/<id>/notes` | Add a note. |
 | `POST /issues/bulk` | Any of the above for a list of issues. |
 | `POST /services/<id>/watch`, `/unwatch` | Start or stop watching a found service. |
-| `PUT /services/<id>/checks` | Edit checks added in the interface. Checks that came from a file are changed in the file. |
+| `PUT /services/<id>/checks` (`admin`) | Edit checks added in the interface. Checks that came from a file are changed in the file. |
 | `PUT /services/<id>/routing` | Who is told, by which channel, for `down` and for `degraded`. |
 | `PUT /services/<id>/hold` | Mark a version on a machine as held on purpose. |
-| `PUT /services/<id>/restart` | Allow or stop automatic restart. |
+| `PUT /services/<id>/restart` (`admin`) | Allow or stop automatic restart. |
 | `POST /proposals/<id>/accept`, `/dismiss` | Accept all or some of a proposal, or dismiss it. |
-| `POST /rules`, `PUT /rules/<id>`, `DELETE /rules/<id>` | Alert rules. |
+| `POST /rules`, `PUT /rules/<id>`, `DELETE /rules/<id>` (`admin`) | Alert rules. |
 | `POST /tasks/<id>/run` | Run an accepted task on its machine. Answers with the run id. |
 
 Keys, tokens and users are managed with the `admin` scope and are never offered through the MCP.
