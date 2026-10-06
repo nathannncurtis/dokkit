@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dokkit: one place that says what needs a look</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="brand.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></symbol>
+</svg>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+    <nav aria-label="Site"><a href="#day">How it looks</a><a href="#told">Alerts</a><a href="#how">How it works</a><a href="#">Docs</a><a href="#">Source</a></nav>
+    <a class="btn pri" href="#install">Install</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero wrap">
+    <h1>One place that says what <span>needs a look.</span></h1>
+    <div class="lede">
+      <p>Dokkit watches your servers, jobs, logs and errors from a server you host yourself, and keeps the list short. Its first screen is below, and it works.</p>
+      <div class="cmd"><code id="c0">docker compose up -d</code><button class="btn" data-copy="c0">Copy</button></div>
+      <a class="quiet" href="#install">or as a Windows service</a>
+    </div>
+
+    <div class="win" aria-label="A working sample of Dokkit">
+      <aside>
+        <span class="org"><span class="mk"><svg><use href="#mark"/></svg></span><span>Brightwater<small>sample data</small></span></span>
+        <button class="on" data-tab="need"><i class="s warn"></i>Needs you<em id="nNeed">3</em></button>
+        <button data-tab="soon"><i class="s ok"></i>Soon<em>2</em></button>
+        <button data-tab="found"><i class="s none"></i>Not watched<em id="nFound">4</em></button>
+        <p>Open a row. Snooze it. This is the real first screen with made-up data.</p>
+      </aside>
+      <div class="pane">
+        <h2 id="paneTitle">This needs your attention.</h2>
+        <div class="list" id="list"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="day">
+    <div class="wrap">
+      <div class="head">
+        <h2>One quiet day. <span>Three&nbsp;things</span> needed you.</h2>
+        <p>Seven machines, every half hour of yesterday. Nearly all of it is quiet, which is the point. Point at a cell.</p>
+      </div>
+      <div class="panel">
+        <div class="ticks"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span></div>
+        <div class="lanes" id="lanes"></div>
+        <p class="tip" id="tip">front-desk-pc was switched off overnight. That is not a problem, so it is not coloured like one.</p>
+      </div>
+      <div class="events">
+        <p><i class="s bad"></i><b>01:00</b>nightly-purge did not run<em>paged once</em></p>
+        <p><i class="s warn"></i><b>09:12</b>nas disk at 91%<em>silent push</em></p>
+        <p><i class="s warn"></i><b>09:40</b>upload portal slow<em>closed itself 11:05</em></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap told" id="told">
+    <h2>It knows what broke. <span>You decide</span> who hears about it.</h2>
+    <div class="panel rows">
+      <div class="chead"><i class="s warn"></i><div><b>nightly-purge</b><code>db-01 · job · every night at 01:00</code></div></div>
+      <div class="crow"><span>If it does not run</span><div class="seg"><label><input type="radio" name="how" value="page" checked><span>Page</span></label><label><input type="radio" name="how" value="push"><span>Push</span></label><label><input type="radio" name="how" value="email"><span>Email</span></label><label><input type="radio" name="how" value="digest"><span>Digest</span></label></div></div>
+      <div class="crow"><span>Wake me at night for this</span><label class="sw"><input type="checkbox" id="night" checked><span></span></label></div>
+      <div class="crow"><span>Restart it before telling anyone</span><label class="sw"><input type="checkbox" id="restart"><span></span></label></div>
+      <div class="crow"><span>Count it as late after</span><input type="range" id="late" min="5" max="120" step="5" value="30" aria-label="Minutes late"><code id="lateOut">30 min</code></div>
+    </div>
+    <div class="saidcol">
+      <p class="said" id="said"></p>
+      <p class="quiet">Change the controls. The sentence is what Dokkit will do.</p>
+    </div>
+  </section>
+
+  <section class="wrap how" id="how">
+    <h2>Built for the person who is the only one watching.</h2>
+    <dl>
+      <div><dt>The app describes itself</dt><dd>A <code>dokkit.toml</code> in the app's own repo says what it is and how to tell it is healthy. Nothing is wired in by hand on the server.</dd></div>
+      <div><dt>Nothing privileged listens</dt><dd>The program on each machine opens no port. Work reaches it over a connection it makes itself, and only tasks you accepted can run.</dd></div>
+      <div><dt>Scanning is offered, never required</dt><dd>Let it look over a machine and propose what to watch, or list things yourself. Nobody is asked to turn off antivirus.</dd></div>
+      <div><dt>On your hardware</dt><dd>A Windows service or a Docker container, on Postgres. Logs stay a year live, then go to your own archive.</dd></div>
+      <div><dt>One list, not six tools</dt><dd>Checks, scheduled jobs, logs, errors, versions and deploys feed the same short list. An issue closes by itself when the thing recovers.</dd></div>
+    </dl>
+  </section>
+
+  <section class="band" id="install">
+    <div class="wrap">
+      <div class="head">
+        <h2>Yours to run.</h2>
+        <p>One server. Then one small program on each machine you want watched.</p>
+      </div>
+      <ol class="steps">
+        <li><b>The server, in Docker</b><div class="cmd"><code id="c1">docker compose up -d</code><button class="btn" data-copy="c1">Copy</button></div></li>
+        <li><b>or on Windows, as a service</b><div class="cmd"><code id="c2">.\install.ps1 -Postgres C:\pgsql</code><button class="btn" data-copy="c2">Copy</button></div></li>
+        <li><b>Each machine</b><div class="cmd"><code id="c3">dokkit enrol https://your-server &lt;token&gt;</code><button class="btn" data-copy="c3">Copy</button></div></li>
+        <li><b>Each app, in its own repo</b><div class="cmd"><code id="c4">dokkit init</code><button class="btn" data-copy="c4">Copy</button></div></li>
+      </ol>
+      <div class="needs" id="needs">
+        <h3>What the server needs</h3>
+        <table>
+          <thead><tr><th></th><th>Minimum</th><th>Recommended</th></tr></thead>
+          <tbody>
+            <tr><th>Processor</th><td>1 core</td><td>2 cores</td></tr>
+            <tr><th>Memory</th><td>1 GB</td><td>2 GB</td></tr>
+            <tr><th>Disk</th><td>20 GB</td><td>40 GB, more if you keep a lot of logs</td></tr>
+            <tr><th>System</th><td colspan="2">Linux with Docker, or Windows 10, 11 or Server as a service. Postgres 15 or newer.</td></tr>
+          </tbody>
+        </table>
+        <p class="quiet">Estimates for about ten machines and sixty services. They have not been measured yet. The program on each watched machine needs next to nothing.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="fbrand">
+      <a class="brand" href="#top"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+      <p>One place that says what needs a look. Self-hosted, on your own hardware.</p>
+      <a class="btn pri" href="#install">Install</a>
+    </div>
+    <nav aria-label="Site map">
+      <div><b>The product</b><a href="#day">How it looks</a><a href="#told">Alerts</a><a href="#how">How it works</a><a href="#install">Install</a></div>
+      <div><b>Reading</b><a href="#">Docs</a><a href="#">Spec</a><a href="#">Client libraries</a><a href="#">Running it</a></div>
+      <div><b>The project</b><a href="#">Source</a><a href="#">Releases</a><a href="#">Licences</a></div>
+    </nav>
+    <p class="legal">Server AGPL. Program and libraries Apache 2.0. Dokkit also accepts reports from Sentry's open-source SDKs and is not affiliated with Sentry.</p>
+  </div>
+</footer>
+<script src="brand.js"></script>
+</body>
+</html>
