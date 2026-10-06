@@ -187,8 +187,8 @@ defmodule DokkitWeb.SettingsLive do
               required
             /> <label><input type="checkbox" name="token[read]" value="true" checked /> Read</label>
             <label><input type="checkbox" name="token[read-logs]" value="true" /> Read logs</label>
-            <label><input type="checkbox" name="token[act]" value="true" /> Snooze and acknowledge</label>
-            <label><input type="checkbox" name="token[admin]" value="true" /> Manage keys and people</label>
+            <label><input type="checkbox" name="token[act]" value="true" /> Act: snooze, acknowledge, watch, route, run tasks</label>
+            <label><input type="checkbox" name="token[admin]" value="true" /> Manage keys, people, rules, checks and restart</label>
             <span :if={@new_token}>Shown only now.</span>
             <span class="end"><button class="btn primary" type="submit">Make a token</button></span>
           </form>

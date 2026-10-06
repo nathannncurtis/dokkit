@@ -66,7 +66,7 @@ defmodule Dokkit.Logs do
 
   def subscribe, do: Phoenix.PubSub.subscribe(Dokkit.PubSub, "logs")
 
-  @doc "Newest first. Options: q, level (that level and worse), service, machine, limit."
+  @doc "Newest first. Options: q, level (that level and worse), service, machine, from, to, limit."
   def list(opts \\ []) do
     query =
       from l in Log,
@@ -76,6 +76,8 @@ defmodule Dokkit.Logs do
 
     query = if opts[:service], do: where(query, [l], l.service_id == ^opts[:service]), else: query
     query = if opts[:machine], do: where(query, [l], l.machine_id == ^opts[:machine]), else: query
+    query = if opts[:from], do: where(query, [l], l.at >= ^opts[:from]), else: query
+    query = if opts[:to], do: where(query, [l], l.at <= ^opts[:to]), else: query
 
     query =
       case Enum.find_index(@levels, &(&1 == opts[:level])) do

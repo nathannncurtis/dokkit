@@ -16,7 +16,8 @@ defmodule DokkitWeb.ApiControllerTest do
 
     {read, _} = Keys.mint(:user, %{scopes: ["read"]})
     {all, _} = Keys.mint(:user, %{scopes: ["read", "read-logs", "act"]})
-    %{job: job, read: read, all: all}
+    {ops, _} = Keys.mint(:user, %{scopes: ["admin"]})
+    %{job: job, read: read, all: all, ops: ops}
   end
 
   defp call(method, path, token, body \\ %{}) do
@@ -31,10 +32,11 @@ defmodule DokkitWeb.ApiControllerTest do
 
     assert %{
              "title" => "Nightly backup failed",
-             "note" => "disk full",
              "machine" => "nas",
              "short_id" => "DOK-" <> _
            } = issue
+
+    refute Map.has_key?(issue, "note")
 
     assert %{"items" => [%{"name" => "nas", "needs_a_look" => 1}], "next" => nil} =
              json_response(call(:get, "/machines", read), 200)
@@ -61,16 +63,91 @@ defmodule DokkitWeb.ApiControllerTest do
 
     assert is_binary(next)
 
-    assert %{"items" => [%{"tail" => "disk full"}]} =
-             json_response(call(:get, "/jobs/#{id}/runs", read), 200)
+    assert %{"items" => [run]} = json_response(call(:get, "/jobs/#{id}/runs", read), 200)
+    refute Map.has_key?(run, "tail")
 
     assert %{"items" => [_]} = json_response(call(:get, "/issues", read), 200)
 
     assert json_response(call(:get, "/logs", read), 403)["error"]["code"] == "no_scope"
+    assert json_response(call(:put, "/rules/x", read, %{}), 403)
     assert json_response(call(:post, "/issues/#{issue["id"]}/acknowledge", read), 403)
     assert json_response(call(:get, "/services/nope", read), 404)
     assert json_response(call(:get, "/inbox", job.key), 401)
     assert json_response(call(:get, "/inbox", "dku_nope"), 401)
+  end
+
+  test "a token with read-logs sees job output and issue notes", %{job: job, all: all} do
+    id = job.service.id
+
+    assert %{"items" => [%{"tail" => "disk full"}]} =
+             json_response(call(:get, "/jobs/#{id}/runs", all), 200)
+
+    [issue] = Issues.open_list()
+    Issues.note(issue.id, "Disk swapped", "sam")
+    assert %{"notes" => [_]} = json_response(call(:get, "/issues/#{issue.id}", all), 200)
+  end
+
+  test "an unknown issue is not found when snoozed, unsnoozed or acknowledged", %{all: all} do
+    id = Ecto.UUID.generate()
+    until = DateTime.utc_now() |> DateTime.add(3600) |> DateTime.to_iso8601()
+    assert json_response(call(:post, "/issues/#{id}/snooze", all, %{until: until}), 404)
+    assert json_response(call(:post, "/issues/#{id}/unsnooze", all), 404)
+    assert json_response(call(:post, "/issues/#{id}/acknowledge", all), 404)
+    assert json_response(call(:post, "/issues/nope/acknowledge", all), 404)
+  end
+
+  test "a closed issue is not found when acknowledged", %{all: all, job: job} do
+    [issue] = Issues.open_list()
+
+    post(
+      build_conn() |> put_req_header("content-type", "text/plain"),
+      "/api/v1/in/#{job.key}/job/nightly-backup/ok",
+      ""
+    )
+
+    assert json_response(call(:post, "/issues/#{issue.id}/acknowledge", all), 404)
+  end
+
+  test "a scope follows the call, not how the path is spelled", %{job: job} do
+    {act, _} = Keys.mint(:user, %{scopes: ["read", "act"]})
+    {read, _} = Keys.mint(:user, %{scopes: ["read"]})
+    id = job.service.id
+    assert json_response(call(:put, "/services/#{id}/%72estart", act, %{allow: true}), 403)
+    assert json_response(call(:put, "/services/#{id}/%63hecks", act, %{checks: []}), 403)
+    assert json_response(call(:post, "/%72ules", act, %{}), 403)
+    assert json_response(call(:post, "/%6Beys", act, %{}), 403)
+    assert json_response(call(:get, "/%6Cogs", read), 403)
+  end
+
+  test "logs are filtered by machine and by time", %{all: all} do
+    {:ok, other} =
+      Estate.add_job(%{"name" => "Zeta sync", "machine" => "zetabox", "schedule" => "0 2 * * *"})
+
+    report(other.key, [%{type: "log", level: "error", msg: "zeta line"}])
+
+    assert %{"items" => [%{"msg" => "rsync: disk full"}]} =
+             json_response(call(:get, "/logs?machine=nas", all), 200)
+
+    assert %{"items" => [%{"msg" => "zeta line"}]} =
+             json_response(call(:get, "/logs?machine=zetabox", all), 200)
+
+    %{"items" => machines} = json_response(call(:get, "/machines", all), 200)
+    %{"id" => zeta} = Enum.find(machines, &(&1["name"] == "zetabox"))
+
+    assert %{"items" => [%{"msg" => "zeta line"}]} =
+             json_response(call(:get, "/logs?machine=#{zeta}", all), 200)
+
+    assert json_response(call(:get, "/logs?from[]=x", all), 404)
+
+    assert %{"items" => []} =
+             json_response(call(:get, "/logs?from=2999-01-01T00:00:00Z", all), 200)
+
+    assert %{"items" => [_ | _]} =
+             json_response(call(:get, "/logs?to=2999-01-01T00:00:00Z", all), 200)
+
+    assert %{"items" => []} = json_response(call(:get, "/logs?to=2000-01-01T00:00:00Z", all), 200)
+    assert json_response(call(:get, "/logs?machine=nowhere", all), 404)
+    assert json_response(call(:get, "/logs?from=yesterday", all), 404)
   end
 
   test "a token with more reads logs and acts", %{all: all} do
@@ -102,7 +179,8 @@ defmodule DokkitWeb.ApiControllerTest do
   test "notes, bulk actions, routing, rules, one machine and versions", %{
     job: job,
     read: read,
-    all: all
+    all: all,
+    ops: ops
   } do
     %{"needs_you" => [%{"id" => id, "service" => service}]} =
       json_response(call(:get, "/inbox", read), 200)
@@ -112,7 +190,7 @@ defmodule DokkitWeb.ApiControllerTest do
     assert json_response(call(:post, "/issues/#{id}/notes", all, %{text: "Disk swapped"}), 200)
 
     assert %{"notes" => [%{"text" => "Disk swapped", "by" => "token " <> _}], "closed_at" => nil} =
-             json_response(call(:get, "/issues/#{id}", read), 200)
+             json_response(call(:get, "/issues/#{id}", all), 200)
 
     assert json_response(call(:get, "/issues/nope", read), 404)
 
@@ -145,16 +223,16 @@ defmodule DokkitWeb.ApiControllerTest do
              )
 
     assert %{"id" => rule, "channel" => "push", "on" => true} =
-             json_response(call(:post, "/rules", all, %{kind: "job", channel: "push"}), 200)
+             json_response(call(:post, "/rules", ops, %{kind: "job", channel: "push"}), 200)
 
     assert %{"channel" => "email", "on" => false, "kind" => "job"} =
              json_response(
-               call(:put, "/rules/#{rule}", all, %{kind: "job", channel: "email", on: false}),
+               call(:put, "/rules/#{rule}", ops, %{kind: "job", channel: "email", on: false}),
                200
              )
 
-    assert json_response(call(:put, "/rules/nope", all, %{}), 404)
-    assert json_response(call(:delete, "/rules/#{rule}", all), 200)
+    assert json_response(call(:put, "/rules/nope", ops, %{}), 404)
+    assert json_response(call(:delete, "/rules/#{rule}", ops), 200)
     assert %{"items" => []} = json_response(call(:get, "/rules", read), 200)
 
     %{"items" => [%{"id" => machine}]} = json_response(call(:get, "/machines", read), 200)
@@ -189,7 +267,7 @@ defmodule DokkitWeb.ApiControllerTest do
   end
 
   test "a service is unwatched and watched again, its checks edited, a version held, restart allowed",
-       %{read: read, all: all} do
+       %{read: read, all: all, ops: ops} do
     %{"needs_you" => [%{"service" => id}]} = json_response(call(:get, "/inbox", read), 200)
     assert json_response(call(:post, "/services/#{id}/unwatch", read), 403)
 
@@ -207,7 +285,7 @@ defmodule DokkitWeb.ApiControllerTest do
 
     assert %{"error" => %{"code" => "bad_checks"}} =
              json_response(
-               call(:put, "/services/#{id}/checks", all, %{checks: [%{name: "x", type: "job"}]}),
+               call(:put, "/services/#{id}/checks", ops, %{checks: [%{name: "x", type: "job"}]}),
                422
              )
 
@@ -219,23 +297,25 @@ defmodule DokkitWeb.ApiControllerTest do
     }
 
     assert %{"checks" => checks} =
-             json_response(call(:put, "/services/#{id}/checks", all, %{checks: [web]}), 200)
+             json_response(call(:put, "/services/#{id}/checks", ops, %{checks: [web]}), 200)
 
     assert %{"type" => "http", "config" => %{"url" => "http://localhost:8080/healthz"}} =
              Enum.find(checks, &(&1["name"] == "web"))
 
     assert %{"checks" => [_job]} =
-             json_response(call(:put, "/services/#{id}/checks", all, %{checks: []}), 200)
+             json_response(call(:put, "/services/#{id}/checks", ops, %{checks: []}), 200)
 
     assert %{"held" => "1.4.2"} =
              json_response(call(:put, "/services/#{id}/hold", all, %{version: "1.4.2"}), 200)
 
     assert %{"held" => nil} = json_response(call(:put, "/services/#{id}/hold", all, %{}), 200)
 
-    assert %{"restart" => true} =
-             json_response(call(:put, "/services/#{id}/restart", all, %{allow: true}), 200)
+    assert json_response(call(:put, "/services/#{id}/restart", all, %{allow: true}), 403)
 
-    assert json_response(call(:put, "/services/nope/restart", all, %{allow: true}), 404)
+    assert %{"restart" => true} =
+             json_response(call(:put, "/services/#{id}/restart", ops, %{allow: true}), 200)
+
+    assert json_response(call(:put, "/services/nope/restart", ops, %{allow: true}), 404)
   end
 
   test "an admin token manages keys and people, and nothing less does", %{job: job, all: all} do
