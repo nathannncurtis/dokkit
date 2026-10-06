@@ -41,14 +41,15 @@ defmodule Dokkit.Intake do
 
   @doc """
   Trades a one-use enrolment token for a machine and its key. A name that is already enrolled
-  is refused unless `"replace"` is true, which revokes that machine's earlier keys.
+  is refused unless the token was minted for that name, which revokes that machine's earlier keys.
   """
   def enrol(token, params) do
     name = String.trim(to_string(params["hostname"] || ""))
-    replace = params["replace"] == true
 
     with true <- name != "",
          {:ok, %Key{used_at: nil} = enrol} <- Dokkit.Keys.verify(token, :enrol) do
+      replace = enrol.label == name
+
       Repo.transaction(fn ->
         now = DateTime.utc_now()
 
@@ -75,7 +76,10 @@ defmodule Dokkit.Intake do
 
             machine ->
               Repo.update_all(
-                from(k in Key, where: k.machine_id == ^machine.id and k.kind == :machine),
+                from(k in Key,
+                  where:
+                    k.machine_id == ^machine.id and k.kind == :machine and is_nil(k.revoked_at)
+                ),
                 set: [revoked_at: now]
               )
 
@@ -117,7 +121,7 @@ defmodule Dokkit.Intake do
   defp clean(list) when is_list(list), do: Enum.map(list, &clean/1)
   defp clean(other), do: other
 
-  # A line that fails inside the database is refused alone; the batch goes on.
+  # A line the database refuses as bad data is refused alone; anything else fails the batch to be retried.
   defp guarded(fun) do
     Repo.query!("SAVEPOINT line")
     result = fun.()
@@ -125,6 +129,7 @@ defmodule Dokkit.Intake do
     result
   rescue
     e ->
+      if not data_error?(e), do: reraise(e, __STACKTRACE__)
       Repo.query!("ROLLBACK TO SAVEPOINT line")
 
       case e do
@@ -132,6 +137,17 @@ defmodule Dokkit.Intake do
         _ -> {:error, "bad_line", "The server could not store this line."}
       end
   end
+
+  defp data_error?(%Refused{}), do: true
+  defp data_error?(%DBConnection.EncodeError{}), do: true
+  defp data_error?(%Ecto.InvalidChangesetError{}), do: true
+  defp data_error?(%Ecto.ChangeError{}), do: true
+  defp data_error?(%Ecto.Query.CastError{}), do: true
+
+  defp data_error?(%Postgrex.Error{postgres: %{code: code, pg_code: pg}}),
+    do: code != :unique_violation and is_binary(pg) and String.starts_with?(pg, ["22", "23"])
+
+  defp data_error?(_), do: false
 
   defp store(key, batch_id, lines, now) do
     seen(key)
@@ -143,7 +159,10 @@ defmodule Dokkit.Intake do
       |> Enum.map(fn {decoded, n} ->
         with {:ok, %{"type" => type} = line} <- decoded,
              ok when ok == :ok or elem(ok, 0) == :log <-
-               guarded(fn -> line(key, type, line, at(line, now)) end) do
+               if(type == "log",
+                 do: log_line(key, line, now),
+                 else: guarded(fn -> line(key, type, line, at(line, now)) end)
+               ) do
           ok
         else
           {:error, code, message} ->
@@ -254,14 +273,6 @@ defmodule Dokkit.Intake do
     end
   end
 
-  # The row's time is the sender's; received_at is the server's, so the offset is their difference.
-  defp line(key, "log", line, _at) do
-    with {:ok, service} <- log_service(key, line) do
-      {:log,
-       Dokkit.Logs.row(line, machine(key, service), service && service.id, DateTime.utc_now())}
-    end
-  end
-
   defp line(%Key{kind: :machine, machine_id: id}, "inventory", line, _at) do
     change =
       for {field, key} <- [os: "os", arch: "arch", program_version: "dokkit"],
@@ -279,6 +290,13 @@ defmodule Dokkit.Intake do
   end
 
   defp line(_, type, _, _), do: {:error, "unknown_type", "Unknown type #{inspect(type)}."}
+
+  # The row's time is the sender's; received_at is the server's, so the offset is their difference.
+  defp log_line(key, line, now) do
+    with {:ok, service} <- log_service(key, line) do
+      {:log, Dokkit.Logs.row(line, machine(key, service), service && service.id, now)}
+    end
+  end
 
   # The host an app reports from, when that is not the machine its service lives on.
   defp elsewhere(%Key{kind: :app}, service, host) when is_binary(host) and host != "" do
@@ -316,6 +334,7 @@ defmodule Dokkit.Intake do
 
   @doc "An error report, in the format of spec/errors.md."
   def error(%Key{} = key, report) do
+    report = clean(report)
     seen(key)
     hosts(key, [report["host"]], DateTime.utc_now())
     with {:ok, service} <- service(key, report), do: Dokkit.Errors.report(service, report)
@@ -323,6 +342,7 @@ defmodule Dokkit.Intake do
 
   @doc "A deploy told to the server on its own, as CI does."
   def deploy(%Key{} = key, params) do
+    params = clean(params)
     seen(key)
     line(key, "deploy", params, DateTime.utc_now())
   end
@@ -471,7 +491,10 @@ defmodule Dokkit.Intake do
     now = DateTime.utc_now()
     service = key.service_id && Repo.get!(Service, key.service_id)
     machine = key.machine_id || (service && service.machine_id)
-    Repo.update_all(from(m in Machine, where: m.id == ^machine), set: [last_seen_at: now])
+
+    if key.kind == :machine,
+      do: Repo.update_all(from(m in Machine, where: m.id == ^machine), set: [last_seen_at: now])
+
     Repo.update_all(from(k in Key, where: k.id == ^key.id), set: [used_at: now])
     service
   end

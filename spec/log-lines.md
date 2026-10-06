@@ -10,7 +10,7 @@ One JSON object per line.
 |---|---|---|
 | `t` | Yes | When it happened. RFC 3339. |
 | `level` | Yes | `trace`, `debug`, `info`, `warn`, `error` or `fatal`. |
-| `msg` | Yes | The line. |
+| `msg` | No | The line. A line without it is kept whole, as JSON, as its message. |
 | `service` | No | The service id. Filled in from `dokkit.toml` or the app key when absent. |
 | `fields` | No | Anything else, as a flat object. Searchable. |
 

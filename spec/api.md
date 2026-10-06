@@ -61,7 +61,7 @@ Roles for people: `owner`, `member`, and `viewer`. A viewer sees everything exce
 - Lists use cursors. A list answer is `{"items": [...], "next": "<cursor or null>"}` and the next page is asked for with `?cursor=`.
 - Lists take `q` (search), `machine`, `service`, `environment`, `from` and `to` wherever those make sense.
 - An error answer is `{"error": {"code": "...", "message": "..."}}`.
-- `401` for a missing or bad key, `403` for a key without the scope, `404` for something that does not exist or that the key may not know exists, `413` for too large, `422` for a body that does not fit this contract, `429` with `Retry-After` when the server is busy.
+- `401` for a missing or bad key, `403` for a key without the scope, `404` for something that does not exist or that the key may not know exists, `413` for too large, `422` for a body that does not fit this contract, `429` with `Retry-After` when the server is busy or a key has used up its request bucket.
 
 ### Encryption
 
@@ -74,7 +74,7 @@ There is no switch that skips verification.
 
 ### Clocks
 
-The server stamps every item with its own receive time and records the sender's clock offset: a log line keeps both its own time and the time it arrived, and the offset is the difference. "Last seen" is always the server's time. An item dated in the future is clamped to the receive time.
+The server stamps every item with its own receive time and a log line keeps both its own time and the time it arrived; the difference is the sender's clock offset, and is zero when the line's time was clamped or missing. "Last seen" is always the server's time. An item dated in the future is clamped to the receive time.
 
 ### Limits
 
@@ -94,7 +94,7 @@ Machine key or app key.
 {"token": "dke_...", "hostname": "host-01", "os": "windows", "arch": "amd64", "dokkit": "0.1.0"}
 ```
 
-Answers `{"machine": "<id>", "key": "dkm_..."}`. The token is spent. A name that is already enrolled answers `409` and the token is kept; sending `"replace": true` enrols it again and revokes that machine's earlier keys.
+Answers `{"machine": "<id>", "key": "dkm_..."}`. The token is spent. A name that is already enrolled answers `409` and the token is kept, unless the token was made for that machine (`POST /keys` with `{"kind": "enrol", "machine": "host-01"}`); then it enrols again and revokes that machine's earlier keys.
 
 ### `POST /report`
 

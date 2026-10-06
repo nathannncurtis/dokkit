@@ -39,7 +39,12 @@ defmodule DokkitWeb.IntakeController do
         json(conn, answer)
 
       {:error, :taken} ->
-        fail(conn, 409, "already_enrolled", "That machine name is already enrolled.")
+        fail(
+          conn,
+          409,
+          "already_enrolled",
+          "That machine name is already enrolled. Ask for an enrolment token made for that machine."
+        )
 
       _ ->
         fail(conn, 401, "bad_token", "That token is not known, was already used, or has run out.")
