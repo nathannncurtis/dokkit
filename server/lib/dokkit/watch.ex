@@ -24,9 +24,11 @@ defmodule Dokkit.Watch do
     {:noreply, state}
   end
 
-  @doc "Returns how many jobs it flagged."
+  @doc "Returns how many jobs and beats it flagged."
   def sweep(now \\ DateTime.utc_now()) do
-    Repo.all(from c in Check, where: c.type == :job and c.state != :down, preload: :service)
+    Repo.all(
+      from c in Check, where: c.type in [:job, :beat] and c.state != :down, preload: :service
+    )
     |> Enum.count(fn check ->
       case verdict(check, now) do
         nil -> false
@@ -35,6 +37,18 @@ defmodule Dokkit.Watch do
     end)
   end
 
+  # Two beats late and a minute more, so one slow loop is not an alarm.
+  defp verdict(%Check{type: :beat, checked_at: %DateTime{} = last, config: config} = check, now) do
+    every = config["every_seconds"] || 60
+    quiet = DateTime.diff(now, last)
+
+    if quiet > every * 2 + 60,
+      do:
+        {"#{check.service.name}: #{check.name} went quiet",
+         "No beat for #{div(quiet, 60)} min. One was expected every #{every} s."}
+  end
+
+  defp verdict(%Check{type: :beat}, _), do: nil
   defp verdict(check, now), do: missed(check, now) || overran(check, now)
 
   # Schedules are read as UTC until jobs carry a timezone.

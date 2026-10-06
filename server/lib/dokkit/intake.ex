@@ -130,6 +130,25 @@ defmodule Dokkit.Intake do
     end
   end
 
+  defp line(key, "beat", line, at) do
+    with {:ok, service} <- service(key, line), name when is_binary(name) <- line["name"] do
+      every = line["every_seconds"]
+      config = %{"every_seconds" => if(is_integer(every) and every > 0, do: every, else: 60)}
+      check = check(service, name, :beat, 1)
+
+      check =
+        if check.config == config,
+          do: check,
+          else: Repo.update!(Ecto.Changeset.change(check, config: config))
+
+      Issues.record(check, :ok, at: at)
+      :ok
+    else
+      {:error, _, _} = refusal -> refusal
+      _ -> {:error, "bad_line", "A beat needs a name."}
+    end
+  end
+
   defp line(key, "job", line, at) do
     with {:ok, service} <- service(key, line), true <- line["event"] in @events do
       job(service, line, at)
@@ -160,7 +179,7 @@ defmodule Dokkit.Intake do
   end
 
   # The other types are added with the features that read them.
-  defp line(_, type, _, _) when type in ~w(metric beat stats deploy),
+  defp line(_, type, _, _) when type in ~w(metric stats deploy),
     do: {:error, "not_yet", "This server does not store #{type} lines yet."}
 
   defp line(_, type, _, _), do: {:error, "unknown_type", "Unknown type #{inspect(type)}."}
