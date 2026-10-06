@@ -40,9 +40,10 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
-  def add_key(conn, %{"kind" => "enrol"}) do
+  def add_key(conn, %{"kind" => "enrol"} = p) do
     expires = DateTime.add(DateTime.utc_now(), 3600)
-    minted(conn, Keys.mint(:enrol, %{expires_at: expires}))
+    label = if is_binary(p["machine"]) and p["machine"] != "", do: String.trim(p["machine"])
+    minted(conn, Keys.mint(:enrol, %{expires_at: expires, label: label}))
   end
 
   def add_key(conn, _),

@@ -16,45 +16,44 @@ defmodule Dokkit.Logs do
 
   def levels, do: @levels
 
-  @doc "Turns a report line, in Dokkit's format or CLEF, into a row."
+  @doc """
+  Turns a report line, in Dokkit's format or CLEF, into a row. A line without a message is kept
+  whole as its message. `received_at` is the server's time; `at` is the sender's.
+  """
   def row(line, machine_id, service_id, received_at) do
     clef? = Map.has_key?(line, "@t") or Map.has_key?(line, "@m") or Map.has_key?(line, "@mt")
     msg = if clef?, do: line["@m"] || render(line["@mt"], line), else: line["msg"]
+    msg = if is_binary(msg), do: msg, else: Jason.encode!(line)
 
-    if is_binary(msg) do
-      level =
-        if clef?,
-          do: @clef[String.downcase(to_string(line["@l"] || "information"))],
-          else: line["level"]
+    level =
+      if clef?,
+        do: @clef[String.downcase(to_string(line["@l"] || "information"))],
+        else: line["level"]
 
-      known =
-        if clef?,
-          do: ~w(@t @l @m @mt @x @i @r type at service),
-          else: ~w(t level msg fields type at service)
+    known =
+      if clef?,
+        do: ~w(@t @l @m @mt @x @i @r type at service),
+        else: ~w(t level msg fields type at service)
 
-      extra =
-        if clef?,
-          do: Map.drop(line, known),
-          else: (is_map(line["fields"]) && line["fields"]) || %{}
+    extra =
+      if clef?,
+        do: Map.drop(line, known),
+        else: (is_map(line["fields"]) && line["fields"]) || %{}
 
-      extra = if clef? and line["@x"], do: Map.put(extra, "exception", line["@x"]), else: extra
-      cut = byte_size(msg) > @max_msg
+    extra = if clef? and line["@x"], do: Map.put(extra, "exception", line["@x"]), else: extra
+    cut = byte_size(msg) > @max_msg
+    big = byte_size(Jason.encode!(extra)) > @max_msg
 
-      {:ok,
-       %{
-         at: time(line["t"] || line["@t"] || line["at"], received_at),
-         received_at: received_at,
-         machine_id: machine_id,
-         service_id: service_id,
-         level: if(level in @levels, do: level, else: "info"),
-         msg:
-           if(cut, do: msg |> binary_part(0, @max_msg) |> String.replace_invalid(""), else: msg),
-         fields: extra,
-         cut: cut
-       }}
-    else
-      :error
-    end
+    %{
+      at: time(line["t"] || line["@t"] || line["at"], DateTime.utc_now()),
+      received_at: received_at,
+      machine_id: machine_id,
+      service_id: service_id,
+      level: if(level in @levels, do: level, else: "info"),
+      msg: if(cut, do: msg |> binary_part(0, @max_msg) |> String.replace_invalid(""), else: msg),
+      fields: if(big, do: %{}, else: extra),
+      cut: cut or big
+    }
   end
 
   def insert([]), do: 0
@@ -113,7 +112,7 @@ defmodule Dokkit.Logs do
       name = "logs_y#{year}m#{String.pad_leading(to_string(month), 2, "0")}"
 
       Repo.query!(
-        "CREATE TABLE IF NOT EXISTS #{name} PARTITION OF logs FOR VALUES FROM ('#{from}') TO ('#{to}')"
+        "CREATE TABLE IF NOT EXISTS #{name} PARTITION OF logs FOR VALUES FROM ('#{from} 00:00:00+00') TO ('#{to} 00:00:00+00')"
       )
 
       :persistent_term.put({__MODULE__, key}, true)
@@ -129,7 +128,8 @@ defmodule Dokkit.Logs do
   def archive(dir, today \\ Date.utc_today()) do
     cutoff = Date.shift(Date.beginning_of_month(today), month: -@keep_months)
 
-    held = for {name, until} <- restored(), until > DateTime.utc_now(), do: name
+    back = restored()
+    held = for {name, until} <- back, until > DateTime.utc_now(), do: name
 
     months =
       Repo.query!("""
@@ -146,18 +146,33 @@ defmodule Dokkit.Logs do
       File.mkdir_p!(dir)
       path = Path.join(dir, "logs-#{year}-#{month}.ndjson.gz")
 
-      %{rows: rows} =
-        Repo.query!("SELECT row_to_json(l)::text FROM #{name} l ORDER BY l.at", [],
-          timeout: :infinity
-        )
+      # A month that came back from its file is only dropped; any other month is written out
+      # first, under a free name. Written as .part first so a half file is never an archive.
+      path =
+        if "logs-#{year}-#{month}" in Map.keys(back) and File.exists?(path) do
+          path
+        else
+          %{rows: rows} =
+            Repo.query!("SELECT row_to_json(l)::text FROM #{name} l ORDER BY l.at", [],
+              timeout: :infinity
+            )
 
-      # Written under another name first, so a half-written file is never taken for the archive.
-      File.write!(path <> ".part", :zlib.gzip(Enum.map_join(rows, "\n", &hd/1)))
-      File.rename!(path <> ".part", path)
+          path = free(path)
+          File.write!(path <> ".part", :zlib.gzip(Enum.map_join(rows, "
+", &hd/1)))
+          File.rename!(path <> ".part", path)
+          path
+        end
+
       Repo.query!("DROP TABLE #{name}")
       :persistent_term.erase({__MODULE__, key})
       path
     end
+  end
+
+  defp free(path, n \\ 1) do
+    next = if n == 1, do: path, else: String.replace_suffix(path, ".ndjson.gz", ".#{n}.ndjson.gz")
+    if File.exists?(next), do: free(path, n + 1), else: next
   end
 
   @restored_days 7
@@ -204,17 +219,43 @@ defmodule Dokkit.Logs do
       until = DateTime.add(now, @restored_days * 86_400)
       value = Map.new(back, fn {k, v} -> {k, DateTime.to_iso8601(v)} end)
 
-      Repo.insert!(
-        %Dokkit.Setting{key: "restored", value: Map.put(value, name, DateTime.to_iso8601(until))},
-        on_conflict: {:replace, [:value, :updated_at]},
-        conflict_target: :key
-      )
+      rows = rows(path)
+      save_restored(Map.put(value, name, DateTime.to_iso8601(until)))
 
-      load(path)
+      # The note is committed first so the hourly archive sees the month as held; it goes
+      # again if the rows do not all go in.
+      try do
+        rows
+        |> Enum.map(& &1.at)
+        |> Enum.uniq_by(&{&1.year, &1.month})
+        |> Enum.each(&ensure_partition/1)
+
+        {:ok, count} =
+          Repo.transaction(
+            fn ->
+              rows |> Enum.chunk_every(1000) |> Enum.each(&Repo.insert_all(Dokkit.Log, &1))
+              length(rows)
+            end,
+            timeout: :infinity
+          )
+
+        count
+      rescue
+        e ->
+          save_restored(value)
+          reraise e, __STACKTRACE__
+      end
     end
   end
 
-  defp load(path) do
+  defp save_restored(value) do
+    Repo.insert!(%Dokkit.Setting{key: "restored", value: value},
+      on_conflict: {:replace, [:value, :updated_at]},
+      conflict_target: :key
+    )
+  end
+
+  defp rows(path) do
     machines = MapSet.new(Repo.all(from m in Dokkit.Machine, select: m.id))
     services = MapSet.new(Repo.all(from s in Dokkit.Service, select: s.id))
 
@@ -229,34 +270,27 @@ defmodule Dokkit.Logs do
       %{at | microsecond: {elem(at.microsecond, 0), 6}}
     end
 
-    rows =
-      for line <- path |> File.read!() |> :zlib.gunzip() |> String.split("\n", trim: true),
-          l = Jason.decode!(line),
-          l["machine_id"] in machines do
-        at = time.(l["at"])
-        ensure_partition(at)
-
-        %{
-          at: at,
-          received_at: time.(l["received_at"]),
-          level: l["level"],
-          msg: l["msg"],
-          fields: l["fields"],
-          cut: l["cut"],
-          machine_id: l["machine_id"],
-          service_id: if(l["service_id"] in services, do: l["service_id"])
-        }
-      end
-
-    rows |> Enum.chunk_every(1000) |> Enum.each(&Repo.insert_all(Dokkit.Log, &1))
-    length(rows)
+    for line <- path |> File.read!() |> :zlib.gunzip() |> String.split("\n", trim: true),
+        l = Jason.decode!(line),
+        l["machine_id"] in machines do
+      %{
+        at: time.(l["at"]),
+        received_at: time.(l["received_at"]),
+        level: l["level"],
+        msg: l["msg"],
+        fields: l["fields"],
+        cut: l["cut"],
+        machine_id: l["machine_id"],
+        service_id: if(l["service_id"] in services, do: l["service_id"])
+      }
+    end
   end
 
   # Times far from now would each make a partition, so they are read as now.
   defp time(text, now) when is_binary(text) do
     with {:ok, at, _} <- DateTime.from_iso8601(text),
          true <- DateTime.compare(at, now) != :gt,
-         true <- DateTime.diff(now, at, :day) < 400 do
+         true <- DateTime.diff(now, at, :day) < 365 do
       %{at | microsecond: {elem(at.microsecond, 0), 6}}
     else
       _ -> now

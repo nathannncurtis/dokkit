@@ -157,4 +157,22 @@ rsync: disk full
            ) ==
              ["*"]
   end
+
+  test "a start cuts short only an earlier run", %{app: app} do
+    line = fn run, event, at ->
+      %{type: "job", service: "backup", run: run, event: event, at: at}
+    end
+
+    report(app, [
+      line.("a", "start", "2026-10-06T01:00:00Z"),
+      line.("b", "start", "2026-10-06T01:05:00Z"),
+      line.("c", "start", "2026-10-06T00:30:00Z"),
+      line.("b", "ok", "2026-10-06T01:06:00Z")
+    ])
+
+    assert %JobRun{result: :fail, finished_at: %DateTime{}} = Repo.get_by!(JobRun, run: "a")
+    assert %JobRun{result: :ok} = Repo.get_by!(JobRun, run: "b")
+    assert %JobRun{result: :running} = Repo.get_by!(JobRun, run: "c")
+    assert Issues.open_list() == []
+  end
 end
