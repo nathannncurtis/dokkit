@@ -20,6 +20,7 @@ defmodule Dokkit.Watch do
     Issues.machines_sweep(DateTime.utc_now())
     Dokkit.Numbers.prune(DateTime.utc_now())
     Dokkit.Digest.tick(DateTime.utc_now(), Dokkit.Alerts.config())
+    Dokkit.Self.tick(DateTime.utc_now(), Dokkit.Alerts.config())
     Issues.changed()
     today = Date.utc_today()
     Enum.each([today, Date.shift(today, month: 1)], &Dokkit.Logs.ensure_partition/1)

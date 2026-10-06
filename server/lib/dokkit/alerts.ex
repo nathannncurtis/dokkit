@@ -11,7 +11,7 @@ defmodule Dokkit.Alerts do
 
   @defaults %{"down" => "page", "degraded" => "push", "push_with" => "ntfy"}
   @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user smtp_password)
-  @plain ~w(ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to text_to digest_at)
+  @plain ~w(ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to text_to digest_at heartbeat_url)
   @max_attempts 5
   @channels [
     {"Page", "page"},

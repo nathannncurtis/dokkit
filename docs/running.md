@@ -1,6 +1,6 @@
 # Running the server
 
-This is how it is meant to work. So far the server runs from its source (see the README), signs people in with the setup code described below, and is not yet packaged as a Windows service or a Docker image. The outside heartbeat and its own row are not built yet.
+This is how it is meant to work. What exists so far is under "Built so far" at the end.
 
 ## Two forms
 
@@ -44,3 +44,17 @@ Dokkit cannot page about itself when it is down, so two things cover it:
 ## Reaching it
 
 Its own usernames and passwords. It is meant for a local network or a private overlay network, and is not meant to be exposed to the internet.
+
+## Built so far
+
+**The packaged server.** `mix release` in `server/` builds it, and it has been started and stopped on Windows that way. It reads `DATABASE_URL`, `SECRET_KEY_BASE`, `PHX_HOST` and `PORT`, and `bin/dokkit eval Dokkit.Release.migrate` brings the database up to date before a start.
+
+**Docker.** `server/Dockerfile` and `server/compose.yml`, with Postgres 17 beside it. Neither has been built or run yet: this was written on a machine with no Docker. It listens on plain HTTP on port 4000 for a proxy that holds the certificate.
+
+**Windows.** No installer yet. By hand: build the release, set the four variables for the machine, run the migrate line above, then `bin\dokkit.bat install` and `bin\dokkit.bat start`, which register and start it as a Windows service. That last step has not been run.
+
+**Its own TLS.** With `DOKKIT_CERT` and `DOKKIT_CERT_KEY` set to a certificate and its key, the server serves HTTPS itself and the enrol page shows the fingerprint for machines to pin.
+
+**Who watches Dokkit.** The outside heartbeat is a setting on the Alerts page. Dokkit's own row is a service called Dokkit with one check, that the database answers, and a chart of the database's size. It routes to a quiet push.
+
+Not built yet: the installer and its private Postgres, archiving old log months, and the rest of its own row (whether it is taking reports, whether archiving worked).

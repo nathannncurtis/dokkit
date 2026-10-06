@@ -25,7 +25,7 @@ Working, with tests:
 - **Libraries.** For Python and .NET, one file each: beats, job progress, an app's own checks, errors, logs.
 - **The API and the MCP**, for user tokens made in Settings.
 
-Not built yet: alert suggestions, the installer and the Docker image.
+Not built yet: alert suggestions, the Windows installer, archiving old log months. The Docker image is written and has not been built.
 
 To run it for development, with Postgres on localhost:
 

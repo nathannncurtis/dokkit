@@ -1,0 +1,33 @@
+# Dokkit with its own Postgres. Copy to the host, set the three values marked below, then:
+#   docker compose up -d
+#   docker compose logs dokkit     # the setup code for the first visit is in here
+services:
+  dokkit:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: ecto://dokkit:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db/dokkit
+      # Make one with: openssl rand -base64 48
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?set SECRET_KEY_BASE}
+      # The name people and machines reach Dokkit by.
+      PHX_HOST: ${PHX_HOST:?set PHX_HOST}
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dokkit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: dokkit
+    volumes:
+      - dokkit-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "dokkit"]
+      interval: 5s
+      retries: 10
+volumes:
+  dokkit-db:

@@ -50,7 +50,6 @@ if config_env() == :prod do
         keyfile: System.fetch_env!("DOKKIT_CERT_KEY")
       ],
       http: false,
-      force_ssl: false,
       secret_key_base: secret_key_base
 
     config :dokkit, cert: cert

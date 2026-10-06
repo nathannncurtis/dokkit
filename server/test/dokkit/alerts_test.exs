@@ -131,4 +131,14 @@ defmodule Dokkit.AlertsTest do
     assert body =~ "Queue"
     assert Dokkit.Digest.tick(late, config) == :not_yet
   end
+
+  test "Dokkit calls the outside address and keeps a row for itself" do
+    assert_receive_nothing = fn -> refute_received {:sent, _, _, _} end
+    assert_receive_nothing.()
+    Dokkit.Self.tick(DateTime.utc_now(), %{"heartbeat_url" => "https://beat.example/abc"})
+    assert_received {:sent, "beat.example", _, _}
+    assert %{state: :ok, version: version} = Repo.get_by!(Service, slug: "dokkit")
+    assert version =~ "."
+    assert [%{name: "database.size_mb"}] = Repo.all(Dokkit.Metric)
+  end
 end

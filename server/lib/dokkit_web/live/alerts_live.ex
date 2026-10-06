@@ -206,6 +206,20 @@ defmodule DokkitWeb.AlertsLive do
                 <.send_test channel="text" tests={@tests} />
                 <span class="hint">An address that turns a mail into a text message.</span>
               </dd>
+              <dt>Outside heartbeat</dt>
+              <dd>
+                <input
+                  class="inp"
+                  style="flex: 1 1 260px"
+                  name="alerts[heartbeat_url]"
+                  value={@config["heartbeat_url"]}
+                  placeholder="https://example.com/ping/your-check"
+                  aria-label="Outside heartbeat address"
+                />
+                <span class="hint">
+                  Dokkit calls this address every minute. Point it at a service that alerts when the calls stop, because Dokkit cannot tell anyone that it is down.
+                </span>
+              </dd>
               <dt>Daily digest</dt>
               <dd>
                 <input
