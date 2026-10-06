@@ -65,6 +65,10 @@ defmodule Dokkit.Keys do
     )
   end
 
+  def used(%Key{id: id}) do
+    Repo.update_all(from(k in Key, where: k.id == ^id), set: [used_at: DateTime.utc_now()])
+  end
+
   def revoke(id) do
     with {:ok, id} <- Ecto.UUID.cast(id) do
       Repo.update_all(from(k in Key, where: k.id == ^id), set: [revoked_at: DateTime.utc_now()])

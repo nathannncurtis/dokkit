@@ -82,6 +82,8 @@ The server stamps every item with its own receive time and records the sender's 
 - One log line: 64 KB. Longer lines are cut and marked as cut.
 - The last lines of a job's output: 16 KB.
 
+**Read and act, built so far:** `GET /inbox`, `/issues`, `/machines`, `/services`, `/services/<id>`, `/jobs`, `/jobs/<id>/runs` and `/logs`, and `POST /issues/<id>/snooze`, `/unsnooze` and `/acknowledge`, all with a user token made in Settings. Lists answer with `next` always null for now.
+
 ## Intake
 
 Machine key or app key.

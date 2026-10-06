@@ -49,6 +49,18 @@ defmodule DokkitWeb.Router do
     post "/enrol", IntakeController, :enrol
     put "/declare", IntakeController, :declare
     get "/ping", IntakeController, :hello
+
+    get "/inbox", ApiController, :inbox
+    get "/issues", ApiController, :issues
+    get "/machines", ApiController, :machines
+    get "/services", ApiController, :services
+    get "/services/:id", ApiController, :service
+    get "/jobs", ApiController, :jobs
+    get "/jobs/:id/runs", ApiController, :runs
+    get "/logs", ApiController, :logs
+    post "/issues/:id/snooze", ApiController, :snooze
+    post "/issues/:id/unsnooze", ApiController, :unsnooze
+    post "/issues/:id/acknowledge", ApiController, :acknowledge
     get "/in/:key/job/:name/:event", IntakeController, :ping
     post "/in/:key/job/:name/:event", IntakeController, :ping
   end
