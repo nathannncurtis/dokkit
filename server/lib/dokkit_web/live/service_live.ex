@@ -35,6 +35,15 @@ defmodule DokkitWeb.ServiceLive do
     {:noreply, load(socket)}
   end
 
+  def handle_event("note", %{"text" => text}, socket) do
+    issue = socket.assigns.issue
+
+    if issue && String.trim(text) != "" && socket.assigns.current_user.role != :viewer,
+      do: Issues.note(issue.id, String.trim(text), socket.assigns.current_user.name)
+
+    {:noreply, load(socket)}
+  end
+
   def handle_event(event, _, socket) when event in ~w(seen snooze back) do
     id = socket.assigns.issue && socket.assigns.issue.id
 
@@ -123,6 +132,25 @@ defmodule DokkitWeb.ServiceLive do
       </div>
       <div class="body rail">
         <div class="col">
+          <div :if={@issue} class="card">
+            <h2>Notes<span :if={@issue.notes != []} class="cnt">{length(@issue.notes)}</span></h2>
+            <div :for={n <- @issue.notes} class="li slim" style="--cols: minmax(0,1fr) auto">
+              <span>{n["text"]}</span>
+              <span class="st">{n["by"]}, {String.slice(to_string(n["at"]), 0, 16)
+              |> String.replace("T", " ")} UTC</span>
+            </div>
+            <form phx-submit="note" id="note-form" style="display: flex; gap: 8px; padding: 10px 14px">
+              <input
+                class="inp"
+                style="flex: 1 1 260px"
+                name="text"
+                placeholder="What you found or did"
+                aria-label="Add a note to this issue"
+                autocomplete="off"
+              />
+              <button class="btn sm" type="submit">Add</button>
+            </form>
+          </div>
           <div :if={@job} class="card">
             <h2>Runs<span :if={@runs != []} class="end">Newest first</span></h2>
             <p :if={@runs == []} class="lead">No run seen yet.</p>

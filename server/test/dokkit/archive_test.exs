@@ -26,7 +26,12 @@ defmodule Dokkit.ArchiveTest do
     assert Logs.archive(dir, ~D[2026-10-06]) == []
     assert Repo.aggregate(Log, :count) == 0
 
+    assert [%{name: "logs-2020-01", back_until: nil}] = Logs.archives(dir)
     assert Logs.restore(path) == 1
+    # Loaded back, it stays a week: not archived again, and not loaded twice.
+    assert Logs.archive(dir, ~D[2026-10-06]) == []
+    assert Logs.restore(path) == 0
+    assert [%{back_until: %DateTime{}}] = Logs.archives(dir)
     assert [%{msg: "an old line", level: "error", fields: %{"a" => 1}, at: ^at}] = Repo.all(Log)
   end
 end

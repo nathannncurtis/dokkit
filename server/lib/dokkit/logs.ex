@@ -129,6 +129,8 @@ defmodule Dokkit.Logs do
   def archive(dir, today \\ Date.utc_today()) do
     cutoff = Date.shift(Date.beginning_of_month(today), month: -@keep_months)
 
+    held = for {name, until} <- restored(), until > DateTime.utc_now(), do: name
+
     months =
       Repo.query!("""
       SELECT c.relname FROM pg_inherits i
@@ -139,7 +141,8 @@ defmodule Dokkit.Logs do
     for [name] <- months,
         [_, year, month] <- [Regex.run(~r/^logs_y(\d{4})m(\d{2})$/, name)],
         key = {String.to_integer(year), String.to_integer(month)},
-        Date.compare(Date.new!(elem(key, 0), elem(key, 1), 1), cutoff) == :lt do
+        Date.compare(Date.new!(elem(key, 0), elem(key, 1), 1), cutoff) == :lt,
+        "logs-#{year}-#{month}" not in held do
       File.mkdir_p!(dir)
       path = Path.join(dir, "logs-#{year}-#{month}.ndjson.gz")
 
@@ -157,8 +160,60 @@ defmodule Dokkit.Logs do
     end
   end
 
-  @doc "Loads an archived month back. Lines from a machine that no longer exists are left out."
+  @restored_days 7
+
+  # Months loaded back, each with the time it may be archived again.
+  defp restored do
+    for {name, until} <-
+          (Repo.get(Dokkit.Setting, "restored") || %Dokkit.Setting{value: %{}}).value,
+        {:ok, until, _} <- [DateTime.from_iso8601(until)],
+        into: %{},
+        do: {name, until}
+  end
+
+  @doc "The archived months in `dir`, newest first, each with whether it is loaded back now."
+  def archives(dir) do
+    now = DateTime.utc_now()
+    back = restored()
+
+    for file <- dir |> Path.join("logs-*.ndjson.gz") |> Path.wildcard() |> Enum.sort(:desc) do
+      name = Path.basename(file, ".ndjson.gz")
+      until = back[name]
+
+      %{
+        name: name,
+        path: file,
+        size: File.stat!(file).size,
+        back_until: if(until && DateTime.compare(until, now) == :gt, do: until)
+      }
+    end
+  end
+
+  @doc """
+  Loads an archived month back for a week. Lines from a machine that no longer exists are
+  left out. Loading a month that is already back does nothing.
+  """
   def restore(path) do
+    name = Path.basename(path, ".ndjson.gz")
+    now = DateTime.utc_now()
+
+    if match?(%DateTime{}, restored()[name]) and DateTime.compare(restored()[name], now) == :gt do
+      0
+    else
+      until = DateTime.add(now, @restored_days * 86_400)
+      value = Map.new(restored(), fn {k, v} -> {k, DateTime.to_iso8601(v)} end)
+
+      Repo.insert!(
+        %Dokkit.Setting{key: "restored", value: Map.put(value, name, DateTime.to_iso8601(until))},
+        on_conflict: {:replace, [:value, :updated_at]},
+        conflict_target: :key
+      )
+
+      load(path)
+    end
+  end
+
+  defp load(path) do
     machines = MapSet.new(Repo.all(from m in Dokkit.Machine, select: m.id))
     services = MapSet.new(Repo.all(from s in Dokkit.Service, select: s.id))
 

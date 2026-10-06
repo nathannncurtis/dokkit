@@ -30,6 +30,16 @@ defmodule DokkitWeb.SettingsLive do
     end)
   end
 
+  def handle_event("restore", %{"name" => name}, socket) do
+    owner(socket, fn ->
+      # Only a file the page listed, never a path from the browser.
+      with %{path: path} <- Enum.find(socket.assigns.archives, &(&1.name == name)),
+           do: Dokkit.Logs.restore(path)
+
+      socket
+    end)
+  end
+
   def handle_event("revoke", %{"id" => id}, socket) do
     owner(socket, fn ->
       Keys.revoke(id)
@@ -56,7 +66,15 @@ defmodule DokkitWeb.SettingsLive do
     {:noreply, load(socket)}
   end
 
-  defp load(socket), do: assign(socket, people: Accounts.list(), keys: Keys.list())
+  defp load(socket) do
+    dir = Application.get_env(:dokkit, :archive)
+
+    assign(socket,
+      people: Accounts.list(),
+      keys: Keys.list(),
+      archives: (dir && Dokkit.Logs.archives(dir)) || []
+    )
+  end
 
   def render(assigns) do
     assigns =
@@ -166,6 +184,33 @@ defmodule DokkitWeb.SettingsLive do
             <span :if={@new_token}>Shown only now.</span>
             <span class="end"><button class="btn primary" type="submit">Make a token</button></span>
           </form>
+        </div>
+        <div :if={@archives != []} class="card">
+          <h2>Archived logs<span class="cnt">{length(@archives)}</span></h2>
+          <p class="lead">Months older than a year. One loaded back can be searched for a week.</p>
+          <div
+            :for={a <- @archives}
+            class="li slim"
+            style="--cols: minmax(0,1fr) 90px auto"
+            id={"archive-#{a.name}"}
+          >
+            <span class="mono">{String.replace_prefix(a.name, "logs-", "")}</span>
+            <span class="st">{Float.round(a.size / 1_048_576, 1)} MB</span>
+            <span :if={a.back_until} class="tag">Loaded until {Calendar.strftime(
+              a.back_until,
+              "%b %-d"
+            )}</span>
+            <button
+              :if={!a.back_until}
+              class="btn sm"
+              type="button"
+              disabled={!@owner}
+              phx-click="restore"
+              phx-value-name={a.name}
+            >
+              Load back
+            </button>
+          </div>
         </div>
         <div class="card">
           <h2>Appearance</h2>

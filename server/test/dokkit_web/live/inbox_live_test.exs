@@ -127,4 +127,15 @@ defmodule DokkitWeb.InboxLiveTest do
     assert render_click(view, "restart") =~ "Stop starting it again"
     assert [%{restart: true}] = Dokkit.Found.checks(service.machine_id)
   end
+
+  test "a note is added to the open issue from its service page", %{conn: conn, service: service} do
+    {_, key} = Keys.mint(:app, %{service_id: service.id})
+    Intake.ping(key, "backup", "fail", nil, "")
+    {:ok, view, html} = live(conn, "/s/#{service.id}")
+    assert html =~ "What you found or did"
+
+    html = view |> form("#note-form", text: " Disk was full; cleared it ") |> render_submit()
+    assert html =~ "Disk was full; cleared it"
+    assert html =~ "sam,"
+  end
 end
