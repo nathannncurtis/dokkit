@@ -33,7 +33,7 @@ defmodule Dokkit.Numbers do
 
     # A threshold in a service's file reads that service's number, or the machine's.
     all = Repo.all(thresholds)
-    limit_of = &(&1.config["limit"] || machine_limit(&1.config["limit_from"]))
+    limit_of = &limit/1
     declared? = Enum.any?(all, &(&1.source == :file and is_number(limit_of.(&1))))
 
     for check <- all,
@@ -86,6 +86,9 @@ defmodule Dokkit.Numbers do
 
   defp machine_title("memory_limit", _), do: "Memory is nearly all in use"
   defp machine_title(_, _), do: nil
+
+  @doc "A check's limit, from its own config or the Alerts page; nil when there is none."
+  def limit(%Check{config: config}), do: config["limit"] || machine_limit(config["limit_from"])
 
   # nil when the limit on the Alerts page is blank, which switches it off.
   defp machine_limit(nil), do: nil
