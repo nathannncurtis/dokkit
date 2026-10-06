@@ -1,6 +1,6 @@
 # The Dokkit API (v1)
 
-This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom`, `beat`, `metric`, `stats`, `deploy` and `log` lines, `GET /services/<id>/series`, versions in `inventory`, `POST /deploys`, `POST /errors`, the ping URLs, `GET /ping`, `PUT /declare`, `POST /proposals`, `GET /checks`, taking work, and the read and act calls for issues (with notes and bulk actions), machines, services, versions, jobs, logs, errors, deploys, rules, proposals and tasks,, and for a service its routing, watching, interface-added checks, held version and restart. The `admin` calls are `GET`, `POST` and `DELETE` on `/keys` and `/users`: a new key is shown once, in the answer that made it, and the last owner cannot be removed. A token can accept or dismiss a found thing; a task is accepted by a person in the interface.
+This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom`, `beat`, `metric`, `stats`, `deploy` and `log` lines, `GET /services/<id>/series`, versions in `inventory`, `POST /deploys`, `POST /errors`, the ping URLs, `GET /ping`, `PUT /declare`, `POST /proposals`, `GET /checks`, taking work, and the read and act calls for issues (with notes and bulk actions), machines, services, versions, jobs, logs, errors, deploys, rules, proposals and tasks,, and for a service its routing, watching, interface-added checks, held version and restart. The `admin` calls are `GET`, `POST` and `DELETE` on `/keys` and `/users`, the rule calls, `PUT /services/<id>/checks` and `PUT /services/<id>/restart`: a new key is shown once, in the answer that made it, and the last owner cannot be removed. A token can accept or dismiss a found thing; a task is accepted by a person in the interface.
 
 ## One rule
 
@@ -191,7 +191,7 @@ POST /api/<project>/envelope/       reports from Sentry's open-source SDKs
 
 ## Read
 
-A login session, or a user token with `read`. Log contents need `read-logs`: without it, job output, task output, error messages and issue notes are left out of every answer.
+A login session, or a user token with `read`. Log contents need `read-logs`: without it, job output, task output, error messages and the notes on issues, services and checks are left out of every answer.
 
 | Call | Gives |
 |---|---|

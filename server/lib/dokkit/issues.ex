@@ -100,8 +100,12 @@ defmodule Dokkit.Issues do
 
   defp set(ids, change) do
     ids = for id <- List.wrap(ids), match?({:ok, _}, Ecto.UUID.cast(id)), do: id
-    Repo.update_all(from(i in Issue, where: i.id in ^ids and is_nil(i.closed_at)), set: change)
+
+    {count, _} =
+      Repo.update_all(from(i in Issue, where: i.id in ^ids and is_nil(i.closed_at)), set: change)
+
     changed(false)
+    count
   end
 
   def open_count, do: length(open_list())

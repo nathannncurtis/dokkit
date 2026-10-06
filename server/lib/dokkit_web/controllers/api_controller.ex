@@ -197,7 +197,7 @@ defmodule DokkitWeb.ApiController do
   def snooze(conn, %{"id" => id, "until" => until}) do
     case seconds_until(until) do
       {:ok, seconds} ->
-        known(conn, id, fn -> Issues.snooze(id, seconds) end)
+        known(conn, fn -> Issues.snooze(id, seconds) end)
 
       :error ->
         fail(conn, 422, "bad_time", "until must be a time in the future, in RFC 3339.")
@@ -206,16 +206,11 @@ defmodule DokkitWeb.ApiController do
 
   def snooze(conn, _), do: fail(conn, 422, "bad_time", "Needs until.")
 
-  def unsnooze(conn, %{"id" => id}), do: known(conn, id, fn -> Issues.unsnooze(id) end)
-  def acknowledge(conn, %{"id" => id}), do: known(conn, id, fn -> Issues.acknowledge(id) end)
+  def unsnooze(conn, %{"id" => id}), do: known(conn, fn -> Issues.unsnooze(id) end)
+  def acknowledge(conn, %{"id" => id}), do: known(conn, fn -> Issues.acknowledge(id) end)
 
-  defp known(conn, id, act) do
-    if Read.one_issue(id) do
-      act.()
-      json(conn, %{ok: true})
-    else
-      missing(conn)
-    end
+  defp known(conn, act) do
+    if act.() > 0, do: json(conn, %{ok: true}), else: missing(conn)
   end
 
   def seconds_until(text) do
@@ -250,13 +245,15 @@ defmodule DokkitWeb.ApiController do
   # read-logs, keys, people, rules, checks and restart need admin, and anything else
   # changes something.
   defp scope(conn, _) do
+    path = Enum.map(conn.path_info, &URI.decode/1)
+
     scope =
-      case {conn.method, Enum.at(conn.path_info, 2)} do
+      case {conn.method, Enum.at(path, 2)} do
         {_, area} when area in ["keys", "users"] -> "admin"
         {"GET", "logs"} -> "read-logs"
         {"GET", _} -> "read"
         {_, "rules"} -> "admin"
-        _ -> if List.last(conn.path_info) in ["checks", "restart"], do: "admin", else: "act"
+        _ -> if List.last(path) in ["checks", "restart"], do: "admin", else: "act"
       end
 
     if scope in conn.assigns.key.scopes,

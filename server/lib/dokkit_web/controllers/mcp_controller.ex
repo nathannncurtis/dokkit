@@ -26,7 +26,10 @@ defmodule DokkitWeb.McpController do
      %{
        "q" => @text,
        "level" => %{"type" => "string", "enum" => Dokkit.Logs.levels()},
-       "service" => @text
+       "service" => @text,
+       "machine" => @text,
+       "from" => @text,
+       "to" => @text
      }, []},
     {"snooze", "act",
      "Snooze an issue until a time (RFC 3339). Takes the issue id from attention.",
@@ -138,8 +141,7 @@ defmodule DokkitWeb.McpController do
   defp tool("snooze", %{"id" => id, "until" => until}) do
     case DokkitWeb.ApiController.seconds_until(until) do
       {:ok, seconds} ->
-        Issues.snooze(id, seconds)
-        %{ok: true}
+        known(Issues.snooze(id, seconds))
 
       :error ->
         {:error, "until must be a time in the future, in RFC 3339."}
@@ -147,8 +149,7 @@ defmodule DokkitWeb.McpController do
   end
 
   defp tool("acknowledge", %{"id" => id}) do
-    Issues.acknowledge(id)
-    %{ok: true}
+    known(Issues.acknowledge(id))
   end
 
   defp tool("since_deploy", %{"id" => id}),
@@ -166,6 +167,9 @@ defmodule DokkitWeb.McpController do
   end
 
   defp tool(_, _), do: {:error, "That tool needs different arguments."}
+
+  defp known(0), do: {:error, "No open issue with that id."}
+  defp known(_), do: %{ok: true}
 
   defp clean(data, scopes),
     do: if("read-logs" in scopes, do: data, else: Read.without_logs(data))

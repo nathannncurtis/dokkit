@@ -144,7 +144,7 @@ defmodule Dokkit.Read do
     with %{} = s <- Estate.service(id), do: Enum.map(Estate.runs(s, 100), &run/1)
   end
 
-  @log_keys [:tail, :output, :message, :notes]
+  @log_keys [:tail, :output, :message, :notes, :note]
 
   @doc "The answer without job output, task output, error messages and issue notes, for a token that may not read logs."
   def without_logs(%{__struct__: _} = x), do: x
@@ -269,9 +269,11 @@ defmodule Dokkit.Read do
 
   defp time(nil, default), do: {:ok, default}
 
-  defp time(text, _) do
+  defp time(text, _) when is_binary(text) do
     with {:ok, at, _} <- DateTime.from_iso8601(text), do: {:ok, at}
   end
+
+  defp time(_, _), do: :error
 
   def rules, do: Dokkit.Alerts.rules()
 

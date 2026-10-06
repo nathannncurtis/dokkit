@@ -32,10 +32,11 @@ defmodule DokkitWeb.ApiControllerTest do
 
     assert %{
              "title" => "Nightly backup failed",
-             "note" => "disk full",
              "machine" => "nas",
              "short_id" => "DOK-" <> _
            } = issue
+
+    refute Map.has_key?(issue, "note")
 
     assert %{"items" => [%{"name" => "nas", "needs_a_look" => 1}], "next" => nil} =
              json_response(call(:get, "/machines", read), 200)
@@ -95,13 +96,53 @@ defmodule DokkitWeb.ApiControllerTest do
     assert json_response(call(:post, "/issues/nope/acknowledge", all), 404)
   end
 
+  test "a closed issue is not found when acknowledged", %{all: all, job: job} do
+    [issue] = Issues.open_list()
+
+    post(
+      build_conn() |> put_req_header("content-type", "text/plain"),
+      "/api/v1/in/#{job.key}/job/nightly-backup/ok",
+      ""
+    )
+
+    assert json_response(call(:post, "/issues/#{issue.id}/acknowledge", all), 404)
+  end
+
+  test "a scope follows the call, not how the path is spelled", %{job: job} do
+    {act, _} = Keys.mint(:user, %{scopes: ["read", "act"]})
+    {read, _} = Keys.mint(:user, %{scopes: ["read"]})
+    id = job.service.id
+    assert json_response(call(:put, "/services/#{id}/%72estart", act, %{allow: true}), 403)
+    assert json_response(call(:put, "/services/#{id}/%63hecks", act, %{checks: []}), 403)
+    assert json_response(call(:post, "/%72ules", act, %{}), 403)
+    assert json_response(call(:post, "/%6Beys", act, %{}), 403)
+    assert json_response(call(:get, "/%6Cogs", read), 403)
+  end
+
   test "logs are filtered by machine and by time", %{all: all} do
-    assert %{"items" => [_]} = json_response(call(:get, "/logs?machine=nas", all), 200)
+    {:ok, other} =
+      Estate.add_job(%{"name" => "Zeta sync", "machine" => "zetabox", "schedule" => "0 2 * * *"})
+
+    report(other.key, [%{type: "log", level: "error", msg: "zeta line"}])
+
+    assert %{"items" => [%{"msg" => "rsync: disk full"}]} =
+             json_response(call(:get, "/logs?machine=nas", all), 200)
+
+    assert %{"items" => [%{"msg" => "zeta line"}]} =
+             json_response(call(:get, "/logs?machine=zetabox", all), 200)
+
+    %{"items" => machines} = json_response(call(:get, "/machines", all), 200)
+    %{"id" => zeta} = Enum.find(machines, &(&1["name"] == "zetabox"))
+
+    assert %{"items" => [%{"msg" => "zeta line"}]} =
+             json_response(call(:get, "/logs?machine=#{zeta}", all), 200)
+
+    assert json_response(call(:get, "/logs?from[]=x", all), 404)
 
     assert %{"items" => []} =
              json_response(call(:get, "/logs?from=2999-01-01T00:00:00Z", all), 200)
 
-    assert %{"items" => [_]} =
+    assert %{"items" => [_ | _]} =
              json_response(call(:get, "/logs?to=2999-01-01T00:00:00Z", all), 200)
 
     assert %{"items" => []} = json_response(call(:get, "/logs?to=2000-01-01T00:00:00Z", all), 200)
