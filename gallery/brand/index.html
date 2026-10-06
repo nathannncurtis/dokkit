@@ -28,8 +28,8 @@
     <h1>One place that says what <span>needs a look.</span></h1>
     <div class="lede">
       <p>Dokkit watches your servers, jobs, logs and errors from a server you host yourself, and keeps the list short. Its first screen is below, and it works.</p>
-      <div class="cmd"><code id="c0">docker compose up -d</code><button class="btn" data-copy="c0">Copy</button></div>
-      <a class="quiet" href="#install">or as a Windows service</a>
+      <div class="cmd"><code id="c0">curl -fsSL https://dokkit.dev/install.sh | sudo sh -s -- your.domain.com</code><button class="btn" data-copy="c0">Copy</button></div>
+      <a class="quiet" href="#install">or from source, or as a Windows service</a>
     </div>
 
     <div class="win" aria-label="A working sample of Dokkit">
@@ -98,12 +98,23 @@
         <h2>Yours to run.</h2>
         <p>One server. Then one small program on each machine you want watched.</p>
       </div>
-      <ol class="steps">
-        <li><b>The server, in Docker</b><div class="cmd"><code id="c1">docker compose up -d</code><button class="btn" data-copy="c1">Copy</button></div></li>
-        <li><b>or on Windows, as a service</b><div class="cmd"><code id="c2">.\install.ps1 -Postgres C:\pgsql</code><button class="btn" data-copy="c2">Copy</button></div></li>
-        <li><b>Each machine</b><div class="cmd"><code id="c3">dokkit enrol https://your-server &lt;token&gt;</code><button class="btn" data-copy="c3">Copy</button></div></li>
-        <li><b>Each app, in its own repo</b><div class="cmd"><code id="c4">dokkit init</code><button class="btn" data-copy="c4">Copy</button></div></li>
-      </ol>
+      <div class="steps">
+        <div>
+          <h3>The server, one of these</h3>
+          <ol>
+            <li><b>A fresh Debian or Ubuntu VPS, with a domain pointed at it</b><div class="cmd"><code id="c1">curl -fsSL https://dokkit.dev/install.sh | sudo sh -s -- your.domain.com</code><button class="btn" data-copy="c1">Copy</button></div></li>
+            <li><b>The same, from a checkout of the source</b><div class="cmd"><code id="c5">sudo sh server/install.sh your.domain.com</code><button class="btn" data-copy="c5">Copy</button></div></li>
+            <li><b>Windows, as a service</b><div class="cmd"><code id="c2">.\install.ps1 -Postgres C:\pgsql</code><button class="btn" data-copy="c2">Copy</button></div></li>
+          </ol>
+        </div>
+        <div>
+          <h3>Then</h3>
+          <ol>
+            <li><b>On each machine you want watched</b><div class="cmd"><code id="c3">dokkit enrol https://your.domain.com &lt;token&gt;</code><button class="btn" data-copy="c3">Copy</button></div></li>
+            <li><b>In each app's own repo</b><div class="cmd"><code id="c4">dokkit init</code><button class="btn" data-copy="c4">Copy</button></div></li>
+          </ol>
+        </div>
+      </div>
       <div class="needs" id="needs">
         <h3>What the server needs</h3>
         <table>
