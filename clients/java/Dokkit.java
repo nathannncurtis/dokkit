@@ -8,7 +8,8 @@
 //     java.util.logging.Logger.getLogger("").addHandler(Dokkit.handler());
 //
 // Nothing here throws into the app or waits on the network. Lines wait in a queue of fixed
-// size and a background thread sends them. Error message text is never sent.
+// size and a background thread sends them. Error message text is never sent. An http:// address
+// to another machine keeps the library off unless DOKKIT_INSECURE=1.
 
 import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
@@ -25,6 +26,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Handler;
 import java.util.logging.LogRecord;
 import java.util.stream.Collectors;
@@ -32,14 +35,18 @@ import java.util.zip.GZIPOutputStream;
 
 public final class Dokkit {
     private static final int QUEUE = 1000;
+    private static final int QUEUE_BYTES = 4 << 20; // counted in chars, about
     private static final Object gate = new Object();
-    private static final ArrayDeque<Map<String, Object>> lines = new ArrayDeque<>();
+    private static final Object sending = new Object();
+    private static final ArrayDeque<String> lines = new ArrayDeque<>();
+    private static int lineBytes;
+    private static Batch retry;
     private static final ArrayDeque<Map<String, Object>> errors = new ArrayDeque<>();
     private static HttpClient http;
     private static String url, key, version, environment, host;
     private static int dropped;
 
-    /** Frames of classes whose names start with this are the app's own. Blank means everything outside the JDK. */
+    /** Frames of classes whose names start with this are the app's own. Blank means every frame that is not the JDK's or this library's; set it to the app's package to be exact. */
     public static String own = "";
 
     private Dokkit() {}
@@ -52,11 +59,15 @@ public final class Dokkit {
     public static synchronized void start(String version, String url, String key) {
         try {
             if (url == null || url.isEmpty() || key == null || key.isEmpty() || http != null) return;
+            if (!safe(url)) {
+                System.err.println("dokkit: " + url + " is not https and not this machine; staying off. Set DOKKIT_INSECURE=1 to allow it.");
+                return;
+            }
             Dokkit.url = url.replaceAll("/+$", "");
             Dokkit.key = key;
             Dokkit.version = version;
             environment = System.getenv("DOKKIT_ENV");
-            host = InetAddress.getLocalHost().getHostName();
+            host = hostName();
             http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
             Thread sender = new Thread(() -> {
                 while (true) {
@@ -68,14 +79,33 @@ public final class Dokkit {
             }, "dokkit");
             sender.setDaemon(true);
             sender.start();
-            Runtime.getRuntime().addShutdownHook(new Thread(Dokkit::flush));
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> { flush(); flush(); }));
             if (version != null) add(line("deploy", "version", version));
         } catch (Exception e) {
             http = null;
         }
     }
 
-    /** How many lines were dropped because the queue was full. */
+    private static boolean safe(String url) {
+        if (!url.regionMatches(true, 0, "http://", 0, 7) || "1".equals(System.getenv("DOKKIT_INSECURE"))) return true;
+        String host = URI.create(url).getHost();
+        return host != null && (host.equals("localhost") || host.equals("[::1]") || host.equals("127.0.0.1"));
+    }
+
+    // A lookup can stall for seconds, so it gets two and then the environment's answer.
+    private static String hostName() {
+        try {
+            return CompletableFuture.supplyAsync(() -> {
+                try { return InetAddress.getLocalHost().getHostName(); } catch (Exception e) { throw new RuntimeException(e); }
+            }).get(2, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            String name = System.getenv("COMPUTERNAME");
+            if (name == null || name.isEmpty()) name = System.getenv("HOSTNAME");
+            return name == null || name.isEmpty() ? "unknown" : name;
+        }
+    }
+
+    /** How many lines were dropped because the queue was full or could not be sent. */
     public static int dropped() { return dropped; }
 
     public static void beat(String name) { beat(name, 60); }
@@ -144,6 +174,7 @@ public final class Dokkit {
         try {
             if (http == null || error == null) return;
             List<Object> frames = new ArrayList<>();
+            String mine = own;
             StackTraceElement[] stack = error.getStackTrace();
             // Innermost last, as the format asks.
             for (int i = stack.length - 1; i >= 0; i--) {
@@ -151,7 +182,7 @@ public final class Dokkit {
                 boolean jdk = type.startsWith("java.") || type.startsWith("javax.") || type.startsWith("jdk.") || type.startsWith("sun.");
                 frames.add(pairs("file", type, "function", stack[i].getMethodName(),
                         "line", stack[i].getLineNumber() > 0 ? stack[i].getLineNumber() : null,
-                        "own", own.isEmpty() ? !jdk : type.startsWith(own)));
+                        "own", mine.isEmpty() ? !jdk && !type.equals("Dokkit") : type.startsWith(mine)));
             }
             Map<String, Object> report = pairs("at", Instant.now().toString(), "type", error.getClass().getSimpleName(),
                     "handled", handled, "release", version, "environment", environment, "host", host,
@@ -171,6 +202,7 @@ public final class Dokkit {
         Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
             capture(error, false);
             flush();
+            flush();
             if (before != null) before.uncaughtException(thread, error);
         });
     }
@@ -189,45 +221,80 @@ public final class Dokkit {
 
     /** Sends what is waiting. Called for you when the app exits. */
     public static void flush() {
-        try {
-            while (http != null) {
-                Map<String, Object> error;
-                List<Map<String, Object>> batch = new ArrayList<>();
-                synchronized (gate) {
-                    error = errors.poll();
-                    while (error == null && !lines.isEmpty() && batch.size() < 500) batch.add(lines.poll());
+        synchronized (sending) {
+            try {
+                while (http != null) {
+                    Batch batch = retry != null ? retry : next();
+                    retry = null;
+                    if (batch == null) return;
+                    int status;
+                    try { status = post(batch); } catch (Exception e) { status = 599; }
+                    if (status < 400) continue;
+                    // A failed batch gets one more try; what is lost then is counted.
+                    boolean again = (status >= 500 || status == 429) && batch.gzip;
+                    if (again && ++batch.tries < 2) retry = batch;
+                    else synchronized (gate) { dropped += batch.count; }
+                    if (again) return;
                 }
-                if (error != null) {
-                    post("/api/v1/errors", json(error).getBytes(StandardCharsets.UTF_8), "application/json", false);
-                } else if (batch.isEmpty()) {
-                    return;
-                } else {
-                    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                    try (GZIPOutputStream z = new GZIPOutputStream(buffer)) {
-                        z.write(batch.stream().map(Dokkit::json).collect(Collectors.joining("\n")).getBytes(StandardCharsets.UTF_8));
-                    }
-                    post("/api/v1/report", buffer.toByteArray(), "application/x-ndjson", true);
-                }
+            } catch (Exception e) {
+                // What could not be sent is dropped. The app is never told.
             }
-        } catch (Exception e) {
-            // What could not be sent is dropped. The app is never told.
         }
     }
 
-    private static void post(String path, byte[] body, String kind, boolean gzip) throws Exception {
-        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(url + path)).timeout(Duration.ofSeconds(10))
-                .header("Authorization", "Bearer " + key).header("Content-Type", kind)
-                .POST(HttpRequest.BodyPublishers.ofByteArray(body));
-        if (gzip) request.header("Content-Encoding", "gzip").header("Dokkit-Batch", UUID.randomUUID().toString());
-        http.send(request.build(), HttpResponse.BodyHandlers.discarding());
+    private static final class Batch {
+        final String path, kind;
+        final byte[] body;
+        final boolean gzip;
+        final int count;
+        final String id = UUID.randomUUID().toString();
+        int tries;
+
+        Batch(String path, byte[] body, String kind, boolean gzip, int count) {
+            this.path = path; this.body = body; this.kind = kind; this.gzip = gzip; this.count = count;
+        }
+    }
+
+    private static Batch next() throws Exception {
+        Map<String, Object> error;
+        List<String> batch = new ArrayList<>();
+        synchronized (gate) {
+            error = errors.poll();
+            while (error == null && !lines.isEmpty() && batch.size() < 500) {
+                String line = lines.poll();
+                lineBytes -= line.length();
+                batch.add(line);
+            }
+        }
+        if (error != null) return new Batch("/api/v1/errors", json(error).getBytes(StandardCharsets.UTF_8), "application/json", false, 1);
+        if (batch.isEmpty()) return null;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try (GZIPOutputStream z = new GZIPOutputStream(buffer)) {
+            z.write(String.join("\n", batch).getBytes(StandardCharsets.UTF_8));
+        }
+        return new Batch("/api/v1/report", buffer.toByteArray(), "application/x-ndjson", true, batch.size());
+    }
+
+    private static int post(Batch batch) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(url + batch.path)).timeout(Duration.ofSeconds(10))
+                .header("Authorization", "Bearer " + key).header("Content-Type", batch.kind)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(batch.body));
+        if (batch.gzip) request.header("Content-Encoding", "gzip").header("Dokkit-Batch", batch.id);
+        return http.send(request.build(), HttpResponse.BodyHandlers.discarding()).statusCode();
     }
 
     private static void add(Map<String, Object> line) {
         if (http == null) return;
         line.put("host", host);
+        String text = json(line);
         synchronized (gate) {
-            if (lines.size() >= QUEUE) { lines.poll(); dropped++; }
-            lines.add(line);
+            if (text.length() > QUEUE_BYTES) { dropped++; return; }
+            while (!lines.isEmpty() && (lines.size() >= QUEUE || lineBytes + text.length() > QUEUE_BYTES)) {
+                lineBytes -= lines.poll().length();
+                dropped++;
+            }
+            lines.add(text);
+            lineBytes += text.length();
         }
     }
 
@@ -248,7 +315,7 @@ public final class Dokkit {
 
     private static final class Raw {
         final String text;
-        Raw(String text) { this.text = text; }
+        Raw(String text) { this.text = text.replace('\r', ' ').replace('\n', ' '); }
     }
 
     private static String json(Object value) {

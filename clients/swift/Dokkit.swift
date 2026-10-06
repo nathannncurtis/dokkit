@@ -8,37 +8,64 @@
 //
 // With no address or key, `start` reads DOKKIT_URL and DOKKIT_KEY; blank means off. Nothing
 // here throws into the app or waits on the network. Lines wait in a queue of fixed size and
-// a timer sends them. Error message text is never sent.
+// a timer sends them. Error message text is never sent. An http:// address to another machine
+// keeps the library off unless DOKKIT_INSECURE=1.
 
 import Foundation
 
 public enum Dokkit {
     private static let queue = DispatchQueue(label: "dokkit")
     private static var on: (url: String, key: String, version: String?, environment: String?, host: String)?
-    private static var lines: [[String: Any]] = []
+    private static var lines: [String] = []
+    private static var lineBytes = 0
     private static var errors: [[String: Any]] = []
+    private static var retry: [Batch] = []
+    private static let queueBytes = 4 << 20
+    private static let stamp = ISO8601DateFormatter()
+
+    private struct Batch {
+        let path: String, body: Data, kind: String, count: Int
+        let id = UUID().uuidString
+        var tries = 0
+    }
     private static var timer: DispatchSourceTimer?
     private static var droppedCount = 0
 
-    /// How many lines were dropped because the queue was full.
+    /// How many lines were dropped because the queue was full or could not be sent.
     public static var dropped: Int { queue.sync { droppedCount } }
 
     /// Turns the library on. With no address or key it stays off and every call does nothing.
-    public static func start(version: String? = nil, environment: String? = nil, url: String? = nil, key: String? = nil) {
+    /// `host` names this machine; without it the system's host name is used, and a generic name on phones and tablets.
+    public static func start(version: String? = nil, environment: String? = nil, url: String? = nil, key: String? = nil, host: String? = nil) {
         let env = ProcessInfo.processInfo.environment
         guard let url = url ?? env["DOKKIT_URL"], let key = key ?? env["DOKKIT_KEY"], !url.isEmpty, !key.isEmpty else { return }
-        queue.sync {
-            guard on == nil else { return }
-            var address = url
-            while address.hasSuffix("/") { address.removeLast() }
-            on = (address, key, version, environment ?? env["DOKKIT_ENV"], ProcessInfo.processInfo.hostName)
-            let t = DispatchSource.makeTimerSource(queue: queue)
-            t.schedule(deadline: .now() + 2, repeating: 2)
-            t.setEventHandler { send() }
-            t.resume()
-            timer = t
+        if url.lowercased().hasPrefix("http://") && env["DOKKIT_INSECURE"] != "1" {
+            let name = URL(string: url)?.host ?? ""
+            if name != "localhost" && name != "::1" && name != "127.0.0.1" {
+                FileHandle.standardError.write(Data("dokkit: \(url) is not https and not this machine; staying off. Set DOKKIT_INSECURE=1 to allow it.\n".utf8))
+                return
+            }
         }
-        if let version = version { add(["type": "deploy", "version": version]) }
+        // The host name can take seconds to look up, so it is read on the queue, never on the caller's thread.
+        DispatchQueue.global().async {
+            #if os(macOS) || os(Linux)
+            let name = host ?? ProcessInfo.processInfo.hostName
+            #else
+            let name = host ?? "device"
+            #endif
+            queue.async {
+                guard on == nil else { return }
+                var address = url
+                while address.hasSuffix("/") { address.removeLast() }
+                on = (address, key, version, environment ?? env["DOKKIT_ENV"], name)
+                let t = DispatchSource.makeTimerSource(queue: queue)
+                t.schedule(deadline: .now() + 2, repeating: 2)
+                t.setEventHandler { send() }
+                t.resume()
+                timer = t
+                if let version = version { add(["type": "deploy", "version": version]) }
+            }
+        }
     }
 
     public static func beat(_ name: String, everySeconds: Int = 60) {
@@ -122,14 +149,21 @@ public enum Dokkit {
     private static func add(_ line: [String: Any?]) {
         queue.async {
             guard let on = on else { return }
-            if lines.count >= 1000 {
-                lines.removeFirst()
-                droppedCount += 1
-            }
             var line = clean(line)
             line["at"] = now()
             line["host"] = on.host
-            lines.append(line)
+            guard JSONSerialization.isValidJSONObject(line), let data = try? JSONSerialization.data(withJSONObject: line),
+                  let text = String(data: data, encoding: .utf8) else { return }
+            if text.utf8.count > queueBytes {
+                droppedCount += 1
+                return
+            }
+            while !lines.isEmpty && (lines.count >= 1000 || lineBytes + text.utf8.count > queueBytes) {
+                lineBytes -= lines.removeFirst().utf8.count
+                droppedCount += 1
+            }
+            lines.append(text)
+            lineBytes += text.utf8.count
         }
     }
 
@@ -138,33 +172,55 @@ public enum Dokkit {
         line.compactMapValues { $0 }
     }
 
-    private static func now() -> String { ISO8601DateFormatter().string(from: Date()) }
+    private static func now() -> String { stamp.string(from: Date()) }
 
-    // Runs on the queue. What cannot be sent is dropped. The app is never told.
+    // Runs on the queue. A failed batch gets one more try; what is lost then is counted. The app is never told.
     private static func send(wait: Bool = false) {
         guard let on = on else { return }
         let done = DispatchGroup()
-        func post(_ path: String, _ body: Data, _ kind: String) {
-            guard let url = URL(string: on.url + path) else { return }
+        func post(_ batch: Batch) {
+            guard let url = URL(string: on.url + batch.path) else {
+                droppedCount += batch.count
+                return
+            }
             var request = URLRequest(url: url, timeoutInterval: 10)
             request.httpMethod = "POST"
-            request.httpBody = body
+            request.httpBody = batch.body
             request.setValue("Bearer " + on.key, forHTTPHeaderField: "Authorization")
-            request.setValue(kind, forHTTPHeaderField: "Content-Type")
-            request.setValue(UUID().uuidString, forHTTPHeaderField: "Dokkit-Batch")
+            request.setValue(batch.kind, forHTTPHeaderField: "Content-Type")
+            request.setValue(batch.id, forHTTPHeaderField: "Dokkit-Batch")
             done.enter()
-            URLSession.shared.dataTask(with: request) { _, _, _ in done.leave() }.resume()
+            URLSession.shared.dataTask(with: request) { _, response, _ in
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 599
+                if status >= 400 {
+                    queue.async {
+                        var batch = batch
+                        if (status >= 500 || status == 429) && batch.tries == 0 && batch.path == "/api/v1/report" {
+                            batch.tries = 1
+                            retry.append(batch)
+                        } else {
+                            droppedCount += batch.count
+                        }
+                    }
+                }
+                done.leave()
+            }.resume()
         }
-        for error in errors {
-            if let body = try? JSONSerialization.data(withJSONObject: error) { post("/api/v1/errors", body, "application/json") }
-        }
-        errors = []
-        while !lines.isEmpty {
-            let batch = lines.prefix(500).compactMap { line in
-                (try? JSONSerialization.data(withJSONObject: line)).flatMap { String(data: $0, encoding: .utf8) }
+        let again = retry
+        retry = []
+        again.forEach(post)
+        // At most ten errors a tick; the rest wait for the next one.
+        for error in errors.prefix(10) {
+            if let body = try? JSONSerialization.data(withJSONObject: error) {
+                post(Batch(path: "/api/v1/errors", body: body, kind: "application/json", count: 1))
             }
-            lines.removeFirst(min(500, lines.count))
-            post("/api/v1/report", Data(batch.joined(separator: "\n").utf8), "application/x-ndjson")
+        }
+        errors.removeFirst(min(10, errors.count))
+        while !lines.isEmpty {
+            let batch = Array(lines.prefix(500))
+            lines.removeFirst(batch.count)
+            lineBytes -= batch.reduce(0) { $0 + $1.utf8.count }
+            post(Batch(path: "/api/v1/report", body: Data(batch.joined(separator: "\n").utf8), kind: "application/x-ndjson", count: batch.count))
         }
         if wait { _ = done.wait(timeout: .now() + 10) }
     }

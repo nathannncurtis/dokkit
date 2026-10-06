@@ -37,7 +37,8 @@ namespace Dokkit
             public void Log<TState>(LogLevel level, EventId id, TState state, Exception error, Func<TState, Exception, string> format)
             {
                 if (!IsEnabled(level)) return;
-                Client.Log(Name(level), format(state, error));
+                // The app's own formatter can throw; that never reaches the app through here.
+                try { Client.Log(Name(level), format(state, error)); } catch { }
                 // The error goes to the Errors page by its type and stack. Its message stays here.
                 if (error != null) Client.Capture(error);
             }
