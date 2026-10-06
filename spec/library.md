@@ -36,7 +36,7 @@ An app using the library reports its host name. The host shows up in Dokkit as a
 
 ## Languages
 
-Python, C#, JavaScript, Go, Elixir and Rust. Any other language can use the plain API or the ping URLs in `api.md` until it has a library.
+Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP and PowerShell. Any other language can use the plain API or the ping URLs in `api.md` until it has a library.
 
 ## Built so far
 
@@ -51,5 +51,11 @@ Python, C#, JavaScript, Go, Elixir and Rust. Any other language can use the plai
 `clients/elixir/lib/dokkit.ex`: one file, no packages, Elixir 1.18 or later. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture`, and the module is itself a `:logger` handler.
 
 `clients/rust/src/lib.rs`: one file and one package, `ureq`, for HTTPS. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture` and `catch_unhandled` for panics. A report carries one frame, the file and line that reported it, and lines carry no time of their own: the server stamps them when they arrive.
+
+`clients/java/Dokkit.java`: one file, no packages, Java 11 or later. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture`, `catchUnhandled`, and `handler` for `java.util.logging`. Kotlin and Scala use it as it is.
+
+`clients/php/Dokkit.php`: one file, no packages or extensions, PHP 8.0 or later. `Dokkit::start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture` and `catchUnhandled`. PHP has no background thread, so lines are sent when the request or script ends, after the response has gone out where PHP allows it.
+
+`clients/powershell/Dokkit.psm1`: one file, for Windows PowerShell 5.1 and PowerShell 7. `Start-Dokkit`, `Send-DokkitBeat`, `Invoke-DokkitJob`, `Send-DokkitProgress`, `Send-DokkitCheck`, `Send-DokkitMetric`, `Write-DokkitLog`, `Send-DokkitError` and `Send-Dokkit`. Lines are sent when a job ends or when `Send-Dokkit` is called.
 
 All of them send the host name, and the server records that host as a machine that was seen. The app's version on each host is not kept per host yet.
