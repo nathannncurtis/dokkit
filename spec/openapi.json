@@ -29,11 +29,11 @@
     },
     {
       "name": "Act",
-      "description": "Snooze and acknowledge issues, route and hold services, accept found things and run tasks. User token with `act`."
+      "description": "Snooze and acknowledge issues, route and hold services, accept found things, run tasks, keep error text and set when a job is late. User token with `act`."
     },
     {
       "name": "Admin",
-      "description": "Keys, people, alert rules, interface-added checks and restart. User token with `admin`."
+      "description": "Keys, people, alert rules and settings, interface-added checks, restart, making jobs, accepting tasks, updating the program and loading logs back. User token with `admin`."
     },
     {
       "name": "MCP",
@@ -3774,7 +3774,9 @@
                         "tail": "Purged 412 files."
                       },
                       "last_good_run": null,
-                      "next_expected": "2026-10-06T02:00:00Z"
+                      "next_expected": "2026-10-06T02:00:00Z",
+                      "grace": "30m",
+                      "max_runtime": null
                     }
                   ],
                   "next": null
@@ -3819,6 +3821,132 @@
           {
             "userToken": [
               "read"
+            ]
+          }
+        ]
+      },
+      "post": {
+        "operationId": "addJob",
+        "summary": "Add a job to watch",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Adds a job and its machine if it is new. The key and the addresses the job calls are returned once. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "machine"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "machine": {
+                    "type": "string",
+                    "description": "A machine name. A new name adds the machine."
+                  },
+                  "schedule": {
+                    "type": "string",
+                    "description": "A cron line, read as UTC."
+                  },
+                  "grace": {
+                    "type": "string",
+                    "description": "Such as 30m, 2h or 1d."
+                  },
+                  "max_runtime": {
+                    "type": "string",
+                    "description": "Such as 30m, 2h or 1d."
+                  }
+                }
+              },
+              "example": {
+                "name": "Weekly report",
+                "machine": "nas",
+                "schedule": "0 2 * * 1",
+                "grace": "20m"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The job, with its key shown once.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobAdded"
+                },
+                "example": {
+                  "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                  "name": "Weekly report",
+                  "key": "dka_3f9c0d2e7b4a",
+                  "ping": {
+                    "start": "https://your.domain.com/api/v1/in/dka_3f9c0d2e7b4a/job/weekly-report/start",
+                    "ok": "https://your.domain.com/api/v1/in/dka_3f9c0d2e7b4a/job/weekly-report/ok",
+                    "fail": "https://your.domain.com/api/v1/in/dka_3f9c0d2e7b4a/job/weekly-report/fail"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_job",
+                    "message": "A job needs a name and the machine it runs on."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
             ]
           }
         ]
@@ -4297,6 +4425,25 @@
                     },
                     "next": {
                       "type": "null"
+                    },
+                    "program": {
+                      "type": "object",
+                      "description": "held is the program version this server gives machines to fetch, or null. machines lists what each machine runs.",
+                      "properties": {
+                        "held": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "machines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "description": "A machine: id, machine and version."
+                          }
+                        }
+                      }
                     }
                   }
                 },
@@ -4316,7 +4463,17 @@
                     }
                   ],
                   "apps": [],
-                  "next": null
+                  "next": null,
+                  "program": {
+                    "held": "0.2.0",
+                    "machines": [
+                      {
+                        "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                        "machine": "web-02",
+                        "version": "0.1.0"
+                      }
+                    ]
+                  }
                 }
               }
             }
@@ -7382,6 +7539,1390 @@
           }
         ]
       }
+    },
+    "/api/v1/services/{id}/messages": {
+      "put": {
+        "operationId": "setKeepMessages",
+        "summary": "Keep or stop keeping error text",
+        "tags": [
+          "Act"
+        ],
+        "description": "Keeps the text of a service's errors from now on, or stops keeping it. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the service.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "keep"
+                ],
+                "properties": {
+                  "keep": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "example": {
+                "keep": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The service after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Service"
+                },
+                "example": {
+                  "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                  "slug": "upload-portal",
+                  "name": "Upload portal",
+                  "kind": "service",
+                  "environment": "production",
+                  "state": "ok",
+                  "note": null,
+                  "version": "2.3.0",
+                  "held": null,
+                  "machine": "web-02",
+                  "checks": [],
+                  "routing": {
+                    "down": "page",
+                    "degraded": null
+                  },
+                  "restart": false,
+                  "stats": null,
+                  "stats_at": null,
+                  "open_issue": null,
+                  "keep_messages": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not act."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_keep",
+                    "message": "keep is true or false."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "act"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/{id}/timing": {
+      "put": {
+        "operationId": "setJobTiming",
+        "summary": "Set when a job is late",
+        "tags": [
+          "Act"
+        ],
+        "description": "Sets when a job counts as late (grace) and as run too long (max_runtime). A field left out is cleared. A job from a dokkit.toml is changed in the file. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the job, which is its service id.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "grace": {
+                    "type": "string"
+                  },
+                  "max_runtime": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "grace": "45m",
+                "max_runtime": "2h"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The job after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                },
+                "example": {
+                  "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                  "name": "nightly-purge",
+                  "machine": "nas",
+                  "state": "ok",
+                  "schedule": "0 2 * * *",
+                  "grace": "45m",
+                  "max_runtime": "2h",
+                  "last_run": null,
+                  "last_good_run": null,
+                  "next_expected": "2026-10-06T02:00:00Z"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not act."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_timing",
+                    "message": "Write times as a number and a unit: 30m, 2h, 1d."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "act"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tasks/{id}/accept": {
+      "post": {
+        "operationId": "acceptTask",
+        "summary": "Accept a task",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Accepts a task that is waiting, so its machine may run the command. Accepting lets the server ask a machine to run a command, so it needs `admin`. Send the command and pin that proposals shows. A task whose command or pin has changed since answers 422. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the task, from proposals.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskDecision"
+              },
+              "example": {
+                "command": "systemctl restart portal",
+                "pin": "5d41402abc4b2a76b9719d911017c592",
+                "system": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "changed",
+                    "message": "The command or pin is not the one on offer now. Read proposals again."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tasks/{id}/dismiss": {
+      "post": {
+        "operationId": "dismissTask",
+        "summary": "Dismiss a task",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Dismisses a task that is waiting until its command or pin changes. Send the command and pin that proposals shows. A task whose command or pin has changed since answers 422. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the task, from proposals.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskDecision"
+              },
+              "example": {
+                "command": "systemctl restart portal",
+                "pin": "5d41402abc4b2a76b9719d911017c592"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "changed",
+                    "message": "The command or pin is not the one on offer now. Read proposals again."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/machines/{id}/update": {
+      "post": {
+        "operationId": "updateProgram",
+        "summary": "Ask a machine to fetch the newer program",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Asks an enrolled machine to fetch the newer `dokkit` program from this server. It only fetches: a person finishes the update on the machine. Answers 422 when the server holds no program. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the machine.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The run id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "run": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                },
+                "example": {
+                  "run": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_program",
+                    "message": "This server holds no program for machines to fetch."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alerts": {
+      "get": {
+        "operationId": "getAlertSettings",
+        "summary": "Alert settings",
+        "tags": [
+          "Read"
+        ],
+        "description": "Who is told by default, the limits, the night and the mail settings. Addresses, user names and secrets are shown only as `set` or `not set`. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertSettings"
+                },
+                "example": {
+                  "down": "page",
+                  "degraded": "push",
+                  "push_with": "ntfy",
+                  "disk_limit": "90",
+                  "memory_limit": "95",
+                  "night_from": "22",
+                  "night_to": "7",
+                  "night_offset": "0",
+                  "email_to": "oncall@example.com",
+                  "pagerduty_key": "set",
+                  "ntfy_url": "not set",
+                  "webhook_url": "not set",
+                  "smtp_password": "not set"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "operationId": "setAlertSettings",
+        "summary": "Change alert settings",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Saves the settings that are sent and checks them. Answers with the settings as they now are. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertSettingsBody"
+              },
+              "example": {
+                "down": "push",
+                "pagerduty_key": "R0UT1NGKEY",
+                "night_to": "8"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The settings after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertSettings"
+                },
+                "example": {
+                  "down": "push",
+                  "degraded": "push",
+                  "push_with": "ntfy",
+                  "disk_limit": "90",
+                  "memory_limit": "95",
+                  "night_from": "22",
+                  "night_to": "7",
+                  "night_offset": "0",
+                  "pagerduty_key": "set",
+                  "webhook_url": "set"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_settings",
+                    "message": "The night is whole hours: 0 to 23, and the hours from UTC from -12 to 14."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alerts/test": {
+      "post": {
+        "operationId": "testAlert",
+        "summary": "Send a test alert",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Sends a test alert by one channel. Answers 422 when the channel is not one that sends, or when the send fails, with what went wrong. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "channel"
+                ],
+                "properties": {
+                  "channel": {
+                    "type": "string",
+                    "enum": [
+                      "page",
+                      "push",
+                      "email",
+                      "text",
+                      "digest",
+                      "webhook"
+                    ]
+                  }
+                }
+              },
+              "example": {
+                "channel": "webhook"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "send_failed",
+                    "message": "The webhook has no address yet."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alerts/suggestions": {
+      "get": {
+        "operationId": "listAlertSuggestions",
+        "summary": "Alert suggestions",
+        "tags": [
+          "Read"
+        ],
+        "description": "Issues that opened six times or more in a month and are snoozed, where the daily digest could take them instead. Nothing changes until a person accepts. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AlertSuggestion"
+                      }
+                    },
+                    "next": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Always null for now. Lists are not paged yet."
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                      "service": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                      "name": "Flaky sync",
+                      "state": "down",
+                      "count": 6
+                    }
+                  ],
+                  "next": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alerts/suggestions/{id}/accept": {
+      "post": {
+        "operationId": "acceptAlertSuggestion",
+        "summary": "Accept an alert suggestion",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Sends that service's issues of that kind to the daily digest from now on. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the suggestion, from the list.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alerts/suggestions/{id}/dismiss": {
+      "post": {
+        "operationId": "dismissAlertSuggestion",
+        "summary": "Dismiss an alert suggestion",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Dismisses the suggestion for that service. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the suggestion, from the list.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/logs/archives": {
+      "get": {
+        "operationId": "listArchives",
+        "summary": "Archived months of logs",
+        "tags": [
+          "Read"
+        ],
+        "description": "The archived months of logs that can be loaded back. Takes a user token (`dku_`) with the `read-logs` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Archive"
+                      }
+                    },
+                    "next": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Always null for now. Lists are not paged yet."
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "name": "logs-2025-01",
+                      "size": 1048576,
+                      "back_until": null
+                    }
+                  ],
+                  "next": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read-logs."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read-logs"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/logs/archives/{name}/restore": {
+      "post": {
+        "operationId": "restoreArchive",
+        "summary": "Load an archived month back",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Loads an archived month of logs back into the database for a week. Loading a month that is already back does nothing and answers 0 lines. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "The name of the month, from the list.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loaded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "lines": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "ok": true,
+                  "lines": 18204
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -7404,7 +8945,7 @@
       "userToken": {
         "type": "http",
         "scheme": "bearer",
-        "description": "A user token, prefix `dku_`, for scripts and the MCP. Scopes: `read`, `read-logs`, `act`, `admin`. Reading needs `read`, log contents need `read-logs`, keys and people and rules and interface-added checks and restart need `admin`, and anything else that changes something needs `act`."
+        "description": "A user token, prefix `dku_`, for scripts and the MCP. Scopes: `read`, `read-logs`, `act`, `admin`. Reading needs `read`, log contents need `read-logs`, keys and people and rules and alert settings and interface-added checks and restart and making a job and accepting a task and updating the program and loading logs back need `admin`, and anything else that changes something needs `act`."
       }
     },
     "schemas": {
@@ -7636,6 +9177,10 @@
                     "type": "null"
                   }
                 ]
+              },
+              "keep_messages": {
+                "type": "boolean",
+                "description": "Whether the text of its errors is kept."
               }
             }
           }
@@ -7725,6 +9270,20 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "grace": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "How long past its time a run may start before it counts as missed."
+          },
+          "max_runtime": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "How long a run that reported its start may take."
           }
         }
       },
@@ -8134,6 +9693,13 @@
           },
           "machine": {
             "type": "string"
+          },
+          "pin": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Tasks only. Send it back to accept or dismiss."
           }
         }
       },
@@ -8184,6 +9750,333 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "JobAdded": {
+        "type": "object",
+        "description": "A job that was added. The key and the addresses hold it, and are shown only now.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The service id."
+          },
+          "name": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "description": "The app key of the job, prefix dka_."
+          },
+          "ping": {
+            "type": "object",
+            "description": "The addresses the job calls: start, ok and fail.",
+            "properties": {
+              "start": {
+                "type": "string"
+              },
+              "ok": {
+                "type": "string"
+              },
+              "fail": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "TaskDecision": {
+        "type": "object",
+        "required": [
+          "command",
+          "pin"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "The command as proposals shows it."
+          },
+          "pin": {
+            "type": "string",
+            "description": "The pin as proposals shows it."
+          },
+          "system": {
+            "type": "boolean",
+            "description": "On accept only. True runs the task as the system account."
+          }
+        }
+      },
+      "AlertSettings": {
+        "type": "object",
+        "description": "The alert settings. Addresses, user names and secrets are never returned: each is `set` or `not set`.",
+        "properties": {
+          "down": {
+            "type": "string",
+            "enum": [
+              "page",
+              "push",
+              "email",
+              "text",
+              "digest",
+              "webhook",
+              "none"
+            ]
+          },
+          "degraded": {
+            "type": "string",
+            "enum": [
+              "page",
+              "push",
+              "email",
+              "text",
+              "digest",
+              "webhook",
+              "none"
+            ]
+          },
+          "push_with": {
+            "type": "string",
+            "enum": [
+              "ntfy",
+              "pushover",
+              "pagerduty"
+            ]
+          },
+          "disk_limit": {
+            "type": "string"
+          },
+          "memory_limit": {
+            "type": "string"
+          },
+          "night_from": {
+            "type": "string"
+          },
+          "night_to": {
+            "type": "string"
+          },
+          "night_offset": {
+            "type": "string"
+          },
+          "digest_at": {
+            "type": "string"
+          },
+          "smtp_host": {
+            "type": "string"
+          },
+          "smtp_port": {
+            "type": "string"
+          },
+          "mail_from": {
+            "type": "string"
+          },
+          "email_to": {
+            "type": "string"
+          },
+          "text_to": {
+            "type": "string"
+          },
+          "pagerduty_key": {
+            "type": "string",
+            "enum": [
+              "set",
+              "not set"
+            ]
+          },
+          "ntfy_token": {
+            "type": "string",
+            "enum": [
+              "set",
+              "not set"
+            ]
+          },
+          "pushover_token": {
+            "type": "string",
+            "enum": [
+              "set",
+              "not set"
+            ]
+          },
+          "pushover_user": {
+            "type": "string",
+            "enum": [
+              "set",
+              "not set"
+            ]
+          },
+          "smtp_password": {
+            "type": "string",
+            "enum": [
+              "set",
+              "not set"
+            ]
+          },
+          "ntfy_url": {
+            "type": "string",
+            "enum": [
+              "set",
+              "not set"
+            ]
+          },
+          "webhook_url": {
+            "type": "string",
+            "enum": [
+              "set",
+              "not set"
+            ]
+          },
+          "heartbeat_url": {
+            "type": "string",
+            "enum": [
+              "set",
+              "not set"
+            ]
+          },
+          "smtp_user": {
+            "type": "string",
+            "enum": [
+              "set",
+              "not set"
+            ]
+          }
+        }
+      },
+      "AlertSettingsBody": {
+        "type": "object",
+        "description": "Any of the settings. One that is left out stays as it was. A secret, an address or a user name is written here and never returned. A secret left empty keeps its value. Addresses must be https. The night is whole hours: night_from and night_to from 0 to 23, night_offset (hours from UTC) from -12 to 14.",
+        "properties": {
+          "down": {
+            "type": "string",
+            "enum": [
+              "page",
+              "push",
+              "email",
+              "text",
+              "digest",
+              "webhook",
+              "none"
+            ]
+          },
+          "degraded": {
+            "type": "string",
+            "enum": [
+              "page",
+              "push",
+              "email",
+              "text",
+              "digest",
+              "webhook",
+              "none"
+            ]
+          },
+          "push_with": {
+            "type": "string",
+            "enum": [
+              "ntfy",
+              "pushover",
+              "pagerduty"
+            ]
+          },
+          "disk_limit": {
+            "type": "string"
+          },
+          "memory_limit": {
+            "type": "string"
+          },
+          "night_from": {
+            "type": "string"
+          },
+          "night_to": {
+            "type": "string"
+          },
+          "night_offset": {
+            "type": "string"
+          },
+          "digest_at": {
+            "type": "string"
+          },
+          "smtp_host": {
+            "type": "string"
+          },
+          "smtp_port": {
+            "type": "string"
+          },
+          "mail_from": {
+            "type": "string"
+          },
+          "email_to": {
+            "type": "string"
+          },
+          "text_to": {
+            "type": "string"
+          },
+          "pagerduty_key": {
+            "type": "string"
+          },
+          "ntfy_token": {
+            "type": "string"
+          },
+          "pushover_token": {
+            "type": "string"
+          },
+          "pushover_user": {
+            "type": "string"
+          },
+          "smtp_password": {
+            "type": "string"
+          },
+          "ntfy_url": {
+            "type": "string"
+          },
+          "webhook_url": {
+            "type": "string"
+          },
+          "heartbeat_url": {
+            "type": "string"
+          },
+          "smtp_user": {
+            "type": "string"
+          }
+        }
+      },
+      "AlertSuggestion": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The issue id. Use it to accept or dismiss."
+          },
+          "service": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "description": "How many times the issue opened in a month."
+          }
+        }
+      },
+      "Archive": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Such as logs-2025-01."
+          },
+          "size": {
+            "type": "integer"
+          },
+          "back_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Set while the month is loaded back."
           }
         }
       }

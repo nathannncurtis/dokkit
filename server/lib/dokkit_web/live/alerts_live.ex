@@ -23,16 +23,16 @@ defmodule DokkitWeb.AlertsLive do
   def handle_info(:issues_changed, socket), do: {:noreply, socket}
 
   def handle_event("save", %{"alerts" => params}, socket) do
-    cond do
-      !owner?(socket) ->
-        {:noreply, socket}
+    with true <- owner?(socket) do
+      case Alerts.update(params) do
+        {:ok, config} ->
+          {:noreply, assign(socket, config: config, typed: %{}, saved: true, error: nil)}
 
-      error = Alerts.night_error(params) || bad_address(params) ->
-        {:noreply, typed(socket, params, error)}
-
-      true ->
-        {:noreply,
-         assign(socket, config: Alerts.save(params), typed: %{}, saved: true, error: nil)}
+        {:error, error} ->
+          {:noreply, typed(socket, params, error)}
+      end
+    else
+      _ -> {:noreply, socket}
     end
   end
 
@@ -88,18 +88,6 @@ defmodule DokkitWeb.AlertsLive do
       saved: false,
       error: error
     )
-  end
-
-  defp bad_address(params) do
-    Enum.find_value(~w(ntfy_url webhook_url heartbeat_url), fn k ->
-      url = String.trim(params[k] || "")
-
-      with true <- url != "", {:error, why} <- Alerts.check_url(url) do
-        "#{String.replace(k, "_url", "")}: #{why}"
-      else
-        _ -> nil
-      end
-    end)
   end
 
   defp owner?(socket), do: socket.assigns.current_user.role == :owner

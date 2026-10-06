@@ -41,10 +41,8 @@ defmodule DokkitWeb.SettingsLive do
 
   def handle_event("restore", %{"name" => name}, socket) do
     owner(socket, fn ->
-      # Only a file the page listed, never a path from the browser.
-      with %{path: path} <- Enum.find(socket.assigns.archives, &(&1.name == name)),
-           do: Dokkit.Logs.restore(path)
-
+      # Only a file that is listed, never a path from the browser.
+      Dokkit.Logs.restore_named(name)
       socket
     end)
   end

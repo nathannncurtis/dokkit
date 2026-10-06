@@ -1,6 +1,6 @@
 # The Dokkit API (v1)
 
-This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom`, `beat`, `metric`, `stats`, `deploy` and `log` lines, `GET /services/<id>/series`, versions in `inventory`, `POST /deploys`, `POST /errors`, the ping URLs, `GET /ping`, `PUT /declare`, `POST /proposals`, `GET /checks`, taking work, and the read and act calls for issues (with notes and bulk actions), machines, services, versions, jobs, logs, errors, deploys, rules, proposals and tasks,, and for a service its routing, watching, interface-added checks, held version and restart. The `admin` calls are `GET`, `POST` and `DELETE` on `/keys` and `/users`, the rule calls, `PUT /services/<id>/checks` and `PUT /services/<id>/restart`: a new key is shown once, in the answer that made it, and the last owner cannot be removed. A token can accept or dismiss a found thing; a task is accepted by a person in the interface.
+This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom`, `beat`, `metric`, `stats`, `deploy` and `log` lines, `GET /services/<id>/series`, versions in `inventory`, `POST /deploys`, `POST /errors`, the ping URLs, `GET /ping`, `PUT /declare`, `POST /proposals`, `GET /checks`, taking work, and the read and act calls for issues (with notes and bulk actions), machines, services, versions, jobs, logs, errors, deploys, rules, proposals and tasks,, and for a service its routing, watching, interface-added checks, held version and restart. The `admin` calls are `GET`, `POST` and `DELETE` on `/keys` and `/users`, the rule calls, `PUT /services/<id>/checks` and `PUT /services/<id>/restart`: a new key is shown once, in the answer that made it, and the last owner cannot be removed. A token with `act` can accept or dismiss a found thing; accepting a task needs `admin`, because it lets the server ask a machine to run a command. Alert settings, jobs, job timing, error text, the program update, archived logs and alert suggestions have calls too. A full-control token (with `admin`) is made only in Settings, and signing in, the password and the theme belong to the browser.
 
 ## One rule
 
@@ -207,14 +207,17 @@ A login session, or a user token with `read`. Log contents need `read-logs`: wit
 | `GET /logs` | Log search. Takes `q`, `level`, `machine` (id or name), `service`, `from` and `to` (RFC 3339). An unknown machine or service, or a time that is not one, answers `404`. |
 | `GET /errors`, `GET /errors/<id>` | Errors grouped by type and place; then the individual reports. |
 | `GET /deploys` | Deploy history. |
-| `GET /versions` | Which version of each service is on which machine, and under `apps`, each app that runs on many hosts with the hosts on each version. |
+| `GET /versions` | Which version of each service is on which machine, under `apps` each app that runs on many hosts with the hosts on each version, and under `program` the version this server gives machines to fetch and what each machine runs. |
 | `GET /rules` | Alert rules. |
-| `GET /proposals` | Things waiting to be accepted. |
+| `GET /alerts` | The alert settings: who is told by default, the limits, the night and the mail settings. Addresses (ntfy, webhook, heartbeat), the mail user name and secrets are never returned, only `set` or `not set`. |
+| `GET /alerts/suggestions` | Issues that keep opening and are snoozed, which the daily digest could take instead. |
+| `GET /logs/archives` (`read-logs`) | The archived months of logs that can be loaded back. |
+| `GET /proposals` | Things waiting to be accepted. A task comes with the `command` and `pin` to send back to accept or dismiss it. |
 | `GET /tasks`, `GET /task-runs` | Accepted tasks and their runs. |
 
 ## Act
 
-A login session, or a user token with `act`. Rules, checks and restart need `admin`.
+A login session, or a user token with `act`. Keys, people, rules, alert settings, checks, restart, making a job, accepting a task, updating the program and loading logs back need `admin`.
 
 | Call | Does |
 |---|---|
@@ -229,7 +232,16 @@ A login session, or a user token with `act`. Rules, checks and restart need `adm
 | `PUT /services/<id>/hold` | Mark a version on a machine as held on purpose. |
 | `PUT /services/<id>/restart` (`admin`) | Allow or stop automatic restart. |
 | `POST /proposals/<id>/accept`, `/dismiss` | Accept all or some of a proposal, or dismiss it. |
+| `PUT /services/<id>/messages` | `{"keep": true}` keeps the text of the service's errors from now on; `false` stops. |
+| `POST /jobs` (`admin`) | Add a job: `name` and `machine`, and optionally `schedule` (cron, UTC), `grace` and `max_runtime` (such as `30m`). Answers with the job's `key` and the `ping` addresses, shown once. A new machine name adds the machine. |
+| `PUT /jobs/<id>/timing` | Set `grace` and `max_runtime` of a job added in the interface. A field left out is cleared. A job from a `dokkit.toml` answers `422`: change the file. |
 | `POST /rules`, `PUT /rules/<id>`, `DELETE /rules/<id>` (`admin`) | Alert rules. |
+| `PUT /alerts` (`admin`) | Change alert settings. A setting left out stays as it was; a secret left empty keeps its value. The night is whole hours, addresses must be `https`, `down`, `degraded` and `push_with` must be one of their choices: otherwise `422`. Answers with the settings as `GET /alerts` shows them. |
+| `POST /alerts/test` (`admin`) | `{"channel": "webhook"}` sends a test alert by that channel. A send that fails answers `422` with what went wrong. |
+| `POST /alerts/suggestions/<id>/accept`, `/dismiss` (`admin`) | Send that service's issues to the daily digest from now on, or drop the suggestion. |
+| `POST /logs/archives/<name>/restore` (`admin`) | Load an archived month back for a week. Answers with the number of `lines` loaded. |
+| `POST /tasks/<id>/accept`, `/dismiss` (`admin`) | Accept or dismiss a task that is waiting. Send the `command` and `pin` that `GET /proposals` shows; if either has changed since, the answer is `422` and nothing is accepted. `accept` takes `system: true` to run the task as the system account. Accepting lets the server ask a machine to run a command, so it needs `admin`. |
 | `POST /tasks/<id>/run` | Run an accepted task on its machine. Answers with the run id. |
+| `POST /machines/<id>/update` (`admin`) | Ask an enrolled machine to fetch the newer `dokkit` program. A person finishes the update on the machine. Answers `422` when the server holds no program. |
 
 Keys, tokens and users are managed with the `admin` scope. A token can make a token only with scopes it holds itself, and never one with `admin`: that is made in Settings.

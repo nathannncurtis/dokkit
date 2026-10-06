@@ -76,6 +76,52 @@ defmodule Dokkit.Alerts do
     new
   end
 
+  def setting_keys, do: Map.keys(@defaults) ++ @secrets ++ @plain
+
+  @hidden @secrets ++ ~w(ntfy_url webhook_url heartbeat_url smtp_user)
+
+  @doc "The settings as the API shows them: addresses, user names and secrets are only set or not set."
+  def view do
+    c = config()
+    marks = Map.new(@hidden, &{&1, if(c[&1] in [nil, ""], do: "not set", else: "set")})
+    c |> Map.drop(@hidden) |> Map.merge(marks)
+  end
+
+  @doc "Checks the settings, then saves them. `{:ok, config}` or `{:error, text}`."
+  def update(params) do
+    params = Map.take(params, setting_keys())
+
+    cond do
+      Enum.any?(params, fn {_, v} -> not is_binary(v) end) -> {:error, "Every setting is text."}
+      error = bad_choice(params) || night_error(params) || bad_address(params) -> {:error, error}
+      true -> {:ok, save(params)}
+    end
+  end
+
+  defp bad_choice(params) do
+    channels = for {_, v} <- @channels, do: v
+
+    Enum.find_value(
+      %{"down" => channels, "degraded" => channels, "push_with" => ~w(ntfy pushover pagerduty)},
+      fn {k, ok} ->
+        if String.trim(params[k] || "") not in ["" | ok],
+          do: "#{k} is one of #{Enum.join(ok, ", ")}."
+      end
+    )
+  end
+
+  defp bad_address(params) do
+    Enum.find_value(~w(ntfy_url webhook_url heartbeat_url), fn k ->
+      url = String.trim(params[k] || "")
+
+      with true <- url != "", {:error, why} <- check_url(url) do
+        "#{String.replace(k, "_url", "")}: #{why}"
+      else
+        _ -> nil
+      end
+    end)
+  end
+
   # No time zone database is installed, so the night is set in hours from UTC.
   @doc "Whether `now` falls in the night set on the Alerts page."
   def night?(now, config \\ config()) do

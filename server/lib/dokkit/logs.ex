@@ -206,6 +206,13 @@ defmodule Dokkit.Logs do
     end
   end
 
+  @doc "Loads back the archived month of that name. nil when no file of that name is listed."
+  def restore_named(name) do
+    with dir when is_binary(dir) <- Application.get_env(:dokkit, :archive),
+         %{path: path} <- Enum.find(archives(dir), &(&1.name == name)),
+         do: restore(path)
+  end
+
   @doc """
   Loads an archived month back for a week. Lines from a machine that no longer exists are
   left out. Loading a month that is already back does nothing.

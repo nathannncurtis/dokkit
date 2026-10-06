@@ -1151,7 +1151,9 @@ List jobs. Every job with its schedule, last run, last good run and next expecte
         "tail": "Purged 412 files."
       },
       "last_good_run": null,
-      "next_expected": "2026-10-06T02:00:00Z"
+      "next_expected": "2026-10-06T02:00:00Z",
+      "grace": "30m",
+      "max_runtime": null
     }
   ],
   "next": null
@@ -1294,7 +1296,17 @@ Which version is where. Which version of each service is on which machine, and u
     }
   ],
   "apps": [],
-  "next": null
+  "next": null,
+  "program": {
+    "held": "0.2.0",
+    "machines": [
+      {
+        "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+        "machine": "web-02",
+        "version": "0.1.0"
+      }
+    ]
+  }
 }
 ```
 
@@ -1387,9 +1399,88 @@ List task runs. Runs of tasks, with their output. Output needs `read-logs`. Take
 
 `403` The key may not do this.
 
+### GET /api/v1/alerts
+
+Alert settings. Who is told by default, the limits, the night and the mail settings. Addresses, user names and secrets are shown only as `set` or `not set`. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+`200` OK.
+
+```json
+{
+  "down": "page",
+  "degraded": "push",
+  "push_with": "ntfy",
+  "disk_limit": "90",
+  "memory_limit": "95",
+  "night_from": "22",
+  "night_to": "7",
+  "night_offset": "0",
+  "email_to": "oncall@example.com",
+  "pagerduty_key": "set",
+  "ntfy_url": "not set",
+  "webhook_url": "not set",
+  "smtp_password": "not set"
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+### GET /api/v1/alerts/suggestions
+
+Alert suggestions. Issues that opened six times or more in a month and are snoozed, where the daily digest could take them instead. Nothing changes until a person accepts. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+`200` OK.
+
+```json
+{
+  "items": [
+    {
+      "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+      "service": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+      "name": "Flaky sync",
+      "state": "down",
+      "count": 6
+    }
+  ],
+  "next": null
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+### GET /api/v1/logs/archives
+
+Archived months of logs. The archived months of logs that can be loaded back. Takes a user token (`dku_`) with the `read-logs` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+`200` OK.
+
+```json
+{
+  "items": [
+    {
+      "name": "logs-2025-01",
+      "size": 1048576,
+      "back_until": null
+    }
+  ],
+  "next": null
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
 ## Act
 
-Snooze and acknowledge issues, route and hold services, accept found things and run tasks. User token with `act`.
+Snooze and acknowledge issues, route and hold services, accept found things, run tasks, keep error text and set when a job is late. User token with `act`.
 
 
 ### POST /api/v1/issues/{id}/snooze
@@ -1737,10 +1828,136 @@ Run an accepted task. Runs an accepted task on its machine. The task runs its ac
 
 `404` Not found.
 
+### PUT /api/v1/services/{id}/messages
+
+Keep or stop keeping error text. Keeps the text of a service's errors from now on, or stops keeping it. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+- `id` (path): The id of the service.
+
+Send:
+
+```
+{
+  "keep": true
+}
+```
+
+`200` The service after the change.
+
+```json
+{
+  "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+  "slug": "upload-portal",
+  "name": "Upload portal",
+  "kind": "service",
+  "environment": "production",
+  "state": "ok",
+  "note": null,
+  "version": "2.3.0",
+  "held": null,
+  "machine": "web-02",
+  "checks": [],
+  "routing": {
+    "down": "page",
+    "degraded": null
+  },
+  "restart": false,
+  "stats": null,
+  "stats_at": null,
+  "open_issue": null,
+  "keep_messages": true
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`404` Not found.
+
+`422` The input is not right.
+
+### PUT /api/v1/jobs/{id}/timing
+
+Set when a job is late. Sets when a job counts as late (grace) and as run too long (max_runtime). A field left out is cleared. A job from a dokkit.toml is changed in the file. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+- `id` (path): The id of the job, which is its service id.
+
+Send:
+
+```
+{
+  "grace": "45m",
+  "max_runtime": "2h"
+}
+```
+
+`200` The job after the change.
+
+```json
+{
+  "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+  "name": "nightly-purge",
+  "machine": "nas",
+  "state": "ok",
+  "schedule": "0 2 * * *",
+  "grace": "45m",
+  "max_runtime": "2h",
+  "last_run": null,
+  "last_good_run": null,
+  "next_expected": "2026-10-06T02:00:00Z"
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`404` Not found.
+
+`422` The input is not right.
+
 ## Admin
 
-Keys, people, alert rules, interface-added checks and restart. User token with `admin`.
+Keys, people, alert rules and settings, interface-added checks, restart, making jobs, accepting tasks, updating the program and loading logs back. User token with `admin`.
 
+
+### POST /api/v1/jobs
+
+Add a job to watch. Adds a job and its machine if it is new. The key and the addresses the job calls are returned once. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+Send:
+
+```
+{
+  "name": "Weekly report",
+  "machine": "nas",
+  "schedule": "0 2 * * 1",
+  "grace": "20m"
+}
+```
+
+`200` The job, with its key shown once.
+
+```json
+{
+  "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+  "name": "Weekly report",
+  "key": "dka_3f9c0d2e7b4a",
+  "ping": {
+    "start": "https://your.domain.com/api/v1/in/dka_3f9c0d2e7b4a/job/weekly-report/start",
+    "ok": "https://your.domain.com/api/v1/in/dka_3f9c0d2e7b4a/job/weekly-report/ok",
+    "fail": "https://your.domain.com/api/v1/in/dka_3f9c0d2e7b4a/job/weekly-report/fail"
+  }
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` The input is not right.
 
 ### POST /api/v1/rules
 
@@ -2094,6 +2311,217 @@ Remove a person. Removes a person. Their user tokens stop working. The last owne
 `403` The key may not do this.
 
 `422` The body does not fit.
+
+### POST /api/v1/tasks/{id}/accept
+
+Accept a task. Accepts a task that is waiting, so its machine may run the command. Accepting lets the server ask a machine to run a command, so it needs `admin`. Send the command and pin that proposals shows. A task whose command or pin has changed since answers 422. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+- `id` (path): The id of the task, from proposals.
+
+Send:
+
+```
+{
+  "command": "systemctl restart portal",
+  "pin": "5d41402abc4b2a76b9719d911017c592",
+  "system": false
+}
+```
+
+`200` Done.
+
+```json
+{
+  "ok": true
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`404` Not found.
+
+`422` The input is not right.
+
+### POST /api/v1/tasks/{id}/dismiss
+
+Dismiss a task. Dismisses a task that is waiting until its command or pin changes. Send the command and pin that proposals shows. A task whose command or pin has changed since answers 422. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+- `id` (path): The id of the task, from proposals.
+
+Send:
+
+```
+{
+  "command": "systemctl restart portal",
+  "pin": "5d41402abc4b2a76b9719d911017c592"
+}
+```
+
+`200` Done.
+
+```json
+{
+  "ok": true
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`404` Not found.
+
+`422` The input is not right.
+
+### POST /api/v1/machines/{id}/update
+
+Ask a machine to fetch the newer program. Asks an enrolled machine to fetch the newer `dokkit` program from this server. It only fetches: a person finishes the update on the machine. Answers 422 when the server holds no program. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+- `id` (path): The id of the machine.
+
+`200` The run id.
+
+```json
+{
+  "run": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3"
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`404` Not found.
+
+`422` The input is not right.
+
+### PUT /api/v1/alerts
+
+Change alert settings. Saves the settings that are sent and checks them. Answers with the settings as they now are. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+Send:
+
+```
+{
+  "down": "push",
+  "pagerduty_key": "R0UT1NGKEY",
+  "night_to": "8"
+}
+```
+
+`200` The settings after the change.
+
+```json
+{
+  "down": "push",
+  "degraded": "push",
+  "push_with": "ntfy",
+  "disk_limit": "90",
+  "memory_limit": "95",
+  "night_from": "22",
+  "night_to": "7",
+  "night_offset": "0",
+  "pagerduty_key": "set",
+  "webhook_url": "set"
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` The input is not right.
+
+### POST /api/v1/alerts/test
+
+Send a test alert. Sends a test alert by one channel. Answers 422 when the channel is not one that sends, or when the send fails, with what went wrong. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+Send:
+
+```
+{
+  "channel": "webhook"
+}
+```
+
+`200` Sent.
+
+```json
+{
+  "ok": true
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` The input is not right.
+
+### POST /api/v1/alerts/suggestions/{id}/accept
+
+Accept an alert suggestion. Sends that service's issues of that kind to the daily digest from now on. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+- `id` (path): The id of the suggestion, from the list.
+
+`200` Done.
+
+```json
+{
+  "ok": true
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`404` Not found.
+
+### POST /api/v1/alerts/suggestions/{id}/dismiss
+
+Dismiss an alert suggestion. Dismisses the suggestion for that service. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+- `id` (path): The id of the suggestion, from the list.
+
+`200` Done.
+
+```json
+{
+  "ok": true
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`404` Not found.
+
+### POST /api/v1/logs/archives/{name}/restore
+
+Load an archived month back. Loads an archived month of logs back into the database for a week. Loading a month that is already back does nothing and answers 0 lines. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+- `name` (path): The name of the month, from the list.
+
+`200` Loaded.
+
+```json
+{
+  "ok": true,
+  "lines": 18204
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`404` Not found.
 
 ## MCP
 

@@ -117,28 +117,37 @@ defmodule Dokkit.Estate do
         {:error, @duration_error}
 
       true ->
-        Repo.transaction(fn ->
-          machine =
-            Repo.get_by(Machine, name: machine) ||
-              Repo.insert!(%Machine{name: machine, kind: :seen})
+        with {:ok, _} = added <-
+               Repo.transaction(fn ->
+                 machine =
+                   Repo.get_by(Machine, name: machine) ||
+                     Repo.insert!(%Machine{name: machine, kind: :seen})
 
-          if Repo.get_by(Service, machine_id: machine.id, slug: slug),
-            do: Repo.rollback("#{machine.name} already has something called #{name}.")
+                 if Repo.get_by(Service, machine_id: machine.id, slug: slug),
+                   do: Repo.rollback("#{machine.name} already has something called #{name}.")
 
-          service =
-            Repo.insert!(%Service{machine_id: machine.id, slug: slug, name: name, kind: :job})
+                 service =
+                   Repo.insert!(%Service{
+                     machine_id: machine.id,
+                     slug: slug,
+                     name: name,
+                     kind: :job
+                   })
 
-          Repo.insert!(%Check{
-            service_id: service.id,
-            name: slug,
-            type: :job,
-            fail_after: 1,
-            config: config
-          })
+                 Repo.insert!(%Check{
+                   service_id: service.id,
+                   name: slug,
+                   type: :job,
+                   fail_after: 1,
+                   config: config
+                 })
 
-          {key, _} = Keys.mint(:app, %{service_id: service.id, label: name})
-          %{service: service, key: key}
-        end)
+                 {key, _} = Keys.mint(:app, %{service_id: service.id, label: name})
+                 %{service: service, key: key}
+               end) do
+          Dokkit.Issues.changed(false)
+          added
+        end
     end
   end
 

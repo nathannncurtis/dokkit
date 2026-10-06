@@ -19,7 +19,6 @@ defmodule DokkitWeb.JobsLive do
   def handle_event("add", %{"job" => params}, socket) do
     with true <- socket.assigns.current_user.role != :viewer,
          {:ok, added} <- Estate.add_job(params) do
-      Dokkit.Issues.changed(false)
       {:noreply, assign(socket, added: added, error: nil, form: %{})}
     else
       {:error, text} -> {:noreply, assign(socket, error: text, form: params)}
@@ -197,7 +196,7 @@ defmodule DokkitWeb.JobsLive do
   defp label("fail"), do: "When it fails"
 
   defp ping(added, event),
-    do: DokkitWeb.Endpoint.url() <> "/api/v1/in/#{added.key}/job/#{added.service.slug}/#{event}"
+    do: Dokkit.Intake.ping_url(added.key, added.service.slug, event)
 
   defp example(added) do
     """

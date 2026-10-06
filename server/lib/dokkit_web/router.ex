@@ -140,5 +140,19 @@ defmodule DokkitWeb.Router do
     post "/issues/:id/snooze", ApiController, :snooze
     post "/issues/:id/unsnooze", ApiController, :unsnooze
     post "/issues/:id/acknowledge", ApiController, :acknowledge
+    put "/services/:id/messages", ApiController, :keep_messages
+    post "/jobs", ApiController, :add_job
+    put "/jobs/:id/timing", ApiController, :set_job_timing
+    post "/tasks/:id/accept", ApiController, :accept_task
+    post "/tasks/:id/dismiss", ApiController, :dismiss_task
+    post "/machines/:id/update", ApiController, :update_program
+    get "/alerts", ApiController, :alert_settings
+    put "/alerts", ApiController, :set_alert_settings
+    post "/alerts/test", ApiController, :test_alert
+    get "/alerts/suggestions", ApiController, :suggestions
+    post "/alerts/suggestions/:id/accept", ApiController, :accept_suggestion
+    post "/alerts/suggestions/:id/dismiss", ApiController, :dismiss_suggestion
+    get "/logs/archives", ApiController, :archives
+    post "/logs/archives/:name/restore", ApiController, :restore_archive
   end
 end

@@ -216,9 +216,46 @@ defmodule Dokkit.Read do
 
     tasks =
       for t <- Dokkit.Tasks.waiting(),
-          do: %{id: t.id, kind: "task", name: t.name, command: t.command, machine: t.machine.name}
+          do: %{
+            id: t.id,
+            kind: "task",
+            name: t.name,
+            command: t.command,
+            pin: t.pin,
+            machine: t.machine.name
+          }
 
     found ++ tasks
+  end
+
+  @doc "Issues that open again and again, where the digest would do. A person accepts or dismisses."
+  def suggestions do
+    for i <- Dokkit.Alerts.suggestions() do
+      %{
+        id: i.id,
+        service: i.service_id,
+        name: i.service.name,
+        state: i.state,
+        count: i.count
+      }
+    end
+  end
+
+  @doc "The archived months of logs that can be loaded back."
+  def archives do
+    dir = Application.get_env(:dokkit, :archive)
+    for a <- (dir && Logs.archives(dir)) || [], do: Map.take(a, [:name, :size, :back_until])
+  end
+
+  @doc "The program version the server holds for machines to fetch, and what each machine runs."
+  def program do
+    %{
+      held: Dokkit.Tasks.program_version(),
+      machines:
+        for m <- Estate.machines(), m.kind != :group, m.program_version do
+          %{id: m.id, machine: m.name, version: m.program_version}
+        end
+    }
   end
 
   def services(params) do
@@ -243,6 +280,7 @@ defmodule Dokkit.Read do
         checks: checks,
         routing: %{down: s.route_down, degraded: s.route_degraded, night: s.night},
         restart: s.restart,
+        keep_messages: s.keep_messages,
         stats: s.stats,
         stats_at: s.stats_at,
         open_issue: open && issue(Repo.preload(open, [:machine, :service, :check, :alert]))
@@ -258,6 +296,8 @@ defmodule Dokkit.Read do
         machine: j.machine.name,
         state: j.check.state,
         schedule: j.check.config["schedule"],
+        grace: j.check.config["grace"],
+        max_runtime: j.check.config["max_runtime"],
         last_run: j.last && run(j.last),
         last_good_run: j.good,
         next_expected: Estate.next_expected(j.check)

@@ -482,6 +482,10 @@ defmodule Dokkit.Intake do
   def label(%Service{slug: name, name: full}, name), do: full
   def label(_, name), do: name
 
+  @doc "The address a job calls to say it started, finished (`ok`) or failed."
+  def ping_url(key, slug, event),
+    do: DokkitWeb.Endpoint.url() <> "/api/v1/in/#{key}/job/#{slug}/#{event}"
+
   defp failure(%JobRun{tail: tail}) when is_binary(tail),
     do:
       tail

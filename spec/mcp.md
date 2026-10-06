@@ -35,7 +35,10 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `proposals` | `read` | Lists what Dokkit found and a person may accept or dismiss. |
 | `series` | `read` | Shows numbers over time for a service. |
 | `day` | `read` | Shows the last 24 hours in half hours: for each machine whether something was down, needed a look, or nothing happened, or it was not heard from, and the issues that opened. |
+| `alert_settings` | `read` | Shows the alert settings. Addresses, user names and secrets are only `set` or `not set`. |
+| `alert_suggestions` | `read` | Lists issues that keep opening, which the daily digest could take instead. |
 | `logs` | `read-logs` | Searches log lines. |
+| `archives` | `read-logs` | Lists the archived months of logs that can be loaded back. |
 | `snooze` | `act` | Snoozes an issue until a time. |
 | `unsnooze` | `act` | Wakes a snoozed issue. |
 | `acknowledge` | `act` | Marks an issue as seen. |
@@ -48,6 +51,8 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `accept_proposal` | `act` | Accepts a proposal. |
 | `dismiss_proposal` | `act` | Dismisses a proposal. |
 | `run_task` | `act` | Runs an accepted task. |
+| `keep_messages` | `act` | Keeps or stops keeping the text of a service's errors. |
+| `set_job_timing` | `act` | Sets when a job counts as late and as run too long. |
 | `add_rule` | `admin` | Adds an alert rule. |
 | `update_rule` | `admin` | Replaces what an alert rule says. |
 | `delete_rule` | `admin` | Deletes an alert rule. |
@@ -59,6 +64,15 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `people` | `admin` | Lists the people who can sign in. |
 | `add_person` | `admin` | Adds a person. |
 | `remove_person` | `admin` | Removes a person. |
+| `accept_task` | `admin` | Accepts a waiting task, so its machine may run the command. Takes the command and pin that `proposals` shows. |
+| `dismiss_task` | `admin` | Dismisses a waiting task. |
+| `update_program` | `admin` | Asks an enrolled machine to fetch the newer `dokkit` program. |
+| `add_job` | `admin` | Adds a job to watch. Its key and addresses are returned once. |
+| `set_alert_settings` | `admin` | Changes alert settings. A setting left out stays as it was. |
+| `test_alert` | `admin` | Sends a test alert by one channel. |
+| `accept_suggestion` | `admin` | Sends a service's issues to the daily digest from now on. |
+| `dismiss_suggestion` | `admin` | Dismisses an alert suggestion. |
+| `restore_archive` | `admin` | Loads an archived month of logs back for a week. |
 
 ## Rules
 
@@ -71,4 +85,4 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 
 ## Built so far
 
-`POST /mcp` with a user token: every tool in the table, 43 in all, one for each call of the API. A tool the token may not use is not listed.
+`POST /mcp` with a user token: every tool in the table, 57 in all (21 `read`, 2 `read-logs`, 14 `act`, 20 `admin`), one for each call of the API a token can make. Making a full-control token and the browser's own sign-in have no tool: they are Settings and the browser only. A tool the token may not use is not listed.

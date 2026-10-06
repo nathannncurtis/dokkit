@@ -102,17 +102,17 @@ $("#told").addEventListener("input", say);
 
 // What an agent is offered follows its token.
 const TOOLS = {
-  read: ["attention", "find", "service", "since_deploy", "jobs", "job_runs", "errors", "tasks", "task_runs", "day", "machines", "machine", "issues", "issue", "deploys", "versions", "rules", "proposals", "series"],
-  "read-logs": ["logs"],
-  act: ["snooze", "unsnooze", "acknowledge", "note", "bulk", "watch", "unwatch", "routing", "hold", "accept_proposal", "dismiss_proposal", "run_task"],
-  admin: ["add_rule", "update_rule", "delete_rule", "set_checks", "allow_restart", "keys", "make_key", "revoke_key", "people", "add_person", "remove_person"],
+  read: ["attention", "find", "service", "jobs", "job_runs", "errors", "since_deploy", "tasks", "machines", "machine", "issues", "issue", "deploys", "versions", "rules", "proposals", "task_runs", "series", "day", "alert_settings", "alert_suggestions"],
+  "read-logs": ["logs", "archives"],
+  act: ["snooze", "acknowledge", "run_task", "unsnooze", "note", "bulk", "watch", "unwatch", "routing", "hold", "accept_proposal", "dismiss_proposal", "keep_messages", "set_job_timing"],
+  admin: ["add_rule", "update_rule", "delete_rule", "set_checks", "allow_restart", "keys", "make_key", "revoke_key", "people", "add_person", "remove_person", "accept_task", "dismiss_task", "update_program", "add_job", "set_alert_settings", "test_alert", "accept_suggestion", "dismiss_suggestion", "restore_archive"],
 };
 function offer() {
   const all = $("#scAll").checked;
   const on = { read: true, "read-logs": all || $("#scLogs").checked, act: all || $("#scAct").checked, admin: all };
   let n = 0;
   $("#tools").innerHTML = Object.entries(TOOLS).map(([s, names]) => names.map((t) => { n += on[s]; return `<code class="${on[s] ? (s === "admin" ? "adm" : "") : "off"}">${t}</code>`; }).join("")).join("");
-  $("#toolSay").textContent = `This token is offered ${n} of 43 tools. ` + (all ? "It can do anything you can, keys and people included." : (on.act ? "It can act on issues and run tasks you accepted. It cannot touch keys, people or rules." : "It cannot change anything.") + (on["read-logs"] ? "" : " Log contents are left out of every answer."));
+  $("#toolSay").textContent = `This token is offered ${n} of 57 tools. ` + (all ? "It can do anything you can, keys and people included." : (on.act ? "It can act on issues and run tasks you accepted. It cannot touch keys, people or rules." : "It cannot change anything.") + (on["read-logs"] ? "" : " Log contents are left out of every answer."));
 }
 // Full control is not a switch you can just flip.
 let sure = false;

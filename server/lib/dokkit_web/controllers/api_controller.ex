@@ -103,7 +103,10 @@ defmodule DokkitWeb.ApiController do
   def add_user(conn, params), do: reply(conn, new_person(params))
   def remove_user(conn, %{"id" => id}), do: reply(conn, drop_person(id))
 
-  def versions(conn, _), do: json(conn, %{items: Read.versions(), apps: Read.apps(), next: nil})
+  def versions(conn, _),
+    do:
+      json(conn, %{items: Read.versions(), apps: Read.apps(), program: Read.program(), next: nil})
+
   def proposals(conn, _), do: list(conn, Read.proposals())
   def machine(conn, %{"id" => id}), do: one(conn, Read.machine(id))
   def issue(conn, %{"id" => id}), do: one(conn, Read.one_issue(id))
@@ -211,6 +214,133 @@ defmodule DokkitWeb.ApiController do
   def update_rule(conn, params), do: reply(conn, edit_rule(params))
   def delete_rule(conn, %{"id" => id}), do: reply(conn, drop_rule(id))
 
+  def set_keep(id, keep) when is_boolean(keep),
+    do: change(id, &Dokkit.Estate.set(&1, :keep_messages, keep))
+
+  def set_keep(_, _), do: {:error, "bad_keep", "keep is true or false."}
+
+  def keep_messages(conn, %{"id" => id} = p), do: reply(conn, set_keep(id, p["keep"]))
+
+  @job_texts ~w(name machine schedule grace max_runtime)
+
+  def new_job(params) do
+    with true <- texts?(params, @job_texts),
+         {:ok, %{service: s, key: key}} <- Dokkit.Estate.add_job(params) do
+      ping =
+        for e <- ~w(start ok fail), into: %{}, do: {e, Dokkit.Intake.ping_url(key, s.slug, e)}
+
+      %{id: s.id, name: s.name, key: key, ping: ping}
+    else
+      false -> {:error, "bad_job", "Every field is text."}
+      {:error, why} -> {:error, "bad_job", why}
+    end
+  end
+
+  def add_job(conn, params), do: reply(conn, new_job(params))
+
+  def job_timing(%{"id" => id} = params) do
+    with true <- texts?(params, ~w(grace max_runtime)),
+         %{} = service <- Dokkit.Estate.service(id),
+         %{} = job <- Enum.find(service.checks, &(&1.type == :job)),
+         {:ok, _} <- Dokkit.Estate.set_job_timing(job, params) do
+      Enum.find(Read.jobs(), &(&1.id == id))
+    else
+      nil -> not_found()
+      false -> {:error, "bad_timing", "grace and max_runtime are text, such as 30m."}
+      {:error, why} -> {:error, "bad_timing", why}
+    end
+  end
+
+  def set_job_timing(conn, params), do: reply(conn, job_timing(params))
+
+  defp texts?(params, keys), do: Enum.all?(keys, &is_binary(params[&1] || ""))
+
+  def alert_settings(conn, _), do: reply(conn, Dokkit.Alerts.view())
+
+  def save_alerts(params) do
+    case Dokkit.Alerts.update(params) do
+      {:ok, _} -> Dokkit.Alerts.view()
+      {:error, why} -> {:error, "bad_settings", why}
+    end
+  end
+
+  def set_alert_settings(conn, params), do: reply(conn, save_alerts(params))
+
+  def try_alert(%{"channel" => channel}) when is_binary(channel) do
+    if Dokkit.Alerts.sends?(channel) do
+      case Dokkit.Alerts.test(channel) do
+        :ok -> %{ok: true}
+        {:error, why} -> {:error, "send_failed", why}
+      end
+    else
+      {:error, "bad_channel", "channel is page, push, email, text, digest or webhook."}
+    end
+  end
+
+  def try_alert(_), do: {:error, "bad_channel", "Needs a channel."}
+
+  def test_alert(conn, params), do: reply(conn, try_alert(params))
+
+  def suggestions(conn, _), do: list(conn, Read.suggestions())
+
+  def suggestion(id, act), do: if(act.(id), do: %{ok: true}, else: not_found())
+
+  def accept_suggestion(conn, %{"id" => id}),
+    do: reply(conn, suggestion(id, &Dokkit.Alerts.accept_suggestion/1))
+
+  def dismiss_suggestion(conn, %{"id" => id}),
+    do: reply(conn, suggestion(id, &Dokkit.Alerts.dismiss_suggestion/1))
+
+  @doc "Accepts or dismisses the command and pin that proposals showed for a task."
+  def decide_task(%{"id" => id, "command" => command, "pin" => pin} = params, field)
+      when is_binary(command) and is_binary(pin) do
+    cond do
+      !Enum.any?(Dokkit.Tasks.waiting(), &(&1.id == id)) ->
+        not_found()
+
+      Dokkit.Tasks.decide(id, command, pin, field, params["system"] in [true, "true"]) == :ok ->
+        %{ok: true}
+
+      true ->
+        {:error, "changed",
+         "The command or pin is not the one on offer now. Read proposals again."}
+    end
+  end
+
+  def decide_task(_, _),
+    do: {:error, "bad_task", "Needs command and pin, as proposals shows them."}
+
+  def accept_task(conn, params), do: reply(conn, decide_task(params, :accepted))
+  def dismiss_task(conn, params), do: reply(conn, decide_task(params, :dismissed))
+
+  @doc "Asks an enrolled machine to fetch the newer program."
+  def fetch_program(id, who) do
+    case Read.machine(id) do
+      %{kind: :enrolled} ->
+        case Dokkit.Tasks.update(id, who) do
+          nil -> {:error, "no_program", "This server holds no program for machines to fetch."}
+          run -> %{run: run.id}
+        end
+
+      _ ->
+        not_found()
+    end
+  end
+
+  def update_program(conn, %{"id" => id}),
+    do: reply(conn, fetch_program(id, "token " <> (conn.assigns.key.label || "")))
+
+  def archives(conn, _), do: list(conn, Read.archives())
+
+  def restore_month(name) do
+    case Dokkit.Logs.restore_named(name) do
+      nil -> not_found()
+      lines -> %{ok: true, lines: lines}
+    end
+  end
+
+  def restore_archive(conn, %{"name" => name}), do: reply(conn, restore_month(name))
+
   defp one(conn, nil), do: missing(conn)
   defp one(conn, thing), do: json(conn, clean(conn, thing))
 
@@ -281,18 +411,21 @@ defmodule DokkitWeb.ApiController do
   end
 
   # What a call needs follows from the call: reading needs read, log contents need
-  # read-logs, keys, people, rules, checks and restart need admin, and anything else
+  # read-logs, keys, people, rules, alert settings, checks, restart, updating the program,
+  # restoring logs, making a job and accepting a task need admin, and anything else
   # changes something.
   defp scope(conn, _) do
     path = Enum.map(conn.path_info, &URI.decode/1)
 
     scope =
-      case {conn.method, Enum.at(path, 2)} do
-        {_, area} when area in ["keys", "users"] -> "admin"
-        {"GET", "logs"} -> "read-logs"
-        {"GET", _} -> "read"
-        {_, "rules"} -> "admin"
-        _ -> if List.last(path) in ["checks", "restart"], do: "admin", else: "act"
+      case {conn.method, Enum.at(path, 2), List.last(path)} do
+        {_, area, _} when area in ["keys", "users"] -> "admin"
+        {"GET", "logs", _} -> "read-logs"
+        {"GET", _, _} -> "read"
+        {_, area, _} when area in ["rules", "alerts"] -> "admin"
+        {"POST", "tasks", last} when last in ["accept", "dismiss"] -> "admin"
+        {"POST", "jobs", "jobs"} -> "admin"
+        {_, _, last} -> if last in ~w(checks restart update restore), do: "admin", else: "act"
       end
 
     if scope in conn.assigns.key.scopes,
