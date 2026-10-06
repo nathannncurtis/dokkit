@@ -36,7 +36,7 @@ An app using the library reports its host name. The host shows up in Dokkit as a
 
 ## Languages
 
-Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell and shell. Any other language can use the plain API or the ping URLs in `api.md` until it has a library.
+Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift. Any other language can use the plain API or the ping URLs in `api.md` until it has a library.
 
 ## Built so far
 
@@ -44,7 +44,7 @@ Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell and shell. Any o
 
 `clients/dotnet/Dokkit/Dokkit.cs`: one file for .NET Standard 2.0, no packages. `Start`, `Beat`, `Job`, `Check`, `Metric`, `Stats`, `Log`, `Capture` and `CatchUnhandled`. It has no provider for `Microsoft.Extensions.Logging` yet; an app that writes Serilog's compact format to a file can have `dokkit` read it.
 
-`clients/javascript/dokkit.js`: one file, no packages, for Node 18 or later and for browsers. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture` and `catchUnhandled`.
+`clients/javascript/dokkit.js`: one file, no packages, for Node 18 or later and for browsers. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture` and `catchUnhandled`. `dokkit.d.ts` beside it gives TypeScript the types.
 
 `clients/go/dokkit.go`: one file, standard library only. `Start`, `Beat`, `Job`, `Check`, `Metric`, `Stats`, `Log`, `Capture`, `Recover` for panics, and `Handler` for `log/slog`. Go keeps no stack with an error, so a report carries the stack of the place that reported it.
 
@@ -59,5 +59,7 @@ Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell and shell. Any o
 `clients/powershell/Dokkit.psm1`: one file, for Windows PowerShell 5.1 and PowerShell 7. `Start-Dokkit`, `Send-DokkitBeat`, `Invoke-DokkitJob`, `Send-DokkitProgress`, `Send-DokkitCheck`, `Send-DokkitMetric`, `Write-DokkitLog`, `Send-DokkitError` and `Send-Dokkit`. Lines are sent when a job ends or when `Send-Dokkit` is called.
 
 `clients/shell/dokkit.sh`: one file to source, needing only curl. `dokkit_beat`, `dokkit_job`, `dokkit_check`, `dokkit_metric` and `dokkit_log`. Each call sends its one line straight away and waits at most five seconds. It does not report errors; a failed job carries its exit code.
+
+`clients/swift/Dokkit.swift`: one file, Foundation only, for iOS 13 and macOS 10.15 or later. `start`, `beat`, `job`, `check`, `metric`, `stats`, `log`, `capture` and `flush`. Swift keeps no stack with an error, so a report carries the stack of the place that reported it. It has not been compiled or run yet.
 
 All of them send the host name, and the server records that host as a machine that was seen. The app's version on each host is not kept per host yet.

@@ -22,7 +22,7 @@ Working, with tests:
 - **Found.** `dokkit scan` writes what is on a machine to a file and `dokkit propose` sends it. Running Windows services and listening ports wait on the Found page, and watching one adds a check that `dokkit watch` runs on that machine.
 - **Tasks.** A `dokkit.toml` offers a named command. The owner accepts it on the Found page, it is run from the Tasks page, and `dokkit watch` on its machine carries it out and sends back the output. A command that changes has to be accepted again.
 - **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Errors, Deploys, Found, Tasks, Alerts and Settings. People sign in; the first one claims the server with a setup code.
-- **Libraries.** For Python, .NET, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell and shell, one file each: beats, job progress, an app's own checks, errors, logs.
+- **Libraries.** For Python, .NET, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift, one file each: beats, job progress, an app's own checks, errors, logs.
 - **The API and the MCP**, for user tokens made in Settings.
 
 Not built yet: alert suggestions, the Windows installer. The Docker image is written and has not been built.
@@ -44,7 +44,7 @@ go build -o dokkit.exe .
 |---|---|---|
 | **The server** | Takes everything in, stores it, alerts, and serves the web interface. | Phoenix on Postgres |
 | **The `dokkit` program** | Runs on each machine. Watches what is on it, reports to the server, and can run named tasks. It is also the command-line tool. | Go, one file |
-| **Libraries** | For things only an app knows about itself: that it is alive inside, job progress, its own checks, errors. | Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell |
+| **Libraries** | For things only an app knows about itself: that it is alive inside, job progress, its own checks, errors. | Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell, Swift |
 | **MCP** | Lets an AI tool ask Dokkit questions and take a few everyday actions. | Part of the server |
 
 ## Decisions

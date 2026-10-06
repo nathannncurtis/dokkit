@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "main": "dokkit.js",
+  "types": "dokkit.d.ts",
   "license": "Apache-2.0",
   "scripts": { "test": "node --test" }
 }
