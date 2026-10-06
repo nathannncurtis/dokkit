@@ -37,6 +37,9 @@ defmodule DokkitWeb.Layouts do
         <.link class={["nav", @active == :alerts && "on"]} navigate={~p"/alerts"}>
           <i class="ph ph-bell" aria-hidden="true"></i>Alerts
         </.link>
+        <.link class={["nav", @active == :settings && "on"]} navigate={~p"/settings"}>
+          <i class="ph ph-gear" aria-hidden="true"></i>Settings
+        </.link>
         <h3 :if={@shell.machines != []}>Machines</h3>
         <.link :for={m <- @shell.machines} class="nav" navigate={~p"/all" <> "#m-#{m.id}"}>
           <span class={["dot", m.state]}></span>{m.name}<span :if={m.bad > 0} class="q">{m.bad}</span>

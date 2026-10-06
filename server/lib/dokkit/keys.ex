@@ -53,6 +53,26 @@ defmodule Dokkit.Keys do
     end
   end
 
+  @doc "Every key that still works, newest first."
+  def list do
+    now = DateTime.utc_now()
+
+    Repo.all(
+      from k in Key,
+        where: is_nil(k.revoked_at) and (is_nil(k.expires_at) or k.expires_at > ^now),
+        order_by: [desc: k.inserted_at],
+        preload: [:machine, :service]
+    )
+  end
+
+  def revoke(id) do
+    with {:ok, id} <- Ecto.UUID.cast(id) do
+      Repo.update_all(from(k in Key, where: k.id == ^id), set: [revoked_at: DateTime.utc_now()])
+    end
+
+    :ok
+  end
+
   def hint(text), do: String.slice(text, 0, 8) <> "…"
 
   defp hash(text), do: :crypto.hash(:sha256, text)

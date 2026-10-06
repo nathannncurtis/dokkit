@@ -38,6 +38,7 @@ defmodule DokkitWeb.Router do
       live "/logs", LogsLive
       live "/machines/new", EnrolLive
       live "/alerts", AlertsLive
+      live "/settings", SettingsLive
     end
   end
 

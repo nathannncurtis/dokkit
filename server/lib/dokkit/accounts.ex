@@ -55,6 +55,50 @@ defmodule Dokkit.Accounts do
     end
   end
 
+  def list, do: Repo.all(from u in User, order_by: u.name)
+
+  def add(name, role, password) do
+    name = String.trim(name || "")
+
+    cond do
+      name == "" ->
+        {:error, "Choose a name to sign in with."}
+
+      role not in ~w(owner member viewer) ->
+        {:error, "A person is an owner, a member or a viewer."}
+
+      String.length(password || "") < @min_password ->
+        {:error, "Use a password of at least #{@min_password} characters."}
+
+      Repo.exists?(from u in User, where: fragment("lower(?)", u.name) == ^String.downcase(name)) ->
+        {:error, "There is already someone called #{name}."}
+
+      true ->
+        {:ok,
+         Repo.insert!(%User{
+           name: name,
+           password_hash: hash(password),
+           role: String.to_existing_atom(role)
+         })}
+    end
+  end
+
+  @doc "Removing someone signs them out everywhere."
+  def remove(id, %User{id: by}) do
+    case Ecto.UUID.cast(id) do
+      {:ok, ^by} ->
+        {:error, "You cannot remove yourself."}
+
+      {:ok, id} ->
+        Repo.delete_all(from u in User, where: u.id == ^id)
+        DokkitWeb.Endpoint.broadcast("user:#{id}", "disconnect", %{})
+        :ok
+
+      :error ->
+        {:error, "No such person."}
+    end
+  end
+
   def authenticate(name, password) when is_binary(name) and is_binary(password) do
     name = String.downcase(String.trim(name))
     user = Repo.one(from u in User, where: fragment("lower(?)", u.name) == ^name)

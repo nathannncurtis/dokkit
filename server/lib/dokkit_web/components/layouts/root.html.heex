@@ -8,11 +8,15 @@
     <link phx-track-static rel="stylesheet" href={~p"/vendor/phosphor.css"} />
     <link phx-track-static rel="stylesheet" href={~p"/css/dokkit.css"} />
     <script>
-      (function () {
-        var look = null; try { look = JSON.parse(localStorage.getItem("dokkit-look")); } catch (e) {}
-        var dark = look ? look.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+      function dokkitTheme(theme) {
+        try {
+          if (arguments.length) theme ? localStorage.setItem("dokkit-look", JSON.stringify({theme: theme})) : localStorage.removeItem("dokkit-look");
+          theme = (JSON.parse(localStorage.getItem("dokkit-look")) || {}).theme;
+        } catch (e) { theme = null; }
+        var dark = theme ? theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
         document.documentElement.className = (dark ? "t-dark " : "") + "d-slate a-teal";
-      })();
+      }
+      dokkitTheme();
     </script>
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>
