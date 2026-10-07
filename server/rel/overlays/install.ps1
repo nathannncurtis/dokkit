@@ -237,8 +237,19 @@ try {
                 # Letters and digits only, so the password needs no escaping in an address.
                 $password = (Get-Secret 24) -replace '[^A-Za-z0-9]', ''
                 Set-Content -Path $passwordFile -Value $password -Encoding ascii -NoNewline
+                # initdb gives up its administrator rights, so until it is done the person
+                # installing is named on the two things it touches.
+                $installer = '*' + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+                New-Item -ItemType Directory -Force $data | Out-Null
+                & icacls $data /grant "${installer}:(OI)(CI)F" | Out-Null
+                Test-Ok 'Letting initdb write the data folder'
+                & icacls $passwordFile /grant "${installer}:R" | Out-Null
+                Test-Ok 'Letting initdb read the password'
                 & (Join-Path $pg 'bin\initdb.exe') -D $data -U dokkit --pwfile=$passwordFile -A scram-sha-256 -E UTF8 --locale=C | Out-Null
-                if ($LASTEXITCODE -ne 0) { throw 'Postgres could not make its data folder.' }
+                $made = $LASTEXITCODE
+                & icacls $data /remove $installer /T /C | Out-Null
+                & icacls $passwordFile /remove $installer | Out-Null
+                if ($made -ne 0) { throw 'Postgres could not make its data folder.' }
             }
             # It runs as Network Service, which needs the data folder and nothing else.
             & icacls $data /grant "${networkService}:(OI)(CI)F" | Out-Null
