@@ -103,6 +103,19 @@ Starts dokkit watch each time you sign in. Windows only. Works on Windows only s
 Runs it as a service, on Windows or Linux. Needs an administrator or root. Works on Windows and on Linux with systemd; not on macOS yet. Installs dokkit as a service that starts with the machine, so it keeps watching with nobody signed in. On Windows it runs as Local Service, an account with no rights of its own, and reads only what that account can read, which leaves out other people's profile folders. On Linux it runs as a user named dokkit, which is made if useradd is there, and it reads only the folders that user can read. It may restart only the services or units that this machine's own configuration names, and only where the machine lets its account: on Windows the service's own permissions, on Linux root or systemd. On Windows it keeps to Program Files\DokkitProgram and ProgramData\DokkitProgram, and install refuses a data folder that holds anything but config.json, spool, dokkit.log and update. A program installed in the older Program Files\Dokkit and ProgramData\dokkit is moved by install or update: its config.json, spool and dokkit.log are copied, the service is pointed at the new copy, and the old files are left where they are. Needs an administrator prompt on Windows and root on Linux. On Linux, run through sudo, it uses the enrolment of the account that ran sudo, and root's own when that account has none, and says which file it used. update puts this copy in place of the installed one and restarts the service. uninstall leaves the machine enrolled on the server.
 
 
+### `dokkit updater install|uninstall|run|status`
+
+Updates the program, and the server on the machine that runs it, when asked. Windows only so far. Windows only so far. install, from an administrator prompt, once: copies this program to Program Files\DokkitUpdater, makes ProgramData\DokkitUpdater for administrators and the system account only, registers the scheduled task Dokkit updater (system account, every five minutes and at start-up), and runs one check. It needs the program's service installed first. run is what the task runs: it asks the server whether this machine has been told to move to a version, and only installs a release whose list is signed with the project's release key and whose files match it. It never installs an older version. status prints the installed versions, the last check and the last result. uninstall removes the task and the copied file. See spec/updates.md.
+
+
+## This machine
+
+
+### `dokkit version`
+
+Prints the version of this build. Prints the version this build was made as, such as v1.2.3. A build made by hand says v0.0.0-dev.
+
+
 ## Tasks
 
 

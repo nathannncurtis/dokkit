@@ -487,6 +487,68 @@ List the tasks accepted for this machine. So `dokkit task list` can say which ta
 
 `401` Missing or bad key.
 
+### GET /api/v1/releases/{version}/{file}
+
+Download a release file. A file of a release, for the updater on a machine. Takes a machine key (`dkm_`).
+
+- `version` (path): A release version. Letters, digits, dots, dashes and underscores; not starting with a dot.
+- `file` (path): A file name in that release, such as `SHA256SUMS`. Same characters as a version.
+
+`200` The file.
+
+`401` Missing or bad key.
+
+`404` Not found.
+
+### GET /api/v1/update
+
+Ask which version to move to. The updater on a machine tells the server what is installed and asks whether to move. The server remembers the versions, that the machine has an updater, and whether it hosts the server. 204 when no version is wanted, the server does not hold the wanted version completely, or every part the machine has is already on it; otherwise 200 with the version. Takes a machine key (`dkm_`).
+
+- `program` (query, optional): The installed program version.
+- `server` (query, optional): The installed server version. Left out when the machine does not run the server.
+- `updater` (query, optional): The installed updater version.
+- `os` (query, optional): 
+- `arch` (query, optional): 
+
+`200` Move to this version.
+
+```json
+{
+  "version": "v1.2.3"
+}
+```
+
+`204` Nothing to do.
+
+`401` Missing or bad key.
+
+### POST /api/v1/update/result
+
+Report how an update went. The server keeps the last result for the machine and clears its wanted version when `ok` is true. Takes a machine key (`dkm_`).
+
+
+Send:
+
+```
+{
+  "version": "v1.2.3",
+  "ok": true,
+  "note": "program, updater"
+}
+```
+
+`200` Kept.
+
+```json
+{
+  "ok": true
+}
+```
+
+`401` Missing or bad key.
+
+`422` The input is not right.
+
 ## Read
 
 Read issues, machines, services, jobs, logs, errors, deploys, rules, proposals and tasks. User token.
@@ -1478,6 +1540,35 @@ Archived months of logs. The archived months of logs that can be loaded back. Ta
 
 `403` The key may not do this.
 
+### GET /api/v1/releases
+
+List the releases held. The versions this server holds for the updaters, newest first, each with its file names and whether it has both `SHA256SUMS` and `SHA256SUMS.sig`. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+`200` The releases.
+
+```json
+{
+  "items": [
+    {
+      "version": "v1.2.3",
+      "files": [
+        "SHA256SUMS",
+        "SHA256SUMS.sig",
+        "dokkit-windows-x64",
+        "dokkit-windows-x64.zip"
+      ],
+      "complete": true
+    }
+  ],
+  "next": null
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
 ## Act
 
 Snooze and acknowledge issues, route and hold services, accept found things, run tasks, keep error text and set when a job is late. User token with `act`.
@@ -2377,15 +2468,24 @@ Send:
 
 ### POST /api/v1/machines/{id}/update
 
-Ask a machine to fetch the newer program. Asks an enrolled machine to fetch the newer `dokkit` program from this server. It only fetches: a person finishes the update on the machine. Answers 422 when the server holds no program. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Approve a release for a machine, or ask it to fetch the program. With `version`, sets the machine's wanted version, and only to a version the server holds completely (422 `not_held`, or `bad_version` when it is not `v` and three numbers). The updater on the machine does the rest. Without a body, asks an enrolled machine to fetch the newer `dokkit` program from this server, which a person finishes on the machine; 422 when the server holds no program. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 - `id` (path): The id of the machine.
 
-`200` The run id.
+Send:
+
+```
+{
+  "version": "v1.2.3"
+}
+```
+
+`200` Asked: the version; or the run id of the fetch.
 
 ```json
 {
-  "run": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3"
+  "ok": true,
+  "version": "v1.2.3"
 }
 ```
 
@@ -2522,6 +2622,80 @@ Load an archived month back. Loads an archived month of logs back into the datab
 `403` The key may not do this.
 
 `404` Not found.
+
+### PUT /api/v1/releases/{version}/{file}
+
+Put a release file on the server. The body is the file, as is, up to 200 MB, and replaces a file of that name. It is written to disk as it arrives. The server stores it and does not check it; the updater does. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+- `version` (path): A release version. Letters, digits, dots, dashes and underscores; not starting with a dot.
+- `file` (path): A file name in that release, such as `SHA256SUMS`. Same characters as a version.
+
+`200` Stored.
+
+```json
+{
+  "ok": true
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`413` The file is over 200 MB.
+
+`422` The name is not allowed.
+
+### DELETE /api/v1/releases/{version}
+
+Remove a release. Removes every file of that version from the server. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+- `version` (path): A release version. Letters, digits, dots, dashes and underscores; not starting with a dot.
+
+`200` Removed.
+
+```json
+{
+  "ok": true
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`404` Not found.
+
+`422` The name is not allowed.
+
+### POST /api/v1/update-all
+
+Ask every updater to move to a release. Sets the wanted version on every machine that has an updater. Only a version the server holds completely is accepted: 422 with code `not_held` otherwise, and `bad_version` when it is not `v` and three numbers. Nothing updates until this is called; there is no automatic following of new releases. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+Send:
+
+```
+{
+  "version": "v1.2.3"
+}
+```
+
+`200` Asked.
+
+```json
+{
+  "ok": true,
+  "version": "v1.2.3",
+  "machines": 3
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` The version is not one the server holds completely.
 
 ## MCP
 
