@@ -8,6 +8,7 @@ defmodule Dokkit.Tasks do
   alias Dokkit.{Repo, Task, TaskRun}
 
   @max_output 256 * 1024
+  @imessage "dokkit:imessage"
 
   @doc "Takes the tasks of a declared file. The file owns them, so ones it no longer lists go."
   def declared(service, tasks) do
@@ -68,14 +69,20 @@ defmodule Dokkit.Tasks do
             )
       )
 
-  defp runnable, do: from(t in Task, where: t.accepted == t.command and t.accepted_pin == t.pin)
+  defp runnable,
+    do:
+      from(t in Task,
+        where: t.accepted == t.command and t.accepted_pin == t.pin and t.name != @imessage
+      )
 
   @doc "What a machine may be asked to run: each accepted task and the pin that was accepted."
   def accepted_for(machine_id) do
     for t <-
           Repo.all(
             from t in Task,
-              where: t.machine_id == ^machine_id and not is_nil(t.accepted_pin),
+              where:
+                t.machine_id == ^machine_id and not is_nil(t.accepted_pin) and
+                  t.name != @imessage,
               order_by: t.name
           ),
         do: %{task: t.name, command_sha256: t.accepted_pin, as: account(t)}
@@ -103,7 +110,12 @@ defmodule Dokkit.Tasks do
 
   def runs(limit \\ 50) do
     Repo.all(
-      from r in TaskRun, order_by: [desc: r.inserted_at], limit: ^limit, preload: [task: :machine]
+      from r in TaskRun,
+        join: t in assoc(r, :task),
+        where: t.name != @imessage,
+        order_by: [desc: r.inserted_at],
+        limit: ^limit,
+        preload: [task: :machine]
     )
   end
 
@@ -157,6 +169,38 @@ defmodule Dokkit.Tasks do
       run(task.id, by)
     end
   end
+
+  @doc """
+  Queues a built-in run that sends an iMessage from this Mac. It needs no accepting, is never
+  listed as a task and is offered only to this machine.
+  """
+  def imessage(machine_id, to, text, alert_id \\ nil) do
+    task =
+      Repo.get_by(Task, machine_id: machine_id, name: @imessage) ||
+        Repo.insert!(%Task{
+          machine_id: machine_id,
+          name: @imessage,
+          command: @imessage,
+          accepted: @imessage,
+          pin: "",
+          accepted_pin: ""
+        })
+
+    run =
+      Repo.insert!(%TaskRun{
+        task_id: task.id,
+        by: "alert",
+        alert_id: alert_id,
+        payload: %{"to" => to, "text" => text}
+      })
+
+    Phoenix.PubSub.broadcast(Dokkit.PubSub, "work:#{machine_id}", :work)
+    run
+  end
+
+  @doc "What the program is told beside the task's name: the built-in run's own fields."
+  def extras(%TaskRun{payload: %{"to" => to, "text" => text}}), do: %{to: to, text: text}
+  def extras(_), do: %{}
 
   @doc "Accepts or dismisses the command and pin the person was shown, and nothing newer."
   def decide(id, command, pin, field, as_system \\ false)
@@ -247,19 +291,31 @@ defmodule Dokkit.Tasks do
   end
 
   def result(machine_id, run_id, %{"refused" => why}) when is_binary(why),
-    do: finish(machine_id, run_id, state: :refused, output: String.slice(why, 0, 500))
+    do:
+      machine_id
+      |> finish(run_id, state: :refused, output: String.slice(why, 0, 500))
+      |> answered(run_id)
 
   def result(machine_id, run_id, %{"exit_code" => code} = params) when is_integer(code) do
     took = params["duration_ms"]
 
-    finish(machine_id, run_id,
+    machine_id
+    |> finish(run_id,
       state: if(code == 0, do: :ok, else: :fail),
       exit_code: code,
       duration_ms: is_integer(took) && took >= 0 && took
     )
+    |> answered(run_id)
   end
 
   def result(_, _, _), do: :error
+
+  defp answered(:ok, run_id) do
+    Dokkit.Alerts.answered(run_id)
+    :ok
+  end
+
+  defp answered(other, _), do: other
 
   defp finish(machine_id, run_id, set) do
     set = for {k, v} <- set, v != false, do: {k, v}

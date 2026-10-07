@@ -17,7 +17,7 @@ There is one HTTP API on the server. `dokkit`, the CLI, the libraries, the MCP a
 | **Issue** | Opens when a check goes bad and closes by itself when it recovers. Has a short id (`DOK-12`), a kind, a since-time and a count. Can be snoozed until a time or acknowledged. |
 | **Job run** | One run of a job: start, finish, exit code, duration, progress, last lines of output. |
 | **Deploy** | Version X of service S went onto machine M at time T. |
-| **Rule** | A condition, a channel (`page`, `push`, `email`, `text`, `digest`, `webhook`) and who receives it. |
+| **Rule** | A condition, a channel (`page`, `push`, `email`, `imessage`, `sms`, `digest`, `webhook`) and who receives it. |
 | **Proposal** | Something found or offered that is not active until accepted in the interface: scan results and tasks. |
 | **Task** | A named piece of work defined on a machine. A task run is one execution. |
 | **Environment** | `production` by default. Anything reported under another environment, such as `dev`, is shown and never alerts. |
@@ -173,7 +173,13 @@ GET /work?wait=50
 
 `command_sha256` is the pin of the task that was accepted: a SHA-256 that `dokkit` computes over the command, the absolute path of the `dokkit.toml` that declares it (links resolved) and the contents of every word of the command (quotes removed) that is a regular file inside the task's folder, links resolved. A file outside the folder is not hashed. A task also carries the path of its file, shown beside the command. `dokkit` sends the pin with each task it declares and runs the task only when its own pin is the same one. A task accepted before pins existed has none and must be accepted again; a task declared with no pin by an older `dokkit` waits with the note that it needs a newer one and is never run.
 
-A task has a name and nothing else. There are no arguments in v1, so the server cannot shape what runs.
+A task has a name and nothing else. There are no arguments in v1, so the server cannot shape what runs. The one exception is the built-in `dokkit:imessage`, offered only to the Mac chosen for iMessage, with an empty `command_sha256` and two more fields:
+
+```json
+{"run": "<id>", "task": "dokkit:imessage", "as": "ordinary", "command_sha256": "", "to": ["+15555550100", "someone@example.com"], "text": "Upload portal is down (web-01, DOK-12)"}
+```
+
+The program posts one output line for each recipient (`sent to X` or `not sent to X: why`) and a result with `exit_code` 0 when all were sent, 1 otherwise, or `{"refused": "why"}`.
 
 ```
 POST /work/<run>/output     a chunk of output
@@ -237,7 +243,7 @@ A login session, or a user token with `act`. Keys, people, rules, alert settings
 | `PUT /jobs/<id>/timing` | Set `grace` and `max_runtime` of a job added in the interface. A field left out stays as it was; an empty one clears it. A job from a `dokkit.toml` answers `422`: change the file. |
 | `POST /rules`, `PUT /rules/<id>`, `DELETE /rules/<id>` (`admin`) | Alert rules. `PUT` changes only the fields sent; an empty one clears it. A `kind`, `state` or `channel` that is not one of its choices, `null`, or a `machine` that is not text answers `422`. |
 | `PUT /alerts` (`admin`) | Change alert settings. A setting left out stays as it was; a secret sent as an empty string is cleared. A secret is sent to one host: if `ntfy_url` or `smtp_host` changes and its secret (`ntfy_token`, `smtp_password`) is not sent in the same call, the secret is cleared, and the answer carries a `note` that says so. Addresses may be on the server's own network but not this machine or a link-local address (see `alerts.md`); `smtp_port` is 25, 465, 587 or 2525. The night is whole hours, addresses must be `https`, `down`, `degraded` and `push_with` must be one of their choices: otherwise `422`. Answers with the settings as `GET /alerts` shows them. |
-| `POST /alerts/test` (`admin`) | `{"channel": "webhook"}` sends a test alert by that channel. The answer is `{"ok": true}` or `422` with one fixed reason, never anything the far end said. `422` with code `slow_down` after four tests at once, then one every 25 seconds, for each token. |
+| `POST /alerts/test` (`admin`) | `{"channel": "webhook"}` sends a test alert by that channel. The answer is `{"ok": true}` or `422` with one reason: for SMS Twilio's own message, for iMessage the Mac's answer (waited for up to a minute), for the others a fixed reason, never anything the far end said. `422` with code `slow_down` after four tests at once, then one every 25 seconds, for each token. |
 | `POST /alerts/suggestions/<id>/accept`, `/dismiss` (`admin`) | Send that service's issues to the daily digest from now on, or drop the suggestion. |
 | `POST /logs/archives/<name>/restore` (`admin`) | Load an archived month back for a week. Answers with the number of `lines` loaded. |
 | `POST /tasks/<id>/accept`, `/dismiss` (`admin`) | Accept or dismiss a task that is waiting. Send the `command` and `pin` that `GET /proposals` shows; if either has changed since, the answer is `422` and nothing is accepted. `accept` takes `system: true` to run the task as the system account. Accepting lets the server ask a machine to run a command, so it needs `admin`. |

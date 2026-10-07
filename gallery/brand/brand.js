@@ -100,7 +100,7 @@ function say() {
   const how = $('input[name="how"]:checked').value, night = $("#night").checked, late = $("#late").value, long = $("#long").value;
   $("#lateOut").textContent = late + " min";
   $("#longOut").textContent = long + " min";
-  const what = { page: "page you", push: "send a silent push", email: "email you", digest: "put it in the morning digest" }[how];
+  const what = { page: "page you", push: "send a silent push", email: "email you", imessage: "send you an iMessage", sms: "send you an SMS", digest: "put it in the morning digest" }[how];
   const when = how === "digest" ? "" : night ? ", even at night" : ", and wait for morning if it is night";
   $("#said").innerHTML = `If nightly-purge has not run ${late} minutes after 01:00, Dokkit will <b>${what}</b>${when}. A run that finishes over ${long} minutes goes under Soon and wakes nobody. One still going past it needs you.`;
 }

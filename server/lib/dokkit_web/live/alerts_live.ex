@@ -2,7 +2,7 @@ defmodule DokkitWeb.AlertsLive do
   use DokkitWeb, :live_view
   alias Dokkit.Alerts
 
-  @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user smtp_password)
+  @secrets Alerts.secrets()
   @push [{"ntfy", "ntfy"}, {"Pushover", "pushover"}, {"PagerDuty low urgency", "pagerduty"}]
 
   def mount(_params, _session, socket) do
@@ -11,12 +11,14 @@ defmodule DokkitWeb.AlertsLive do
      |> assign(
        page_title: "Alerts",
        config: Alerts.config(),
+       macs: Alerts.macs(),
        rules: Alerts.rules(),
        suggestions: Alerts.suggestions(),
        saved: false,
        note: nil,
        error: nil,
        typed: %{},
+       waiting: false,
        tests: %{}
      )}
   end
@@ -77,22 +79,66 @@ defmodule DokkitWeb.AlertsLive do
     {:noreply, assign(socket, suggestions: Alerts.suggestions())}
   end
 
-  def handle_event("test", %{"channel" => channel}, socket) do
-    if owner?(socket) and Alerts.sends?(channel) do
-      result =
-        case DokkitWeb.ApiController.try_alert(
-               %{"channel" => channel},
-               socket.assigns.current_user.id
-             ) do
-          %{ok: true} -> {:ok, "Sent. Check that it arrived."}
-          {:error, _, text} -> {:error, text}
-        end
+  def handle_event("test", %{"channel" => "imessage"}, socket) do
+    if owner?(socket) and not socket.assigns.waiting do
+      user = socket.assigns.current_user.id
 
-      {:noreply, assign(socket, tests: Map.put(socket.assigns.tests, channel, result))}
+      {:noreply,
+       socket
+       |> assign(
+         waiting: true,
+         tests:
+           Map.put(socket.assigns.tests, "imessage", {:wait, "Waiting for the Mac to answer."})
+       )
+       |> start_async(:imessage, fn ->
+         DokkitWeb.ApiController.try_alert(%{"channel" => "imessage"}, user)
+       end)}
     else
       {:noreply, socket}
     end
   end
+
+  def handle_event("test", %{"channel" => channel}, socket) do
+    if owner?(socket) and Alerts.sends?(channel) do
+      {:noreply,
+       assign(socket, tests: Map.put(socket.assigns.tests, channel, test_result(channel, socket)))}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_async(:imessage, {:ok, answer}, socket),
+    do:
+      {:noreply,
+       assign(socket,
+         waiting: false,
+         tests: Map.put(socket.assigns.tests, "imessage", answer(answer))
+       )}
+
+  def handle_async(:imessage, {:exit, _}, socket),
+    do:
+      {:noreply,
+       assign(socket,
+         waiting: false,
+         tests: Map.put(socket.assigns.tests, "imessage", {:error, "The test did not finish."})
+       )}
+
+  defp test_result(channel, socket),
+    do:
+      answer(
+        DokkitWeb.ApiController.try_alert(%{"channel" => channel}, socket.assigns.current_user.id)
+      )
+
+  defp answer(%{ok: true}), do: {:ok, "Sent. Check that it arrived."}
+  defp answer({:error, _, text}), do: {:error, text}
+
+  defp no_mac?(config, key),
+    do: config[key] == "imessage" and config["imessage_machine"] in [nil, ""]
+
+  defp rule_no_mac?(rules, config),
+    do:
+      Enum.any?(rules, &(&1["on"] and &1["channel"] == "imessage")) and
+        config["imessage_machine"] in [nil, ""]
 
   # Keep what was typed, so a page update does not put the saved values back over it.
   defp typed(socket, params, error) do
@@ -124,11 +170,11 @@ defmodule DokkitWeb.AlertsLive do
       <div class="head">
         <h1 tabindex="-1">Alerts</h1>
       </div>
-
+      
       <div :if={@suggestions != []} class="body set" style="padding-bottom: 0">
         <div class="card">
           <h2>Suggestions<span class="cnt">{length(@suggestions)}</span></h2>
-
+          
           <div
             :for={i <- @suggestions}
             class="li slim"
@@ -138,7 +184,7 @@ defmodule DokkitWeb.AlertsLive do
             <span>
               {i.service.name} has needed a look {i.count} times this month and is snoozed. Send it to the daily digest instead?
             </span>
-
+            
             <button
               class="btn sm"
               type="button"
@@ -148,7 +194,7 @@ defmodule DokkitWeb.AlertsLive do
             >
               Send to the digest
             </button>
-
+            
             <button
               class="btn sm"
               type="button"
@@ -161,46 +207,15 @@ defmodule DokkitWeb.AlertsLive do
           </div>
         </div>
       </div>
-
+      
       <form class="body set" phx-submit="save" phx-change="changed" id="alerts-form">
         <fieldset disabled={!@owner} style="display: contents">
           <div class="card">
-            <h2>Who is told</h2>
-
-            <dl class="kv">
-              <dt>When something stops</dt>
-
-              <dd>
-                <.pick
-                  name="down"
-                  value={@config["down"]}
-                  options={@channels}
-                  label="When something stops"
-                />
-              </dd>
-
-              <dt>When something is struggling</dt>
-
-              <dd>
-                <.pick
-                  name="degraded"
-                  value={@config["degraded"]}
-                  options={@channels}
-                  label="When something is struggling"
-                />
-                <span class="hint">
-                  An issue alerts once, when it opens. If it recovers and fails again inside 30 minutes, that is the same issue and it stays quiet.
-                </span>
-              </dd>
-            </dl>
-          </div>
-
-          <div class="card">
-            <h2>Channels</h2>
-
+            <h2>PagerDuty</h2>
+            
             <dl class="kv">
               <dt>Page</dt>
-
+              
               <dd>
                 <.secret
                   typed={@typed}
@@ -212,9 +227,15 @@ defmodule DokkitWeb.AlertsLive do
                   Through PagerDuty, for what cannot wait until morning. The key is the integration key of an Events API v2 integration. The page is resolved when the issue closes.
                 </span>
               </dd>
-
+            </dl>
+          </div>
+          
+          <div class="card">
+            <h2>Push</h2>
+            
+            <dl class="kv">
               <dt>Push</dt>
-
+              
               <dd>
                 <.pick
                   name="push_with"
@@ -224,9 +245,9 @@ defmodule DokkitWeb.AlertsLive do
                 /> <.send_test channel="push" tests={@tests} />
                 <span class="hint">A quiet notification on your phone, for what should be seen today.</span>
               </dd>
-
+              
               <dt>ntfy</dt>
-
+              
               <dd>
                 <input
                   class="inp"
@@ -242,9 +263,9 @@ defmodule DokkitWeb.AlertsLive do
                   label="Access token, if the topic needs one"
                 /> <span class="hint">An https address.</span>
               </dd>
-
+              
               <dt>Pushover</dt>
-
+              
               <dd>
                 <.secret
                   typed={@typed}
@@ -253,25 +274,15 @@ defmodule DokkitWeb.AlertsLive do
                   label="Application token"
                 /> <.secret typed={@typed} name="pushover_user" config={@config} label="User key" />
               </dd>
-
-              <dt>Webhook</dt>
-
-              <dd>
-                <input
-                  class="inp"
-                  style="flex: 1 1 260px"
-                  name="alerts[webhook_url]"
-                  value={@owner && @config["webhook_url"]}
-                  placeholder="https://example.com/hook"
-                  aria-label="Webhook address"
-                /> <.send_test channel="webhook" tests={@tests} />
-                <span class="hint">
-                  An https address. A JSON request when an issue opens and another when it closes.
-                </span>
-              </dd>
-
+            </dl>
+          </div>
+          
+          <div class="card">
+            <h2>Email</h2>
+            
+            <dl class="kv">
               <dt>Mail server</dt>
-
+              
               <dd>
                 <input
                   :for={
@@ -295,11 +306,11 @@ defmodule DokkitWeb.AlertsLive do
                   value={@config["mail_from"]}
                   placeholder="Sent from, such as dokkit@example.com"
                   aria-label="Sent from"
-                /> <span class="hint">Used for email, text and the daily digest.</span>
+                /> <span class="hint">Used for email and the daily digest.</span>
               </dd>
-
+              
               <dt>Email</dt>
-
+              
               <dd>
                 <input
                   class="inp"
@@ -311,23 +322,171 @@ defmodule DokkitWeb.AlertsLive do
                 /> <.send_test channel="email" tests={@tests} />
                 <span class="hint">More than one address, with commas between them.</span>
               </dd>
-
-              <dt>Text</dt>
-
+            </dl>
+          </div>
+          
+          <div class="card" id="imessage">
+            <h2>iMessage</h2>
+            
+            <dl class="kv">
+              <dt>Sent from</dt>
+              
+              <dd>
+                <span :if={@macs != []} class="dd wide">
+                  <select
+                    class="inp"
+                    name="alerts[imessage_machine]"
+                    aria-label="The Mac that sends iMessages"
+                  >
+                    <option value="">No Mac chosen</option>
+                    
+                    <option
+                      :for={m <- @macs}
+                      value={m.id}
+                      selected={m.id == @config["imessage_machine"]}
+                    >
+                      {m.name}
+                    </option>
+                  </select>
+                   <i class="ph ph-caret-down" aria-hidden="true"></i>
+                </span>
+                
+                <span :if={@macs == []} class="hint">
+                  No Mac is enrolled. iMessage goes out through a Mac that runs the program and is signed in to Messages.
+                </span>
+                
+                <span :if={@macs != [] and @config["imessage_machine"] in [nil, ""]} class="hint bad">
+                  The iMessage channel will not send until a Mac is chosen.
+                </span>
+              </dd>
+              
+              <dt>Goes to</dt>
+              
               <dd>
                 <input
                   class="inp"
                   style="flex: 1 1 260px"
-                  name="alerts[text_to]"
-                  value={@config["text_to"]}
-                  placeholder="5551234567@your-carrier.example"
-                  aria-label="Text goes to"
-                /> <.send_test channel="text" tests={@tests} />
-                <span class="hint">An address that turns a mail into a text message.</span>
+                  name="alerts[imessage_to]"
+                  value={@config["imessage_to"]}
+                  placeholder="+15555550100, you@example.com"
+                  aria-label="iMessage goes to"
+                /> <.send_test channel="imessage" tests={@tests} />
+                <span class="hint">
+                  Phone numbers or email addresses, with commas between them. Run
+                  <code>dokkit imessage on</code>
+                  on that Mac so it may send; macOS asks once on its screen.
+                </span>
               </dd>
-
+            </dl>
+          </div>
+          
+          <div class="card" id="sms">
+            <h2>SMS</h2>
+            
+            <dl class="kv">
+              <dt>Twilio account</dt>
+              
+              <dd>
+                <input
+                  class="inp"
+                  style="flex: 1 1 200px"
+                  name="alerts[twilio_sid]"
+                  value={@owner && @config["twilio_sid"]}
+                  placeholder="Account SID"
+                  aria-label="Twilio account SID"
+                /> <.secret typed={@typed} name="twilio_token" config={@config} label="Auth token" />
+                <input
+                  class="inp"
+                  style="flex: 1 1 160px"
+                  name="alerts[twilio_from]"
+                  value={@config["twilio_from"]}
+                  placeholder="Sent from, such as +15555550100"
+                  aria-label="Twilio number the text is sent from"
+                />
+              </dd>
+              
+              <dt>Goes to</dt>
+              
+              <dd>
+                <input
+                  class="inp"
+                  style="flex: 1 1 260px"
+                  name="alerts[sms_to]"
+                  value={@config["sms_to"]}
+                  placeholder="+15555550100, +15555550101"
+                  aria-label="SMS goes to"
+                /> <.send_test channel="sms" tests={@tests} />
+                <span class="hint">Phone numbers, with commas between them.</span>
+              </dd>
+            </dl>
+          </div>
+          
+          <div class="card">
+            <h2>Webhook</h2>
+            
+            <dl class="kv">
+              <dt>Webhook</dt>
+              
+              <dd>
+                <input
+                  class="inp"
+                  style="flex: 1 1 260px"
+                  name="alerts[webhook_url]"
+                  value={@owner && @config["webhook_url"]}
+                  placeholder="https://example.com/hook"
+                  aria-label="Webhook address"
+                /> <.send_test channel="webhook" tests={@tests} />
+                <span class="hint">
+                  An https address. A JSON request when an issue opens and another when it closes.
+                </span>
+              </dd>
+            </dl>
+          </div>
+          
+          <div class="card">
+            <h2>Who is told</h2>
+            
+            <dl class="kv">
+              <dt>When something stops</dt>
+              
+              <dd>
+                <.pick
+                  name="down"
+                  value={@config["down"]}
+                  options={@channels}
+                  label="When something stops"
+                />
+                <span :if={no_mac?(@config, "down")} class="hint bad">
+                  iMessage will not send until a Mac is chosen above.
+                </span>
+              </dd>
+              
+              <dt>When something is struggling</dt>
+              
+              <dd>
+                <.pick
+                  name="degraded"
+                  value={@config["degraded"]}
+                  options={@channels}
+                  label="When something is struggling"
+                />
+                <span :if={no_mac?(@config, "degraded")} class="hint bad">
+                  iMessage will not send until a Mac is chosen above.
+                </span>
+                
+                <span class="hint">
+                  An issue alerts once, when it opens. If it recovers and fails again inside 30 minutes, that is the same issue and it stays quiet.
+                </span>
+              </dd>
+            </dl>
+          </div>
+          
+          <div class="card">
+            <h2>Limits and night</h2>
+            
+            <dl class="kv">
               <dt>A machine's disk</dt>
-
+              
               <dd>
                 <input
                   class="inp"
@@ -339,9 +498,9 @@ defmodule DokkitWeb.AlertsLive do
                 />
                 <span class="hint">Percent used, on any disk, that needs a look. Blank switches it off.</span>
               </dd>
-
+              
               <dt>A machine's memory</dt>
-
+              
               <dd>
                 <input
                   class="inp"
@@ -353,9 +512,9 @@ defmodule DokkitWeb.AlertsLive do
                 />
                 <span class="hint">Percent used that needs a look, three minutes running. Blank switches it off.</span>
               </dd>
-
+              
               <dt>Outside heartbeat</dt>
-
+              
               <dd>
                 <input
                   class="inp"
@@ -369,9 +528,9 @@ defmodule DokkitWeb.AlertsLive do
                   An https address. Dokkit calls it every minute. Point it at a service that alerts when the calls stop, because Dokkit cannot tell anyone that it is down.
                 </span>
               </dd>
-
+              
               <dt>Night</dt>
-
+              
               <dd>
                 <input
                   class="inp mono"
@@ -401,9 +560,9 @@ defmodule DokkitWeb.AlertsLive do
                   Start hour, end hour and hours from UTC, for example 22, 7 and -5. A service set not to wake you at night holds its alerts until the night ends.
                 </span>
               </dd>
-
+              
               <dt>Daily digest</dt>
-
+              
               <dd>
                 <input
                   class="inp mono"
@@ -418,7 +577,7 @@ defmodule DokkitWeb.AlertsLive do
                 </span>
               </dd>
             </dl>
-
+            
             <div class="foot">
               <span :if={!@owner}>Only the owner can change these.</span>
               <span :if={@saved} role="status">Saved. {@note}</span>
@@ -428,16 +587,20 @@ defmodule DokkitWeb.AlertsLive do
           </div>
         </fieldset>
       </form>
-
+      
       <form class="body set" phx-submit="rule" id="rule-form" style="padding-top: 0">
         <fieldset disabled={!@owner} style="display: contents">
           <div class="card">
             <h2>Rules<span :if={@rules != []} class="cnt">{length(@rules)}</span></h2>
-
+            
             <p :if={@rules == []} class="lead">
               No rules. Every issue follows the two choices under Who is told, unless its service says otherwise.
             </p>
-
+            
+            <p :if={rule_no_mac?(@rules, @config)} class="lead bad">
+              A rule sends by iMessage, and it will not send until a Mac is chosen above.
+            </p>
+            
             <div
               :for={r <- @rules}
               class="li slim"
@@ -448,23 +611,23 @@ defmodule DokkitWeb.AlertsLive do
               <button class="btn sm" type="button" phx-click="rule" phx-value-toggle={r["id"]}>
                 {if r["on"], do: "Switch off", else: "Switch on"}
               </button>
-
+              
               <button class="btn sm" type="button" phx-click="rule" phx-value-remove={r["id"]}>
                 Remove
               </button>
             </div>
-
+            
             <dl class="kv">
               <dt>New rule</dt>
-
+              
               <dd>
                 <span :for={{field, options} <- [{"kind", @kinds}, {"state", @states}]} class="dd">
                   <select class="inp" name={"rule[#{field}]"} aria-label={"Rule " <> field}>
                     <option :for={{text, value} <- options} value={value}>{text}</option>
                   </select>
-                  <i class="ph ph-caret-down" aria-hidden="true"></i>
+                   <i class="ph ph-caret-down" aria-hidden="true"></i>
                 </span>
-
+                
                 <input
                   class="inp"
                   style="flex: 1 1 160px"
@@ -476,9 +639,9 @@ defmodule DokkitWeb.AlertsLive do
                   <select class="inp" name="rule[channel]" aria-label="Rule channel">
                     <option :for={{text, value} <- @channels} value={value}>{text}</option>
                   </select>
-                  <i class="ph ph-caret-down" aria-hidden="true"></i>
+                   <i class="ph ph-caret-down" aria-hidden="true"></i>
                 </span>
-                <button class="btn" type="submit">Add the rule</button>
+                 <button class="btn" type="submit">Add the rule</button>
                 <span class="hint">
                   The first rule that fits an issue decides its channel. A service's own routing comes first.
                 </span>
@@ -504,7 +667,7 @@ defmodule DokkitWeb.AlertsLive do
           {text}
         </option>
       </select>
-      <i class="ph ph-caret-down" aria-hidden="true"></i>
+       <i class="ph ph-caret-down" aria-hidden="true"></i>
     </span>
     """
   end
