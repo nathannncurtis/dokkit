@@ -138,6 +138,24 @@ function Get-Erlsrv {
         Sort-Object { [version]($_.Directory.Parent.Name -replace '^erts-') } |
         Select-Object -Last 1).FullName
 }
+# Copies only the files that are new or different. A file Windows still has open is nearly always
+# one that did not change, such as the service wrapper, and is left alone.
+# Reads a file other programs may have open.
+function Get-Sha256([string]$Path) {
+    $stream = [IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite, Delete')
+    try { [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($stream)) }
+    finally { $stream.Dispose() }
+}
+function Copy-Changed([string]$From, [string]$Into) {
+    $root = (Resolve-Path $From).Path.TrimEnd('\')
+    foreach ($file in Get-ChildItem $root -Recurse -File) {
+        $target = Join-Path $Into $file.FullName.Substring($root.Length).TrimStart('\')
+        if ((Test-Path $target) -and (Get-Item $target).Length -eq $file.Length -and
+            (Get-Sha256 $target) -eq (Get-Sha256 $file.FullName)) { continue }
+        New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
+        Copy-Item $file.FullName $target -Force
+    }
+}
 function Test-Ok([string]$What) {
     if ($LASTEXITCODE -ne 0) { throw "$What failed." }
 }
@@ -185,7 +203,7 @@ try {
     New-Item -ItemType Directory -Force $To | Out-Null
     # A file that has just been run, or that a scanner has open, is free again within moments.
     for ($try = 1; ; $try++) {
-        try { Copy-Item -Path (Join-Path $PSScriptRoot '*') -Destination $To -Recurse -Force; break }
+        try { Copy-Changed $PSScriptRoot $To; break }
         catch {
             if ($try -ge 30) { throw }
             if ($try -eq 1) { Write-Host "Waiting for a file that is in use: $($_.Exception.Message)" }
