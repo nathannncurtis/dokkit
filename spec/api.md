@@ -188,6 +188,24 @@ POST /work/<run>/result     {"exit_code": 0, "duration_ms": 81234}
 
 `dokkit` only runs a task that is defined on its machine and has been accepted. Anything else is answered with a refusal result.
 
+### Updates
+
+How an update reaches a machine is in `updates.md`. The updater on a machine uses its machine key.
+
+```
+GET /update?program=v1.2.3&server=v1.2.3&updater=v1.2.3&os=windows&arch=x64
+POST /update/result
+GET /releases/<version>/<file>      a file of a release the server holds
+```
+
+`GET /update` remembers what the machine is on (`server` is left out when it does not run the server) and that it has an updater. `204` when no version is wanted, when the server does not hold the wanted version completely (both `SHA256SUMS` and `SHA256SUMS.sig`), or when every part the machine has is already on it. Otherwise `200`:
+
+```json
+{"version": "v1.2.3"}
+```
+
+The result is `{"version": "v1.2.3", "ok": true, "note": "program, updater"}`, or `ok: false` with a `note` of at most 2000 characters. The server keeps the last result for the machine and, when `ok` is true, clears the wanted version. The answer is `{"ok": true}`; a result with no `version`, no `ok` or a longer note answers `422`.
+
 ### Errors
 
 Two doors, both described in `errors.md`:
@@ -220,6 +238,7 @@ A login session, or a user token with `read`. Log contents need `read-logs`: wit
 | `GET /logs/archives` (`read-logs`) | The archived months of logs that can be loaded back. |
 | `GET /proposals` | Things waiting to be accepted. A task comes with the `command` and `pin` to send back to accept or dismiss it. |
 | `GET /tasks`, `GET /task-runs` | Accepted tasks and their runs. |
+| `GET /releases` | The releases the server holds, newest first: `version`, `files` and `complete`, which is true when both `SHA256SUMS` and `SHA256SUMS.sig` are held. |
 
 ## Act
 
@@ -248,6 +267,9 @@ A login session, or a user token with `act`. Keys, people, rules, alert settings
 | `POST /logs/archives/<name>/restore` (`admin`) | Load an archived month back for a week. Answers with the number of `lines` loaded. |
 | `POST /tasks/<id>/accept`, `/dismiss` (`admin`) | Accept or dismiss a task that is waiting. Send the `command` and `pin` that `GET /proposals` shows; if either has changed since, the answer is `422` and nothing is accepted. `accept` takes `system: true` to run the task as the system account. Accepting lets the server ask a machine to run a command, so it needs `admin`. |
 | `POST /tasks/<id>/run` | Run an accepted task on its machine. Answers with the run id. |
-| `POST /machines/<id>/update` (`admin`) | Ask an enrolled machine to fetch the newer `dokkit` program. A person finishes the update on the machine. Answers `422` when the server holds no program. |
+| `POST /machines/<id>/update` (`admin`) | `{"version": "v1.2.3"}` sets the machine's wanted version, for its updater to act on, and only to a release the server holds completely: `422` with code `not_held` otherwise, `bad_version` when it is not `v` and three numbers. Answers `{"ok": true, "version": "v1.2.3"}`. Without a body, it asks an enrolled machine to fetch the newer `dokkit` program, which a person finishes on the machine; `422` when the server holds no program. |
+| `POST /update-all` (`admin`) | The same body, for every machine that has an updater. Answers `{"ok": true, "version": "v1.2.3", "machines": 3}`. |
+| `PUT /releases/<version>/<file>` (`admin`) | The body is the file, as is, up to 200 MB (`413` over that), written to disk as it arrives. Replaces a file of that name. The server does not check it; the updater does. A version or file name of anything but letters, digits, dots, dashes and underscores, or one that starts with a dot, answers `422` with code `bad_name`. |
+| `DELETE /releases/<version>` (`admin`) | Removes that version's files. |
 
 Keys, tokens and users are managed with the `admin` scope. A token can make a token only with scopes it holds itself, and never one with `admin`: that is made in Settings.

@@ -50,6 +50,16 @@ end
 config :dokkit, archive: System.get_env("DOKKIT_ARCHIVE")
 config :dokkit, programs: System.get_env("DOKKIT_PROGRAMS")
 
+# Signed releases the updaters fetch. Beside the settings file in production.
+releases =
+  cond do
+    config_env() != :prod -> Path.join(System.tmp_dir!(), "dokkit-releases-#{config_env()}")
+    Path.type(settings) == :absolute -> Path.join(Path.dirname(settings), "releases")
+    true -> "releases"
+  end
+
+config :dokkit, releases: System.get_env("DOKKIT_RELEASES") || releases
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

@@ -344,8 +344,29 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
+  @doc "Approves a release for one machine, or for every machine that has an updater."
+  def approve_update(version, id) do
+    case Dokkit.Releases.approve(version, id) do
+      {:ok, n} ->
+        if id == :all,
+          do: %{ok: true, version: version, machines: n},
+          else: %{ok: true, version: version}
+
+      error ->
+        error
+    end
+  end
+
+  # With a version it approves a release; without, it is the older fetch.
+  def update_program(conn, %{"id" => id, "version" => version}),
+    do: reply(conn, approve_update(version, id))
+
   def update_program(conn, %{"id" => id}),
     do: reply(conn, fetch_program(id, "token " <> (conn.assigns.key.label || "")))
+
+  def releases(conn, _), do: list(conn, Dokkit.Releases.list())
+
+  def update_all(conn, params), do: reply(conn, approve_update(params["version"], :all))
 
   def archives(conn, _), do: list(conn, Read.archives())
 
@@ -433,10 +454,10 @@ defmodule DokkitWeb.ApiController do
   # changes something.
   def needs(method, path) do
     case {method, Enum.at(path, 2), List.last(path)} do
-      {_, area, _} when area in ["keys", "users"] -> "admin"
+      {_, area, _} when area in ["keys", "users", "update-all"] -> "admin"
       {"GET", "logs", _} -> "read-logs"
       {"GET", _, _} -> "read"
-      {_, area, _} when area in ["rules", "alerts"] -> "admin"
+      {_, area, _} when area in ["rules", "alerts", "releases"] -> "admin"
       {"POST", "tasks", last} when last in ["accept", "dismiss"] -> "admin"
       {"POST", "jobs", "jobs"} -> "admin"
       {_, _, last} -> if last in ~w(checks restart update restore), do: "admin", else: "act"

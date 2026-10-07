@@ -26,7 +26,10 @@ defmodule DokkitWeb.ParityTest do
          ]},
       "test" => {:owner, ["POST /api/v1/alerts/test"]}
     },
-    "DeploysLive" => %{"fetch" => {:owner, ["POST /api/v1/machines/:id/update"]}},
+    "EverythingLive" => %{
+      "update" => {:owner, ["POST /api/v1/machines/:id/update"]},
+      "update_all" => {:owner, ["POST /api/v1/update-all"]}
+    },
     "EnrolLive" => %{"token" => {:owner, ["POST /api/v1/keys"]}},
     "InboxLive" => %{
       "tab" => @view,
@@ -86,7 +89,12 @@ defmodule DokkitWeb.ParityTest do
     "POST /password" => "A person changes their own password; a token has none."
   }
 
-  @api_controllers [DokkitWeb.ApiController, DokkitWeb.McpController, DokkitWeb.IntakeController]
+  @api_controllers [
+    DokkitWeb.ApiController,
+    DokkitWeb.McpController,
+    DokkitWeb.IntakeController,
+    DokkitWeb.ReleaseController
+  ]
   @live Path.expand("../../lib/dokkit_web/live", __DIR__)
 
   defp routes,

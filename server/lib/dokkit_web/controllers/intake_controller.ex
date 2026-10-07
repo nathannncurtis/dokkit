@@ -234,6 +234,28 @@ defmodule DokkitWeb.IntakeController do
     end
   end
 
+  @doc "What the updater on a machine reports, and the version it should move to, if any."
+  def update(conn, params) do
+    with {:ok, machine} <- machine(conn) do
+      case Dokkit.Releases.ask(machine, params) do
+        nil -> send_resp(conn, 204, "")
+        version -> json(conn, %{version: version})
+      end
+    end
+  end
+
+  def update_result(conn, params) do
+    with {:ok, machine} <- machine(conn) do
+      case Dokkit.Releases.result(machine, params) do
+        :ok ->
+          json(conn, %{ok: true})
+
+        :error ->
+          fail(conn, 422, "bad_result", "Needs version, ok and at most 2000 characters of note.")
+      end
+    end
+  end
+
   @doc "The tasks accepted for this machine, so `dokkit task list` can say which they are."
   def accepted(conn, _params) do
     with {:ok, machine} <- machine(conn),

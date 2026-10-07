@@ -8084,11 +8084,11 @@
     "/api/v1/machines/{id}/update": {
       "post": {
         "operationId": "updateProgram",
-        "summary": "Ask a machine to fetch the newer program",
+        "summary": "Approve a release for a machine, or ask it to fetch the program",
         "tags": [
           "Admin"
         ],
-        "description": "Asks an enrolled machine to fetch the newer `dokkit` program from this server. It only fetches: a person finishes the update on the machine. Answers 422 when the server holds no program. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "description": "With `version`, sets the machine's wanted version, and only to a version the server holds completely (422 `not_held`, or `bad_version` when it is not `v` and three numbers). The updater on the machine does the rest. Without a body, asks an enrolled machine to fetch the newer `dokkit` program from this server, which a person finishes on the machine; 422 when the server holds no program. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
         "parameters": [
           {
             "name": "id",
@@ -8102,20 +8102,28 @@
         ],
         "responses": {
           "200": {
-            "description": "The run id.",
+            "description": "Asked: the version; or the run id of the fetch.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
                     "run": {
                       "type": "string",
-                      "format": "uuid"
+                      "format": "uuid",
+                      "description": "Only for a fetch without a version."
                     }
                   }
                 },
                 "example": {
-                  "run": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3"
+                  "ok": true,
+                  "version": "v1.2.3"
                 }
               }
             }
@@ -8191,7 +8199,29 @@
               "admin"
             ]
           }
-        ]
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "pattern": "^v\\d+\\.\\d+\\.\\d+$"
+                  }
+                }
+              },
+              "example": {
+                "version": "v1.2.3"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/alerts": {
@@ -8934,6 +8964,723 @@
             "userToken": [
               "admin"
             ]
+          }
+        ]
+      }
+    },
+    "/api/v1/releases": {
+      "get": {
+        "operationId": "listReleases",
+        "summary": "List the releases held",
+        "tags": [
+          "Read"
+        ],
+        "description": "The versions this server holds for the updaters, newest first, each with its file names and whether it has both `SHA256SUMS` and `SHA256SUMS.sig`. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "responses": {
+          "200": {
+            "description": "The releases.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Release"
+                      }
+                    },
+                    "next": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Always null for now. Lists are not paged yet."
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "version": "v1.2.3",
+                      "files": [
+                        "SHA256SUMS",
+                        "SHA256SUMS.sig",
+                        "dokkit-windows-x64",
+                        "dokkit-windows-x64.zip"
+                      ],
+                      "complete": true
+                    }
+                  ],
+                  "next": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/releases/{version}/{file}": {
+      "put": {
+        "operationId": "putReleaseFile",
+        "summary": "Put a release file on the server",
+        "tags": [
+          "Admin"
+        ],
+        "description": "The body is the file, as is, up to 200 MB, and replaces a file of that name. It is written to disk as it arrives. The server stores it and does not check it; the updater does. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "description": "A release version. Letters, digits, dots, dashes and underscores; not starting with a dot.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$"
+            },
+            "required": true
+          },
+          {
+            "name": "file",
+            "in": "path",
+            "description": "A file name in that release, such as `SHA256SUMS`. Same characters as a version.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stored.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The file is over 200 MB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "too_large",
+                    "message": "A release file is at most 200 MB."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The name is not allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_name",
+                    "message": "A name is letters, digits, dots, dashes and underscores only."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      },
+      "get": {
+        "operationId": "getReleaseFile",
+        "summary": "Download a release file",
+        "tags": [
+          "Work"
+        ],
+        "description": "A file of a release, for the updater on a machine. Takes a machine key (`dkm_`).",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "description": "A release version. Letters, digits, dots, dashes and underscores; not starting with a dot.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$"
+            },
+            "required": true
+          },
+          {
+            "name": "file",
+            "in": "path",
+            "description": "A file name in that release, such as `SHA256SUMS`. Same characters as a version.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Needs a machine key."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "machineKey": []
+          }
+        ]
+      }
+    },
+    "/api/v1/releases/{version}": {
+      "delete": {
+        "operationId": "deleteRelease",
+        "summary": "Remove a release",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Removes every file of that version from the server. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "description": "A release version. Letters, digits, dots, dashes and underscores; not starting with a dot.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The name is not allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_name",
+                    "message": "A name is letters, digits, dots, dashes and underscores only."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/update-all": {
+      "post": {
+        "operationId": "updateAll",
+        "summary": "Ask every updater to move to a release",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Sets the wanted version on every machine that has an updater. Only a version the server holds completely is accepted: 422 with code `not_held` otherwise, and `bad_version` when it is not `v` and three numbers. Nothing updates until this is called; there is no automatic following of new releases. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "pattern": "^v\\d+\\.\\d+\\.\\d+$"
+                  }
+                }
+              },
+              "example": {
+                "version": "v1.2.3"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Asked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "machines": {
+                      "type": "integer",
+                      "description": "How many machines were asked."
+                    }
+                  }
+                },
+                "example": {
+                  "ok": true,
+                  "version": "v1.2.3",
+                  "machines": 3
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The version is not one the server holds completely.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_held",
+                    "message": "This server does not hold v1.2.3 completely: it needs SHA256SUMS and SHA256SUMS.sig."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/update": {
+      "get": {
+        "operationId": "askUpdate",
+        "summary": "Ask which version to move to",
+        "tags": [
+          "Work"
+        ],
+        "description": "The updater on a machine tells the server what is installed and asks whether to move. The server remembers the versions, that the machine has an updater, and whether it hosts the server. 204 when no version is wanted, the server does not hold the wanted version completely, or every part the machine has is already on it; otherwise 200 with the version. Takes a machine key (`dkm_`).",
+        "parameters": [
+          {
+            "name": "program",
+            "in": "query",
+            "description": "The installed program version.",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "server",
+            "in": "query",
+            "description": "The installed server version. Left out when the machine does not run the server.",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "updater",
+            "in": "query",
+            "description": "The installed updater version.",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "os",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "arch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Move to this version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "version": "v1.2.3"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "Nothing to do."
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Needs a machine key."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "machineKey": []
+          }
+        ]
+      }
+    },
+    "/api/v1/update/result": {
+      "post": {
+        "operationId": "updateResult",
+        "summary": "Report how an update went",
+        "tags": [
+          "Work"
+        ],
+        "description": "The server keeps the last result for the machine and clears its wanted version when `ok` is true. Takes a machine key (`dkm_`).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "ok"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string"
+                  },
+                  "ok": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "description": "What was updated, or what went wrong."
+                  }
+                }
+              },
+              "example": {
+                "version": "v1.2.3",
+                "ok": true,
+                "note": "program, updater"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Kept.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Needs a machine key."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_result",
+                    "message": "Needs version, ok and at most 2000 characters of note."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "machineKey": []
           }
         ]
       }
@@ -10146,6 +10893,24 @@
             ],
             "format": "date-time",
             "description": "Set while the month is loaded back."
+          }
+        }
+      },
+      "Release": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "complete": {
+            "type": "boolean",
+            "description": "True when both `SHA256SUMS` and `SHA256SUMS.sig` are held."
           }
         }
       }

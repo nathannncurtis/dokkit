@@ -121,6 +121,7 @@ defmodule DokkitWeb.SettingsLive do
     assign(socket,
       people: Accounts.list(),
       keys: Keys.list(),
+      releases: Dokkit.Releases.list(),
       archives: (dir && Dokkit.Logs.archives(dir)) || []
     )
   end
@@ -225,6 +226,29 @@ defmodule DokkitWeb.SettingsLive do
               Revoke
             </button>
             <span :if={!@owner}></span>
+          </div>
+        </div>
+
+        <div :if={@owner} class="card" id="releases">
+          <h2>Releases<span class="end">Held for the updaters to fetch</span></h2>
+
+          <p :if={@releases == []} class="lead">
+            No release is held. The release workflow puts one here with PUT /api/v1/releases.
+          </p>
+
+          <div
+            :for={r <- @releases}
+            class="li slim"
+            style="--cols: minmax(0,1fr) auto"
+            id={"release-#{r.version}"}
+          >
+            <div>
+              <div class="ti"><span class="mono">{r.version}</span></div>
+              <div class="sub mono">{Enum.join(r.files, ", ")}</div>
+            </div>
+            <span class={["tag", !r.complete && "warn"]}>
+              {if r.complete, do: "Complete", else: "Incomplete"}
+            </span>
           </div>
         </div>
 

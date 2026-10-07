@@ -193,6 +193,15 @@ defmodule DokkitWeb.McpController do
     {"update_program", "admin",
      "Ask an enrolled machine to fetch the newer dokkit program. A person finishes the update on the machine. Takes the id from machines.",
      %{"id" => @text}, ["id"]},
+    {"releases", "read",
+     "The program releases this server holds, each with its files and whether it is complete. Only a complete release can be approved.",
+     %{}, []},
+    {"update_machine", "admin",
+     "Ask the updater on a machine to move to a release this server holds completely, such as v1.2.3. Takes the id from machines and the version from releases. Only a signed release installs.",
+     %{"id" => @text, "version" => @text}, ["id", "version"]},
+    {"update_all", "admin",
+     "Ask the updater on every machine that has one to move to a release this server holds completely, such as v1.2.3.",
+     %{"version" => @text}, ["version"]},
     {"add_job", "admin",
      "Add a job to watch. The key and the addresses the job calls are returned once. schedule is a cron line read as UTC; grace and max_runtime are times such as 30m.",
      %{
@@ -391,6 +400,12 @@ defmodule DokkitWeb.McpController do
   defp tool("accept_task", %{"id" => _} = args), do: Api.decide_task(args, :accepted) |> r()
   defp tool("dismiss_task", %{"id" => _} = args), do: Api.decide_task(args, :dismissed) |> r()
   defp tool("update_program", %{"id" => id}), do: Api.fetch_program(id, "an AI tool") |> r()
+  defp tool("releases", _), do: %{items: Dokkit.Releases.list()}
+
+  defp tool("update_machine", %{"id" => id, "version" => version}),
+    do: Api.approve_update(version, id) |> r()
+
+  defp tool("update_all", %{"version" => version}), do: Api.approve_update(version, :all) |> r()
   defp tool("add_job", args), do: Api.new_job(args) |> r()
   defp tool("set_alert_settings", args), do: Api.save_alerts(args) |> r()
 

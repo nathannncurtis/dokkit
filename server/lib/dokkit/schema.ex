@@ -20,6 +20,15 @@ defmodule Dokkit.Machine do
     field :program_version, :string
     field :last_seen_at, :utc_datetime_usec
     field :seen_by, :binary_id
+    field :server_version, :string
+    field :updater_version, :string
+    field :has_updater, :boolean, default: false
+    field :hosts_server, :boolean, default: false
+    field :wanted_version, :string
+    field :update_version, :string
+    field :update_ok, :boolean
+    field :update_note, :string
+    field :update_at, :utc_datetime_usec
     has_many :services, Dokkit.Service
     timestamps()
   end
