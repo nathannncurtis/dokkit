@@ -83,6 +83,16 @@ Sets which folders dokkit watch reads dokkit.toml files from. Adds a folder to t
 Shows those folders. Lists the folders dokkit watch reads dokkit.toml files from: the installed service's when there is one, otherwise your own, and any it cannot read.
 
 
+### `dokkit imessage on|off|status`
+
+Lets this Mac send iMessages when the server asks. Alerts by iMessage go out through a Mac that is signed in to Messages. Nothing is sent unless this Mac was told it may: on records that it may, off takes it back, and status says which. Off is the default, and on works on a Mac only. A running dokkit watch picks the change up with no restart. When the service is installed this changes the service's configuration, which needs an administrator, or root, and it prints the exact line to run.
+
+
+### `dokkit imessage test <recipient> [words...]`
+
+Sends one iMessage from this Mac now, to prove Messages works. Sends the words, or a short test message, to a phone number or an email address through Messages on this Mac, without the server, and prints sent to <recipient> or the reason it was not. It works whether or not on was run. The first send makes macOS ask once, on this Mac's screen, whether dokkit may control Messages; allow it, or switch it on under System Settings, Privacy & Security, Automation. macOS remembers the answer only for a signed build of dokkit. A message is cut at 1000 characters.
+
+
 ### `dokkit startup on|off`
 
 Starts dokkit watch each time you sign in. Windows only. Works on Windows only so far. Adds dokkit watch --background to your own startup programs, or takes it out. No administrator. On Linux, use dokkit service, or add dokkit watch --background to your desktop's startup programs. On macOS, add it to a launchd job.

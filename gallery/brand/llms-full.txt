@@ -266,6 +266,16 @@ Sets which folders dokkit watch reads dokkit.toml files from. Adds a folder to t
 Shows those folders. Lists the folders dokkit watch reads dokkit.toml files from: the installed service's when there is one, otherwise your own, and any it cannot read.
 
 
+### `dokkit imessage on|off|status`
+
+Lets this Mac send iMessages when the server asks. Alerts by iMessage go out through a Mac that is signed in to Messages. Nothing is sent unless this Mac was told it may: on records that it may, off takes it back, and status says which. Off is the default, and on works on a Mac only. A running dokkit watch picks the change up with no restart. When the service is installed this changes the service's configuration, which needs an administrator, or root, and it prints the exact line to run.
+
+
+### `dokkit imessage test <recipient> [words...]`
+
+Sends one iMessage from this Mac now, to prove Messages works. Sends the words, or a short test message, to a phone number or an email address through Messages on this Mac, without the server, and prints sent to <recipient> or the reason it was not. It works whether or not on was run. The first send makes macOS ask once, on this Mac's screen, whether dokkit may control Messages; allow it, or switch it on under System Settings, Privacy & Security, Automation. macOS remembers the answer only for a signed build of dokkit. A message is cut at 1000 characters.
+
+
 ### `dokkit startup on|off`
 
 Starts dokkit watch each time you sign in. Windows only. Works on Windows only so far. Adds dokkit watch --background to your own startup programs, or takes it out. No administrator. On Linux, use dokkit service, or add dokkit watch --background to your desktop's startup programs. On macOS, add it to a launchd job.
@@ -698,7 +708,7 @@ Download the newer dokkit program. The newer `dokkit` program this server holds,
 
 ### GET /api/v1/work
 
-Ask for a task to run. The `dokkit` program asks for work and the server holds the request for up to `wait` seconds. 204 means nothing to do; ask again. `command_sha256` is the pin of the task that was accepted; the program runs the task only when its own pin is the same one. A task has a name and nothing else. There are no arguments. Takes a machine key (`dkm_`).
+Ask for a task to run. The `dokkit` program asks for work and the server holds the request for up to `wait` seconds. 204 means nothing to do; ask again. `command_sha256` is the pin of the task that was accepted; the program runs the task only when its own pin is the same one. A task has a name and nothing else. There are no arguments. The one exception is the built-in task `dokkit:imessage`, which is offered only to the Mac chosen for iMessage, has an empty `command_sha256`, needs no accepting, and carries two more fields: `to`, the recipients, and `text`, the message. The program answers it on the result address with `exit_code` 0 when every recipient was sent to, 1 otherwise, or `refused` with the reason, and posts one line of output for each recipient. Takes a machine key (`dkm_`).
 
 - `wait` (query, optional): Seconds to hold the request.
 
@@ -1704,7 +1714,7 @@ List task runs. Runs of tasks, with their output. Output needs `read-logs`. Take
 
 ### GET /api/v1/alerts
 
-Alert settings. Who is told by default, the limits, the night and the mail settings. Addresses, user names and secrets are shown only as `set` or `not set`. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Alert settings. Who is told by default, the limits, the night and the mail settings. Addresses, user names, the Twilio account SID and secrets are shown only as `set` or `not set`. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 `200` OK.
@@ -2702,7 +2712,7 @@ Ask a machine to fetch the newer program. Asks an enrolled machine to fetch the 
 
 ### PUT /api/v1/alerts
 
-Change alert settings. Saves the settings that are sent and checks them. Answers with the settings as they now are. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Change alert settings. Saves the settings that are sent and checks them. `imessage_machine` must be an enrolled machine whose os is darwin, and every recipient in `imessage_to` and `sms_to` a phone number (or, for iMessage, an email address); otherwise 422. Answers with the settings as they now are. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 Send:
@@ -2740,7 +2750,7 @@ Send:
 
 ### POST /api/v1/alerts/test
 
-Send a test alert. Sends a test alert by one channel. Answers ok, or 422 with one fixed reason that never carries anything the far end said, or 422 with code `slow_down` after four tests at once for a token, then one every 25 seconds. Answers 422 too when the channel is not one that sends. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Send a test alert. Sends a test alert by one channel. Answers ok, or 422 with one reason. For SMS it is Twilio's own message when it gave one, and for iMessage it is the Mac's answer, which is waited for up to a minute. For the others it is a fixed reason that never carries anything the far end said. A 422 with code `slow_down` comes after four tests at once for a token, then one every 25 seconds. Answers 422 too when the channel is not one that sends. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 Send:

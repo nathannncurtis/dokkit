@@ -395,7 +395,7 @@ Download the newer dokkit program. The newer `dokkit` program this server holds,
 
 ### GET /api/v1/work
 
-Ask for a task to run. The `dokkit` program asks for work and the server holds the request for up to `wait` seconds. 204 means nothing to do; ask again. `command_sha256` is the pin of the task that was accepted; the program runs the task only when its own pin is the same one. A task has a name and nothing else. There are no arguments. Takes a machine key (`dkm_`).
+Ask for a task to run. The `dokkit` program asks for work and the server holds the request for up to `wait` seconds. 204 means nothing to do; ask again. `command_sha256` is the pin of the task that was accepted; the program runs the task only when its own pin is the same one. A task has a name and nothing else. There are no arguments. The one exception is the built-in task `dokkit:imessage`, which is offered only to the Mac chosen for iMessage, has an empty `command_sha256`, needs no accepting, and carries two more fields: `to`, the recipients, and `text`, the message. The program answers it on the result address with `exit_code` 0 when every recipient was sent to, 1 otherwise, or `refused` with the reason, and posts one line of output for each recipient. Takes a machine key (`dkm_`).
 
 - `wait` (query, optional): Seconds to hold the request.
 
@@ -1401,7 +1401,7 @@ List task runs. Runs of tasks, with their output. Output needs `read-logs`. Take
 
 ### GET /api/v1/alerts
 
-Alert settings. Who is told by default, the limits, the night and the mail settings. Addresses, user names and secrets are shown only as `set` or `not set`. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Alert settings. Who is told by default, the limits, the night and the mail settings. Addresses, user names, the Twilio account SID and secrets are shown only as `set` or `not set`. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 `200` OK.
@@ -2399,7 +2399,7 @@ Ask a machine to fetch the newer program. Asks an enrolled machine to fetch the 
 
 ### PUT /api/v1/alerts
 
-Change alert settings. Saves the settings that are sent and checks them. Answers with the settings as they now are. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Change alert settings. Saves the settings that are sent and checks them. `imessage_machine` must be an enrolled machine whose os is darwin, and every recipient in `imessage_to` and `sms_to` a phone number (or, for iMessage, an email address); otherwise 422. Answers with the settings as they now are. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 Send:
@@ -2437,7 +2437,7 @@ Send:
 
 ### POST /api/v1/alerts/test
 
-Send a test alert. Sends a test alert by one channel. Answers ok, or 422 with one fixed reason that never carries anything the far end said, or 422 with code `slow_down` after four tests at once for a token, then one every 25 seconds. Answers 422 too when the channel is not one that sends. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+Send a test alert. Sends a test alert by one channel. Answers ok, or 422 with one reason. For SMS it is Twilio's own message when it gave one, and for iMessage it is the Mac's answer, which is waited for up to a minute. For the others it is a fixed reason that never carries anything the far end said. A 422 with code `slow_down` comes after four tests at once for a token, then one every 25 seconds. Answers 422 too when the channel is not one that sends. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
 
 
 Send:
