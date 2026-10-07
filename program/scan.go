@@ -472,9 +472,12 @@ var resultWait = 2 * time.Second
 var killWait = 5 * time.Second
 
 // ordinary makes a command run under an ordinary account instead of this program's own.
-// The installed service sets it, because it is the system account. Under a login it is
-// nil and a task runs as that person.
+// A program that is root sets it. Otherwise it is nil and a task runs as the program's own
+// account: the person signed in, or the account the service was given.
 var ordinary func(*exec.Cmd) (func(), error)
+
+// notSystem is why a task accepted for the system account cannot run here, or "".
+var notSystem string
 
 const updateTask = "dokkit:update"
 
@@ -514,6 +517,9 @@ func (c *client) postResult(path string, body []byte) {
 // fetchUpdate leaves the newer copy in place and returns its SHA-256. A copy that does not
 // match the hash in this machine's config is removed.
 func (c *client) fetchUpdate() (string, string, error) {
+	if runningAsService() && runtime.GOOS == "windows" {
+		return "", "", errors.New("this machine runs dokkit as a service under Local Service, which does not fetch its own update: a file it could write is not one an administrator should run. Put the newer dokkit.exe on the machine, then from an administrator prompt run it with: service update")
+	}
 	if runningAsService() {
 		return "", "", errors.New("this machine runs dokkit as a Linux service, which cannot fetch its own update. As root, install the newer program (run get.sh again), then run: dokkit service update")
 	}
@@ -573,6 +579,11 @@ func (c *client) work() {
 		}
 		if err := taskFolderProblem(t.dir, t.scripts()); err != nil {
 			body, _ := json.Marshal(map[string]string{"refused": err.Error()})
+			c.postResult(result, body)
+			continue
+		}
+		if job.As == "system" && notSystem != "" {
+			body, _ := json.Marshal(map[string]string{"refused": notSystem})
 			c.postResult(result, body)
 			continue
 		}

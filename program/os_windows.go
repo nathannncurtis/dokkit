@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 	"time"
 	"unsafe"
 
@@ -70,7 +69,10 @@ func asService() bool {
 	if out, err := openLog(filepath.Join(machineDir(), "dokkit.log")); err == nil {
 		os.Stdout, os.Stderr = out, out
 	}
-	ordinary = asLocalService
+	// The service is Local Service, so a task it runs is already under an ordinary account,
+	// and like the Linux service it fetches no update for an administrator to run.
+	runningAsService = func() bool { return true }
+	notSystem = "This machine's service runs as Local Service, so it has no system account to run a task under. Accept the task for an ordinary account."
 	startService = func(name string) error {
 		m, err := mgr.Connect()
 		if err != nil {
@@ -187,18 +189,27 @@ func install(m *mgr.Mgr) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "spool"), 0o700); err != nil {
+	spool, log := filepath.Join(dir, "spool"), filepath.Join(dir, "dokkit.log")
+	if err := os.MkdirAll(spool, 0o700); err != nil {
 		return err
 	}
+	if f, err := openLog(log); err != nil {
+		return err
+	} else {
+		f.Close()
+	}
 	os.RemoveAll(filepath.Join(dir, "update"))
-	// Everything inside becomes administrator-owned with the system account and administrators as the only entries.
+	// Everything inside becomes administrator-owned. The service, as Local Service, may read
+	// the folder and write only its spool and its log.
 	for _, args := range [][]string{
 		{dir, "/setowner", "*S-1-5-32-544", "/T", "/C"},
 		{dir, "/reset", "/T", "/C"},
-		{dir, "/inheritance:r", "/grant:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F", "/T", "/C"},
+		{dir, "/inheritance:r", "/grant:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F", localService + ":(OI)(CI)RX", "/T", "/C"},
+		{spool, "/grant", localService + ":(OI)(CI)M", "/T", "/C"},
+		{log, "/grant", localService + ":M"},
 	} {
 		if out, err := exec.Command("icacls", args...).CombinedOutput(); err != nil {
-			return fmt.Errorf("could not lock down %s: %s", dir, out)
+			return fmt.Errorf("could not set who may use %s: %s", args[0], out)
 		}
 	}
 	os.Remove(file)
@@ -217,9 +228,10 @@ func install(m *mgr.Mgr) error {
 		}
 	}
 	s, err := m.CreateService(serviceName, to, mgr.Config{
-		DisplayName: "Dokkit",
-		Description: "Watches this machine and reports to Dokkit. Makes outbound requests only.",
-		StartType:   mgr.StartAutomatic,
+		DisplayName:      "Dokkit",
+		Description:      "Watches this machine and reports to Dokkit. Makes outbound requests only.",
+		StartType:        mgr.StartAutomatic,
+		ServiceStartName: `NT AUTHORITY\LocalService`,
 	})
 	if err != nil {
 		return err
@@ -229,8 +241,26 @@ func install(m *mgr.Mgr) error {
 	if len(c.folders) == 0 {
 		fmt.Println("The service reads no folders yet. To add one, run it " + elevated("folder", "add", "<path>"))
 	}
-	return s.Start()
+	if err := s.Start(); err != nil {
+		return err
+	}
+	// Installed means running, not registered.
+	for range 30 {
+		if st, err := s.Query(); err == nil && st.State == svc.Running {
+			fmt.Println("The service is running as Local Service.")
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	said, _ := os.ReadFile(log)
+	if len(said) > 2000 {
+		said = said[len(said)-2000:]
+	}
+	return fmt.Errorf("the service is installed but did not stay running. The end of %s:\n%s", log, said)
 }
+
+// Local Service, the account Windows keeps for services that need no rights of their own.
+const localService = "*S-1-5-19"
 
 // trustedOwner refuses a folder that someone else made first: its owner could change its
 // permissions again after the install, whatever they are set to now.
@@ -406,26 +436,6 @@ func copyFile(from, to string) error {
 		return err
 	}
 	return out.Close()
-}
-
-var (
-	advapi32  = windows.NewLazySystemDLL("advapi32.dll")
-	logonUser = advapi32.NewProc("LogonUserW")
-)
-
-// asLocalService makes a command run as Local Service, the account Windows keeps for
-// programs that need no rights: it is not an administrator and has no password.
-func asLocalService(cmd *exec.Cmd) (func(), error) {
-	name, _ := windows.UTF16PtrFromString("LocalService")
-	domain, _ := windows.UTF16PtrFromString("NT AUTHORITY")
-	const logonService, providerDefault = 5, 0
-	var token windows.Token
-	ok, _, err := logonUser.Call(uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(domain)), 0, logonService, providerDefault, uintptr(unsafe.Pointer(&token)))
-	if ok == 0 {
-		return nil, err
-	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Token: syscall.Token(token)}
-	return func() { token.Close() }, nil
 }
 
 func finishUpdate(path string) string {
