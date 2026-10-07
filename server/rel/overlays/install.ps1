@@ -289,20 +289,25 @@ try {
     if (Get-Service $service -ErrorAction SilentlyContinue) { & (Get-Erlsrv) remove $service | Out-Null }
     & (Join-Path $To 'bin\dokkit.bat') install
     if ($LASTEXITCODE -ne 0) { throw 'The service could not be registered.' }
-    # Local Service has no password, and an empty one does not survive PowerShell's quoting.
-    & sc.exe config $service obj= 'NT AUTHORITY\LocalService' start= auto | Out-Null
-    Test-Ok 'Making the service run as Local Service'
-    if (Get-Service $database -ErrorAction SilentlyContinue) {
-        & sc.exe config $service depend= $database | Out-Null
-        Test-Ok 'Making the service wait for its Postgres'
-    }
-    # The wrapper is the service process, so its own setting is what restarts it.
-    & (Get-Erlsrv) set $service -onfail restart | Out-Null
-    Test-Ok 'Making the service restart when it stops'
     # The wrapper keeps the cookie in this key, which every user can read until it is locked.
     $key = Get-ChildItem 'HKLM:\SOFTWARE\Ericsson\Erlang\ErlSrv' -ErrorAction Stop |
         ForEach-Object { Join-Path $_.PSPath $service } | Where-Object { Test-Path $_ } | Select-Object -First 1
     if (-not $key) { throw 'The registry key of the service is not where it was expected.' }
+    # Windows knows the service by a name the wrapper made up; $service is only what it shows.
+    $real = (Get-ItemProperty $key).InternalServiceName
+    if (-not $real) { throw "The wrapper did not record the service's own name in $key." }
+    # It is registered as the system account and never started as it.
+    $said = & sc.exe config $real obj= 'NT AUTHORITY\LocalService' password= '""' start= auto
+    if ($LASTEXITCODE -ne 0) { throw "Making the service run as Local Service failed: $said" }
+    if (Get-Service $database -ErrorAction SilentlyContinue) {
+        $said = & sc.exe config $real depend= $database
+        if ($LASTEXITCODE -ne 0) { throw "Making the service wait for its Postgres failed: $said" }
+    }
+    $account = (& sc.exe qc $real | Select-String 'SERVICE_START_NAME').Line
+    if ($account -notmatch 'LocalService') { throw "The service would not run as Local Service: $account" }
+    # The wrapper is the service process, so its own setting is what restarts it.
+    $said = & (Get-Erlsrv) set $service -onfail restart
+    if ($LASTEXITCODE -ne 0) { throw "Making the service restart when it stops failed: $said" }
     $acl = Get-Acl $key
     $acl.SetAccessRuleProtection($true, $false)
     foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRule($rule) }
@@ -313,7 +318,26 @@ try {
     Set-Acl $key $acl
 
     $before = @(Get-SetupCodes).Count
-    & (Get-Erlsrv) start $service | Out-Null
+    $said = & (Get-Erlsrv) start $service
+    $started = $LASTEXITCODE
+
+    # It is not installed until it answers.
+    Write-Host 'Waiting for the server to answer.'
+    $up = $false
+    for ($i = 0; $i -lt 90 -and -not $up; $i++) {
+        $probe = New-Object Net.Sockets.TcpClient
+        try { $probe.Connect('127.0.0.1', [int]$values['PORT']); $up = $true }
+        catch { Start-Sleep -Seconds 1 }
+        finally { $probe.Close() }
+    }
+    if (-not $up) {
+        Write-Host "The wrapper said ($started): $said"
+        & sc.exe query $real | Write-Host
+        $log = Join-Path $logs 'dokkit.log'
+        if (Test-Path $log) { Write-Host "The end of ${log}:"; Get-Content $log -Tail 40 | Write-Host }
+        else { Write-Host "There is no $log, so the server never got as far as its settings." }
+        throw "The service did not answer on port $($values['PORT'])."
+    }
 }
 catch {
     if ($restartDatabase) { try { Start-Service $database } catch { } }
