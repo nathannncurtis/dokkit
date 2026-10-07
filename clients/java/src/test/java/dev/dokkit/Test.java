@@ -10,14 +10,19 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.GZIPInputStream;
 
 public class Test {
     public static void main(String[] args) throws Exception {
+        // The JDK client's own request logging, which is what fed the handler back before.
+        System.setProperty("jdk.httpclient.HttpClient.log", "requests,errors");
         List<String> got = new ArrayList<>();
+        AtomicInteger posts = new AtomicInteger();
         AtomicBoolean refused = new AtomicBoolean();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
+            posts.incrementAndGet();
             InputStream body = exchange.getRequestBody();
             if ("gzip".equals(exchange.getRequestHeaders().getFirst("Content-Encoding"))) body = new GZIPInputStream(body);
             String text = new String(body.readAllBytes(), StandardCharsets.UTF_8);
@@ -58,6 +63,17 @@ public class Test {
         Dokkit.stats("{\n  \"stat\": 7\n}");
         Dokkit.flush();
         Dokkit.flush();
+
+        // With the JDK client's request logging on, one app line is one small, bounded number of posts.
+        int before = posts.get();
+        java.util.logging.Logger root = java.util.logging.Logger.getLogger("");
+        for (java.util.logging.Handler h : root.getHandlers()) root.removeHandler(h);
+        java.util.logging.Handler handler = Dokkit.handler();
+        root.addHandler(handler);
+        java.util.logging.Logger.getLogger("app").info("one app line");
+        for (int i = 0; i < 6; i++) { Thread.sleep(400); Dokkit.flush(); }
+        root.removeHandler(handler);
+        int fed = posts.get() - before;
         server.stop(0);
 
         java.lang.reflect.Method safe = Dokkit.class.getDeclaredMethod("safe", String.class);
@@ -77,6 +93,8 @@ public class Test {
         if (!all.contains("\"document\":{   \"stat\": 7 }")) missing.add("stats on one line");
         if (!java.util.regex.Pattern.compile("\"java.lang.Integer\"[^}]*\"own\":false").matcher(all).find()) missing.add("jdk frame not own");
         if (!guarded) missing.add("http to another machine refused");
+        if (fed < 1 || fed > 3) missing.add("one app line is one to three posts, got " + fed);
+        if (all.split("one app line", -1).length != 2) missing.add("the app line once");
         if (Dokkit.dropped() != 0) missing.add("nothing dropped, got " + Dokkit.dropped());
         if (!missing.isEmpty() || all.contains("4411") || all.contains("BAD KEY") || all.contains("ignored") || all.contains("from the sender")) {
             System.out.println("FAIL\nmissing: " + missing + "\n" + all);

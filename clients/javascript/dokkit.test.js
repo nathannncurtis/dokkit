@@ -139,6 +139,37 @@ test("patchConsole sends console calls through log and can be undone", async () 
   assert.match(r.stderr, /careful/);
 });
 
+test("a large object is cut while it is written, never serialised whole", async () => {
+  const r = await scenario(`
+    dokkit.start({ url, key: "k" });
+    const big = Array.from({ length: 300000 }, (_, i) => ({ i, name: "row" + i, nested: { a: [1, 2, 3] } }));
+    const real = JSON.stringify;
+    let whole = 0;
+    JSON.stringify = function (v, ...rest) { if (v === big || (Array.isArray(v) && v.length > 1000)) whole++; return real.call(this, v, ...rest); };
+    const started = Date.now();
+    const restore = dokkit.patchConsole();
+    console.info(big);
+    console.info({ s: "x".repeat(1e6) });
+    restore();
+    JSON.stringify = real;
+    await dokkit.flush();
+    console.log(whole, Date.now() - started < 500);`);
+  assert.ok(r.got[0].lines.every((l) => l.msg.length <= 2000), "capped");
+  assert.ok(r.got[0].lines[0].msg.startsWith('[{"i":0,"name":"row0","nested":{"a":[1,2,3]}},'));
+  assert.strictEqual(r.stdout.trim().split("\n").pop(), "0 true");
+});
+
+test("small values are written as JSON.stringify writes them", async () => {
+  const r = await scenario(`
+    dokkit.start({ url, key: "k" });
+    const restore = dokkit.patchConsole();
+    const loop = {}; loop.me = loop;
+    console.info({ a: 1, b: [1, null, undefined, () => 1], c: "q\\"", d: undefined, e: new Date(0) }, loop, 5n, NaN);
+    restore();
+    await dokkit.flush();`);
+  assert.strictEqual(r.got[0].lines[0].msg, '{"a":1,"b":[1,null,null,null],"c":"q\\"","e":"1970-01-01T00:00:00.000Z"} [object Object] 5 null');
+});
+
 test("with Dokkit off the console wrapper serialises nothing, and log never throws", async () => {
   const r = await scenario(`
     let n = 0;

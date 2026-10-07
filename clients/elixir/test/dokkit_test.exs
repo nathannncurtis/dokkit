@@ -109,15 +109,32 @@ defmodule DokkitTest do
     assert state.count == 1 and state.dropped == 2 and state.errors == []
   end
 
-  test "what the sender and the TLS library log about our own requests is not queued" do
+  test "what the sender logs about our own requests is not queued, and an app's own TLS record is" do
     Dokkit.start(url: "http://127.0.0.1:1", key: "dka_test")
+    window = :persistent_term.get({Dokkit, :window})
+    :atomics.put(window, 1, System.monotonic_time(:millisecond) - 1)
     event = fn meta -> %{level: :notice, msg: {:string, "x"}, meta: meta} end
+    count = fn -> :sys.get_state(Dokkit).count end
+
+    # From the sender process, or carrying the library's own metadata: dropped, whatever the module.
+    Task.async(fn -> Process.put(:dokkit_sending, true) && Dokkit.log(event.(%{}), %{}) end) |> Task.await()
+    Dokkit.log(event.(%{domain: [:otp, :ssl, :handshake], dokkit: true}), %{})
+    assert count.() == 0
+
+    # The app's own failed handshake or HTTP call, from another process while nothing of ours is sending: kept.
     Dokkit.log(event.(%{domain: [:otp, :ssl, :handshake]}), %{})
     Dokkit.log(event.(%{mfa: {:httpc_handler, :init, 1}}), %{})
-    Task.async(fn -> Process.put(:dokkit_sending, true) && Dokkit.log(event.(%{}), %{}) end) |> Task.await()
-    assert :sys.get_state(Dokkit).count == 0
+    Dokkit.log(event.(%{mfa: {:tls_connection, :init, 1}}), %{})
+    assert count.() == 3
+
+    # While a send of ours is running those modules are our own client's: dropped. Other records are not.
+    :atomics.put(window, 1, System.monotonic_time(:millisecond) + 10_000)
+    Dokkit.log(event.(%{domain: [:otp, :ssl, :handshake]}), %{})
+    Dokkit.log(event.(%{mfa: {:httpc_handler, :init, 1}}), %{})
+    assert count.() == 3
     Dokkit.log(event.(%{mfa: {MyApp, :run, 0}}), %{})
-    assert :sys.get_state(Dokkit).count == 1
+    assert count.() == 4
+    :atomics.put(window, 1, System.monotonic_time(:millisecond) - 1)
   end
 
   test "a throw or an exit in a job is a failure" do

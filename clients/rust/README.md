@@ -24,7 +24,7 @@ With the `log` feature, `dokkit::Logger` implements the `log` crate's `Log` trai
 dokkit = { path = "path/to/dokkit/clients/rust", features = ["log"] }
 ```
 
-The logger ignores records from `ureq`, `rustls` and this crate, so its own sending is never logged back into it.
+The logger ignores whatever is logged on the thread that is sending, `ureq`'s own lines included, so its own sending is never logged back into it. A crate of yours with any name is logged.
 
 ```
 log::set_logger(&dokkit::Logger).unwrap();

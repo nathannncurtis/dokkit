@@ -14,7 +14,7 @@ In code: `import dev.dokkit.Dokkit;`
 
 ## Logging
 
-`java.util.logging.Logger.getLogger("").addHandler(Dokkit.handler())` sends `java.util.logging` records through `log`.
+`java.util.logging.Logger.getLogger("").addHandler(Dokkit.handler())` sends `java.util.logging` records through `log`. It leaves out records from the JDK HTTP client and from this library, and drops its own when the queue is half full, so turning on the client's request logging cannot make it feed on its own sending.
 
 ## Test
 

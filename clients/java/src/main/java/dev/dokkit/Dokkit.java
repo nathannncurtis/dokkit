@@ -217,7 +217,11 @@ public final class Dokkit {
         return new Handler() {
             @Override public void publish(LogRecord r) {
                 try {
-                    if (http == null || sendingNow.get()) return;
+                    if (http == null || sendingNow.get() || ours(r.getLoggerName())) return;
+                    // Logging cannot fill the queue and push out job and check lines.
+                    synchronized (gate) {
+                        if (lines.size() >= QUEUE / 2) { dropped++; return; }
+                    }
                     int n = r.getLevel().intValue();
                     log(n >= 1000 ? "error" : n >= 900 ? "warn" : n >= 800 ? "info" : "debug", String.valueOf(r.getMessage()));
                 } catch (Exception e) {
@@ -227,6 +231,12 @@ public final class Dokkit {
             @Override public void flush() {}
             @Override public void close() {}
         };
+    }
+
+    // The JDK HTTP client logs from its own threads about the posts made here; feeding that back would never end.
+    private static boolean ours(String logger) {
+        return logger != null && (logger.startsWith("jdk.httpclient") || logger.startsWith("jdk.internal.httpclient")
+                || logger.startsWith("java.net.http") || logger.startsWith("dev.dokkit"));
     }
 
     /** Sends what is waiting. Called for you when the app exits. */

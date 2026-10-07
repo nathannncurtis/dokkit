@@ -222,9 +222,8 @@ impl ::log::Log for Logger {
     }
 
     fn log(&self, record: &::log::Record) {
-        // The sender and this crate log about their own requests; never feed those back.
-        let target = record.target();
-        if STATE.get().is_none() || SENDING.with(|s| s.get()) || ["ureq", "rustls", "dokkit"].iter().any(|t| target.starts_with(t)) {
+        // Whatever is logged on the sending thread, such as ureq's own lines, is not fed back in.
+        if STATE.get().is_none() || SENDING.with(|s| s.get()) {
             return;
         }
         let level = match record.level() {

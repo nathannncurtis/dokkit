@@ -18,7 +18,7 @@ Once the repository is public, this also works:
 
 ## Logging
 
-The `Dokkit` module is a `:logger` handler: `:logger.add_handler(:dokkit, Dokkit, %{level: :info})`.
+The `Dokkit` module is a `:logger` handler: `:logger.add_handler(:dokkit, Dokkit, %{level: :info})`. It leaves out what the sender process logs, and what the HTTP and TLS libraries log while one of its sends is running or has just ended (or when the record carries `dokkit: true`), so sending cannot feed itself. Your own failed TLS or HTTP calls at any other time are logged.
 
 ## Test
 

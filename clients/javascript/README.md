@@ -12,7 +12,7 @@ npm install path/to/dokkit/clients/javascript
 
 ## Logging
 
-JavaScript has no logging framework, only `console`. `dokkit.patchConsole()` makes `console.log`, `info`, `debug`, `warn`, `error` and `trace` also go through `log`, and returns a function that puts the console back. `dokkit.consoleLogger()` returns a wrapped console and leaves the global one alone. Both are off until called.
+JavaScript has no logging framework, only `console`. `dokkit.patchConsole()` makes `console.log`, `info`, `debug`, `warn`, `error` and `trace` also go through `log`, and returns a function that puts the console back. `dokkit.consoleLogger()` returns a wrapped console and leaves the global one alone. Both are off until called. An argument is cut at 2000 characters and 200 keys while it is written, so a large object in a hot path is never serialised whole.
 
 ## Test
 

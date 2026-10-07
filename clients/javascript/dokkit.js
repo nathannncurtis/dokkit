@@ -103,13 +103,76 @@ export function log(level, msg, fields) {
 
 const LEVELS = { log: "info", debug: "debug", info: "info", warn: "warn", error: "error", trace: "trace" };
 
+const CAP = 2000;
+const KEYS = 200;
+
+// JSON.stringify's text for a value, cut at CAP characters and KEYS keys and elements while it
+// is written, so a large object is never serialised whole. Throws where JSON.stringify would.
+function bounded(value) {
+  let used = 0;
+  let keys = 0;
+  const out = [];
+  const seen = new Set();
+  const put = (t) => {
+    out.push(t);
+    used += t.length;
+  };
+  const walk = (v) => {
+    if (used >= CAP) return;
+    if (v && typeof v.toJSON === "function") v = v.toJSON();
+    if (v === null) return put("null");
+    switch (typeof v) {
+      case "string":
+        return put(JSON.stringify(v.slice(0, CAP - used)));
+      case "number":
+        return put(Number.isFinite(v) ? String(v) : "null");
+      case "boolean":
+        return put(String(v));
+      case "bigint":
+        throw new TypeError("bigint");
+      case "object":
+        break;
+      default:
+        return put("null");
+    }
+    if (seen.has(v)) throw new TypeError("circular");
+    seen.add(v);
+    if (Array.isArray(v)) {
+      put("[");
+      for (let i = 0; i < v.length && used < CAP && keys++ < KEYS; i++) {
+        if (i) put(",");
+        walk(v[i]);
+      }
+      put("]");
+    } else {
+      put("{");
+      let first = true;
+      for (const k in v) {
+        if (used >= CAP || keys++ >= KEYS) break;
+        if (!Object.hasOwn(v, k)) continue;
+        const x = v[k];
+        if (x === undefined || typeof x === "function" || typeof x === "symbol") continue;
+        if (!first) put(",");
+        first = false;
+        put(JSON.stringify(k.slice(0, CAP)) + ":");
+        walk(x);
+      }
+      put("}");
+    }
+    seen.delete(v);
+  };
+  if (value === undefined || typeof value === "function" || typeof value === "symbol") return undefined;
+  walk(value);
+  return out.join("").slice(0, CAP);
+}
+
 const text = (a) => {
   try {
-    if (typeof a === "string") return a.slice(0, 2000);
-    return (a instanceof Error ? a.name : JSON.stringify(a) ?? String(a)).slice(0, 2000);
+    if (typeof a === "string") return a.slice(0, CAP);
+    return (a instanceof Error ? a.name : bounded(a) ?? String(a)).slice(0, CAP);
   } catch {
     try {
-      return String(a).slice(0, 2000);
+      return String(a).slice(0, CAP);
     } catch {
       return "";
     }

@@ -176,15 +176,35 @@ defmodule Dokkit do
     :skip -> :ok
   end
 
-  # What the sender, the HTTP client and the TLS library log about our own requests is never fed back in.
+  # What the sender logs about our own requests is never fed back in. The HTTP client and the TLS
+  # library log from processes of their own, so their records count as ours only while a send is
+  # running (or just ended), or when they carry `dokkit: true`. An app's own TLS or HTTP record at
+  # any other time is kept.
   defp from_sending?(event) do
     meta = Map.get(event, :meta, %{})
+
+    Process.get(:dokkit_sending) == true or meta[:pid] == Process.whereis(__MODULE__) or meta[:dokkit] == true or
+      (sending_now?() and from_http_or_tls?(meta))
+  end
+
+  defp from_http_or_tls?(meta) do
     prefixes = ["httpc", "http_", "inets", "ssl", "tls_", "dtls_"]
 
-    Process.get(:dokkit_sending) == true or meta[:pid] == Process.whereis(__MODULE__) or
-      match?([:otp, d | _] when d in [:ssl, :inets], meta[:domain]) or
-      match?({m, _, _} when is_atom(m), meta[:mfa]) and
-        String.starts_with?(Atom.to_string(elem(meta[:mfa], 0)), prefixes)
+    match?([:otp, d | _] when d in [:ssl, :inets], meta[:domain]) or
+      (match?({m, _, _} when is_atom(m), meta[:mfa]) and
+         String.starts_with?(Atom.to_string(elem(meta[:mfa], 0)), prefixes))
+  end
+
+  # The time, in milliseconds on the monotonic clock, until which a send counts as running.
+  defp window(ms) do
+    if ref = :persistent_term.get({__MODULE__, :window}, nil), do: :atomics.put(ref, 1, System.monotonic_time(:millisecond) + ms)
+  end
+
+  defp sending_now? do
+    case :persistent_term.get({__MODULE__, :window}, nil) do
+      nil -> false
+      ref -> System.monotonic_time(:millisecond) < :atomics.get(ref, 1)
+    end
   end
 
   defp add(line), do: cast({:line, Map.put_new(line, :at, now())})
@@ -201,6 +221,9 @@ defmodule Dokkit do
   @impl true
   def init(state) do
     :timer.send_interval(2000, :tick)
+    ref = :atomics.new(1, signed: true)
+    :atomics.put(ref, 1, System.monotonic_time(:millisecond))
+    :persistent_term.put({__MODULE__, :window}, ref)
     {:ok, state}
   end
 
@@ -265,6 +288,7 @@ defmodule Dokkit do
         _ -> Enum.map(batches, &{:failed, &1})
       end
 
+    window(1000)
     s = Enum.reduce(failed, %{s | sender: nil}, &retry_or_drop/2)
     s = if s.waiters != [] and (s.count > 0 or s.errors != []), do: start_send(s), else: s
 
@@ -323,6 +347,7 @@ defmodule Dokkit do
       s
     else
       conf = %{url: s.url, key: s.key}
+      window(60_000)
 
       {pid, ref} =
         spawn_monitor(fn ->
