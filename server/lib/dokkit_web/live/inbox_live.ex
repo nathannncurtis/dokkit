@@ -377,7 +377,8 @@ defmodule DokkitWeb.InboxLive do
 
   defp event_tail(e) do
     [
-      "on " <> e.machine,
+      # Dokkit's own issues have no machine.
+      e.machine && "on " <> e.machine,
       e.sent && String.downcase(e.sent),
       e.closed_at && "closed itself " <> hm(e.closed_at)
     ]

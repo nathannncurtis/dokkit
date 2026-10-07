@@ -183,4 +183,20 @@ defmodule Dokkit.DayTest do
     assert html =~ ~r/ui-vault at \d\d:\d\d: no signal/
     assert html =~ ~s(href="/all#m-#{m.id}")
   end
+
+  test "the first screen draws an issue of Dokkit's own, which has no machine in the last day",
+       %{conn: conn} do
+    own = machine("Dokkit") |> Ecto.Changeset.change(kind: :group) |> Repo.update!()
+    s = service(own)
+
+    issue(own,
+      service_id: s.id,
+      title: "Dokkit: database is down",
+      since: DateTime.add(DateTime.utc_now(), -300)
+    )
+
+    assert Enum.any?(Read.day().events, &is_nil(&1.machine))
+    {:ok, _, html} = live(signed_in(conn), "/")
+    assert html =~ "Dokkit: database is down"
+  end
 end
