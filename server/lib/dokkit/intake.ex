@@ -15,7 +15,7 @@ defmodule Dokkit.Intake do
   @states %{"ok" => :ok, "degraded" => :degraded, "down" => :down}
   @events ~w(start progress ok fail)
 
-  def report(%Key{} = key, batch_id, body) do
+  def report(%Key{} = key, batch_id, body, now \\ DateTime.utc_now()) do
     lines = String.split(body, "\n", trim: true)
     stored = batch_id && Repo.get_by(Batch, id: batch_id, key_id: key.id)
 
@@ -27,7 +27,6 @@ defmodule Dokkit.Intake do
         {:ok, answer(stored)}
 
       true ->
-        now = DateTime.utc_now()
         lines = Enum.map(lines, &decode/1)
         # A month's partition is made before the transaction, never inside it.
         Enum.each(lines, fn

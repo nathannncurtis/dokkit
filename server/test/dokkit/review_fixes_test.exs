@@ -343,16 +343,19 @@ defmodule Dokkit.ReviewFixesTest do
       check =
         Repo.one!(from c in Check, join: s in assoc(c, :service), where: s.machine_id == ^m.id)
 
+      reported = ~U[2026-03-10 12:20:00.000000Z]
+      now = ~U[2026-03-10 13:45:00.000000Z]
+
       Repo.update_all(from(c in Check, where: c.id == ^check.id),
-        set: [inserted_at: DateTime.add(DateTime.utc_now(), -7200)]
+        set: [inserted_at: DateTime.add(reported, -7200)]
       )
 
-      now = %{DateTime.add(DateTime.utc_now(), 3600) | minute: 45, second: 0}
       assert Dokkit.Watch.sweep(now) == 0
       assert Repo.reload!(check).state == :unknown
 
-      {key, _} = Keys.mint(:machine, %{machine_id: m.id})
-      report(key, [line("backup", "ok", "a", 1000)])
+      {_, key} = Keys.mint(:machine, %{machine_id: m.id})
+      body = Jason.encode!(line("backup", "ok", "a", 1000))
+      assert {:ok, _} = Dokkit.Intake.report(key, nil, body, reported)
       refute Repo.reload!(check).config["waiting"]
       assert Dokkit.Watch.sweep(now) == 1
     end
