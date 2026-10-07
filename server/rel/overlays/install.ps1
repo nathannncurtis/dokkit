@@ -309,6 +309,17 @@ catch {
     throw
 }
 
+# With its own certificate it is meant to be reached from other machines.
+if ($values['DOKKIT_CERT']) {
+    if (Get-NetFirewallRule -DisplayName 'Dokkit' -ErrorAction SilentlyContinue) {
+        Set-NetFirewallRule -DisplayName 'Dokkit' -LocalPort $values['PORT']
+    }
+    else {
+        New-NetFirewallRule -DisplayName 'Dokkit' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $values['PORT'] | Out-Null
+    }
+    Write-Host "Windows Firewall lets port $($values['PORT']) in."
+}
+
 $scheme = if ($values['DOKKIT_CERT']) { 'https' } else { 'http' }
 $shown = if ($values['DOKKIT_CERT']) { $values['PHX_HOST'] } else { 'localhost' }
 Write-Host "Dokkit is at ${scheme}://${shown}:$($values['PORT'])"
