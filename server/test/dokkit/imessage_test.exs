@@ -421,7 +421,7 @@ defmodule Dokkit.ImessageTest do
 
     test "the iMessage test shows the Mac's answer when it arrives", %{conn: conn, mac_key: key} do
       {:ok, view, _} = live(signed_in(conn), "/alerts")
-      html = view |> element(~s(#imessage button[phx-value-channel="imessage"])) |> render_click()
+      html = view |> form("#alerts-form") |> render_submit(%{"test" => "imessage"})
       assert html =~ "Waiting for the Mac"
 
       run =
