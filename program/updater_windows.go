@@ -139,7 +139,10 @@ func updaterCommand(args []string) int {
 			return updaterStatus()
 		}
 	}
-	fmt.Fprintln(os.Stderr, "dokkit updater install|uninstall|run|status")
+	if len(args) >= 2 && args[0] == "rehearse" {
+		return updaterRehearse(args[1], len(args) == 3 && args[2] == "--server")
+	}
+	fmt.Fprintln(os.Stderr, "dokkit updater install|uninstall|run|status, or rehearse <folder> [--server]")
 	return 2
 }
 

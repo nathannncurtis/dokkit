@@ -135,7 +135,13 @@ func (st state) serverVersion() string {
 
 func newer(a, b string) bool { c, _ := compareVersions(a, b); return c > 0 }
 
+// sendResults is false in a rehearsal.
+var sendResults = true
+
 func postResult(c *client, r outcome) bool {
+	if !sendResults {
+		return true
+	}
 	b, _ := json.Marshal(r)
 	code, err := c.call("POST", "/api/v1/update/result", "application/json", b, nil)
 	return err == nil && code >= 200 && code < 300
