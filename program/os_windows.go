@@ -550,6 +550,8 @@ func updateService(s *mgr.Service) error {
 		return err
 	}
 	cfg.BinaryPathName = syscall.EscapeArg(to)
+	// Blank leaves the account as it is; naming it again would need its password.
+	cfg.ServiceStartName = ""
 	if err := s.UpdateConfig(cfg); err != nil {
 		return err
 	}
