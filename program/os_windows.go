@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -20,8 +23,10 @@ import (
 const serviceName = "dokkit"
 
 // machineDir is where an installed service keeps its configuration and spool.
-// Only administrators and the system account can read it.
-func machineDir() string { return filepath.Join(os.Getenv("ProgramData"), "dokkit") }
+// Only administrators and the system account can write it.
+func machineDir() string { return newData(os.Getenv("ProgramData")) }
+
+func installedExe() string { return newExe(os.Getenv("ProgramFiles")) }
 
 // installedServiceConfig is the installed service's configuration file, or "" when there is no service.
 // An ordinary account may not open the service, so any answer but "no such service" counts as installed.
@@ -175,12 +180,11 @@ func install(m *mgr.Mgr) error {
 		if err := trustedOwner(dir); err != nil {
 			return err
 		}
-	}
-	// A config.json left in the folder counts only for its two lists, and only if an administrator owns it.
-	file := filepath.Join(dir, "config.json")
-	var lists saved
-	if b, err := os.ReadFile(file); err == nil && trustedOwner(file) == nil {
-		json.Unmarshal(b, &lists)
+		if names, err := dirNames(dir); err != nil {
+			return err
+		} else if err := refusal(dir, names); err != nil {
+			return err
+		}
 	}
 	if p, err := configPath(); err == nil && os.Getenv("DOKKIT_CONFIG") == "" {
 		os.Setenv("DOKKIT_CONFIG", p) // the address and key come from the person installing, never from the folder
@@ -189,39 +193,32 @@ func install(m *mgr.Mgr) error {
 	if err != nil {
 		return err
 	}
-	spool, log := filepath.Join(dir, "spool"), filepath.Join(dir, "dokkit.log")
-	if err := os.MkdirAll(spool, 0o700); err != nil {
+	note, err := migrateOld()
+	if err != nil {
 		return err
 	}
-	if f, err := openLog(log); err != nil {
-		return err
-	} else {
-		f.Close()
+	// A config.json left in the folder counts only for its two lists, and only if an administrator owns it.
+	file := filepath.Join(dir, "config.json")
+	var lists saved
+	if b, err := os.ReadFile(file); err == nil && trustedOwner(file) == nil {
+		json.Unmarshal(b, &lists)
 	}
+	log := filepath.Join(dir, "dokkit.log")
 	os.RemoveAll(filepath.Join(dir, "update"))
-	// Everything inside becomes administrator-owned. The service, as Local Service, may read
-	// the folder and write only its spool and its log.
-	for _, args := range [][]string{
-		{dir, "/setowner", "*S-1-5-32-544", "/T", "/C"},
-		{dir, "/reset", "/T", "/C"},
-		{dir, "/inheritance:r", "/grant:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F", localService + ":(OI)(CI)RX", "/T", "/C"},
-		{spool, "/grant", localService + ":(OI)(CI)M", "/T", "/C"},
-		{log, "/grant", localService + ":M"},
-	} {
-		if out, err := exec.Command("icacls", args...).CombinedOutput(); err != nil {
-			return fmt.Errorf("could not set who may use %s: %s", args[0], out)
-		}
+	if err := secure(dir); err != nil {
+		return err
 	}
 	os.Remove(file)
 	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders, Restart: lists.Restart, Hosts: lists.Hosts, SpoolMB: int(c.spoolMB), SystemTasks: c.system, UpdateSha256: c.updateSha})
 	if err := os.WriteFile(file, b, 0o600); err != nil {
 		return err
 	}
+	fmt.Print(note)
 	from, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	to := filepath.Join(os.Getenv("ProgramFiles"), "Dokkit", "dokkit.exe")
+	to := installedExe()
 	if !sameFile(from, to) {
 		if err := copyFile(from, to); err != nil {
 			return err
@@ -259,8 +256,80 @@ func install(m *mgr.Mgr) error {
 	return fmt.Errorf("the service is installed but did not stay running. The end of %s:\n%s", log, said)
 }
 
-// Local Service, the account Windows keeps for services that need no rights of their own.
-const localService = "*S-1-5-19"
+// secure makes the folder, its spool and its log, and sets who may use them. The folder is set once,
+// without /T, and what is inside is reset to inherit from it: with /T, inheritance goes from every
+// file too, and an entry that applies to folders leaves a file with no permissions at all.
+func secure(dir string) error {
+	spool, log := filepath.Join(dir, "spool"), filepath.Join(dir, "dokkit.log")
+	if err := os.MkdirAll(spool, 0o700); err != nil {
+		return err
+	}
+	f, err := openLog(log)
+	if err != nil {
+		return err
+	}
+	f.Close()
+	for _, args := range permissionSteps(dir, "*S-1-5-32-544") {
+		if out, err := exec.Command("icacls", args...).CombinedOutput(); err != nil {
+			return fmt.Errorf("could not set who may use %s: %s", args[0], out)
+		}
+	}
+	return nil
+}
+
+func dirNames(dir string) (names []string, err error) {
+	es, err := os.ReadDir(dir)
+	for _, e := range es {
+		names = append(names, e.Name())
+	}
+	return
+}
+
+// migrateOld copies the program's own config.json, spool and dokkit.log out of the old folders, which
+// the server's installer also uses, when an administrator-owned install is in them. Nothing in the old
+// folders is changed or removed, and nothing else in them is read. It returns what to tell the person.
+func migrateOld() (string, error) {
+	od, ox := oldData(os.Getenv("ProgramData")), oldExe(os.Getenv("ProgramFiles"))
+	oc := filepath.Join(od, "config.json")
+	if _, err := os.Stat(ox); err != nil {
+		return "", nil
+	}
+	if _, err := os.Stat(oc); err != nil || trustedOwner(oc) != nil {
+		return "", nil
+	}
+	dir := machineDir()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	var copied []string
+	for _, n := range ownItems {
+		to := filepath.Join(dir, n)
+		if _, err := os.Stat(to); err == nil {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(od, n)); err != nil {
+			continue
+		}
+		if err := copyTree(filepath.Join(od, n), to); err != nil {
+			return "", err
+		}
+		copied = append(copied, n)
+	}
+	return fmt.Sprintf("Copied %s from %s to %s. The old copies are still in %s, with %s, and nothing else there was touched. Delete them when you are sure.\n", strings.Join(copied, ", "), od, dir, od, ox), nil
+}
+
+func copyTree(from, to string) error {
+	return filepath.WalkDir(from, func(p string, e fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(from, p)
+		if e.IsDir() {
+			return os.MkdirAll(filepath.Join(to, rel), 0o700)
+		}
+		return copyFile(p, filepath.Join(to, rel))
+	})
+}
 
 // trustedOwner refuses a folder that someone else made first: its owner could change its
 // permissions again after the install, whatever they are set to now.
@@ -449,7 +518,7 @@ func updateService(s *mgr.Service) error {
 	if err != nil {
 		return err
 	}
-	to := filepath.Join(os.Getenv("ProgramFiles"), "Dokkit", "dokkit.exe")
+	to := installedExe()
 	if sameFile(from, to) {
 		return errors.New("run this from the newer copy, not from the installed one")
 	}
@@ -460,8 +529,30 @@ func updateService(s *mgr.Service) error {
 		}
 		time.Sleep(time.Second)
 	}
+	note, err := migrateOld()
+	if err != nil {
+		return err
+	}
+	file := filepath.Join(machineDir(), "config.json")
+	if _, err := os.Stat(file); err != nil {
+		return fmt.Errorf("no configuration is in %s, or in the old %s", machineDir(), oldData(os.Getenv("ProgramData")))
+	}
+	if note != "" {
+		if err := secure(machineDir()); err != nil {
+			return err
+		}
+	}
 	if err := copyFile(from, to); err != nil {
 		return err
 	}
+	cfg, err := s.Config()
+	if err != nil {
+		return err
+	}
+	cfg.BinaryPathName = syscall.EscapeArg(to)
+	if err := s.UpdateConfig(cfg); err != nil {
+		return err
+	}
+	fmt.Print(note)
 	return s.Start()
 }
