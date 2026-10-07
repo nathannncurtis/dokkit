@@ -1,5 +1,5 @@
 {
- "help": "dokkit 0.1.0\n\nIn an app's repo\n  dokkit init\n      Asks what the app is and writes dokkit.toml.\n  dokkit check [dokkit.toml]\n      Runs the checks it can once and prints what would be sent.\n  dokkit apply [dokkit.toml]\n      Sends the file to the server.\n\nJobs\n  dokkit run [--service <slug>] --job <name> -- <command> [arguments]\n      Runs a command and reports how it went.\n  dokkit ping [--service <slug>] <name> [start|ok|fail]\n      Reports a job that cannot be wrapped.\n\nThis machine\n  dokkit enrol <address> <token> [sha256:<certificate fingerprint>]\n      Joins this machine to a server.\n  dokkit status\n      What this machine watches and when it last reported.\n  dokkit doctor\n      A rough check of the server and the clock.\n\nFinding things\n  dokkit scan [--no-services] [--no-ports] [--no-tasks] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]\n      Looks over this machine and writes a proposal file.\n  dokkit propose\n      Sends the proposal file to be accepted.\n\nStaying running\n  dokkit watch [--background]\n      Watches this machine, as an ordinary program.\n  dokkit startup on|off\n      Starts dokkit watch each time you sign in. Windows only.\n  dokkit service install|uninstall|update|start|stop\n      Runs it as a service, on Windows or Linux. Needs an administrator or root.\n\nTasks\n  dokkit task list\n      The tasks on this machine and whether each is accepted.\n  dokkit task run <name>\n      Runs a task here to try it.\n\nReads DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key),\nor the address and machine key that dokkit enrol saved.\ndokkit help <command> says more about one.",
+ "help": "dokkit 0.1.0\n\nIn an app's repo\n  dokkit init\n      Asks what the app is and writes dokkit.toml.\n  dokkit check [dokkit.toml]\n      Runs the checks it can once and prints what would be sent.\n  dokkit apply [dokkit.toml]\n      Sends the file to the server.\n\nJobs\n  dokkit run [--service <slug>] --job <name> -- <command> [arguments]\n      Runs a command and reports how it went.\n  dokkit ping [--service <slug>] <name> [start|ok|fail]\n      Reports a job that cannot be wrapped.\n\nThis machine\n  dokkit enrol <address> <token> [sha256:<certificate fingerprint>]\n      Joins this machine to a server.\n  dokkit status\n      What this machine watches and when it last reported.\n  dokkit doctor\n      A rough check of the server and the clock.\n\nFinding things\n  dokkit scan [--no-services] [--no-ports] [--no-tasks] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]\n      Looks over this machine and writes a proposal file.\n  dokkit propose\n      Sends the proposal file to be accepted.\n\nStaying running\n  dokkit watch [--background]\n      Watches this machine, as an ordinary program.\n  dokkit folder add|remove <path>\n      Sets which folders dokkit watch reads dokkit.toml files from.\n  dokkit folder list\n      Shows those folders.\n  dokkit startup on|off\n      Starts dokkit watch each time you sign in. Windows only.\n  dokkit service install|uninstall|update|start|stop\n      Runs it as a service, on Windows or Linux. Needs an administrator or root.\n\nTasks\n  dokkit task list\n      The tasks on this machine and whether each is accepted.\n  dokkit task run <name>\n      Runs a task here to try it.\n\nReads DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key),\nor the address and machine key that dokkit enrol saved.\ndokkit help <command> says more about one.",
  "check": "dokkit.toml: upload-portal, 2 check(s)\n  ok   http           http://localhost:8080/healthz\n       would send {\"at\":\"2026-10-06T22:08:58.1420895Z\",\"check\":\"http\",\"service\":\"upload-portal\",\"state\":\"ok\",\"type\":\"state\",\"value\":10}\n  ok   tcp            port 5432\n       would send {\"at\":\"2026-10-06T22:08:58.1432929Z\",\"check\":\"tcp\",\"service\":\"upload-portal\",\"state\":\"ok\",\"type\":\"state\",\"value\":1}",
  "groups": [
   {
@@ -55,7 +55,7 @@
      "name": "status",
      "synopsis": "dokkit status",
      "short": "What this machine watches and when it last reported.",
-     "more": "Shows the files dokkit watch reads, when it last sent, and how many reports are waiting, and any folder it cannot read. It says a watch is running only while that watch has written down in the last three minutes, and then gives its process number. On Linux it shows the installed service when root, or the dokkit group, can read its files."
+     "more": "Shows the files dokkit watch reads, when it last sent, and how many reports are waiting, and any folder it cannot read. It says a watch is running only while that watch has written down in the last three minutes, and then gives its process number. On Linux it shows the installed service when root, or the dokkit group, can read its files; the service's status itself can be read only with sudo."
     },
     {
      "name": "doctor",
@@ -92,6 +92,18 @@
      "more": "Reads dokkit.toml files from the folders in DOKKIT_FOLDERS or in the saved configuration, and from the folders directly inside them. Runs their checks, sends the log files they name, runs the tasks a person accepted, and says the machine is alive once a minute. No administrator, no service. --background leaves it running after this window closes. Run like this, it never restarts a service or unit; only the installed service does."
     },
     {
+     "name": "folder",
+     "synopsis": "dokkit folder add|remove <path>",
+     "short": "Sets which folders dokkit watch reads dokkit.toml files from.",
+     "more": "Adds a folder to the list dokkit watch reads dokkit.toml files from, or takes one out. It reads the dokkit.toml in the folder and in the folders directly inside it. The path is made absolute, and for add the folder must exist. Adding one twice changes nothing. A running watch picks up the change within a minute, with no restart. When the service is installed this changes the service's list, which needs an administrator, or root on Linux, and it prints the exact line to run. Otherwise it changes your own list. On Linux, it warns when the dokkit user cannot read the folder."
+    },
+    {
+     "name": "folder",
+     "synopsis": "dokkit folder list",
+     "short": "Shows those folders.",
+     "more": "Lists the folders dokkit watch reads dokkit.toml files from: the installed service's when there is one, otherwise your own, and any it cannot read."
+    },
+    {
      "name": "startup",
      "synopsis": "dokkit startup on|off",
      "short": "Starts dokkit watch each time you sign in. Windows only.",
@@ -101,7 +113,7 @@
      "name": "service",
      "synopsis": "dokkit service install|uninstall|update|start|stop",
      "short": "Runs it as a service, on Windows or Linux. Needs an administrator or root.",
-     "more": "Works on Windows and on Linux with systemd; not on macOS yet. Installs dokkit as a service that starts with the machine, so it keeps watching with nobody signed in. On Windows it runs as the system account. On Linux it runs as a user named dokkit, which is made if useradd is there, and it reads only the folders that user can read. It may restart only the services or units that this machine's own configuration names. On Linux that needs dokkit to run as root or systemd to allow it. Needs an administrator prompt on Windows and root on Linux. On Linux it uses the enrolment of the account that ran sudo. update puts this copy in place of the installed one and restarts the service. uninstall leaves the machine enrolled on the server."
+     "more": "Works on Windows and on Linux with systemd; not on macOS yet. Installs dokkit as a service that starts with the machine, so it keeps watching with nobody signed in. On Windows it runs as the system account. On Linux it runs as a user named dokkit, which is made if useradd is there, and it reads only the folders that user can read. It may restart only the services or units that this machine's own configuration names. On Linux that needs dokkit to run as root or systemd to allow it. Needs an administrator prompt on Windows and root on Linux. On Linux, run through sudo, it uses the enrolment of the account that ran sudo, and root's own when that account has none, and says which file it used. update puts this copy in place of the installed one and restarts the service. uninstall leaves the machine enrolled on the server."
     }
    ]
   },

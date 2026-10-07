@@ -227,7 +227,7 @@ Joins this machine to a server. Trades a one-time token for this machine's key a
 
 ### `dokkit status`
 
-What this machine watches and when it last reported. Shows the files dokkit watch reads, when it last sent, and how many reports are waiting, and any folder it cannot read. It says a watch is running only while that watch has written down in the last three minutes, and then gives its process number. On Linux it shows the installed service when root, or the dokkit group, can read its files.
+What this machine watches and when it last reported. Shows the files dokkit watch reads, when it last sent, and how many reports are waiting, and any folder it cannot read. It says a watch is running only while that watch has written down in the last three minutes, and then gives its process number. On Linux it shows the installed service when root, or the dokkit group, can read its files; the service's status itself can be read only with sudo.
 
 
 ### `dokkit doctor`
@@ -256,6 +256,16 @@ Sends the proposal file to be accepted. Sends dokkit-proposal.json, which a scan
 Watches this machine, as an ordinary program. Reads dokkit.toml files from the folders in DOKKIT_FOLDERS or in the saved configuration, and from the folders directly inside them. Runs their checks, sends the log files they name, runs the tasks a person accepted, and says the machine is alive once a minute. No administrator, no service. --background leaves it running after this window closes. Run like this, it never restarts a service or unit; only the installed service does.
 
 
+### `dokkit folder add|remove <path>`
+
+Sets which folders dokkit watch reads dokkit.toml files from. Adds a folder to the list dokkit watch reads dokkit.toml files from, or takes one out. It reads the dokkit.toml in the folder and in the folders directly inside it. The path is made absolute, and for add the folder must exist. Adding one twice changes nothing. A running watch picks up the change within a minute, with no restart. When the service is installed this changes the service's list, which needs an administrator, or root on Linux, and it prints the exact line to run. Otherwise it changes your own list. On Linux, it warns when the dokkit user cannot read the folder.
+
+
+### `dokkit folder list`
+
+Shows those folders. Lists the folders dokkit watch reads dokkit.toml files from: the installed service's when there is one, otherwise your own, and any it cannot read.
+
+
 ### `dokkit startup on|off`
 
 Starts dokkit watch each time you sign in. Windows only. Works on Windows only so far. Adds dokkit watch --background to your own startup programs, or takes it out. No administrator. On Linux, use dokkit service, or add dokkit watch --background to your desktop's startup programs. On macOS, add it to a launchd job.
@@ -263,7 +273,7 @@ Starts dokkit watch each time you sign in. Windows only. Works on Windows only s
 
 ### `dokkit service install|uninstall|update|start|stop`
 
-Runs it as a service, on Windows or Linux. Needs an administrator or root. Works on Windows and on Linux with systemd; not on macOS yet. Installs dokkit as a service that starts with the machine, so it keeps watching with nobody signed in. On Windows it runs as the system account. On Linux it runs as a user named dokkit, which is made if useradd is there, and it reads only the folders that user can read. It may restart only the services or units that this machine's own configuration names. On Linux that needs dokkit to run as root or systemd to allow it. Needs an administrator prompt on Windows and root on Linux. On Linux it uses the enrolment of the account that ran sudo. update puts this copy in place of the installed one and restarts the service. uninstall leaves the machine enrolled on the server.
+Runs it as a service, on Windows or Linux. Needs an administrator or root. Works on Windows and on Linux with systemd; not on macOS yet. Installs dokkit as a service that starts with the machine, so it keeps watching with nobody signed in. On Windows it runs as the system account. On Linux it runs as a user named dokkit, which is made if useradd is there, and it reads only the folders that user can read. It may restart only the services or units that this machine's own configuration names. On Linux that needs dokkit to run as root or systemd to allow it. Needs an administrator prompt on Windows and root on Linux. On Linux, run through sudo, it uses the enrolment of the account that ran sudo, and root's own when that account has none, and says which file it used. update puts this copy in place of the installed one and restarts the service. uninstall leaves the machine enrolled on the server.
 
 
 ## Tasks

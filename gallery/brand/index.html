@@ -57,7 +57,7 @@
     <div class="wrap">
       <div class="head">
         <h2>One quiet day. <span>Three&nbsp;things</span> needed you.</h2>
-        <p>Seven machines, every half hour of the last day. Nearly all of it is quiet, which is the point. Point at a cell.</p>
+        <p>Seven machines, every half hour of one day. Nearly all of it is quiet, which is the point. Point at a cell.</p>
       </div>
       <div class="panel">
         <div class="ticks"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span></div>
@@ -65,7 +65,7 @@
         <p class="tip" id="tip">front-desk-pc was switched off overnight. That is not a problem, so it is not coloured like one.</p>
       </div>
       <div class="events">
-        <p><i class="s bad"></i><b>01:30</b>nightly-purge did not run<em>paged</em></p>
+        <p><i class="s bad"></i><b>01:30</b>nightly-purge did not run<em>paged, closed itself 02:10</em></p>
         <p><i class="s warn"></i><b>09:12</b>nas disk at 91%<em>pushed</em></p>
         <p><i class="s warn"></i><b>09:40</b>upload portal slow<em>pushed, closed itself 11:05</em></p>
       </div>
@@ -188,8 +188,8 @@ path = "logs/*.jsonl"</pre></div>
           <ol>
             <li><b>On each machine you want watched, get the program</b><div class="cmd"><code id="c10">curl -fsSL https://dokkit.dev/get.sh | sh</code><button class="btn" data-copy="c10">Copy</button></div><div class="cmd"><code id="c11">irm https://dokkit.dev/get.ps1 | iex</code><button class="btn" data-copy="c11">Copy</button></div></li>
             <li><b>Join it to your server</b><div class="cmd"><code id="c3">dokkit enrol https://your.domain.com &lt;token&gt;</code><button class="btn" data-copy="c3">Copy</button></div></li>
-            <li><b>Keep it running with nobody signed in, on Windows or Linux</b><div class="cmd"><code id="c12">dokkit service install</code><button class="btn" data-copy="c12">Copy</button></div></li>
-            <li><b>In each app's own repo</b><div class="cmd"><code id="c4">dokkit init</code><button class="btn" data-copy="c4">Copy</button></div></li>
+            <li><b>Keep it running with nobody signed in: an administrator prompt on Windows, sudo on Linux</b><div class="cmd"><code id="c12">dokkit service install</code><button class="btn" data-copy="c12">Copy</button></div></li>
+            <li><b>In each app's own folder, describe it, then say where it lives</b><div class="cmd"><code id="c4">dokkit init</code><button class="btn" data-copy="c4">Copy</button></div><div class="cmd"><code id="c13">dokkit folder add .</code><button class="btn" data-copy="c13">Copy</button></div></li>
           </ol>
         </div>
       </div>

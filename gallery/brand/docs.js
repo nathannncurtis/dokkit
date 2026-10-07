@@ -7,7 +7,7 @@ const pretty = (o) => esc(typeof o === "string" ? o : JSON.stringify(o, null, 2)
 if ($("#cli")) fetch("cli.json").then((r) => r.json()).then((d) => {
   $("#help").textContent = "$ dokkit help\n" + d.help;
   $("#checkOut").textContent = "$ dokkit check\n" + d.check;
-  $("#toc").innerHTML = d.groups.map((g) => `<b>${esc(g.name)}</b>` + g.commands.map((c, i) => `<a href="#${c.name}-${i}">${esc(c.synopsis.split(" ").slice(0, c.name === "task" ? 3 : 2).join(" "))}</a>`).join("")).join("");
+  $("#toc").innerHTML = d.groups.map((g) => `<b>${esc(g.name)}</b>` + g.commands.map((c, i) => `<a href="#${c.name}-${i}">${esc(c.synopsis.split(" ").slice(0, ["task", "folder"].includes(c.name) ? 3 : 2).join(" "))}</a>`).join("")).join("");
   $("#cli").innerHTML = d.groups.map((g) => `<h2>${esc(g.name)}</h2>` + g.commands.map((c, i) =>
     `<section class="op" id="${c.name}-${i}"><h3>${esc(c.synopsis)}</h3><p class="sum">${esc(c.short)}</p><p>${esc(c.more)}</p></section>`).join("")).join("");
 });

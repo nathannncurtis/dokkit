@@ -38,7 +38,7 @@ function draw() {
   $("#nSnoozed").textContent = lists.snoozed.length;
   $("#nFound").textContent = lists.found.length;
   if (!rows.length) {
-    $("#list").innerHTML = `<div class="empty"><b>Nothing here needs you.</b>Everything else is fine. <button data-reset>Put the samples back</button></div>`;
+    $("#list").innerHTML = `<div class="empty"><b>${tab === "need" ? "Nothing here needs you." : "Nothing here."}</b>${tab === "need" ? "Everything else is fine. " : ""}<button data-reset>Put the samples back</button></div>`;
     return;
   }
   $("#list").innerHTML = rows.map((r, i) => `
@@ -61,7 +61,13 @@ document.addEventListener("click", (e) => {
   else if ("act" in t.dataset) {
     const item = t.closest(".item");
     item.classList.add("gone");
-    setTimeout(() => { lists[tab].splice(+item.dataset.i, 1); draw(); }, 300);
+    setTimeout(() => {
+      const [row] = lists[tab].splice(+item.dataset.i, 1);
+      // Snoozing moves it to Snoozed, and bringing it back returns it.
+      if (t.textContent === "Snooze an hour") lists.snoozed.push({ ...row, was: tab, w: "for an hour", back: true });
+      if (t.textContent === "Bring back") lists[row.was || "need"].push({ ...row, back: false, w: "back" });
+      draw();
+    }, 300);
   } else if (t.dataset.copy) {
     const text = $("#" + t.dataset.copy).textContent;
     const done = () => { t.textContent = "Copied"; setTimeout(() => (t.textContent = "Copy"), 1400); };
