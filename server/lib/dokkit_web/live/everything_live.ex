@@ -10,10 +10,50 @@ defmodule DokkitWeb.EverythingLive do
   def handle_info({:settled, :page}, socket),
     do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
 
+  def handle_event("update", %{"machine" => id}, socket),
+    do: owner(socket, fn held -> Dokkit.Releases.approve(held, id) end)
+
+  def handle_event("update_all", _, socket),
+    do: owner(socket, fn held -> Dokkit.Releases.approve(held, :all) end)
+
+  defp owner(socket, act) do
+    held = Dokkit.Releases.newest()
+    if socket.assigns.current_user.role == :owner and held, do: act.(held)
+    {:noreply, load(socket)}
+  end
+
   defp load(socket) do
     down = for m <- Dokkit.Issues.machines(), m.down, do: m.id
-    assign(socket, machines: Estate.machines(), down: down, vitals: Dokkit.Numbers.vitals())
+    machines = Estate.machines()
+    held = Dokkit.Releases.newest()
+
+    assign(socket,
+      machines: machines,
+      down: down,
+      vitals: Dokkit.Numbers.vitals(),
+      held: held,
+      movable: Enum.count(machines, &can_move?(&1, held))
+    )
   end
+
+  defp can_move?(m, held) do
+    m.has_updater and held != nil and
+      (Dokkit.Releases.newer?(held, m.program_version) or
+         (m.hosts_server and Dokkit.Releases.newer?(held, m.server_version))) and
+      (is_nil(m.wanted_version) or m.update_ok == false)
+  end
+
+  # No updater: only a Windows machine is told how to get one.
+  defp windows?(m),
+    do: m.kind == :enrolled and String.contains?(String.downcase(m.os || ""), "windows")
+
+  defp outcome(%{wanted_version: nil, update_ok: true, update_version: v}), do: "Updated to #{v}"
+
+  defp outcome(%{update_ok: false, update_version: v, update_note: note}),
+    do: "Update to #{v} failed: #{note}"
+
+  defp outcome(%{wanted_version: v}) when is_binary(v), do: "Asked to move to #{v}"
+  defp outcome(_), do: nil
 
   def render(assigns) do
     ~H"""
@@ -22,6 +62,15 @@ defmodule DokkitWeb.EverythingLive do
         <h1 tabindex="-1">Everything</h1>
 
         <div class="end">
+          <button
+            :if={@current_user.role == :owner and @movable > 1}
+            class="btn"
+            type="button"
+            id="update-all"
+            phx-click="update_all"
+          >
+            <.ic name="arrow-circle-up" />Update all to {@held}
+          </button>
           <.link class="btn" navigate={~p"/machines/new"}><.ic name="hard-drives" />Add a machine</.link>
           <.link class="btn primary" navigate={~p"/jobs/new"}><.ic name="plus" />New job</.link>
         </div>
@@ -58,6 +107,29 @@ defmodule DokkitWeb.EverythingLive do
                   </span>
                 </span>
               </span>
+            </div>
+
+            <div :if={m.has_updater} class="foot" id={"upd-#{m.id}"}>
+              <span class="mono">
+                Program {m.program_version || "unknown"}{m.hosts_server &&
+                  " / Server #{m.server_version || "unknown"}"}
+              </span>
+              <span :if={outcome(m)} class={["st", m.update_ok == false && "warn"]}>{outcome(m)}</span>
+              <span class="end">
+                <button
+                  :if={@current_user.role == :owner and can_move?(m, @held)}
+                  class="btn sm"
+                  type="button"
+                  phx-click="update"
+                  phx-value-machine={m.id}
+                >
+                  Update to {@held}
+                </button>
+              </span>
+            </div>
+
+            <div :if={!m.has_updater and windows?(m)} class="foot" id={"upd-#{m.id}"}>
+              <span>No updater on this machine. On it, from an administrator prompt: <code>dokkit updater install</code></span>
             </div>
 
             <.link :for={s <- m.services} class="li slim cols-all" navigate={~p"/s/#{s.id}"}>

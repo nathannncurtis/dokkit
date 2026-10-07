@@ -242,6 +242,10 @@ try {
     New-Item -ItemType Directory -Force $logs | Out-Null
     & icacls $logs /inheritance:r /grant:r "${administrators}:(OI)(CI)F" "${system}:(OI)(CI)F" "${localService}:(OI)(CI)M" | Out-Null
     Test-Ok 'Locking down the log folder'
+    $releases = if ($values['DOKKIT_RELEASES']) { $values['DOKKIT_RELEASES'] } else { Join-Path $folder 'releases' }
+    New-Item -ItemType Directory -Force $releases | Out-Null
+    & icacls $releases /inheritance:r /grant:r "${administrators}:(OI)(CI)F" "${system}:(OI)(CI)F" "${localService}:(OI)(CI)M" | Out-Null
+    Test-Ok 'Locking down the releases folder'
     if ($values['DOKKIT_ARCHIVE']) {
         New-Item -ItemType Directory -Force $values['DOKKIT_ARCHIVE'] | Out-Null
         & icacls $values['DOKKIT_ARCHIVE'] /grant "${localService}:(OI)(CI)M" | Out-Null

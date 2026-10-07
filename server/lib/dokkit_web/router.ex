@@ -93,6 +93,13 @@ defmodule DokkitWeb.Router do
     get "/checks", IntakeController, :checks
     get "/tasks/accepted", IntakeController, :accepted
     get "/program/:target", IntakeController, :program
+    get "/update", IntakeController, :update
+    post "/update/result", IntakeController, :update_result
+    get "/releases", ApiController, :releases
+    put "/releases/:version/:file", ReleaseController, :put
+    get "/releases/:version/:file", ReleaseController, :show
+    delete "/releases/:version", ReleaseController, :delete
+    post "/update-all", ApiController, :update_all
     get "/work", IntakeController, :work
     post "/work/:run/output", IntakeController, :work_output
     post "/work/:run/result", IntakeController, :work_result
