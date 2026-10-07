@@ -5,9 +5,11 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+# A build that fails does not fail the run. The release job publishes only when every file is there.
 jobs:
   image:
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       contents: read
       packages: write
@@ -35,6 +37,7 @@ jobs:
 
   program:
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       contents: read
     strategy:
@@ -70,6 +73,7 @@ jobs:
 
   windows-server:
     runs-on: windows-latest
+    continue-on-error: true
     permissions:
       contents: read
     defaults:
@@ -112,13 +116,14 @@ jobs:
           path: out/*
 
   release:
-    if: github.ref_type == 'tag'
+    if: always() && github.ref_type == 'tag'
     needs: [image, program, windows-server]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           path: assets
           merge-multiple: true
@@ -126,6 +131,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Six programs and the Windows server, each with its checksum.
+          found=$(ls assets 2>/dev/null | wc -l)
+          if [ "$found" -ne 14 ]; then
+            echo "::warning::Not published: $found of 14 files were built."
+            ls assets
+            exit 0
+          fi
           gh release create "$GITHUB_REF_NAME" assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \

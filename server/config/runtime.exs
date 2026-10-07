@@ -70,6 +70,9 @@ if config_env() == :prod do
 
   cert = System.get_env("DOKKIT_CERT")
 
+  # An IPv6 socket on Windows takes no IPv4, so there it listens on IPv4.
+  any = if match?({:win32, _}, :os.type()), do: {0, 0, 0, 0}, else: {0, 0, 0, 0, 0, 0, 0, 0}
+
   # With a certificate of its own, Dokkit serves TLS itself and machines pin it when they enrol.
   # Without one it speaks plain HTTP behind a proxy that holds a real certificate.
   if cert do
@@ -78,7 +81,7 @@ if config_env() == :prod do
     config :dokkit, DokkitWeb.Endpoint,
       url: [host: host, port: port, scheme: "https"],
       https: [
-        ip: {0, 0, 0, 0, 0, 0, 0, 0},
+        ip: any,
         port: port,
         certfile: cert,
         keyfile: System.fetch_env!("DOKKIT_CERT_KEY")
@@ -90,7 +93,7 @@ if config_env() == :prod do
   else
     config :dokkit, DokkitWeb.Endpoint,
       url: [host: host, port: 443, scheme: "https"],
-      http: [ip: {0, 0, 0, 0, 0, 0, 0, 0}],
+      http: [ip: any],
       secret_key_base: secret_key_base
 
     config :dokkit, behind_proxy: true
