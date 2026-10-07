@@ -30,7 +30,6 @@ import (
 const (
 	tailBytes = 16 * 1024
 	spoolMB   = 500
-	version   = "0.1.0"
 	usage     = `dokkit run [--service <slug>] --job <name> -- <command> [arguments]
 dokkit ping [--service <slug>] <name> [start|ok|fail]
 dokkit init
@@ -46,6 +45,8 @@ dokkit imessage on|off|status
 dokkit imessage test <recipient> [words...]
 dokkit doctor
 dokkit service install|uninstall|update|start|stop
+dokkit updater install|uninstall|run|status
+dokkit version
 dokkit scan [--no-services] [--no-ports] [--no-tasks] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]
 dokkit propose
 dokkit task list
@@ -93,6 +94,13 @@ func cli(args []string) int {
 	}
 	if args[0] == "init" {
 		return initFile("dokkit.toml", os.Stdin)
+	}
+	if args[0] == "version" {
+		fmt.Println(version)
+		return 0
+	}
+	if args[0] == "updater" {
+		return updaterCommand(args[1:])
 	}
 	if args[0] == "folder" {
 		return folderCommand(args[1:])
