@@ -38,7 +38,8 @@ An issue closes itself after 3 good checks, and the page it raised is resolved a
 | `page` | PagerDuty, high urgency. |
 | `push` | A quiet phone notification, through one of: PagerDuty at low urgency, ntfy, or Pushover. |
 | `email` | A mail server. |
-| `text` | An address that turns mail into a text message. |
+| `imessage` | One enrolled Mac that is signed in to Messages. The server hands that Mac a built-in piece of work, `dokkit:imessage`, with the recipients and the one-line summary; the alert counts as sent only when the Mac answers with exit code 0. For people who do not want to register a phone number for automated texts. |
+| `sms` | A Twilio account: one request to Twilio for each recipient, sent from the Twilio number in the settings. |
 | `digest` | One email a day. |
 | `webhook` | A plain web request to an address. |
 
@@ -66,13 +67,17 @@ Learning what normal looks like and flagging the unusual. Limits are fixed numbe
 
 ## Built so far
 
-Every channel in the table, with one server-wide choice for `down` and one for `degraded`, each service's own routing, and rules. An issue's channel is its service's routing if it has one, else the first rule that fits, else the server-wide choice. A rule's condition is the kind of thing (a job, a check, a machine), what happened (stops, struggles) and optionally one machine. Everyone is one recipient so far: one email address and one text address in the settings.
+Every channel in the table, with one server-wide choice for `down` and one for `degraded`, each service's own routing, and rules. An issue's channel is its service's routing if it has one, else the first rule that fits, else the server-wide choice. A rule's condition is the kind of thing (a job, a check, a machine), what happened (stops, struggles) and optionally one machine. Everyone is one recipient so far: the email, iMessage and SMS addresses in the settings.
+
+An iMessage goes out through the Mac named in `imessage_machine`, an enrolled machine whose os is `darwin`, to the phone numbers and email addresses in `imessage_to`. An opening alert queues one run of `dokkit:imessage` for that Mac alone; it is not a task a person can see, run or accept. The alert is `sending` until the Mac answers: exit code 0 makes it sent, a refusal or any other exit makes it failed with the refusal or the program's output lines as the reason. If the Mac has not answered after 5 minutes (not connected, asleep) the alert fails with "The Mac that sends iMessages, <name>, did not pick it up." The run stays, so a late success still marks the alert sent, and a retry waits on that run instead of queuing a second message; a retry after a failed answer queues a new run. A close sends nothing. Choosing `imessage` while no Mac is chosen is allowed and the Alerts page says it will not send. The Mac must have been told it may send (`dokkit imessage on`, run on that Mac), and macOS asks once on its screen.
+
+SMS goes through `POST https://api.twilio.com/2010-04-01/Accounts/<sid>/Messages.json` with the settings `twilio_sid`, `twilio_token` (a secret) and `twilio_from`, to each number in `sms_to`. A 2xx is sent; anything else fails the alert with Twilio's `message` when it gave one. An alert recorded as `text` before this existed reads as "Texted"; every stored choice of `text` became `sms`.
 
 An alert is written with its issue and sent afterwards, and a send that fails is tried again a minute later, up to five times. An alert skipped while its issue was briefly closed is sent when the issue reopens. Mail goes through the mail server in the settings, always over TLS (port 465 from the first byte, any other port by STARTTLS), and has not been sent through a real one yet. A blank setting falls back to its default. The addresses for ntfy, the webhook and the heartbeat must be https, and only the owner sees them. The digest holds what opened without paging, errors first seen that day from any app, and thresholds, built-in ones included, within a tenth of their limit; an alert is marked sent only when the mail that carried it went out, and a failed digest is logged and tried again.
 
 Each machine's own disks and memory are watched without a declaration, against two limits on the Alerts page (90 and 95 percent used unless changed; blank switches one off), by the usual three-in-a-row rule. A threshold a file declares for the same number replaces the built-in one.
 
-One suggestion is made: an issue that has opened six times or more in a month and is snoozed is offered the daily digest, on the Alerts page, and accepting sets that service's routing. Dismissing it stops the offer for that service. The settings, the test send and the suggestions are on the API and the MCP as well (`GET` and `PUT /alerts`, `POST /alerts/test`, `/alerts/suggestions`), and a secret or an address is never returned, only `set` or `not set`. Email and text go to every address in their setting, written with commas between them; who receives a page or a push is decided in PagerDuty, ntfy or Pushover.
+One suggestion is made: an issue that has opened six times or more in a month and is snoozed is offered the daily digest, on the Alerts page, and accepting sets that service's routing. Dismissing it stops the offer for that service. The settings, the test send and the suggestions are on the API and the MCP as well (`GET` and `PUT /alerts`, `POST /alerts/test`, `/alerts/suggestions`), and a secret or an address is never returned, only `set` or `not set`. Email, iMessage and SMS go to every address in their setting, written with commas between them; who receives a page or a push is decided in PagerDuty, ntfy or Pushover.
 
 ## Where an alert may be sent
 

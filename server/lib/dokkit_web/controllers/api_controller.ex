@@ -289,7 +289,7 @@ defmodule DokkitWeb.ApiController do
         {:error, why} -> {:error, "send_failed", why}
       end
     else
-      false -> {:error, "bad_channel", "channel is page, push, email, text, digest or webhook."}
+      false -> {:error, "bad_channel", "channel is page, push, email, imessage, sms, digest or webhook."}
       {:wait, s} -> {:error, "slow_down", "Too many tests. Wait #{s} seconds."}
     end
   end

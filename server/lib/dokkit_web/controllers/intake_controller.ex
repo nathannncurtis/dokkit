@@ -80,12 +80,18 @@ defmodule DokkitWeb.IntakeController do
           send_resp(conn, 204, "")
 
         run ->
-          json(conn, %{
-            run: run.id,
-            task: run.task.name,
-            as: Dokkit.Tasks.account(run.task),
-            command_sha256: run.task.accepted_pin
-          })
+          json(
+            conn,
+            Map.merge(
+              %{
+                run: run.id,
+                task: run.task.name,
+                as: Dokkit.Tasks.account(run.task),
+                command_sha256: run.task.accepted_pin
+              },
+              Dokkit.Tasks.extras(run)
+            )
+          )
       end
     end
   end

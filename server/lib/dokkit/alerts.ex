@@ -7,7 +7,7 @@ defmodule Dokkit.Alerts do
   use GenServer
   import Ecto.Query
   require Logger
-  alias Dokkit.{Alert, Issue, Repo, Service, Setting}
+  alias Dokkit.{Alert, Issue, Machine, Repo, Service, Setting, TaskRun}
 
   @defaults %{
     "down" => "page",
@@ -19,16 +19,18 @@ defmodule Dokkit.Alerts do
     "night_to" => "7",
     "night_offset" => "0"
   }
-  @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user smtp_password)
-  @plain ~w(disk_limit memory_limit ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to text_to digest_at heartbeat_url)
+  @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user smtp_password twilio_token)
+  @plain ~w(disk_limit memory_limit ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to digest_at heartbeat_url imessage_machine imessage_to twilio_sid twilio_from sms_to)
   @max_attempts 5
+  @imessage_wait 300
   @smtp_ports [25, 465, 587, 2525]
   @kept_blank ~w(disk_limit memory_limit)
   @channels [
     {"Page", "page"},
     {"Push", "push"},
     {"Email", "email"},
-    {"Text", "text"},
+    {"iMessage", "imessage"},
+    {"SMS", "sms"},
     {"Daily digest", "digest"},
     {"Webhook", "webhook"},
     {"Nobody", "none"}
@@ -41,6 +43,8 @@ defmodule Dokkit.Alerts do
     "page" => "Paged",
     "push" => "Pushed",
     "email" => "Emailed",
+    "imessage" => "Sent an iMessage",
+    "sms" => "Sent an SMS",
     "text" => "Texted",
     "webhook" => "Webhook called"
   }
@@ -49,6 +53,14 @@ defmodule Dokkit.Alerts do
   def sent_word(channel), do: @sent[channel]
 
   def secrets, do: @secrets
+
+  @doc "The enrolled Macs, which can send iMessages."
+  def macs,
+    do:
+      Repo.all(
+        from m in Machine, where: m.kind == :enrolled and m.os == "darwin", order_by: m.name
+      )
+
   def smtp_ports, do: @smtp_ports
 
   def config do
@@ -107,7 +119,7 @@ defmodule Dokkit.Alerts do
 
   def setting_keys, do: Map.keys(@defaults) ++ @secrets ++ @plain
 
-  @hidden @secrets ++ ~w(ntfy_url webhook_url heartbeat_url smtp_user)
+  @hidden @secrets ++ ~w(ntfy_url webhook_url heartbeat_url smtp_user twilio_sid)
 
   @doc "The settings as the API shows them: addresses, user names and secrets are only set or not set."
   def view do
@@ -127,7 +139,9 @@ defmodule Dokkit.Alerts do
       Enum.any?(params, fn {_, v} -> not is_binary(v) end) ->
         {:error, "Every setting is text."}
 
-      error = bad_choice(params) || night_error(params) || bad_address(params) ->
+      error =
+          bad_choice(params) || night_error(params) || bad_recipients(params) ||
+            bad_address(params) ->
         {:error, error}
 
       true ->
@@ -146,6 +160,49 @@ defmodule Dokkit.Alerts do
           do: "#{k} is one of #{Enum.join(ok, ", ")}."
       end
     )
+  end
+
+  @phone ~r/^\+?[0-9][0-9 ()\-.]{5,19}$/
+  @email ~r/^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/
+
+  @doc "The recipients written in a setting, commas between them."
+  def recipients(value),
+    do: (value || "") |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+
+  defp bad_recipients(params) do
+    bad_mac(params) ||
+      Enum.find_value(
+        [{"imessage_to", [@phone, @email]}, {"sms_to", [@phone]}, {"twilio_from", [@phone]}],
+        fn {k, ok} ->
+          Enum.find_value(recipients(params[k]), fn r ->
+            unless Enum.any?(ok, &Regex.match?(&1, r)),
+              do:
+                "#{k}: #{r} is not a #{if length(ok) == 2, do: "phone number or an email address", else: "phone number"}."
+          end)
+        end
+      ) || bad_sid(params)
+  end
+
+  defp bad_sid(params) do
+    unless String.trim(params["twilio_sid"] || "") =~ ~r/^[A-Za-z0-9]*$/,
+      do: "twilio_sid is letters and numbers only."
+  end
+
+  defp bad_mac(params) do
+    id = String.trim(params["imessage_machine"] || "")
+
+    with true <- id != "" do
+      mac =
+        case Ecto.UUID.cast(id) do
+          {:ok, id} -> Repo.get(Machine, id)
+          _ -> nil
+        end
+
+      unless match?(%Machine{kind: :enrolled, os: "darwin"}, mac),
+        do: "iMessage goes out through a Mac. #{(mac && mac.name) || "That machine"} is not one."
+    else
+      _ -> nil
+    end
   end
 
   defp bad_address(params) do
@@ -467,7 +524,9 @@ defmodule Dokkit.Alerts do
 
   def closing(%Issue{id: id}) do
     Repo.update_all(
-      from(a in Alert, where: a.issue_id == ^id and a.status in [:pending, :failed, :held]),
+      from(a in Alert,
+        where: a.issue_id == ^id and a.status in [:pending, :sending, :failed, :held]
+      ),
       set: [status: :skipped]
     )
 
@@ -488,6 +547,7 @@ defmodule Dokkit.Alerts do
 
   def deliver_pending do
     config = config()
+    settle()
 
     Repo.all(
       from a in Alert,
@@ -502,8 +562,18 @@ defmodule Dokkit.Alerts do
     |> Enum.map(fn alert ->
       action = if alert.status == :closing, do: :close, else: :open
 
+      about = about(alert.issue)
+
+      sent =
+        if alert.channel == "imessage" and action == :open,
+          do: imessage(alert, about, config),
+          else: send_to(provider(alert.channel, config), action, about, config)
+
       change =
-        case send_to(provider(alert.channel, config), action, about(alert.issue), config) do
+        case sent do
+          :waiting ->
+            [status: :sending, error: nil]
+
           :ok ->
             [status: if(action == :close, do: :closed, else: :sent), error: nil]
 
@@ -520,6 +590,125 @@ defmodule Dokkit.Alerts do
       Repo.update!(Ecto.Changeset.change(alert, [attempts: alert.attempts + 1] ++ change))
     end)
     |> length()
+  end
+
+  defp not_picked_up(name),
+    do: "The Mac that sends iMessages, #{name}, did not pick it up."
+
+  defp imessage_mac(%{"imessage_machine" => id}) when id not in [nil, ""] do
+    case Repo.get(Machine, id) do
+      %Machine{kind: :enrolled, os: "darwin"} = mac -> {:ok, mac}
+      _ -> {:error, "The Mac chosen for iMessage is not enrolled any more."}
+    end
+  end
+
+  defp imessage_mac(_), do: {:error, "iMessage has no Mac chosen yet."}
+
+  defp imessage_to(config) do
+    case recipients(config["imessage_to"]) do
+      [] -> {:error, "iMessage has no recipients yet."}
+      to -> {:ok, to}
+    end
+  end
+
+  # One run for an alert at a time: a run still waiting for its Mac is waited on, not repeated.
+  defp imessage(alert, about, config) do
+    with {:ok, mac} <- imessage_mac(config), {:ok, to} <- imessage_to(config) do
+      last =
+        Repo.one(
+          from r in TaskRun,
+            where: r.alert_id == ^alert.id,
+            order_by: [desc: r.inserted_at],
+            limit: 1
+        )
+
+      case last do
+        %TaskRun{state: state} when state in [:queued, :running] ->
+          if stale?(last, DateTime.utc_now()),
+            do: {:error, not_picked_up(mac.name)},
+            else: :waiting
+
+        _ ->
+          Dokkit.Tasks.imessage(mac.id, to, summary(about), alert.id)
+          :waiting
+      end
+    end
+  end
+
+  defp stale?(%TaskRun{inserted_at: at}, now), do: DateTime.diff(now, at) >= @imessage_wait
+
+  @doc """
+  Fails the iMessage alerts whose Mac has not answered in five minutes. Their run stays, so a
+  late answer still counts and a retry does not send a second message. Returns how many failed.
+  """
+  def settle(now \\ DateTime.utc_now()) do
+    cutoff = DateTime.add(now, -@imessage_wait)
+
+    late =
+      Repo.all(
+        from a in Alert,
+          join: r in TaskRun,
+          on: r.alert_id == a.id and r.state in [:queued, :running],
+          join: t in assoc(r, :task),
+          join: m in assoc(t, :machine),
+          where: a.status == :sending and r.inserted_at <= ^cutoff,
+          select: {a.id, m.name}
+      )
+
+    n =
+      for {id, name} <- late, reduce: 0 do
+        n ->
+          {k, _} =
+            Repo.update_all(from(a in Alert, where: a.id == ^id and a.status == :sending),
+              set: [status: :failed, error: not_picked_up(name), updated_at: now]
+            )
+
+          n + k
+      end
+
+    if n > 0, do: Dokkit.Issues.changed(false)
+    n
+  end
+
+  @doc "A finished iMessage run settles its alert, however late it answers."
+  def answered(run_id) do
+    with %TaskRun{alert_id: id} = run when is_binary(id) <- Repo.get(TaskRun, run_id) do
+      set =
+        if run.state == :ok,
+          do: [status: :sent, error: nil],
+          else: [status: :failed, error: reason(run)]
+
+      Repo.update_all(
+        from(a in Alert, where: a.id == ^id and a.status in [:sending, :failed]),
+        set: set ++ [updated_at: DateTime.utc_now()]
+      )
+
+      Dokkit.Issues.changed(false)
+    end
+
+    :ok
+  end
+
+  defp reason(%TaskRun{output: output, exit_code: code}) do
+    case output |> String.split("\n", trim: true) |> Enum.join("; ") do
+      "" -> "The Mac answered with exit code #{code}."
+      text -> String.slice(text, 0, 500)
+    end
+  end
+
+  @test_wait 60_000
+
+  @doc """
+  Sends a test. An iMessage goes the way an alert does, and the answer is waited for up to a
+  minute; a run nobody picked up by then is withdrawn so it does not send later.
+  """
+  def test("imessage") do
+    config = config()
+
+    with {:ok, mac} <- imessage_mac(config), {:ok, to} <- imessage_to(config) do
+      run = Dokkit.Tasks.imessage(mac.id, to, "A test from Dokkit (dokkit, DOK-0)")
+      wait_for(run, mac, Application.get_env(:dokkit, :imessage_test_wait, @test_wait))
+    end
   end
 
   def test(channel) do
@@ -544,6 +733,27 @@ defmodule Dokkit.Alerts do
     end
   end
 
+  defp wait_for(run, mac, left) do
+    case Repo.get!(TaskRun, run.id) do
+      %TaskRun{state: :ok} ->
+        :ok
+
+      %TaskRun{state: state} = r when state in [:fail, :refused] ->
+        {:error, reason(r)}
+
+      r when left <= 0 ->
+        Repo.update_all(from(x in TaskRun, where: x.id == ^r.id and x.state == :queued),
+          set: [state: :refused, finished_at: DateTime.utc_now(), output: "Not picked up."]
+        )
+
+        {:error, not_picked_up(mac.name)}
+
+      _ ->
+        Process.sleep(250)
+        wait_for(run, mac, left - 250)
+    end
+  end
+
   defp about(%Issue{} = i) do
     %{
       id: i.id,
@@ -558,7 +768,10 @@ defmodule Dokkit.Alerts do
 
   defp provider("page", _), do: :pagerduty_high
   defp provider("webhook", _), do: :webhook
-  defp provider(channel, _) when channel in ~w(email text digest), do: String.to_atom(channel)
+
+  defp provider(channel, _) when channel in ~w(email sms text imessage digest),
+    do: String.to_atom(channel)
+
   defp provider("push", %{"push_with" => "pagerduty"}), do: :pagerduty_low
   defp provider("push", %{"push_with" => "pushover"}), do: :pushover
   defp provider("push", _), do: :ntfy
@@ -635,12 +848,36 @@ defmodule Dokkit.Alerts do
     Dokkit.Mail.send(config["email_to"], summary(about), Enum.reject(lines, &is_nil/1), config)
   end
 
-  # A text is short, and the address that turns mail into one decides how short.
-  defp send_to(:text, :open, about, config),
-    do: Dokkit.Mail.send(config["text_to"], "Dokkit", [summary(about)], config)
+  defp send_to(:sms, :open, about, %{"twilio_sid" => sid, "twilio_token" => token} = config)
+       when sid not in [nil, ""] and token not in [nil, ""] do
+    from = config["twilio_from"]
+    to = recipients(config["sms_to"])
+
+    cond do
+      from in [nil, ""] ->
+        {:error, "SMS has no number to send from yet."}
+
+      to == [] ->
+        {:error, "SMS has no recipients yet."}
+
+      true ->
+        url = "https://api.twilio.com/2010-04-01/Accounts/#{sid}/Messages.json"
+
+        to
+        |> Enum.map(fn number ->
+          form = [To: digits(number), From: digits(from), Body: summary(about)]
+          post(url, auth: {:basic, "#{sid}:#{token}"}, form: form, say: true)
+        end)
+        |> Enum.find(:ok, &(&1 != :ok))
+    end
+  end
+
+  defp send_to(:sms, :open, _, _), do: {:error, "SMS needs a Twilio account SID and auth token."}
 
   # ntfy, Pushover and mail have nothing to resolve.
   defp send_to(_, :close, _, _), do: :ok
+
+  defp digits(number), do: String.replace(number, ~r/[ ()\-.]/, "")
 
   defp summary(about), do: "#{about.title} (#{about.machine}, #{about.short})"
 
@@ -722,6 +959,8 @@ defmodule Dokkit.Alerts do
   defp local_ip?(_), do: false
 
   defp post(url, opts) do
+    {say, opts} = Keyword.pop(opts, :say, false)
+
     opts =
       [retry: :transient, max_retries: 2, receive_timeout: 10_000, redirect: false] ++
         opts ++ Application.get_env(:dokkit, :req_options, [])
@@ -730,9 +969,18 @@ defmodule Dokkit.Alerts do
       {pinned, opts} = pin(url, opts, ips)
 
       case Req.post(pinned, opts) do
-        {:ok, %{status: s}} when s in 200..299 -> :ok
-        {:ok, %{status: s}} -> failed(host, "answered #{s}")
-        {:error, e} -> failed(host, Exception.message(e))
+        {:ok, %{status: s}} when s in 200..299 ->
+          :ok
+
+        {:ok, %{status: s, body: %{"message" => why}}} when say and is_binary(why) ->
+          Logger.warning("Sending to #{host} failed: answered #{s}: #{why}")
+          {:error, String.slice(why, 0, 500)}
+
+        {:ok, %{status: s}} ->
+          failed(host, "answered #{s}")
+
+        {:error, e} ->
+          failed(host, Exception.message(e))
       end
     end
   rescue

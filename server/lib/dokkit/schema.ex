@@ -167,7 +167,9 @@ defmodule Dokkit.TaskRun do
     field :output, :string, default: ""
     field :started_at, :utc_datetime_usec
     field :finished_at, :utc_datetime_usec
+    field :payload, :map
     belongs_to :task, Dokkit.Task
+    belongs_to :alert, Dokkit.Alert
     timestamps()
   end
 end
@@ -287,7 +289,7 @@ defmodule Dokkit.Alert do
     field :channel, :string
 
     field :status, Ecto.Enum,
-      values: [:pending, :sent, :failed, :skipped, :closing, :closed, :held],
+      values: [:pending, :sending, :sent, :failed, :skipped, :closing, :closed, :held],
       default: :pending
 
     field :attempts, :integer, default: 0
