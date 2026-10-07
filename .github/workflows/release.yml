@@ -47,8 +47,6 @@ jobs:
           - { os: windows, arch: arm64, ext: .exe }
           - { os: linux, arch: amd64, ext: '' }
           - { os: linux, arch: arm64, ext: '' }
-          - { os: darwin, arch: amd64, ext: '' }
-          - { os: darwin, arch: arm64, ext: '' }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -63,12 +61,75 @@ jobs:
         run: |
           mkdir -p ../out
           name=dokkit-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
-          go build -trimpath -o "../out/$name" .
+          version=v0.0.0-dev
+          if [ "$GITHUB_REF_TYPE" = tag ]; then version=$GITHUB_REF_NAME; fi
+          go build -trimpath -ldflags "-X main.version=$version" -o "../out/$name" .
           cd ../out
           sha256sum "$name" > "$name.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: program-${{ matrix.os }}-${{ matrix.arch }}
+          path: out/*
+
+  mac:
+    runs-on: macos-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: program/go.mod
+      - name: Build
+        working-directory: program
+        env:
+          CGO_ENABLED: '0'
+          GOOS: darwin
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -p ../out
+          version=v0.0.0-dev
+          if [ "$GITHUB_REF_TYPE" = tag ]; then version=$GITHUB_REF_NAME; fi
+          go build -trimpath -ldflags "-X main.version=$version" -o "../out/dokkit-darwin-${{ matrix.arch }}" .
+      # macOS keeps an unsigned program off the local network. Without the secrets the file goes out unsigned.
+      - name: Sign
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+        run: |
+          file=out/dokkit-darwin-${{ matrix.arch }}
+          if [ -z "$APPLE_CERT_P12" ] || [ -z "$APPLE_SIGN_IDENTITY" ]; then
+            echo "::warning::No signing certificate is set, so $file is not signed."
+            exit 0
+          fi
+          keychain=$RUNNER_TEMP/sign.keychain-db
+          pass=$(openssl rand -hex 16)
+          security create-keychain -p "$pass" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$pass" "$keychain"
+          printf '%s' "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          # The certificate chains to Apple's developer authority, which a fresh keychain may not hold.
+          curl -fsSL https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer -o "$RUNNER_TEMP/wwdr.cer" && security import "$RUNNER_TEMP/wwdr.cer" -k "$keychain" || true
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pass" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          codesign --force --options runtime --timestamp --identifier dev.dokkit.dokkit --sign "$APPLE_SIGN_IDENTITY" --keychain "$keychain" "$file"
+          codesign --verify --strict --verbose=2 "$file"
+          codesign -dv --verbose=2 "$file" 2>&1 | grep -E 'Identifier|TeamIdentifier'
+          security delete-keychain "$keychain"
+      - name: Checksum
+        run: |
+          cd out
+          shasum -a 256 "dokkit-darwin-${{ matrix.arch }}" > "dokkit-darwin-${{ matrix.arch }}.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: program-darwin-${{ matrix.arch }}
           path: out/*
 
   windows-server:
@@ -117,7 +178,7 @@ jobs:
 
   release:
     if: always() && github.ref_type == 'tag'
-    needs: [image, program, windows-server]
+    needs: [image, program, mac, windows-server]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -130,6 +191,7 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
           # Six programs and the Windows server, each with its checksum.
           found=$(ls assets 2>/dev/null | wc -l)
@@ -138,6 +200,20 @@ jobs:
             ls assets
             exit 0
           fi
+          # The list the updater trusts: every file's SHA-256 under the version, signed with the release key.
+          cd assets
+          { echo "version $GITHUB_REF_NAME"; sha256sum $(ls | grep -v -e '\.sha256$' -e '^SHA256SUMS' | sort); } > SHA256SUMS
+          if [ -n "$RELEASE_SIGNING_KEY" ]; then
+            printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release.pem"
+            openssl pkeyutl -sign -rawin -inkey "$RUNNER_TEMP/release.pem" -in SHA256SUMS -out "$RUNNER_TEMP/sums.sig"
+            openssl pkey -in "$RUNNER_TEMP/release.pem" -pubout -out "$RUNNER_TEMP/release.pub"
+            openssl pkeyutl -verify -rawin -pubin -inkey "$RUNNER_TEMP/release.pub" -in SHA256SUMS -sigfile "$RUNNER_TEMP/sums.sig"
+            base64 -w0 "$RUNNER_TEMP/sums.sig" > SHA256SUMS.sig
+            rm "$RUNNER_TEMP/release.pem"
+          else
+            echo "::warning::No release signing key is set, so this release cannot be installed by the updater."
+          fi
+          cd ..
           gh release create "$GITHUB_REF_NAME" assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
