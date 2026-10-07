@@ -20,6 +20,7 @@ One Go binary, `dokkit`. The same file is the command-line tool and the thing th
 | Staying running | `dokkit watch` | Runs in the foreground under a login. An ordinary program: no administrator, no service. |
 | | `dokkit watch --background` | The same, left running with no window. |
 | | `dokkit folder add <path>`, `remove <path>`, `list` | Sets the folders `dokkit watch` reads `dokkit.toml` files from. With the service installed it changes the service's list, which needs an administrator or root; otherwise it changes the signed-in person's own. |
+| | `dokkit imessage on`, `off`, `status`, `test <recipient> [words]` | Lets this Mac send iMessages when the server asks, or sends one now to try it. |
 | | `dokkit startup on`, `off` | Starts `dokkit watch --background` each time this person signs in. No administrator. |
 | | `dokkit service install`, `uninstall`, `update`, `start`, `stop` | Runs as a service. Needs an administrator once. |
 | Tasks | `dokkit task list` | The tasks defined on this machine and whether each is accepted. |
@@ -44,6 +45,8 @@ Each is a choice. None is a requirement for the next.
 **`dokkit run` and `dokkit ping` work with or without `dokkit` running.** If it is running they leave their report in the spool folder. If not, they send it themselves.
 
 **It only runs accepted, named tasks.** A task is defined on the machine, accepted in the interface, and pinned to what was accepted: the exact command, the path of the file that declares it and the contents of every file inside the task's folder that the command names. The server can ask for a task by name and nothing else.
+
+**It sends an iMessage only from a Mac told it may.** Alerts by iMessage go out through a Mac signed in to Messages. The server asks with a built-in piece of work, `dokkit:imessage`, naming the recipients and the text; each is sent through the Messages app with `osascript`, the recipient and text passed as arguments and never as part of the script, and the run gets one line per recipient. `dokkit imessage on` records in the saved configuration (`imessage`) that this Mac may, and it is off by default; without it, on any other system, or with no recipient or text, the machine refuses the work. A recipient that is not a phone number or an email address is not sent to, and a text is cut at 1000 characters. `dokkit imessage test <recipient>` sends one from this Mac without the server. The first send makes macOS ask once, on the Mac's screen, whether `dokkit` may control Messages; a signed build is needed for macOS to remember the answer.
 
 **It never asks for antivirus to be turned off.** The declared and user-space levels exist so that getting started never needs an exception.
 

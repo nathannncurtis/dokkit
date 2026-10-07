@@ -42,6 +42,8 @@ dokkit startup on|off
 dokkit status
 dokkit folder add|remove <path>
 dokkit folder list
+dokkit imessage on|off|status
+dokkit imessage test <recipient> [words...]
 dokkit doctor
 dokkit service install|uninstall|update|start|stop
 dokkit scan [--no-services] [--no-ports] [--no-tasks] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]
@@ -94,6 +96,9 @@ func cli(args []string) int {
 	}
 	if args[0] == "folder" {
 		return folderCommand(args[1:])
+	}
+	if args[0] == "imessage" {
+		return imessageCommand(args[1:])
 	}
 	if args[0] == "service" {
 		if len(args) != 2 || !strings.Contains(" install uninstall update start stop ", " "+args[1]+" ") {
@@ -304,6 +309,8 @@ type saved struct {
 	// SHA-256 a fetched update must have.
 	SystemTasks  bool   `json:"system_tasks,omitempty"`
 	UpdateSha256 string `json:"update_sha256,omitempty"`
+	// IMessage lets this Mac send iMessages when the server asks.
+	IMessage bool `json:"imessage,omitempty"`
 }
 
 // viewService makes status and doctor read an installed Linux service's configuration and spool.

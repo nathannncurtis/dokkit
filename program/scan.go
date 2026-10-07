@@ -557,6 +557,8 @@ func (c *client) work() {
 		var job struct {
 			Run, Task, As string
 			Sha           string `json:"command_sha256"`
+			To            []string
+			Text          string
 		}
 		status, err := c.call("GET", "/api/v1/work?wait=50", "", nil, &job)
 		if status == 204 {
@@ -568,6 +570,10 @@ func (c *client) work() {
 		}
 		if job.Task == updateTask {
 			c.update(job.Run)
+			continue
+		}
+		if job.Task == imessageTask {
+			c.imessage(job.Run, job.To, job.Text)
 			continue
 		}
 		result := "/api/v1/work/" + job.Run + "/result"
