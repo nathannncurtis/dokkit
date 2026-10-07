@@ -150,7 +150,7 @@ if ($upgrade) {
     }
 }
 if ($DatabaseUrl) { $values['DATABASE_URL'] = $DatabaseUrl }
-if ($PSBoundParameters.ContainsKey('Address') -or -not $values['PHX_HOST']) { $values['PHX_HOST'] = $Address }
+if ($PSBoundParameters.ContainsKey('Address') -or -not $values['PHX_HOST']) { $values['PHX_HOST'] = $Address.ToLower() }
 if ($PSBoundParameters.ContainsKey('Port') -or -not $values['PORT']) { $values['PORT'] = "$Port" }
 if ($Archive) { $values['DOKKIT_ARCHIVE'] = $Archive }
 if (-not $values['SECRET_KEY_BASE']) { $values['SECRET_KEY_BASE'] = Get-Secret 48 }

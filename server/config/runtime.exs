@@ -68,6 +68,9 @@ if config_env() == :prod do
     System.get_env("PHX_HOST") ||
       raise "PHX_HOST is missing. It is the name people and machines reach Dokkit by."
 
+  # Browsers send the name in lower case, and the live connection's origin is compared exactly.
+  host = String.downcase(host)
+
   cert = System.get_env("DOKKIT_CERT")
 
   # An IPv6 socket on Windows takes no IPv4, so there it listens on IPv4.
