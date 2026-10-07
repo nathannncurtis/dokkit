@@ -289,7 +289,8 @@ try {
     if (Get-Service $service -ErrorAction SilentlyContinue) { & (Get-Erlsrv) remove $service | Out-Null }
     & (Join-Path $To 'bin\dokkit.bat') install
     if ($LASTEXITCODE -ne 0) { throw 'The service could not be registered.' }
-    & sc.exe config $service obj= 'NT AUTHORITY\LocalService' password= '""' start= auto | Out-Null
+    # Local Service has no password, and an empty one does not survive PowerShell's quoting.
+    & sc.exe config $service obj= 'NT AUTHORITY\LocalService' start= auto | Out-Null
     Test-Ok 'Making the service run as Local Service'
     if (Get-Service $database -ErrorAction SilentlyContinue) {
         & sc.exe config $service depend= $database | Out-Null
@@ -337,14 +338,15 @@ Write-Host "Dokkit is at ${scheme}://${shown}:$($values['PORT'])"
 if (-not $values['DOKKIT_CERT']) {
     Write-Host 'It has no certificate, so only this machine can use it. Other machines need -Cert and -CertKey, or a proxy that holds a certificate.'
 }
-if (-not $upgrade) {
-    Write-Host 'Waiting for the setup code.'
-    $code = $null
-    for ($i = 0; $i -lt 60 -and -not $code; $i++) {
-        Start-Sleep -Seconds 1
-        $codes = @(Get-SetupCodes)
-        if ($codes.Count -gt $before) { $code = $codes[-1] }
-    }
-    if ($code) { Write-Host "The first visit asks for this setup code: $code" }
-    else { Write-Host "The first visit asks for a setup code. It is in $logs\dokkit.log." }
+# A first install that stopped partway comes back as an upgrade and still has no account.
+Write-Host 'Waiting for the setup code.'
+$wait = if ($upgrade) { 15 } else { 60 }
+$code = $null
+for ($i = 0; $i -lt $wait -and -not $code; $i++) {
+    Start-Sleep -Seconds 1
+    $codes = @(Get-SetupCodes)
+    if ($codes.Count -gt $before) { $code = $codes[-1] }
 }
+if ($code) { Write-Host "The first visit asks for this setup code: $code" }
+elseif (-not $upgrade) { Write-Host "The first visit asks for a setup code. It is in $logs\dokkit.log." }
+else { Write-Host 'It printed no setup code, so it already has an account.' }
