@@ -176,11 +176,22 @@ try {
         Write-Host 'Stopping the service.'
         & (Get-Erlsrv) stop $service | Out-Null
         $restartService = $upgrade
+        # The port mapper outlives the server and keeps its own file open.
+        $epmd = Join-Path (Split-Path (Get-Erlsrv)) 'epmd.exe'
+        if (Test-Path $epmd) { & $epmd -kill | Out-Null }
     }
 
     Write-Host "Copying the server to $To."
     New-Item -ItemType Directory -Force $To | Out-Null
-    Copy-Item -Path (Join-Path $PSScriptRoot '*') -Destination $To -Recurse -Force
+    # A file that has just been run, or that a scanner has open, is free again within moments.
+    for ($try = 1; ; $try++) {
+        try { Copy-Item -Path (Join-Path $PSScriptRoot '*') -Destination $To -Recurse -Force; break }
+        catch {
+            if ($try -ge 30) { throw }
+            if ($try -eq 1) { Write-Host "Waiting for a file that is in use: $($_.Exception.Message)" }
+            Start-Sleep -Seconds 2
+        }
+    }
 
     # Every release archive carries the same cookie. This one is made here and only administrators
     # and the system account can read it.
