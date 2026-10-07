@@ -128,7 +128,14 @@ type result struct {
 	state string
 	note  string
 	value float64
+	// blind is a check this account could not make. Nothing is sent for it.
+	blind bool
 }
+
+// cannotTell is a check that could not be made, which is not the same as one that failed.
+type cannotTell struct{ why string }
+
+func (c cannotTell) Error() string { return c.why }
 
 func readDeclaration(path string) (*declaration, error) {
 	d := &declaration{path: path}
@@ -366,7 +373,7 @@ func (c *check) run() result {
 		if errors.As(err, &stuck) {
 			return result{note: c.Name + " " + err.Error()}
 		}
-		if err != nil {
+		if err != nil && !errors.As(err, new(cannotTell)) {
 			if c.tryRestart() {
 				return result{ok: true, note: "had stopped; started it again"}
 			}
@@ -374,6 +381,10 @@ func (c *check) run() result {
 				err = fmt.Errorf("%w; this machine does not allow starting it, list it under restart in its config.json", err)
 			}
 		}
+	}
+	var blind cannotTell
+	if errors.As(err, &blind) {
+		return result{blind: true, note: blind.why}
 	}
 	if err != nil {
 		return result{note: short(err)}
@@ -427,7 +438,7 @@ func processRunning(name string) error {
 	if runtime.GOOS == "windows" {
 		out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq "+name, "/NH", "/FO", "CSV").Output()
 		if err != nil {
-			return err
+			return cannotTell{"this account may not list processes"}
 		}
 		if !strings.Contains(strings.ToLower(string(out)), strings.ToLower(`"`+name+`"`)) {
 			return errors.New("not running")
@@ -446,12 +457,27 @@ func serviceRunning(name string) error {
 	}
 	out, err := exec.Command("sc", "query", name).Output()
 	if err != nil {
-		return errors.New("no such service")
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			return scProblem(exit.ExitCode())
+		}
+		return err
 	}
 	if !bytes.Contains(out, []byte("RUNNING")) {
 		return errors.New("not running")
 	}
 	return nil
+}
+
+// scProblem reads sc's exit code, which is the Windows error it met.
+func scProblem(code int) error {
+	switch code {
+	case 1060:
+		return errors.New("no such service")
+	case 5:
+		return cannotTell{"this account may not ask Windows about the service"}
+	}
+	return fmt.Errorf("sc query failed with %d", code)
 }
 
 func (c *check) target() string {
@@ -498,6 +524,10 @@ func checkOnce(path string) int {
 			continue
 		}
 		r := c.run()
+		if r.blind {
+			fmt.Printf("  ?    %-14s %s\n       cannot tell: %s. Nothing would be sent.\n", c.name, c.target(), r.note)
+			continue
+		}
 		line, _ := json.Marshal(stateLine(d, c, r))
 		mark := "ok  "
 		switch {
@@ -751,6 +781,9 @@ func (w *watcher) tick(at time.Time) int {
 	parallel(len(todo), func(i int) {
 		d, c := todo[i].d, todo[i].c
 		r := c.run()
+		if r.blind {
+			return
+		}
 		out[i] = []any{stateLine(d, c, r)}
 		// A note on a good answer is a restart; the state alone would not keep it.
 		if r.ok && r.note != "" {
