@@ -33,6 +33,18 @@ if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw 'Run this from an administrator PowerShell.'
 }
 
+# The program on a machine installed before it had folders of its own lives in these two folders.
+# Installing over it would change what the program's service runs and may read.
+$programData = Join-Path $env:ProgramData 'Dokkit'
+$programHere = (Test-Path (Join-Path $programData 'config.json')) -or (Test-Path (Join-Path $programData 'spool'))
+$programExe = (Test-Path (Join-Path $To 'dokkit.exe')) -and -not (Test-Path (Join-Path $To 'bin\dokkit.bat'))
+if (-not (Test-Path (Join-Path $programData 'settings.env')) -and ($programHere -or $programExe)) {
+    throw ("The Dokkit program is installed in $programData and $To, and there is no server there. Nothing was changed. " +
+        "The server needs those folders to itself. From an administrator prompt, run 'service update' with a current copy of the program, " +
+        "which moves the program to its own folders (DokkitProgram under Program Files and ProgramData) and leaves the old files where they are. " +
+        "Then delete config.json, spool, dokkit.log and dokkit.exe from the old folders, and run this again.")
+}
+
 # Piped from the site there is no release beside this script, so it fetches one, and a Postgres
 # for a first install that named no database, then runs the copy inside that release.
 if (-not $PSScriptRoot -or -not (Test-Path (Join-Path $PSScriptRoot 'bin\dokkit.bat'))) {
