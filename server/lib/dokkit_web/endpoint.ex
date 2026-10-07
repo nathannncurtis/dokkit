@@ -25,6 +25,8 @@ defmodule DokkitWeb.Endpoint do
     from: :dokkit,
     gzip: not code_reloading?,
     only: DokkitWeb.static_paths(),
+    # A digested file at the root has its hash in its name.
+    only_matching: ~w(favicon- robots-),
     raise_on_missing_only: code_reloading?
 
   # Code reloading can be explicitly enabled under the
