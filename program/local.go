@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -56,6 +57,9 @@ func initFile(path string, in io.Reader) int {
 		return 1
 	}
 	fmt.Printf("Wrote %s. Run dokkit check to try it.\n", path)
+	if abs, err := filepath.Abs(filepath.Dir(path)); err == nil {
+		fmt.Println("Next, so this machine watches it, run: " + folderAddLine(abs))
+	}
 	return 0
 }
 
@@ -156,6 +160,11 @@ func (w *watcher) saveStatus(at time.Time) {
 func (c *client) status() int {
 	var s status
 	b, err := os.ReadFile(filepath.Join(c.spool, "status.json"))
+	if errors.Is(err, fs.ErrPermission) {
+		exe, _ := os.Executable()
+		fmt.Println("Run this with sudo to see the service's status: sudo " + exe + " status")
+		return 1
+	}
 	if err != nil || json.Unmarshal(b, &s) != nil {
 		fmt.Println("dokkit watch has not run on this machine yet.")
 		return 1

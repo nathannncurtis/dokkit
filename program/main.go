@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -39,6 +40,8 @@ dokkit enrol <address> <token> [sha256:<certificate fingerprint>]
 dokkit watch [--background]
 dokkit startup on|off
 dokkit status
+dokkit folder add|remove <path>
+dokkit folder list
 dokkit doctor
 dokkit service install|uninstall|update|start|stop
 dokkit scan [--no-services] [--no-ports] [--no-tasks] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]
@@ -88,6 +91,9 @@ func cli(args []string) int {
 	}
 	if args[0] == "init" {
 		return initFile("dokkit.toml", os.Stdin)
+	}
+	if args[0] == "folder" {
+		return folderCommand(args[1:])
 	}
 	if args[0] == "service" {
 		if len(args) != 2 || !strings.Contains(" install uninstall update start stop ", " "+args[1]+" ") {
@@ -163,13 +169,17 @@ func cli(args []string) int {
 	return 2
 }
 
-// wantsHelp is true for a known command given --help or -h before any "--". run and ping take
-// a free word as their name or command, so for them only the first argument counts.
+// wantsHelp is true for a known command given --help or -h before any "--", or the bare word
+// help right after it. run and ping take a free word as their name or command, so for them only
+// the first argument counts, and only as --help or -h.
 func wantsHelp(args []string) bool {
 	if !slices.ContainsFunc(topics, func(t topic) bool { return t.name == args[0] }) {
 		return false
 	}
 	free := args[0] == "run" || args[0] == "ping"
+	if !free && len(args) > 1 && args[1] == "help" {
+		return true
+	}
 	for i, a := range args[1:] {
 		if a == "--" {
 			return false
@@ -308,10 +318,11 @@ func configPath() (string, error) {
 	return filepath.Join(dir, "dokkit", "config.json"), err
 }
 
-func load() (*client, error) {
-	c := &client{url: os.Getenv("DOKKIT_URL"), key: os.Getenv("DOKKIT_KEY"), spool: os.Getenv("DOKKIT_SPOOL"), http: &http.Client{}}
-	defer func() { c.http.Transport = toServer }()
+// readConfig reads the saved configuration the way every command does, and the spool folder
+// an installed service's configuration names, or "".
+func readConfig() (saved, string) {
 	var s saved
+	spool := ""
 	if p, err := configPath(); err == nil {
 		if b, err := os.ReadFile(p); err == nil {
 			json.Unmarshal(b, &s)
@@ -320,16 +331,16 @@ func load() (*client, error) {
 	s.Restart, s.Hosts = nil, nil
 	// An installed service's configuration wins for whoever is allowed to read it.
 	if dir := machineDir(); dir != "" && os.Getenv("DOKKIT_CONFIG") == "" {
-		if b, err := os.ReadFile(filepath.Join(dir, "config.json")); err == nil && json.Unmarshal(b, &s) == nil && c.spool == "" {
-			c.spool = filepath.Join(dir, "spool")
+		if b, err := os.ReadFile(filepath.Join(dir, "config.json")); err == nil && json.Unmarshal(b, &s) == nil {
+			spool = filepath.Join(dir, "spool")
 		}
 	}
-	if cfg, spool := serviceFiles(); viewService && cfg != "" && os.Getenv("DOKKIT_CONFIG") == "" {
+	if cfg, sp := serviceFiles(); viewService && cfg != "" && os.Getenv("DOKKIT_CONFIG") == "" {
 		var v saved
 		if b, err := os.ReadFile(cfg); err == nil && json.Unmarshal(b, &v) == nil && v.URL != "" {
 			s = v
-			if c.spool == "" {
-				c.spool = spool
+			if spool == "" {
+				spool = sp
 			}
 		}
 	}
@@ -339,16 +350,53 @@ func load() (*client, error) {
 			s.Restart, s.Hosts = l.Restart, l.Hosts
 		}
 	}
-	c.folders, c.pin, c.restartable, c.hosts = s.Folders, s.Pin, s.Restart, s.Hosts
+	// The installed service reads folders only from a file nobody but an administrator can write.
+	if refuseFolders() {
+		s.Folders = nil
+	}
+	return s, spool
+}
+
+// folderList is the folders to read dokkit.toml files from: DOKKIT_FOLDERS, else the saved ones.
+func folderList(s saved) []string {
+	if f := os.Getenv("DOKKIT_FOLDERS"); f != "" {
+		return filepath.SplitList(f)
+	}
+	return s.Folders
+}
+
+var foldersMu sync.Mutex
+
+// foldersNow is the folders to read now. The watch changes them while its other goroutines read them.
+func (c *client) foldersNow() []string {
+	foldersMu.Lock()
+	defer foldersMu.Unlock()
+	return slices.Clone(c.folders)
+}
+
+// reloadFolders picks up a folder list changed since this program started.
+func (c *client) reloadFolders() {
+	s, _ := readConfig()
+	f := folderList(s)
+	foldersMu.Lock()
+	c.folders = f
+	foldersMu.Unlock()
+}
+
+func load() (*client, error) {
+	c := &client{url: os.Getenv("DOKKIT_URL"), key: os.Getenv("DOKKIT_KEY"), spool: os.Getenv("DOKKIT_SPOOL"), http: &http.Client{}}
+	defer func() { c.http.Transport = toServer }()
+	s, spool := readConfig()
+	if c.spool == "" {
+		c.spool = spool
+	}
+	c.folders, c.pin, c.restartable, c.hosts = folderList(s), s.Pin, s.Restart, s.Hosts
 	c.system, c.updateSha = s.SystemTasks, strings.ToLower(s.UpdateSha256)
 	c.spoolMB = int64(s.SpoolMB)
 	if n, err := strconv.Atoi(os.Getenv("DOKKIT_SPOOL_MB")); err == nil && n > 0 {
 		c.spoolMB = int64(n)
 	}
 	pinTo(s.Pin)
-	if f := os.Getenv("DOKKIT_FOLDERS"); f != "" {
-		c.folders = filepath.SplitList(f)
-	}
 	if c.url == "" || c.key == "" {
 		if s.URL == "" || s.Key == "" {
 			return nil, errors.New("set DOKKIT_URL and DOKKIT_KEY, or run dokkit enrol")

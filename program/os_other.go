@@ -16,6 +16,10 @@ import (
 
 func machineDir() string { return "" }
 
+// refuseFolders is true in the installed service when its configuration is in a file or folder
+// anyone but root can write, so the folders it names are not read.
+func refuseFolders() bool { return runningAsService() && listsPath() == "" }
+
 // serviceFiles are the installed service's configuration file and spool folder, where there is one.
 func serviceFiles() (string, string) {
 	if runtime.GOOS == "linux" {

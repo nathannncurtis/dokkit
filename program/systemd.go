@@ -8,14 +8,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 // cmdLimit is how long one program run through runCmd may take.
 var cmdLimit = 30 * time.Second
 
-// runCmd runs a program and returns what it printed. Tests replace it.
+// runCmd runs a program and returns what it printed on standard output. Standard error goes
+// into the error, never into the output. Tests replace it.
 var runCmd = func(name string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), cmdLimit)
 	defer cancel()
@@ -25,7 +28,9 @@ var runCmd = func(name string, args ...string) ([]byte, error) {
 	}
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
-		out = append(out, exit.Stderr...)
+		if said := strings.TrimSpace(string(exit.Stderr)); said != "" {
+			err = fmt.Errorf("%w: %s", err, said)
+		}
 	}
 	return out, err
 }
@@ -35,23 +40,87 @@ type unitBusy struct{ state string }
 
 func (b unitBusy) Error() string { return "is " + b.state }
 
-// systemdActive is nil when the unit is running.
-func systemdActive(name string) error {
-	out, err := runCmd("systemctl", "is-active", "--", name)
-	state := strings.TrimSpace(string(out))
-	switch {
-	case err == nil && state == "active":
-		return nil
-	case state == "reloading", state == "activating", state == "deactivating":
-		return unitBusy{state}
-	case state == "":
-		return errors.New("systemctl did not answer")
-	case state == "inactive":
-		if load, _ := runCmd("systemctl", "show", "--property=LoadState", "--value", "--", name); strings.TrimSpace(string(load)) == "not-found" {
-			return errors.New("no such unit")
+// unitStuck is a unit that is down in a way a restart from here would not help: it is waiting to
+// be restarted by systemd after a failure, or it has been starting for too long.
+type unitStuck struct{ why string }
+
+func (s unitStuck) Error() string { return "not running (" + s.why + ")" }
+
+// busyChecks counts the consecutive checks that found each unit starting, reloading or stopping.
+var (
+	busyChecks   = map[string]int{}
+	busyChecksMu sync.Mutex
+)
+
+// busyLimit is how many consecutive checks may find a unit busy before it counts as down.
+const busyLimit = 2
+
+// unitState is what systemctl show says about a unit.
+type unitState struct{ load, active, sub, result, restarts string }
+
+func parseUnit(out string) unitState {
+	var u unitState
+	for _, l := range strings.Split(out, "\n") {
+		k, v, _ := strings.Cut(strings.TrimSpace(l), "=")
+		switch k {
+		case "LoadState":
+			u.load = v
+		case "ActiveState":
+			u.active = v
+		case "SubState":
+			u.sub = v
+		case "Result":
+			u.result = v
+		case "NRestarts":
+			u.restarts = v
 		}
 	}
-	return fmt.Errorf("not running (%s)", state)
+	return u
+}
+
+// systemdActive is nil when the unit is running.
+func systemdActive(name string) error {
+	out, err := runCmd("systemctl", "show", "--property=LoadState,ActiveState,SubState,Result,NRestarts", "--", name)
+	u := parseUnit(string(out))
+	if u.active == "" {
+		if err != nil {
+			return fmt.Errorf("systemctl did not answer: %v", err)
+		}
+		return errors.New("systemctl did not answer")
+	}
+	key := strings.ToLower(strings.TrimSuffix(name, ".service"))
+	busyChecksMu.Lock()
+	defer busyChecksMu.Unlock()
+	switch u.active {
+	case "active":
+		delete(busyChecks, key)
+		return nil
+	case "activating", "reloading", "deactivating":
+		failed := u.result != "" && u.result != "success"
+		if u.sub == "auto-restart" || failed {
+			delete(busyChecks, key)
+			why := "waiting to be restarted after a failure"
+			if failed {
+				why += ": " + u.result
+			}
+			if n, _ := strconv.Atoi(u.restarts); n > 0 {
+				why += fmt.Sprintf(", restarted %d times", n)
+			}
+			return unitStuck{why}
+		}
+		if busyChecks[key]++; busyChecks[key] > busyLimit {
+			return unitStuck{fmt.Sprintf("still %s after %d checks", u.active, busyChecks[key])}
+		}
+		return unitBusy{u.active}
+	}
+	delete(busyChecks, key)
+	if u.load == "not-found" {
+		return errors.New("no such unit")
+	}
+	if u.result != "" && u.result != "success" {
+		return fmt.Errorf("not running (%s: %s)", u.active, u.result)
+	}
+	return fmt.Errorf("not running (%s)", u.active)
 }
 
 // restartUnit restarts a unit. Only root can, unless the system allows this account to.
@@ -59,7 +128,10 @@ func restartUnit(name string) error { return systemctl("restart", "--", name) }
 
 func systemctl(args ...string) error {
 	if out, err := runCmd("systemctl", args...); err != nil {
-		return fmt.Errorf("systemctl %s: %v: %s", args[0], err, strings.TrimSpace(string(out)))
+		if said := strings.TrimSpace(string(out)); said != "" {
+			return fmt.Errorf("systemctl %s: %v: %s", args[0], err, said)
+		}
+		return fmt.Errorf("systemctl %s: %v", args[0], err)
 	}
 	return nil
 }
@@ -124,13 +196,14 @@ func runSteps(action string) error {
 // stillEnrolled is said after an uninstall: the server is not told.
 const stillEnrolled = "This machine is still enrolled on the server, which will report that it stopped reporting. Revoke its key on the server to end that."
 
-// enrolmentPath is the first of the person's own configuration file and the one under the home
-// of the account that ran sudo that holds an address and a key. "" when neither does.
+// enrolmentPath is the first of the file under the home of the account that ran sudo and
+// root's own configuration file that holds an address and a key. "" when neither does.
 func enrolmentPath(own, sudoHome string) string {
-	paths := []string{own}
+	var paths []string
 	if sudoHome != "" {
 		paths = append(paths, filepath.Join(sudoHome, ".config", "dokkit", "config.json"))
 	}
+	paths = append(paths, own)
 	for _, p := range paths {
 		var s saved
 		if b, err := os.ReadFile(p); err == nil && json.Unmarshal(b, &s) == nil && s.URL != "" && s.Key != "" {
@@ -146,4 +219,28 @@ func unreadable(folder string) string {
 		return err.Error()
 	}
 	return ""
+}
+
+// othersCannotRead says why an account that owns nothing here may not be able to list path, or "".
+func othersCannotRead(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err.Error()
+	}
+	for dir := abs; ; dir = filepath.Dir(dir) {
+		fi, err := os.Stat(dir)
+		if err != nil {
+			return err.Error()
+		}
+		need := os.FileMode(0o001)
+		if dir == abs {
+			need = 0o005
+		}
+		if fi.Mode().Perm()&need != need {
+			return dir + " is closed to other accounts"
+		}
+		if dir == filepath.Dir(dir) {
+			return ""
+		}
+	}
 }

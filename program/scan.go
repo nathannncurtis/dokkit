@@ -565,7 +565,7 @@ func (c *client) work() {
 			continue
 		}
 		result := "/api/v1/work/" + job.Run + "/result"
-		t, defined := tasks(declarations(c.folders))[job.Task]
+		t, defined := tasks(declarations(c.foldersNow()))[job.Task]
 		// Only the task a person accepted runs. A command, file or script changed since then is refused.
 		if !defined || t.pin() != job.Sha {
 			c.postResult(result, []byte(`{"refused":"This machine has no task with that name, that command, that file and that script."}`))

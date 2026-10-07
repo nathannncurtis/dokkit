@@ -362,6 +362,10 @@ func (c *check) run() result {
 		if errors.As(err, &busy) {
 			return result{state: "degraded", note: c.Name + " " + err.Error()}
 		}
+		var stuck unitStuck
+		if errors.As(err, &stuck) {
+			return result{note: c.Name + " " + err.Error()}
+		}
 		if err != nil {
 			if c.tryRestart() {
 				return result{ok: true, note: "had stopped; started it again"}
@@ -605,6 +609,12 @@ func (w *watcher) checkFolders() {
 	}
 }
 
+// reload picks up a folder list changed since the last look.
+func (w *watcher) reload() {
+	w.c.reloadFolders()
+	w.folders = w.c.foldersNow()
+}
+
 // refresh re-reads files that are new or changed, declares them, and forgets files that are gone.
 func (w *watcher) refresh() {
 	w.checkFolders()
@@ -783,6 +793,7 @@ func (c *client) watch() int {
 		ran := 0
 		if at.Sub(beat) >= beatEvery {
 			beat = at
+			w.reload()
 			w.refresh()
 			c.beat(w.versions())
 			if lines := w.stats(); len(lines) > 0 {

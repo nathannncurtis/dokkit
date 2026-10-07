@@ -24,6 +24,38 @@ const serviceName = "dokkit"
 // Only administrators and the system account can read it.
 func machineDir() string { return filepath.Join(os.Getenv("ProgramData"), "dokkit") }
 
+// installedServiceConfig is the installed service's configuration file, or "" when there is no service.
+// An ordinary account may not open the service, so any answer but "no such service" counts as installed.
+func installedServiceConfig() string {
+	m, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
+	if err != nil {
+		return ""
+	}
+	defer windows.CloseServiceHandle(m)
+	name, _ := windows.UTF16PtrFromString(serviceName)
+	h, err := windows.OpenService(m, name, windows.SERVICE_QUERY_STATUS)
+	if err == nil {
+		windows.CloseServiceHandle(h)
+	} else if err == windows.ERROR_SERVICE_DOES_NOT_EXIST {
+		return ""
+	}
+	return filepath.Join(machineDir(), "config.json")
+}
+
+// ownedByService has nothing to do: the folder the file is in already limits it to administrators.
+func ownedByService(string) error { return nil }
+
+// refuseFolders is true in the installed service when its folder or configuration file can be
+// changed by anyone but administrators, so the folders it names are not read.
+func refuseFolders() bool {
+	if is, _ := svc.IsWindowsService(); !is {
+		return false
+	}
+	dir := machineDir()
+	file := filepath.Join(dir, "config.json")
+	return trustedOwner(dir) != nil || writableByOthers(dir) != nil || writableByOthers(file) != nil
+}
+
 // serviceFiles is for Linux; Windows reads machineDir for every command.
 func serviceFiles() (string, string) { return "", "" }
 
@@ -194,6 +226,9 @@ func install(m *mgr.Mgr) error {
 	}
 	defer s.Close()
 	s.SetRecoveryActions([]mgr.RecoveryAction{{Type: mgr.ServiceRestart, Delay: time.Minute}}, 86400)
+	if len(c.folders) == 0 {
+		fmt.Println("The service reads no folders yet. To add one, run it " + elevated("folder", "add", "<path>"))
+	}
 	return s.Start()
 }
 

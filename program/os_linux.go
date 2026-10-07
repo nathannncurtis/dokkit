@@ -23,7 +23,7 @@ func serviceCommand(action string) int {
 		return 1
 	}
 	var err error
-	if _, serr := os.Stat(unitPath); serr != nil && action != "install" {
+	if _, serr := os.Stat(unitPath); serr != nil && action != "install" && !(action == "uninstall" && leftoverConfig()) {
 		err = errors.New("the service is not installed")
 	} else {
 		switch action {
@@ -48,11 +48,18 @@ func serviceCommand(action string) int {
 	return 0
 }
 
-// useEnrolment points the configuration at the person who ran dokkit enrol: root's own, or
-// the account that ran sudo, whose home sudo usually hides.
-func useEnrolment() error {
+// leftoverConfig is true when a failed install left an address or key in the service's configuration.
+func leftoverConfig() bool {
+	var s saved
+	b, err := os.ReadFile(configFile)
+	return err == nil && json.Unmarshal(b, &s) == nil && (s.URL != "" || s.Key != "")
+}
+
+// useEnrolment points the configuration at the enrolment of the account that ran sudo, or at
+// root's own when that account has none. It returns the file used and whose it is.
+func useEnrolment() (string, string, error) {
 	if os.Getenv("DOKKIT_CONFIG") != "" || (os.Getenv("DOKKIT_URL") != "" && os.Getenv("DOKKIT_KEY") != "") {
-		return nil
+		return "", "", nil
 	}
 	own, _ := configPath()
 	home := ""
@@ -64,9 +71,13 @@ func useEnrolment() error {
 	p := enrolmentPath(own, home)
 	if p == "" {
 		exe, _ := os.Executable()
-		return fmt.Errorf("this machine is not enrolled for root or for the account that ran sudo. Run: %s enrol <address> <token>, then install again", exe)
+		return "", "", fmt.Errorf("this machine is not enrolled for the account that ran sudo or for root. Run: %s enrol <address> <token>, then install again", exe)
 	}
-	return os.Setenv("DOKKIT_CONFIG", p)
+	who := "the account that ran sudo"
+	if p == own {
+		who = "root"
+	}
+	return p, who, os.Setenv("DOKKIT_CONFIG", p)
 }
 
 // installService copies this program and the saved configuration to where only root can change
@@ -87,12 +98,16 @@ func installService() error {
 			json.Unmarshal(b, &lists)
 		}
 	}
-	if err := useEnrolment(); err != nil {
+	from, who, err := useEnrolment()
+	if err != nil {
 		return err
 	}
 	c, err := load()
 	if err != nil {
 		return err
+	}
+	if from != "" {
+		fmt.Println("Using the enrolment of " + who + ", in " + from + ", for " + c.url + ".")
 	}
 	if _, err := user.Lookup(unitUser); err != nil {
 		if _, err := exec.LookPath("useradd"); err != nil {
@@ -118,6 +133,13 @@ func installService() error {
 	}
 	os.Chmod(dir, 0o755)
 	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders, Restart: lists.Restart, Hosts: lists.Hosts, SpoolMB: int(c.spoolMB), SystemTasks: c.system, UpdateSha256: c.updateSha})
+	installed := false
+	// A failed install must not leave the address and key on disk.
+	defer func() {
+		if !installed {
+			scrubConfig(lists)
+		}
+	}()
 	if err := writeOwned(configFile, b, gid); err != nil {
 		return err
 	}
@@ -139,31 +161,21 @@ func installService() error {
 		runCmd("systemctl", "daemon-reload")
 		return err
 	}
+	installed = true
+	if len(c.folders) == 0 {
+		fmt.Println("The service reads no folders yet. To add one, run: " + elevated("folder", "add", "<path>"))
+	}
 	return nil
 }
 
-// othersCannotRead says why an account that owns nothing here may not be able to list path, or "".
-func othersCannotRead(path string) string {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return err.Error()
+// scrubConfig rewrites the service's configuration with the restart and hosts lists only.
+func scrubConfig(l saved) error {
+	b, _ := json.Marshal(saved{Restart: l.Restart, Hosts: l.Hosts})
+	gid := 0
+	if u, err := user.Lookup(unitUser); err == nil {
+		gid, _ = strconv.Atoi(u.Gid)
 	}
-	for dir := abs; ; dir = filepath.Dir(dir) {
-		fi, err := os.Stat(dir)
-		if err != nil {
-			return err.Error()
-		}
-		need := os.FileMode(0o001)
-		if dir == abs {
-			need = 0o005
-		}
-		if fi.Mode().Perm()&need != need {
-			return dir + " is closed to other accounts"
-		}
-		if dir == filepath.Dir(dir) {
-			return ""
-		}
-	}
+	return writeOwned(configFile, b, gid)
 }
 
 // writeOwned writes a file only root can change and the dokkit group can read.
@@ -193,12 +205,7 @@ func uninstallService() error {
 				json.Unmarshal(b, &l)
 			}
 		}
-		b, _ := json.Marshal(saved{Restart: l.Restart, Hosts: l.Hosts})
-		gid := 0
-		if u, err := user.Lookup(unitUser); err == nil {
-			gid, _ = strconv.Atoi(u.Gid)
-		}
-		if err := writeOwned(configFile, b, gid); err != nil {
+		if err := scrubConfig(l); err != nil {
 			return err
 		}
 	}
@@ -257,5 +264,25 @@ func sameFile(a, b string) bool {
 }
 
 func finishUpdate(path string) string {
-	return "To finish, on that machine, as root: " + path + " service update"
+	return "To finish: that file is your own copy, and only you should run it. An administrator updates the service by running get.sh as root, then: dokkit service update"
+}
+
+// installedServiceConfig is the installed service's configuration file, or "" when none is installed.
+func installedServiceConfig() string {
+	if _, err := os.Stat(unitPath); err == nil {
+		return configFile
+	}
+	return ""
+}
+
+// ownedByService makes a file one only root can change and the dokkit group can read.
+func ownedByService(path string) error {
+	gid := 0
+	if u, err := user.Lookup(unitUser); err == nil {
+		gid, _ = strconv.Atoi(u.Gid)
+	}
+	if err := os.Chown(path, 0, gid); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o640)
 }
