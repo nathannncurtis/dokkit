@@ -21,7 +21,9 @@ go get github.com/nathannncurtis/dokkit/clients/go@main
 
 `dokkit.Start("2.3.0")` reads `DOKKIT_URL` and `DOKKIT_KEY`. `dokkit.StartWith("2.3.0", addr, key)` uses what it is given and does not read the environment: a blank address or key means off.
 
-Every start with a version sends a `deploy` line, and that is meant. The server stores the version and records a deploy only when it changes; for an app on many PCs it keeps one row per PC.
+Start with a version sends one `deploy` line per process, in the background. Set `dokkit.AnnounceVersion = false` before `Start` to turn it off. The server records a deploy only when the version changes; for an app on many PCs it keeps one row per PC.
+
+A non-production environment (`DOKKIT_ENV`) is put on every line. A line over 64 KB (bytes) loses its fields and has its `msg` cut, ending in ` [cut]`. Report bodies are gzipped. Stack frames carry the package path and file name only; Go has no app folder notion.
 
 ## Sending
 
@@ -31,7 +33,7 @@ Lines go first, then error reports. An error report the server did not answer fo
 
 ## Logging
 
-`slog.SetDefault(slog.New(dokkit.Handler(slog.LevelInfo)))` sends `log/slog` records through `Log`.
+`slog.SetDefault(slog.New(dokkit.Handler(slog.LevelInfo)))` sends `log/slog` records through `Log`. Anything logged on the goroutine that is inside the library's own request is not queued.
 
 ## Test
 

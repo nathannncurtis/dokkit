@@ -145,8 +145,8 @@ func TestHttpToAnotherMachineStaysOffUnlessAllowed(t *testing.T) {
 func TestQueueIsBoundedByBytes(t *testing.T) {
 	reset()
 	StartWith("", "http://127.0.0.1:1", "dka_test")
-	big := strings.Repeat("x", 900<<10)
-	for i := 0; i < 12; i++ {
+	big := strings.Repeat("x", 60<<10)
+	for i := 0; i < 200; i++ {
 		Log("info", big, nil)
 	}
 	mu.Lock()
@@ -345,3 +345,84 @@ func TestFlushGivesUpAfterItsTimeLimit(t *testing.T) {
 	close(hold)
 	flush()
 }
+
+func TestLineOver64KBIsCutAtACharacter(t *testing.T) {
+	reset()
+	StartWith("", "http://127.0.0.1:1", "dka_test")
+	Log("info", strings.Repeat("é", 100000), map[string]any{"a": 1})
+	mu.Lock()
+	defer mu.Unlock()
+	var d struct {
+		Msg    string
+		Fields map[string]any
+	}
+	if len(lines) != 1 || len(lines[0]) > 65536 || dropped != 0 {
+		t.Fatalf("lines=%d dropped=%d", len(lines), dropped)
+	}
+	json.Unmarshal(lines[0], &d)
+	if !strings.HasSuffix(d.Msg, " [cut]") || strings.ContainsRune(d.Msg, '�') || d.Fields != nil {
+		t.Fatalf("%.40q %v", d.Msg, d.Fields)
+	}
+}
+
+func TestAnnounceVersionOffSendsNoDeployLine(t *testing.T) {
+	reset()
+	defer func() { AnnounceVersion = true }()
+	AnnounceVersion = false
+	StartWith("1.0", "http://127.0.0.1:1", "dka_test")
+	Beat("w", 1)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(lines) != 1 || strings.Contains(string(lines[0]), "deploy") {
+		t.Fatalf("%s", lines)
+	}
+}
+
+func TestNonProductionEnvironmentIsOnEveryLine(t *testing.T) {
+	for env, want := range map[string]bool{"dev": true, "production": false} {
+		reset()
+		t.Setenv("DOKKIT_ENV", env)
+		StartWith("1.0", "http://127.0.0.1:1", "dka_test")
+		Log("info", "m", nil)
+		Beat("b", 1)
+		Job("j", func(*Run) error { return nil })
+		mu.Lock()
+		if len(lines) < 5 {
+			t.Fatalf("%d lines", len(lines))
+		}
+		for _, l := range lines {
+			if strings.Contains(string(l), `"environment":"`+env+`"`) != want {
+				t.Fatalf("%s: %s", env, l)
+			}
+		}
+		mu.Unlock()
+	}
+}
+
+func TestSelfFeedGuard(t *testing.T) {
+	reset()
+	StartWith("", "http://127.0.0.1:1", "dka_test")
+	sending.Store(gid(), true)
+	slog.New(Handler(slog.LevelInfo)).Info("from the sender")
+	sending.Delete(gid())
+	slog.New(Handler(slog.LevelInfo)).Info("from the app")
+	mu.Lock()
+	defer mu.Unlock()
+	if len(lines) != 1 || !strings.Contains(string(lines[0]), "from the app") {
+		t.Fatalf("%s", lines)
+	}
+}
+
+func TestTooManyRequestsErrorReportIsKept(t *testing.T) {
+	reset()
+	server, _ := fake(t, map[string]int{"/api/v1/errors": 429})
+	StartWith("", server.URL, "dka_test")
+	Capture(errors.New("bad"))
+	Flush()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(errs) != 1 || dropped != 0 {
+		t.Fatalf("kept=%d dropped=%d", len(errs), dropped)
+	}
+}
+

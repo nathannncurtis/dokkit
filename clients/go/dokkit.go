@@ -27,19 +27,24 @@ import (
 	"path"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
 	queue    = 1000
 	maxBytes = 8 << 20 // queued bytes
-	maxLine  = 1 << 20
+	maxLine  = 64 << 10
 	maxBatch = 4 << 20 // the server refuses an unzipped batch over 5 MB
 )
 
 type line = map[string]any
+
+// AnnounceVersion is whether Start sends a deploy line with the version. The server records a deploy only when the version changes.
+var AnnounceVersion = true
 
 // FlushTimeout is the longest Flush, and so Recover, waits for the server.
 var FlushTimeout = 5 * time.Second
@@ -92,7 +97,7 @@ func StartWith(release, addr, appKey string) {
 			flush()
 		}
 	}()
-	if release != "" {
+	if release != "" && AnnounceVersion {
 		add(line{"type": "deploy", "version": release})
 	}
 }
@@ -143,18 +148,46 @@ func encode(l line) (b []byte) {
 	return b
 }
 
+// fit cuts a line over maxLine bytes: its fields go, then its msg is cut at a character boundary and ends in " [cut]".
+func fit(l line, b []byte) []byte {
+	msg, ok := l["msg"].(string)
+	if len(b) <= maxLine || !ok {
+		return b
+	}
+	delete(l, "fields")
+	keep := len(msg)
+	for keep > 0 {
+		if over := len(encode(l)) - maxLine; over > 0 {
+			keep -= over + 16
+		} else {
+			break
+		}
+		if keep < 0 {
+			keep = 0
+		}
+		for keep > 0 && keep < len(msg) && !utf8.RuneStart(msg[keep]) {
+			keep--
+		}
+		l["msg"] = msg[:keep] + " [cut]"
+	}
+	return encode(l)
+}
+
 func add(l line) {
 	mu.Lock()
-	h, live := host, on
+	h, env, live := host, environment, on
 	mu.Unlock()
 	if !live {
 		return
+	}
+	if env != "" && env != "production" {
+		l["environment"] = env
 	}
 	if l["at"] == nil {
 		l["at"] = now()
 	}
 	l["host"] = h
-	b := encode(l)
+	b := fit(l, encode(l))
 	mu.Lock()
 	defer mu.Unlock()
 	if len(b) == 0 || len(b) > maxLine {
@@ -433,13 +466,16 @@ func send(b *batch) int {
 		req.Header.Set("Content-Encoding", "gzip")
 		req.Header.Set("Dokkit-Batch", b.id)
 	}
+	g := gid()
+	sending.Store(g, true)
 	res, err := client.Do(req)
+	sending.Delete(g)
 	if err != nil {
 		return failed
 	}
 	res.Body.Close()
 	switch {
-	case res.StatusCode >= 500:
+	case res.StatusCode >= 500 || res.StatusCode == 429:
 		return failed
 	case res.StatusCode >= 400:
 		return refused
@@ -461,7 +497,20 @@ func (h *handler) WithAttrs(a []slog.Attr) slog.Handler {
 	return &handler{h.level, append(h.attrs[:len(h.attrs):len(h.attrs)], a...)}
 }
 
+// sending holds the goroutines that are inside the library's own request, so what the HTTP stack logs there is not queued.
+var sending sync.Map
+
+func gid() int {
+	var b [32]byte
+	f := strings.Fields(string(b[:runtime.Stack(b[:], false)]))
+	n, _ := strconv.Atoi(f[1])
+	return n
+}
+
 func (h *handler) Handle(_ context.Context, r slog.Record) error {
+	if _, own := sending.Load(gid()); own {
+		return nil
+	}
 	level := "debug"
 	switch {
 	case r.Level >= slog.LevelError:
