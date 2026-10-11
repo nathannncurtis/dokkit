@@ -24,7 +24,9 @@ defmodule DokkitWeb.ParityTest do
            "POST /api/v1/alerts/suggestions/:id/accept",
            "POST /api/v1/alerts/suggestions/:id/dismiss"
          ]},
-      "test" => {:owner, ["POST /api/v1/alerts/test"]}
+      "test" => {:owner, ["POST /api/v1/alerts/test"]},
+      "person" => {:owner, ["PUT /api/v1/alerts/people/:id", "POST /api/v1/alerts/test"]},
+      "who" => {:owner, ["PUT /api/v1/alerts/who"]}
     },
     "EverythingLive" => %{
       "update" => {:owner, ["POST /api/v1/machines/:id/update"]},
@@ -50,6 +52,7 @@ defmodule DokkitWeb.ParityTest do
       "timing_typed" => @view,
       "timing" => {:member, ["PUT /api/v1/jobs/:id/timing"]},
       "route" => {:member, ["PUT /api/v1/services/:id/routing"]},
+      "who" => {:owner, ["PUT /api/v1/alerts/who"]},
       "watching" =>
         {:member, ["POST /api/v1/services/:id/watch", "POST /api/v1/services/:id/unwatch"]},
       "hold" => {:member, ["PUT /api/v1/services/:id/hold"]},

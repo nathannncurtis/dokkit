@@ -29,14 +29,14 @@ Each service has a switch, "Wake me at night for this", on by default. When it i
 
 ## Recovery
 
-An issue closes itself after 3 good checks, and the page it raised is resolved automatically.
+An issue closes itself after as many good results in a row as it takes to open: 3 for a check unless that check was given another number. A job, a beat, a disk forecast and the checks of Dokkit's own row open on one bad result and close on one good result. The page it raised is resolved automatically.
 
 ## Channels
 
 | Channel | Delivered by |
 |---|---|
-| `page` | PagerDuty, high urgency. |
-| `push` | A quiet phone notification, through one of: PagerDuty at low urgency, ntfy, or Pushover. |
+| `page` | PagerDuty, an Events API v2 trigger with severity `critical`. Urgency (high or low) is a setting of the PagerDuty service the routing key belongs to; Dokkit does not send it. |
+| `push` | A quiet phone notification, through one of: PagerDuty (an event with severity `warning`), ntfy, or Pushover. |
 | `email` | A mail server. |
 | `imessage` | One enrolled Mac that is signed in to Messages. The server hands that Mac a built-in piece of work, `dokkit:imessage`, with the recipients and the one-line summary; the alert counts as sent only when the Mac answers with exit code 0. For people who do not want to register a phone number for automated texts. |
 | `sms` | A Twilio account: one request to Twilio for each recipient, sent from the Twilio number in the settings. |
@@ -52,10 +52,24 @@ A rule is a condition, a channel, and who receives it. Each service also has its
 Sent once a day at a time that is a setting. It holds:
 
 - errors from desktop apps, by machine and app
-- issues that opened or closed without paging
+- issues that opened without paging, and issues that closed without paging and had opened before the day began
 - anything about to cross a limit
 
 A day with nothing to say sends nothing.
+
+Each person who has an email address gets a digest of their own with what was theirs, and the server-wide address gets what was told to everyone. See People.
+
+## People
+
+A person is a user of the server. Each has destinations of their own, kept in a table apart from the users: an email address, a phone number for SMS, an iMessage address, an ntfy address, a Pushover user key and a PagerDuty routing key. The ntfy address, the Pushover user key and the routing key are only shown as set or not set. A person's ntfy topic gets the server's ntfy access token only when it is on the same host as the server's ntfy address. The Twilio account, the Pushover application token, the mail server and the Mac that sends iMessages stay server-wide.
+
+Who is told is named at four levels: a check, a service, a rule, and the default on the Alerts page. Each names one or more people, or `everyone`. The most specific level that names someone decides: check, then service, then rule, then default. A level that names nobody leaves it to the level above. `everyone` is the server-wide destinations of the Alerts page and behaves as it did before people existed; it is the default, so an install that names nobody sees no change. A named person who has been removed is dropped, and if no one is left it goes to everyone.
+
+An alert to named people is sent to each person's own destination for the channel. Each person is tried and retried on their own: a person whose send failed is retried without telling the others twice, and the failure names them. A person without a destination for the channel fails the alert with a reason that names them. A page opens and resolves in each person's own PagerDuty service, with a dedup key of its own. iMessage goes to all named addresses in one run. A webhook is server-wide and is sent once whoever is named. The night, the 30-minute rule, snoozes and non-production apply to the alert as before, whoever it goes to.
+
+## Dokkit's own health
+
+Dokkit keeps a row for itself with checks for taking reports, its database, its archive folder and its certificate. When no machine has reported for 10 minutes, or the database does not answer, the row is down and takes the channel set on the Alerts page for that, which is the loudest channel that is set up (a page, then SMS, iMessage, push, email) unless one is chosen. An archive folder that cannot be written to and a certificate inside its warning window are degraded and push unless another channel is chosen. The row's two routes follow those two settings. The outside heartbeat is the way to hear of Dokkit being down altogether.
 
 ## Suggestions
 
@@ -67,9 +81,9 @@ Learning what normal looks like and flagging the unusual. Limits are fixed numbe
 
 ## Built so far
 
-Every channel in the table, with one server-wide choice for `down` and one for `degraded`, each service's own routing, and rules. An issue's channel is its service's routing if it has one, else the first rule that fits, else the server-wide choice. A rule's condition is the kind of thing (a job, a check, a machine), what happened (stops, struggles) and optionally one machine. Everyone is one recipient so far: the email, iMessage and SMS addresses in the settings.
+Every channel in the table, with one server-wide choice for `down` and one for `degraded`, each service's own routing, and rules. An issue's channel is its service's routing if it has one, else the first rule that fits, else the server-wide choice. A rule's condition is the kind of thing (a job, a check, a machine), what happened (stops, struggles) and optionally one machine. Everyone is the server-wide destinations: the email, iMessage and SMS addresses in the settings. People with destinations of their own are described under People.
 
-An iMessage goes out through the Mac named in `imessage_machine`, an enrolled machine whose os is `darwin`, to the phone numbers and email addresses in `imessage_to`. An opening alert queues one run of `dokkit:imessage` for that Mac alone. The alert is `sending` until the Mac answers: exit code 0 makes it sent, a refusal or any other exit makes it failed with the refusal or the program's output lines as the reason. If the Mac has not answered after 5 minutes (not connected, asleep) the alert fails with "The Mac that sends iMessages, <name>, did not pick it up." The run stays, so a late success still marks the alert sent, and a retry waits on that run instead of queuing a second message; a retry after a failed answer queues a new run. A close sends nothing. Choosing `imessage` while no Mac is chosen is allowed and the Alerts page says it will not send. The Mac must have been told it may send (`dokkit imessage on`, run on that Mac), and macOS asks once on its screen.
+An iMessage goes out through the Mac named in `imessage_machine`, an enrolled machine whose os is `darwin`, to the phone numbers and email addresses in `imessage_to`. An opening alert queues one run of `dokkit:imessage` for that Mac alone. The alert is `sending` until the Mac answers: exit code 0 makes it sent, a refusal or any other exit makes it failed with the refusal or the program's output lines as the reason. If the Mac has not answered after 5 minutes (not connected, asleep) the alert fails with "The Mac that sends iMessages, <name>, did not pick it up." The run stays, so a late success still marks the alert sent, and a retry waits on that run instead of queuing a second message; a retry after a failed answer queues a new run. A close sends nothing. Choosing `imessage` while no Mac is chosen is allowed and the Alerts page says it will not send. The iMessage card says plainly where it stands: no Mac chosen, no address, the Mac chosen but its program has not picked up the test, the Mac chosen and no test sent yet, or set up once the Mac has answered a test. `GET /alerts` carries the same words as `imessage_status`. The Mac must have been told it may send (`dokkit imessage on`, run on that Mac), and macOS asks once on its screen.
 
 SMS goes through `POST https://api.twilio.com/2010-04-01/Accounts/<sid>/Messages.json` with the settings `twilio_sid`, `twilio_token` (a secret) and `twilio_from`, to each number in `sms_to`. A 2xx is sent; anything else fails the alert with Twilio's `message` when it gave one. An alert recorded as `text` before this existed reads as "Texted"; every stored choice of `text` became `sms`.
 
@@ -77,7 +91,7 @@ An alert is written with its issue and sent afterwards, and a send that fails is
 
 Each machine's own disks and memory are watched without a declaration, against two limits on the Alerts page (90 and 95 percent used unless changed; blank switches one off), by the usual three-in-a-row rule. A threshold a file declares for the same number replaces the built-in one.
 
-One suggestion is made: an issue that has opened six times or more in a month and is snoozed is offered the daily digest, on the Alerts page, and accepting sets that service's routing. Dismissing it stops the offer for that service. The settings, the test send and the suggestions are on the API and the MCP as well (`GET` and `PUT /alerts`, `POST /alerts/test`, `/alerts/suggestions`), and a secret or an address is never returned, only `set` or `not set`. Email, iMessage and SMS go to every address in their setting, written with commas between them; who receives a page or a push is decided in PagerDuty, ntfy or Pushover.
+One suggestion is made: an issue that has opened six times or more in a month and is snoozed is offered the daily digest, on the Alerts page, and accepting sets that service's routing. Dismissing it stops the offer for that service. The settings, the test send, the people and who is told at each level, and the suggestions are on the API and the MCP as well (`GET` and `PUT /alerts`, `POST /alerts/test` with an optional `person`, `GET /alerts/people`, `PUT /alerts/people/<id>`, `GET` and `PUT /alerts/who`, `/alerts/suggestions`), and a secret or an address is never returned, only `set` or `not set`. Email, iMessage and SMS go to every address in their setting, written with commas between them; who receives a page or a push is decided in PagerDuty, ntfy or Pushover.
 
 ## Where an alert may be sent
 

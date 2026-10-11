@@ -8102,7 +8102,7 @@
         "tags": [
           "Admin"
         ],
-        "description": "Sends a test alert by one channel. Answers ok, or 422 with one reason. For SMS it is Twilio's own message when it gave one, and for iMessage it is the Mac's answer, which is waited for up to a minute. For the others it is a fixed reason that never carries anything the far end said. A 422 with code `slow_down` comes after four tests at once for a token, then one every 25 seconds. Answers 422 too when the channel is not one that sends. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "description": "Sends a test alert by one channel. Answers ok, or 422 with one reason. For SMS it is Twilio's own message when it gave one, and for iMessage it is the Mac's answer, which is waited for up to a minute. For the others it is a fixed reason that never carries anything the far end said. A 422 with code `slow_down` comes after four tests at once for a token, then one every 25 seconds. Answers 422 too when the channel is not one that sends, or `person` is not a person on the server (code `bad_person`). Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
         "requestBody": {
           "required": true,
           "content": {
@@ -8124,6 +8124,10 @@
                       "digest",
                       "webhook"
                     ]
+                  },
+                  "person": {
+                    "type": "string",
+                    "description": "The id of a person. The test goes to that person's destination instead of the server-wide one."
                   }
                 }
               },
@@ -9943,6 +9947,615 @@
           }
         ]
       }
+    },
+    "/api/v1/alerts/people": {
+      "get": {
+        "operationId": "listAlertPeople",
+        "summary": "People alerts can be told",
+        "tags": [
+          "Read"
+        ],
+        "description": "Each person on the server with the destinations they have of their own. The ntfy address, the Pushover user key and the PagerDuty routing key are only `set` or `not set`. Takes a user token (`dku_`) with the `read` scope.",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "phone": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "imessage": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "ntfy_url": {
+                            "type": "string",
+                            "enum": [
+                              "set",
+                              "not set"
+                            ]
+                          },
+                          "pushover_user": {
+                            "type": "string",
+                            "enum": [
+                              "set",
+                              "not set"
+                            ]
+                          },
+                          "pagerduty_key": {
+                            "type": "string",
+                            "enum": [
+                              "set",
+                              "not set"
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "next": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Always null for now. Lists are not paged yet."
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                      "name": "ada",
+                      "role": "member",
+                      "email": "ada@example.com",
+                      "phone": "+15555550100",
+                      "imessage": null,
+                      "ntfy_url": "set",
+                      "pushover_user": "not set",
+                      "pagerduty_key": "not set"
+                    }
+                  ],
+                  "next": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alerts/who": {
+      "get": {
+        "operationId": "listAlertWho",
+        "summary": "Who is told at each level",
+        "tags": [
+          "Read"
+        ],
+        "description": "Where someone is named: the default, a rule, a service or a check. The most specific level that names someone decides: the check, then the service, then the rule, then the default. A level that names nobody is left to the level above, and the default is everyone. Takes a user token (`dku_`) with the `read` scope.",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "default",
+                              "rule",
+                              "service",
+                              "check"
+                            ]
+                          },
+                          "id": {
+                            "type": "string",
+                            "description": "The rule, service or check. Empty for the default."
+                          },
+                          "to": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "Person ids, or [\"everyone\"] for the server-wide destinations."
+                          }
+                        }
+                      }
+                    },
+                    "next": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Always null for now. Lists are not paged yet."
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "scope": "service",
+                      "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                      "to": [
+                        "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f4"
+                      ]
+                    }
+                  ],
+                  "next": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "operationId": "setAlertWho",
+        "summary": "Name who is told at one level",
+        "tags": [
+          "Admin"
+        ],
+        "description": "`to` is a list of person ids, or `[\"everyone\"]`, which is the server-wide destinations and behaves as before. An empty list names nobody at that level, so the level above decides. Takes a user token (`dku_`) with the `admin` scope.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "default",
+                      "rule",
+                      "service",
+                      "check"
+                    ]
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Person ids, or [\"everyone\"] for the server-wide destinations."
+                  },
+                  "service": {
+                    "type": "string",
+                    "description": "For a check: the id of its service, sent with `name` instead of `id`."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "For a check: its name."
+                  }
+                },
+                "required": [
+                  "scope",
+                  "to"
+                ]
+              },
+              "example": {
+                "scope": "service",
+                "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                "to": [
+                  "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f4"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "default",
+                        "rule",
+                        "service",
+                        "check"
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "description": "The rule, service or check. Empty for the default."
+                    },
+                    "to": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Person ids, or [\"everyone\"] for the server-wide destinations."
+                    }
+                  }
+                },
+                "example": {
+                  "scope": "service",
+                  "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                  "to": [
+                    "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f4"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Refused, with the reason.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alerts/people/{id}": {
+      "put": {
+        "operationId": "updateAlertPerson",
+        "summary": "Change a person's destinations",
+        "tags": [
+          "Admin"
+        ],
+        "description": "A destination left out stays as it was; an empty one clears it. Email and iMessage may hold several addresses with commas between them. The ntfy address must be https. A person's ntfy topic gets the server's ntfy token only when it is on the same host as the server's ntfy address. A person with no destination for a channel makes that alert fail with a reason that names them. Takes a user token (`dku_`) with the `admin` scope.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the person.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "imessage": {
+                    "type": "string"
+                  },
+                  "ntfy_url": {
+                    "type": "string"
+                  },
+                  "pushover_user": {
+                    "type": "string"
+                  },
+                  "pagerduty_key": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "email": "ada@example.com",
+                "phone": "+15555550100"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "phone": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "imessage": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "ntfy_url": {
+                      "type": "string",
+                      "enum": [
+                        "set",
+                        "not set"
+                      ]
+                    },
+                    "pushover_user": {
+                      "type": "string",
+                      "enum": [
+                        "set",
+                        "not set"
+                      ]
+                    },
+                    "pagerduty_key": {
+                      "type": "string",
+                      "enum": [
+                        "set",
+                        "not set"
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                  "name": "ada",
+                  "role": "member",
+                  "email": "ada@example.com",
+                  "phone": "+15555550100",
+                  "imessage": null,
+                  "ntfy_url": "set",
+                  "pushover_user": "not set",
+                  "pagerduty_key": "not set"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Refused, with the reason.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -10877,6 +11490,18 @@
               "set",
               "not set"
             ]
+          },
+          "self_down": {
+            "type": "string",
+            "description": "The channel for Dokkit's own row when it stops taking reports or cannot reach its database. Empty is the loudest channel that is set up."
+          },
+          "self_degraded": {
+            "type": "string",
+            "description": "The channel for lesser trouble with Dokkit itself. Empty is push."
+          },
+          "imessage_status": {
+            "type": "string",
+            "description": "Where iMessage sending stands: set up once the chosen Mac has answered a test, else what is still missing."
           }
         }
       },
@@ -10996,6 +11621,14 @@
           },
           "smtp_user": {
             "type": "string"
+          },
+          "self_down": {
+            "type": "string",
+            "description": "The channel for Dokkit's own row when it stops taking reports or cannot reach its database. Empty is the loudest channel that is set up."
+          },
+          "self_degraded": {
+            "type": "string",
+            "description": "The channel for lesser trouble with Dokkit itself. Empty is push."
           }
         }
       },

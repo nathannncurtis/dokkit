@@ -289,17 +289,52 @@ defmodule DokkitWeb.ApiController do
 
   def set_alert_settings(conn, params), do: reply(conn, save_alerts(params))
 
+  def alert_people(conn, _), do: list(conn, Dokkit.People.view())
+
+  def save_person(%{"id" => id} = params) do
+    case Dokkit.People.update(id, params) do
+      {:ok, person} -> Dokkit.People.view(person)
+      :not_found -> not_found()
+      {:error, why} -> {:error, "bad_person", why}
+    end
+  end
+
+  def set_alert_person(conn, params), do: reply(conn, save_person(params))
+
+  def alert_who(conn, _), do: list(conn, Dokkit.People.who_list())
+
+  def save_who(params) do
+    id =
+      if params["scope"] == "check" and is_binary(params["service"]),
+        do: Dokkit.People.check_id(params["service"], params["name"]) || "",
+        else: params["id"]
+
+    case Dokkit.People.set_who(params["scope"], id, params["to"]) do
+      {:ok, entry} -> entry
+      {:error, why} -> {:error, "bad_who", why}
+    end
+  end
+
+  def set_alert_who(conn, params), do: reply(conn, save_who(params))
+
   @test_cost 2_500
 
   @doc "Sends a test alert. Answers ok, or one fixed reason. Four tests at once for each caller, then one every 25 seconds."
-  def try_alert(%{"channel" => channel}, who) when is_binary(channel) do
+  def try_alert(%{"channel" => channel} = params, who) when is_binary(channel) do
+    person = params["person"] && Dokkit.People.get(params["person"])
+    bad_person = params["person"] != nil and person == nil
+
     with true <- Dokkit.Alerts.sends?(channel),
+         false <- bad_person,
          :ok <- Dokkit.RateLimit.take({:alert_test, who}, @test_cost) do
-      case Dokkit.Alerts.test(channel) do
+      case Dokkit.Alerts.test(channel, person) do
         :ok -> %{ok: true}
         {:error, why} -> {:error, "send_failed", why}
       end
     else
+      true ->
+        {:error, "bad_person", "person is the id of a person on this server."}
+
       false ->
         {:error, "bad_channel", "channel is page, push, email, imessage, sms, digest or webhook."}
 
