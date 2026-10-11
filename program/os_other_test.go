@@ -40,3 +40,29 @@ func TestAStatusFileTheAccountCannotReadSaysToUseSudo(t *testing.T) {
 		t.Fatalf("%q", out)
 	}
 }
+
+func TestEachDiskIsListedOnce(t *testing.T) {
+	mac := []string{
+		"Filesystem 1024-blocks Used Available Capacity Mounted on",
+		"/dev/disk3s1s1 482000000 11000000 200000000 6% /",
+		"/dev/disk3s5 482000000 280000000 200000000 59% /System/Volumes/Data",
+		"/dev/disk3s6 482000000 20000 200000000 1% /System/Volumes/VM",
+		"/dev/disk3s4 482000000 700000 200000000 1% /System/Volumes/Preboot",
+		"/dev/disk1s2 500000 15000 480000 4% /System/Volumes/xarts",
+		"/dev/disk3s3 482000000 900000 200000000 1% /Volumes/Recovery",
+		"/dev/disk5s1 1000000 840000 160000 85% /Volumes/Backup",
+	}
+	got := disksFrom(mac)
+	if len(got) != 2 || got[0]["mount"] != "/" || got[1]["mount"] != "/Volumes/Backup" {
+		t.Fatalf("%v", got)
+	}
+	linux := []string{
+		"/dev/sda2 100000000 50000000 50000000 50% /",
+		"/dev/sda2 100000000 50000000 50000000 50% /var/lib/docker/etc-hosts",
+		"/dev/loop3 100000 100000 0 100% /snap/core/1",
+		"/dev/sdb1 200000000 1000 199999000 1% /data",
+	}
+	if got = disksFrom(linux); len(got) != 2 || got[1]["mount"] != "/data" {
+		t.Fatalf("%v", got)
+	}
+}
