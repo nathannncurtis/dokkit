@@ -1,6 +1,6 @@
 defmodule DokkitWeb.SessionControllerTest do
   use DokkitWeb.ConnCase, async: true
-  alias Dokkit.Accounts
+  alias Dokkit.{Accounts, Repo}
 
   @password "correct horse battery"
 
@@ -176,5 +176,78 @@ defmodule DokkitWeb.SessionControllerTest do
     assert redirected_to(get(conn, "/login/code")) == "/login"
     Accounts.totp_reset("Totp-Tom")
     assert redirected_to(post(conn, "/login", %{name: "totp-tom", password: @password})) == "/"
+  end
+
+  defp two_step_on(conn, name, step_offset) do
+    {:ok, user} = Accounts.add(name, "member", @password)
+    inside = recycle(post(conn, "/login", %{name: name, password: @password}))
+    html_response(get(inside, "/two-step"), 200)
+    secret = Accounts.get(user.id).totp_secret
+    code = Accounts.totp_code(secret, Accounts.totp_step() + step_offset)
+    page = html_response(post(inside, "/two-step", %{code: code, do: "on"}), 200)
+    codes = Regex.scan(~r/\b[A-Z0-9]{6}-[A-Z0-9]{6}\b/, page) |> List.flatten() |> Enum.uniq()
+    {user, secret, inside, codes}
+  end
+
+  test "recovery codes are shown once, work once in place of a code and are counted like passwords",
+       %{conn: conn} do
+    conn = from(conn, 22)
+    {user, secret, inside, codes} = two_step_on(conn, "recover-ro", 0)
+    assert length(codes) == 10
+    assert Accounts.recovery_left(user) == 10
+
+    assert Repo.query!("select code_hash from recovery_codes").rows
+           |> Enum.all?(fn [hash] -> hash =~ ~r/^[0-9a-f]{64}$/ end)
+
+    again = html_response(post(inside, "/two-step", %{code: "000000", do: "on"}), 200)
+    assert again =~ "shown once"
+    refute again =~ hd(codes)
+    assert Accounts.recovery_left(user) == 10
+    refute html_response(get(inside, "/two-step"), 200) =~ hd(codes)
+
+    [first, second | _] = codes
+    half = recycle(post(conn, "/login", %{name: "recover-ro", password: @password}))
+    assert html_response(post(half, "/login/code", %{code: "AAAAAA-AAAAAA"}), 401) =~ "not right"
+    done = post(half, "/login/code", %{code: String.downcase(first)})
+    assert redirected_to(done) == "/two-step?used=1"
+    landing = html_response(get(recycle(done), "/two-step?used=1"), 200)
+    assert landing =~ "signed in with a recovery code"
+    assert landing =~ "9 recovery codes left"
+
+    half = recycle(post(conn, "/login", %{name: "recover-ro", password: @password}))
+    assert html_response(post(half, "/login/code", %{code: first}), 401) =~ "not right"
+    assert redirected_to(post(half, "/login/code", %{code: second})) == "/two-step?used=1"
+
+    next = Accounts.totp_code(secret, Accounts.totp_step() + 1)
+    assert redirected_to(post(half, "/login/code", %{code: next})) == "/"
+  end
+
+  test "new recovery codes need a current code and end the old set; turning off deletes them", %{
+    conn: conn
+  } do
+    conn = from(conn, 23)
+    {user, secret, inside, old} = two_step_on(conn, "recover-new", -1)
+
+    bad = post(inside, "/two-step", %{code: "000000", do: "codes"})
+    assert html_response(bad, 422) =~ "not right"
+    assert Accounts.recovery_left(user) == 10
+
+    code = Accounts.totp_code(secret, Accounts.totp_step() + 0)
+    page = html_response(post(inside, "/two-step", %{code: code, do: "codes"}), 200)
+    new = Regex.scan(~r/\b[A-Z0-9]{6}-[A-Z0-9]{6}\b/, page) |> List.flatten() |> Enum.uniq()
+    assert length(new) == 10
+    assert new -- old == new
+
+    half = recycle(post(conn, "/login", %{name: "recover-new", password: @password}))
+    assert html_response(post(half, "/login/code", %{code: hd(old)}), 401) =~ "not right"
+    assert redirected_to(post(half, "/login/code", %{code: hd(new)})) == "/two-step?used=1"
+
+    off = Accounts.totp_code(secret, Accounts.totp_step() + 1)
+    html_response(post(inside, "/two-step", %{code: off}), 200)
+    assert Accounts.recovery_left(Accounts.get(user.id)) == 0
+
+    {user2, _, _, _} = two_step_on(conn, "recover-reset", 0)
+    Accounts.totp_reset("recover-reset")
+    assert Accounts.recovery_left(user2) == 0
   end
 end

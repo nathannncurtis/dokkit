@@ -585,6 +585,13 @@ input, select { accent-color: var(--brand); caret-color: var(--brand); }
 .door p { text-wrap: pretty; }
 .door .bad { display: flex; gap: 8px; color: var(--bad); }
 .door .bad i { line-height: 20px; }
+.door .notice { display: flex; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--raise); border: 1px solid var(--line); }
+.door .notice i { line-height: 20px; color: var(--ok); }
+.door .codes { margin: 0; padding: 14px 16px; border-radius: 8px; background: var(--raise); border: 1px solid var(--line); columns: 2; column-gap: 24px; font-size: 15px; line-height: 28px; user-select: all; }
+.door .row { display: flex; gap: 8px; }
+.door .row .btn { flex: 1; }
+.door a.btn { text-decoration: none; color: inherit; }
+.door a.btn.primary { color: var(--brand-ink); }
 .me form { margin-left: auto; }
 .me .btn { color: var(--side-mute); }
 
