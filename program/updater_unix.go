@@ -419,7 +419,7 @@ func updaterRehearse(dir string) int {
 	self, _ := os.Executable()
 	for _, p := range []string{where.updaterExe, where.programExe} {
 		if !exists(p) {
-			copyPlain(self, p)
+			putFile(self, p)
 		}
 	}
 	ops = realHost()
@@ -429,9 +429,5 @@ func updaterRehearse(dir string) int {
 	loadClient = load
 	sendResults = false
 	fmt.Println("Rehearsing in", dir, "- nothing outside it is changed and no result is sent.")
-	code := updaterRun()
-	if b, err := os.ReadFile(filepath.Join(where.data, "updater.log")); err == nil {
-		fmt.Print(string(b))
-	}
-	return code
+	return updaterRun()
 }

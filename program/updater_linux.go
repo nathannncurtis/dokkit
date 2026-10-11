@@ -20,8 +20,9 @@ const (
 
 	timerServicePath = "/etc/systemd/system/" + timerName + ".service"
 	timerUnitPath    = "/etc/systemd/system/" + timerName + ".timer"
-	qnapCrontab      = "/etc/config/crontab"
 )
+
+var qnapCrontab = "/etc/config/crontab"
 
 var errNoCron = errors.New("this machine has neither a running systemd nor a crontab command, so there is nothing to run the updater from")
 
