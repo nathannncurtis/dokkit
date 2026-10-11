@@ -33,6 +33,8 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `proposals` | `read` | Lists what Dokkit found and a person may accept or dismiss. |
 | `series` | `read` | Shows numbers over time for a service (`id`), or for a machine's own disks, memory and processor (`machine`). |
 | `day` | `read` | Shows the last 24 hours in half hours: for each machine whether something was down, needed a look, or nothing happened, or it was not heard from, and the issues that opened. |
+| `releases` | `read` | Lists the program releases the server holds and whether each is complete. |
+| `certificate` | `read` | Shows the certificates the server serves itself. |
 | `alert_settings` | `read` | Shows the alert settings. Addresses, user names and secrets are only `set` or `not set`. |
 | `alert_suggestions` | `read` | Lists issues that keep opening, which the daily digest could take instead. |
 | `logs` | `read-logs` | Searches log lines. |
@@ -62,6 +64,15 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `add_person` | `admin` | Adds a person. |
 | `remove_person` | `admin` | Removes a person. |
 | `update_program` | `admin` | Asks an enrolled machine to fetch the newer `dokkit` program. |
+| `update_machine` | `admin` | Asks the updater on a machine to move to a release the server holds completely. |
+| `update_all` | `admin` | The same for every machine that has an updater. |
+| `set_certificate` | `admin` | Puts a certificate for a real name in place. |
+| `remove_certificate` | `admin` | Removes the uploaded certificate. |
+| `certificate_settings` | `admin` | Shows the settings for getting and renewing the uploaded certificate. |
+| `set_certificate_settings` | `admin` | Changes those settings. A setting left out stays as it was. |
+| `renew_certificate` | `admin` | Gets a certificate now from the certificate authority. |
+| `add_app` | `admin` | Adds an app that runs on many machines. Its key is returned once. |
+| `add_dependency` | `admin` | Adds something outside that is depended on. With a check (`http` url or `tcp` address) it is put on an enrolled machine whose program runs the check; without one it belongs to the group Outside. |
 | `add_job` | `admin` | Adds a job to watch. Its key and addresses are returned once. |
 | `set_alert_settings` | `admin` | Changes alert settings. A setting left out stays as it was; an empty secret clears it. If the address a secret goes to changes (`ntfy_url`, `smtp_host`), send the secret again in the same call or it is cleared, and the answer says so. |
 | `test_alert` | `admin` | Sends a test alert by one channel. Answers sent, or one fixed reason. Four at once for each token, then one every 25 seconds. |
@@ -76,8 +87,9 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 - **Read tools are marked read-only**, so a client can run them without asking each time. `admin` tools are marked destructive.
 - **What comes back is data.** Names, titles, notes, error text, deploy fields and output were written by machines and apps. Every answer starts with a line that says so.
 - **Arguments are checked against the types the tool declares.** A wrong type is an `isError` answer, not a failure. A `null` argument is the same as one left out, and a whole number written as `5.0` is an integer. To clear a route, send an empty text.
+- **Lists page by cursor.** The list tools (`find`, `jobs`, `job_runs`, `logs`, `errors`, `machines`, `issues`, `deploys`, `rules`, `proposals`, `keys`, `people`, `releases`) take the filters of their API list, `cursor` and `limit` (1 to 500, default 100). A list that fits one page answers as an array, as before; a longer one, or any call with `cursor` or `limit`, answers `{"items": [...], "next": "<cursor or null>"}`. `issues` takes `state` (`open`, `snoozed`, `closed` or `all`). `errors` with an `id` pages the group's reports the same way. `accept_proposal` and `dismiss_proposal` take `ids` or `all`.
 - **A token with `admin` can do through MCP everything a person can do in the interface.** Making such a token asks for confirmation in Settings.
 
 ## Built so far
 
-`POST /mcp` with a user token: every tool in the table, 57 in all (21 `read`, 2 `read-logs`, 14 `act`, 20 `admin`), one for each call of the API a token can make. Making a full-control token and the browser's own sign-in have no tool: they are Settings and the browser only. A tool the token may not use is not listed.
+`POST /mcp` with a user token: every tool in the table, 63 in all (20 `read`, 2 `read-logs`, 13 `act`, 28 `admin`), one for each call of the API a token can make. Making a full-control token and the browser's own sign-in have no tool: they are Settings and the browser only. A tool the token may not use is not listed.

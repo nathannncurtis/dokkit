@@ -80,6 +80,12 @@ defmodule Dokkit.Logs do
     query = if opts[:to], do: where(query, [l], l.at <= ^opts[:to]), else: query
 
     query =
+      case opts[:before] do
+        {at, id} -> where(query, [l], l.at < ^at or (l.at == ^at and l.id < ^id))
+        _ -> query
+      end
+
+    query =
       case Enum.find_index(@levels, &(&1 == opts[:level])) do
         nil -> query
         i -> where(query, [l], l.level in ^Enum.drop(@levels, i))

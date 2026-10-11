@@ -1157,6 +1157,50 @@
               "read"
             ]
           }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Only what contains this text.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "machine",
+            "in": "query",
+            "description": "Only on this machine (id or name).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "service or port.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
         ]
       }
     },
@@ -1373,6 +1417,74 @@
             "userToken": [
               "read"
             ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Only what contains this text.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "machine",
+            "in": "query",
+            "description": "Only on this machine (id or name).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "description": "Only this service (id).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "description": "Only in this environment.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Only from this time, RFC 3339.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Only up to this time, RFC 3339.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
           }
         ]
       }
@@ -1745,6 +1857,74 @@
             "userToken": [
               "read"
             ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Only what contains this text.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "machine",
+            "in": "query",
+            "description": "Only on this machine (id or name).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "description": "Only this service (id).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "description": "Only in this environment.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Only from this time, RFC 3339.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Only up to this time, RFC 3339.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
           }
         ]
       }
@@ -2799,11 +2979,11 @@
     "/api/v1/issues": {
       "get": {
         "operationId": "listIssues",
-        "summary": "List open and snoozed issues",
+        "summary": "List issues",
         "tags": [
           "Read"
         ],
-        "description": "Open issues, then snoozed ones. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "description": "Issues, newest first: the open and snoozed ones, or those of `state`. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
         "responses": {
           "200": {
             "description": "OK.",
@@ -2891,6 +3071,88 @@
             "userToken": [
               "read"
             ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "description": "open, snoozed, closed or all. Left out: open and snoozed.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "snoozed",
+                "closed",
+                "all"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Only what contains this text.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "machine",
+            "in": "query",
+            "description": "Only on this machine (id or name).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "description": "Only this service (id).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "description": "Only in this environment.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Only from this time, RFC 3339.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Only up to this time, RFC 3339.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
           }
         ]
       }
@@ -3121,6 +3383,42 @@
             "userToken": [
               "read"
             ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Only what contains this text.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "machine",
+            "in": "query",
+            "description": "Only on this machine (id or name).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
           }
         ]
       }
@@ -3468,6 +3766,48 @@
               "type": "string"
             },
             "required": false
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "description": "Only this service (id).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "description": "Only in this environment.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "service, job, dependency or app.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
           }
         ],
         "responses": {
@@ -4049,6 +4389,66 @@
               "read"
             ]
           }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Only what contains this text.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "machine",
+            "in": "query",
+            "description": "Only on this machine (id or name).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "description": "Only this service (id).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "description": "Only in this environment.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "ok, degraded, down or unknown.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
         ]
       },
       "post": {
@@ -4195,6 +4595,53 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "name": "result",
+            "in": "query",
+            "description": "running, ok or fail.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "running",
+                "ok",
+                "fail"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Only from this time, RFC 3339.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Only up to this time, RFC 3339.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
           }
         ],
         "responses": {
@@ -4367,6 +4814,24 @@
               "format": "date-time"
             },
             "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
           }
         ],
         "responses": {
@@ -4476,7 +4941,7 @@
         "tags": [
           "Read"
         ],
-        "description": "One group with the stack and tags of its latest report. The message is there only when the service keeps messages, and needs `read-logs`. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "description": "One group with the stack and tags of its latest report. The message is there only when the service keeps messages, and needs `read-logs`. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, error messages and notes are left out of the answer. `reports` lists the group's individual reports, newest first, as `{items, next}`; `cursor` and `limit` page them.",
         "parameters": [
           {
             "name": "id",
@@ -4486,6 +4951,24 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
           }
         ],
         "responses": {
@@ -4831,6 +5314,34 @@
             "userToken": [
               "read"
             ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Only what contains this text.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
           }
         ]
       },
@@ -6754,6 +7265,66 @@
               "admin"
             ]
           }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Only what contains this text.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "user, app, enrol or machine.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "machine",
+            "in": "query",
+            "description": "Only on this machine (id or name).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Only from this time, RFC 3339.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Only up to this time, RFC 3339.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
         ]
       },
       "post": {
@@ -7074,6 +7645,34 @@
             "userToken": [
               "admin"
             ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Only what contains this text.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
           }
         ]
       },
@@ -8749,6 +9348,34 @@
               "read"
             ]
           }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Only what contains this text.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next` of an earlier answer, for the following page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items in a page: 1 to 500, 100 when left out (500 for logs).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
         ]
       }
     },
@@ -9942,6 +10569,174 @@
             ]
           }
         ]
+      }
+    },
+    "/api/v1/proposals/accept": {
+      "post": {
+        "operationId": "acceptProposals",
+        "summary": "Accept found things",
+        "tags": [
+          "Act"
+        ],
+        "description": "Accepts some found services and ports (`ids`) or every one waiting (`all` true), so they are watched. Answers `done`, the ids acted on; `404` when none of them is waiting. Takes a user token (`dku_`) with the `act` scope.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "all": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "example": {
+                "ids": [
+                  "8f0f6f58-0000-0000-0000-000000000000"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/proposals/dismiss": {
+      "post": {
+        "operationId": "dismissProposals",
+        "summary": "Dismiss found things",
+        "tags": [
+          "Act"
+        ],
+        "description": "Dismisses some proposals (`ids`) or every one waiting (`all` true). Answers `done`, the ids acted on; `404` when none of them is waiting. Takes a user token (`dku_`) with the `act` scope.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "all": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "example": {
+                "ids": [
+                  "8f0f6f58-0000-0000-0000-000000000000"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dependencies": {
+      "post": {
+        "operationId": "addDependency",
+        "summary": "Add something outside that is depended on",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Adds a service of kind `dependency`. With `check` (`{type: http, url}` or `{type: tcp, address: host:port}`) it is put on `machine`, an enrolled machine whose dokkit runs the check; without a check it belongs to the group machine Outside. Answers as `GET /services/{id}` does. Takes a user token (`dku_`) with the `admin` scope.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "machine": {
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "http",
+                          "tcp"
+                        ]
+                      },
+                      "url": {
+                        "type": "string"
+                      },
+                      "address": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "name": "Payment gateway",
+                "machine": "web-01",
+                "check": {
+                  "type": "http",
+                  "url": "https://pay.example.com/health"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },

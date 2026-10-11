@@ -29,15 +29,49 @@ defmodule Dokkit.Estate do
     )
   end
 
-  def runs(%Service{id: id}, limit \\ 30) do
-    Repo.all(
+  def runs(%Service{id: id}, limit \\ 30, opts \\ []) do
+    query =
       from r in JobRun,
         join: c in assoc(r, :check),
         where: c.service_id == ^id,
-        order_by: [desc: coalesce(r.started_at, r.finished_at)],
+        order_by: [desc: coalesce(r.started_at, r.finished_at), desc: r.id],
         limit: ^limit,
         preload: [check: c]
-    )
+
+    query =
+      if opts[:from],
+        do: where(query, [r], coalesce(r.started_at, r.finished_at) >= ^opts[:from]),
+        else: query
+
+    query =
+      if opts[:to],
+        do: where(query, [r], coalesce(r.started_at, r.finished_at) <= ^opts[:to]),
+        else: query
+
+    query =
+      case opts[:result] do
+        result when result in ~w(running ok fail) ->
+          where(query, [r], r.result == ^String.to_existing_atom(result))
+
+        _ ->
+          query
+      end
+
+    query =
+      case opts[:after] do
+        {at, rid} ->
+          where(
+            query,
+            [r],
+            coalesce(r.started_at, r.finished_at) < ^at or
+              (coalesce(r.started_at, r.finished_at) == ^at and r.id < ^rid)
+          )
+
+        _ ->
+          query
+      end
+
+    Repo.all(query)
   end
 
   @doc "Every job with its newest run and the time of its last good one."
@@ -177,6 +211,90 @@ defmodule Dokkit.Estate do
   end
 
   @app_checks 100
+  @doc """
+  Adds something outside that is depended on. Nothing here can reach it, so its check is
+  assigned to an enrolled machine and run by that machine's program; without a check it
+  belongs to the group machine Outside.
+  """
+  def add_dependency(params) do
+    name = String.trim(params["name"] || "")
+    slug = name |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-") |> String.trim("-")
+    machine = String.trim(params["machine"] || "")
+
+    with true <- slug != "" or {:error, "A dependency needs a name."},
+         {:ok, check} <- dependency_check(params["check"]),
+         {:ok, home} <- dependency_home(machine, check) do
+      Repo.transaction(fn ->
+        if Repo.get_by(Service, machine_id: home.id, slug: slug),
+          do: Repo.rollback("#{home.name} already has something called #{name}.")
+
+        service =
+          Repo.insert!(%Service{machine_id: home.id, slug: slug, name: name, kind: :dependency})
+
+        with true <- check != nil,
+             {:error, why} <- set_checks(service, [check]) do
+          Repo.rollback(why)
+        end
+
+        service.id
+      end)
+    end
+  end
+
+  defp dependency_check(nil), do: {:ok, nil}
+
+  defp dependency_check(%{"type" => "http", "url" => url} = c) when is_binary(url) do
+    if url =~ ~r{^https?://[^\s/]+}i,
+      do: {:ok, %{"name" => c["name"] || "http", "type" => "http", "config" => %{"url" => url}}},
+      else: {:error, "An http check needs a url that starts with http:// or https://."}
+  end
+
+  defp dependency_check(%{"type" => "tcp", "address" => address} = c) when is_binary(address) do
+    case Regex.run(~r/^(\S+):(\d{1,5})$/, address) do
+      [_, host, port] when port != "0" ->
+        {:ok,
+         %{
+           "name" => c["name"] || "tcp",
+           "type" => "tcp",
+           "config" => %{"host" => host, "port" => String.to_integer(port)}
+         }}
+
+      _ ->
+        {:error, "A tcp check needs an address as host:port."}
+    end
+  end
+
+  defp dependency_check(_),
+    do: {:error, "check is an http check with a url, or a tcp check with an address (host:port)."}
+
+  defp dependency_home("", nil) do
+    {:ok,
+     Repo.get_by(Machine, name: "Outside") ||
+       Repo.insert!(%Machine{name: "Outside", kind: :group})}
+  end
+
+  defp dependency_home("", _), do: {:error, "A check runs on a machine: say which with machine."}
+
+  defp dependency_home(name, check) do
+    machine =
+      Repo.get_by(Machine, name: name) ||
+        case Ecto.UUID.cast(name) do
+          {:ok, id} -> Repo.get(Machine, id)
+          _ -> nil
+        end
+
+    cond do
+      machine == nil ->
+        {:error, "There is no machine called #{name}."}
+
+      check && machine.kind != :enrolled ->
+        {:error, "#{machine.name} runs no dokkit to run the check."}
+
+      true ->
+        {:ok, machine}
+    end
+  end
+
   @kinds ~w(service job dependency app)
   @types ~w(http tcp process windows-service systemd beat stats threshold expiry custom)
 

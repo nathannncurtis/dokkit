@@ -136,6 +136,8 @@ defmodule DokkitWeb.Router do
     get "/machines/:id", ApiController, :machine
     get "/versions", ApiController, :versions
     get "/proposals", ApiController, :proposals
+    post "/proposals/accept", ApiController, :accept
+    post "/proposals/dismiss", ApiController, :dismiss
     post "/proposals/:id/accept", ApiController, :accept
     post "/proposals/:id/dismiss", ApiController, :dismiss
     post "/rules", ApiController, :add_rule
@@ -156,6 +158,7 @@ defmodule DokkitWeb.Router do
     put "/services/:id/messages", ApiController, :keep_messages
     post "/jobs", ApiController, :add_job
     post "/apps", ApiController, :add_app
+    post "/dependencies", ApiController, :add_dependency
     put "/jobs/:id/timing", ApiController, :set_job_timing
     post "/machines/:id/update", ApiController, :update_program
     get "/alerts", ApiController, :alert_settings
