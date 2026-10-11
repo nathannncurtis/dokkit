@@ -366,7 +366,7 @@ func TestScanWritesAFileAndADeclaredTaskSectionIsIgnored(t *testing.T) {
 	t.Setenv("DOKKIT_URL", "")
 	os.WriteFile("dokkit.toml", []byte("schema = 1\n[service]\nid = \"portal\"\n[[task]]\nid = \"mark\"\nrun = \"echo done > marked.txt\"\n[[task]]\nid = \"bad\"\nrun = \"exit 4\"\n"), 0o600)
 
-	if code := cli([]string{"scan", "--no-services", "--no-ports", "--no-containers", "--no-sites"}); code != 0 {
+	if code := cli([]string{"scan", "--no-services", "--no-ports", "--no-containers", "--no-sites", "--no-jobs", "--no-jobs"}); code != 0 {
 		t.Fatal(code)
 	}
 	var p struct{ Found map[string][]found }
