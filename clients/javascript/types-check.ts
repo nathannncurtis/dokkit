@@ -2,6 +2,7 @@
 import * as dokkit from "./dokkit.js";
 
 dokkit.start({ version: "2.3.0" });
+dokkit.start({ version: "2.3.0", announceVersion: false });
 dokkit.beat("worker", 30);
 dokkit.check("queue-age", "degraded", 14, "oldest item is 14 minutes old");
 dokkit.metric("queue.depth", 7);

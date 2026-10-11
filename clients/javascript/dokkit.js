@@ -13,7 +13,9 @@
 
 const QUEUE = 1000;
 const MAX_BYTES = 4_000_000;
+const MAX_LINE = 65536;
 let state = null;
+let quiet = 0;
 let busy = false;
 let tail = Promise.resolve();
 
@@ -38,7 +40,7 @@ const env = (name) => (typeof process !== "undefined" && process.env && process.
 const now = () => new Date().toISOString();
 
 /** Turns the library on. With no address or key it stays off and every call does nothing. */
-export function start({ version, environment, url, key, host, insecure } = {}) {
+export function start({ version, environment, url, key, host, insecure, announceVersion = true } = {}) {
   try {
     url = url || env("DOKKIT_URL");
     key = key || env("DOKKIT_KEY");
@@ -60,19 +62,38 @@ export function start({ version, environment, url, key, host, insecure } = {}) {
     };
     const timer = setInterval(() => busy || flush(), 2000);
     if (timer.unref) timer.unref();
-    if (typeof process !== "undefined" && process.on) process.on("beforeExit", flush);
-    if (version) add({ type: "deploy", version: String(version) });
+    if (typeof process !== "undefined" && process.on) process.once("beforeExit", flush);
+    if (version && announceVersion) add({ type: "deploy", version: String(version) });
   } catch {
     state = null;
+  }
+}
+
+const decoder = new TextDecoder();
+
+// A line over MAX_LINE bytes loses its fields, then its msg is cut at a character boundary and ends in " [cut]".
+function fit(line) {
+  const whole = { at: now(), ...line, host: state.host };
+  if (state.environment && state.environment !== "production") whole.environment = state.environment;
+  let text = JSON.stringify(whole);
+  if (size(text) <= MAX_LINE || typeof whole.msg !== "string") return text;
+  delete whole.fields;
+  let bytes = enc.encode(whole.msg);
+  let keep = Math.max(0, bytes.length - (size(JSON.stringify(whole)) - MAX_LINE) - 16);
+  for (;;) {
+    whole.msg = decoder.decode(bytes.slice(0, keep)).replace(/\uFFFD$/, "") + " [cut]";
+    text = JSON.stringify(whole);
+    if (size(text) <= MAX_LINE || keep === 0) return text;
+    keep >>= 1;
   }
 }
 
 function add(line) {
   try {
     if (!state) return;
-    const text = JSON.stringify({ at: now(), ...line, host: state.host });
+    const text = fit(line);
     const n = size(text);
-    if (n > MAX_BYTES) {
+    if (n > MAX_LINE) {
       dropped++;
       return;
     }
@@ -184,7 +205,7 @@ export function consoleLogger(target = globalThis.console) {
   const out = Object.create(target);
   for (const [k, level] of Object.entries(LEVELS))
     out[k] = (...args) => {
-      if (state)
+      if (state && !quiet)
         try {
           log(level, args.map(text).join(" "));
         } catch {}
@@ -255,7 +276,8 @@ export function capture(error, { handled = true, tags = {} } = {}) {
       .filter(Boolean)
       .reverse()
       .map(([, fn, file, line]) => ({ ...where(file), function: fn || "(anonymous)", line: Number(line) }));
-    if (state.errors.length < 100)
+    if (state.errors.length >= 100) dropped++;
+    else
       state.errors.push({
         at: now(),
         type: error.name || error.constructor?.name || "Error",
@@ -291,31 +313,50 @@ export function flush() {
   return (tail = tail.then(send));
 }
 
+const zip = async (text) => new Uint8Array(await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+
 async function send() {
   if (!state) return;
   busy = true;
-  const post = async (path, body, kind, more) => {
+  // "sent", "refused" (4xx other than 429, not tried again) or "failed" (kept for the next pass)
+  const post = async (path, text, kind, more) => {
     try {
-      const res = await fetch(state.url + path, {
-        method: "POST",
-        body,
-        // keepalive bodies are capped at 64 KB
-        keepalive: body.length < 16000,
-        signal: AbortSignal.timeout?.(10000),
-        headers: { Authorization: "Bearer " + state.key, "Content-Type": kind, ...more },
-      });
-      return res.ok;
+      let body = text;
+      const headers = { Authorization: "Bearer " + state.key, "Content-Type": kind, ...more };
+      if (path === "/api/v1/report" && typeof CompressionStream === "function")
+        try {
+          body = await zip(text);
+          headers["Content-Encoding"] = "gzip";
+        } catch {
+          body = text;
+        }
+      let pending;
+      quiet++;
+      try {
+        pending = fetch(state.url + path, {
+          method: "POST",
+          body,
+          // keepalive bodies are capped at 64 KB
+          keepalive: body.length < 16000,
+          signal: AbortSignal.timeout?.(10000),
+          headers,
+        });
+      } finally {
+        quiet--;
+      }
+      const res = await pending;
+      if (res.ok) return "sent";
+      return res.status >= 500 || res.status === 429 ? "failed" : "refused";
     } catch {
-      return false;
+      return "failed";
     }
   };
   try {
     while (state.errors.length) {
-      const ok = await post("/api/v1/errors", JSON.stringify(state.errors.shift()), "application/json");
-      if (!ok) {
-        dropped++;
-        return;
-      }
+      const result = await post("/api/v1/errors", JSON.stringify(state.errors[0]), "application/json");
+      if (result === "failed") break;
+      state.errors.shift();
+      if (result === "refused") dropped++;
     }
     while (state.retry || state.lines.length) {
       if (!state.retry) {
@@ -324,15 +365,14 @@ async function send() {
         state.retry = { id: uuid(), n: lines.length, body: lines.join("\n"), tries: 0 };
       }
       const batch = state.retry;
-      if (await post("/api/v1/report", batch.body, "application/x-ndjson", { "Dokkit-Batch": batch.id })) state.retry = null;
-      else {
+      const result = await post("/api/v1/report", batch.body, "application/x-ndjson", { "Dokkit-Batch": batch.id });
+      if (result === "sent") state.retry = null;
+      else if (result === "refused" || batch.tries++) {
         // A failed batch gets one more try; after that it is dropped and counted.
-        if (batch.tries++) {
-          dropped += batch.n;
-          state.retry = null;
-        }
-        return;
-      }
+        dropped += batch.n;
+        state.retry = null;
+        if (result === "failed") return;
+      } else return;
     }
   } finally {
     busy = false;
