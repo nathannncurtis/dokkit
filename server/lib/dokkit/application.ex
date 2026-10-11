@@ -11,12 +11,32 @@ defmodule Dokkit.Application do
 
     children =
       [Dokkit.Repo, Dokkit.RateLimit, {Phoenix.PubSub, name: Dokkit.PubSub}, DokkitWeb.Endpoint] ++
+        ipv6_listener() ++
         if watch, do: [Dokkit.Alerts, Dokkit.Watch], else: []
 
     with {:ok, pid} <-
            Supervisor.start_link(children, strategy: :one_for_one, name: Dokkit.Supervisor) do
       if watch, do: Dokkit.Accounts.announce()
       {:ok, pid}
+    end
+  end
+
+  # An IPv6 socket on Windows takes no IPv4 and rejects ipv6_v6only: false, so IPv6 gets its own listener.
+  defp ipv6_listener do
+    config = Application.get_env(:dokkit, DokkitWeb.Endpoint, [])
+    {scheme, opts} = if config[:https], do: {:https, config[:https]}, else: {:http, config[:http]}
+
+    if is_list(opts) and opts[:ip] == {0, 0, 0, 0} do
+      opts = Keyword.put(opts, :ip, {0, 0, 0, 0, 0, 0, 0, 0})
+
+      [
+        Supervisor.child_spec(
+          {Bandit, [plug: DokkitWeb.Endpoint, scheme: scheme, otp_app: :dokkit] ++ opts},
+          id: :ipv6_listener
+        )
+      ]
+    else
+      []
     end
   end
 

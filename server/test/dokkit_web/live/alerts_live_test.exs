@@ -149,4 +149,19 @@ defmodule DokkitWeb.AlertsLiveTest do
     assert html =~ ~s(value="keep@example.com")
     assert html =~ ~s(value="25")
   end
+
+  test "Send a test uses the Mac and address chosen in the form, without a change event first",
+       %{conn: conn} do
+    mac = Repo.insert!(%Dokkit.Machine{name: "mac-mini", kind: :enrolled, os: "darwin"})
+    {:ok, view, _} = live(signed_in(conn), "/alerts")
+
+    html =
+      view
+      |> form("#alerts-form", alerts: %{imessage_machine: mac.id, imessage_to: "+15555550100"})
+      |> render_submit(%{"test" => "imessage"})
+
+    assert html =~ "Waiting for the Mac to answer."
+    assert %{"imessage_machine" => id, "imessage_to" => "+15555550100"} = Alerts.config()
+    assert id == mac.id
+  end
 end

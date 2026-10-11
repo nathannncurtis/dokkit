@@ -354,7 +354,11 @@ defmodule DokkitWeb.ServiceLive do
               <dt>Held version</dt>
 
               <dd>
-                <form phx-submit="hold" id="hold-form" style="display: flex; gap: 8px">
+                <form
+                  phx-submit="hold"
+                  id="hold-form"
+                  style="display: flex; gap: 8px; flex: 1 1 100%; min-width: 0"
+                >
                   <input
                     class="inp"
                     style="flex: 1 1 120px"

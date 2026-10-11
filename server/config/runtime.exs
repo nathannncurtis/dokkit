@@ -93,7 +93,7 @@ if config_env() == :prod do
 
   cert = System.get_env("DOKKIT_CERT")
 
-  # An IPv6 socket on Windows takes no IPv4, so there it listens on IPv4.
+  # On Windows this listens on IPv4 and Dokkit.Application adds an IPv6 listener.
   any = if match?({:win32, _}, :os.type()), do: {0, 0, 0, 0}, else: {0, 0, 0, 0, 0, 0, 0, 0}
 
   # With a certificate of its own, Dokkit serves TLS itself and machines pin it when they enrol.
