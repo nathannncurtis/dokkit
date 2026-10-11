@@ -60,7 +60,7 @@ defmodule DokkitWeb.EverythingLive do
     <Layouts.app active={:all} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Everything</h1>
-
+        
         <div class="end">
           <button
             :if={@current_user.role == :owner and @movable > 1}
@@ -71,75 +71,85 @@ defmodule DokkitWeb.EverythingLive do
           >
             <.ic name="arrow-circle-up" />Update all to {@held}
           </button>
+          
           <.link class="btn" navigate={~p"/machines/new"}><.ic name="hard-drives" />Add a machine</.link>
           <.link class="btn primary" navigate={~p"/jobs/new"}><.ic name="plus" />New job</.link>
         </div>
       </div>
-
+      
       <div class="body">
         <div class="card">
           <div :if={@machines == []} class="empty">
             <.ic name="squares-four" />Nothing is being watched yet. Add a job to start.
           </div>
-
+          
           <div :if={@machines != []} class="lh cols-all">
             <span>Service</span><span>Version</span><span>Listens</span><span>Kind</span><span></span><span>State</span><span></span>
           </div>
-
+          
           <%= for m <- @machines do %>
-            <div class="grp" id={"m-#{m.id}"}>
-              <span style="display:flex; align-items:center; gap:8px"><.lvl state={
-                if m.id in @down, do: :down, else: worst(m.services)
-              } />{m.name}</span> <span :if={m.os} class="mute" style="font-weight:400">{m.os}</span>
-              <span class="end">
-                <span :if={m.id in @down} class="tag warn">Stopped reporting {at(m.last_seen_at)} UTC</span>
-                <span :if={count(m.services, :bad) > 0} class="tag warn">{need(
-                  count(m.services, :bad)
-                )}</span>
-                <span :if={count(m.services, :ok) > 0} class="tag">{count(m.services, :ok)} fine</span>
-                <span :if={@vitals[m.id]} class="vits">
-                  <span
-                    :for={{name, label} <- [{"cpu.percent", "cpu"}, {"memory.used_percent", "mem"}]}
-                    :if={v = @vitals[m.id][name]}
-                    class={["vit", v >= 90 && "hot"]}
-                  >
-                    {label} <u style={"--v:#{round(v)}%"}><i></i></u> {round(v)}%
+            <div class="mg" role="group" aria-labelledby={"mh-#{m.id}"}>
+              <div class="grp" id={"m-#{m.id}"}>
+                <span id={"mh-#{m.id}"} style="display:flex; align-items:center; gap:8px"><.lvl state={
+                  if m.id in @down, do: :down, else: worst(m.services)
+                } />{m.name}</span>
+                <span :if={m.os} class="mute" style="font-weight:400">{m.os}</span>
+                <span class="end">
+                  <span :if={m.id in @down} class="tag warn">Stopped reporting {at(m.last_seen_at)} UTC</span>
+                  <span :if={count(m.services, :bad) > 0} class="tag warn">{need(
+                    count(m.services, :bad)
+                  )}</span>
+                  <span :if={count(m.services, :ok) > 0} class="tag">{count(m.services, :ok)} fine</span>
+                  <span :if={@vitals[m.id]} class="vits">
+                    <span
+                      :for={{name, label} <- [{"cpu.percent", "cpu"}, {"memory.used_percent", "mem"}]}
+                      :if={v = @vitals[m.id][name]}
+                      class={["vit", v >= 90 && "hot"]}
+                    >
+                      {label} <u style={"--v:#{round(v)}%"}><i></i></u> {round(v)}%
+                    </span>
                   </span>
                 </span>
-              </span>
+              </div>
+              
+              <div :if={m.has_updater} class="foot" id={"upd-#{m.id}"}>
+                <span class="mono">
+                  Program {m.program_version || "unknown"}{m.hosts_server &&
+                    " / Server #{m.server_version || "unknown"}"}
+                </span>
+                
+                <span :if={outcome(m)} class={["st", m.update_ok == false && "warn"]}>{outcome(m)}</span>
+                <span class="end">
+                  <button
+                    :if={@current_user.role == :owner and can_move?(m, @held)}
+                    class="btn sm"
+                    type="button"
+                    phx-click="update"
+                    phx-value-machine={m.id}
+                  >
+                    Update to {@held}
+                  </button>
+                </span>
+              </div>
+              
+              <div :if={!m.has_updater and windows?(m)} class="foot" id={"upd-#{m.id}"}>
+                <span>No updater on this machine. On it, from an administrator prompt:
+                <code>dokkit updater install</code></span>
+              </div>
+              
+              <div :if={m.services == []} class="kid-none">
+                Nothing is running on this machine yet.
+              </div>
+              
+              <.link :for={s <- m.services} class="li slim kid cols-all" navigate={~p"/s/#{s.id}"}>
+                <div class="ti"><.lvl state={s.state} /><span>{s.name}</span></div>
+                 <span class="mono mute">{s.version}</span> <span class="mono mute">{s.listens}</span>
+                <span class="mute">{kind(s.kind)}</span> <span></span>
+                <span class={["tag", s.state in [:degraded, :down] && "warn"]}>{(!s.watched &&
+                                                                                   "Not watched") ||
+                  s.note || say(s.state)}</span> <.ic name="caret-right" />
+              </.link>
             </div>
-
-            <div :if={m.has_updater} class="foot" id={"upd-#{m.id}"}>
-              <span class="mono">
-                Program {m.program_version || "unknown"}{m.hosts_server &&
-                  " / Server #{m.server_version || "unknown"}"}
-              </span>
-              <span :if={outcome(m)} class={["st", m.update_ok == false && "warn"]}>{outcome(m)}</span>
-              <span class="end">
-                <button
-                  :if={@current_user.role == :owner and can_move?(m, @held)}
-                  class="btn sm"
-                  type="button"
-                  phx-click="update"
-                  phx-value-machine={m.id}
-                >
-                  Update to {@held}
-                </button>
-              </span>
-            </div>
-
-            <div :if={!m.has_updater and windows?(m)} class="foot" id={"upd-#{m.id}"}>
-              <span>No updater on this machine. On it, from an administrator prompt: <code>dokkit updater install</code></span>
-            </div>
-
-            <.link :for={s <- m.services} class="li slim cols-all" navigate={~p"/s/#{s.id}"}>
-              <div class="ti"><.lvl state={s.state} /><span>{s.name}</span></div>
-              <span class="mono mute">{s.version}</span> <span class="mono mute">{s.listens}</span>
-              <span class="mute">{kind(s.kind)}</span> <span></span>
-              <span class={["tag", s.state in [:degraded, :down] && "warn"]}>{(!s.watched &&
-                                                                                 "Not watched") ||
-                s.note || say(s.state)}</span> <.ic name="caret-right" />
-            </.link>
           <% end %>
         </div>
       </div>
