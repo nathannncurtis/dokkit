@@ -87,6 +87,7 @@ defmodule Dokkit.Intake do
               Repo.update!(Ecto.Changeset.change(machine, attrs))
           end
 
+        Repo.update_all(from(k in Key, where: k.id == ^enrol.id), set: [machine_id: machine.id])
         {key, _} = Dokkit.Keys.mint(:machine, %{machine_id: machine.id, label: name})
         %{machine: machine.id, key: key}
       end)
