@@ -9,15 +9,24 @@
     <link phx-track-static rel="stylesheet" href={~p"/vendor/phosphor.css"} />
     <link phx-track-static rel="stylesheet" href={~p"/css/dokkit.css"} />
     <script>
-      function dokkitTheme(theme) {
-        try {
-          if (arguments.length) theme ? localStorage.setItem("dokkit-look", JSON.stringify({theme: theme})) : localStorage.removeItem("dokkit-look");
-          theme = (JSON.parse(localStorage.getItem("dokkit-look")) || {}).theme;
-        } catch (e) { theme = null; }
-        var dark = theme ? theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-        document.documentElement.className = dark ? "t-dark d-ember a-orange" : "a-teal";
+      var dokkitState = {};
+      try { dokkitState = JSON.parse(localStorage.getItem("dokkit-look")) || {}; } catch (e) {}
+      function dokkitLook(key, value) {
+        if (key) {
+          value ? dokkitState[key] = value : delete dokkitState[key];
+          try { localStorage.setItem("dokkit-look", JSON.stringify(dokkitState)); } catch (e) {}
+        }
+        var s = dokkitState, dark = s.theme ? s.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+        var base = ["neutral", "plum", "slate", "ember"].indexOf(s.base) < 0 ? "ember" : s.base;
+        var accent = ["violet", "orange", "blue", "teal"].indexOf(s.accent) < 0 ? (dark ? "orange" : "teal") : s.accent;
+        document.documentElement.className = [dark ? "t-dark" : "", dark && base !== "neutral" ? "d-" + base : "", accent !== "violet" ? "a-" + accent : ""].filter(Boolean).join(" ");
+        document.querySelectorAll("[data-look]").forEach(function (b) {
+          var k = b.dataset.look, v = k === "base" ? base : k === "accent" ? accent : s.theme || "";
+          b.classList.toggle("on", v === b.dataset.value);
+          b.setAttribute("aria-pressed", v === b.dataset.value);
+        });
       }
-      dokkitTheme();
+      dokkitLook();
     </script>
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>

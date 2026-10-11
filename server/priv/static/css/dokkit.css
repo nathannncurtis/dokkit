@@ -12,7 +12,7 @@
 }
 .t-dark {
   --bg: #0f0f11; --panel: #17171a; --raise: #222226; --line: #2a2a2f; --ink: #f4f4f5; --mute: #a1a1aa; --chip: #29292e;
-  --brand: #9b87ff; --brand-ink: #12101f; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
+  --brand: #a899ff; --brand-ink: #12101f; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
   --side: #0a0a0c; --side-2: #232328; --shadow: 0 1px 2px rgba(0,0,0,0.4); --knob: var(--bg); --side-hi: var(--ink); --edge: color-mix(in srgb, var(--mute) 62%, var(--panel));
 }
 /* dark bases you can switch between in Settings */
@@ -553,7 +553,13 @@ button.li:hover .ti { color: var(--ink); }
 .opt:hover { background: var(--raise); }
 .opt.on { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
 .opt .sw { width: 24px; height: 24px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--mute) 55%, transparent); background: linear-gradient(135deg, var(--bg) 50%, color-mix(in srgb, var(--mute) 45%, var(--panel)) 50%); }
-.opt .sw.ac { background: var(--brand); }
+.opt .sw.ac { display: flex; overflow: hidden; background: none; }
+.opt .sw.ac i { flex: 1; background: var(--brand); }
+.look-pv { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--raise); }
+.look-pv a { color: var(--brand); }
+.look-pv .tag { background: var(--brand-bg); color: var(--brand); font-weight: 500; }
+.look-pv .dots { display: inline-flex; gap: 12px; font-size: 12.5px; }
+.look-pv .dots b { font-weight: 500; }
 
 /* browser surfaces */
 ::selection { background: color-mix(in srgb, var(--brand) 28%, transparent); }
