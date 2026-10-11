@@ -75,6 +75,26 @@ defmodule DokkitWeb.Auth do
     |> put_session(:live_socket_id, "user:#{user.id}")
   end
 
+  @doc "The password was right; the session holds only who is still owed a code, for five minutes."
+  def await_code(conn, user) do
+    conn
+    |> configure_session(renew: true)
+    |> clear_session()
+    |> put_session(:code_for, user.id)
+    |> put_session(:code_at, Accounts.stamp())
+  end
+
+  def awaiting_code(conn) do
+    with id when is_binary(id) <- get_session(conn, :code_for),
+         at when is_integer(at) <- get_session(conn, :code_at),
+         true <- Accounts.stamp() - at < 300 * 1_000_000,
+         %{totp_on: true} = user <- Accounts.get(id) do
+      user
+    else
+      _ -> nil
+    end
+  end
+
   def sign_out(conn) do
     if user = conn.assigns[:current_user], do: Accounts.sign_out_everywhere(user)
 

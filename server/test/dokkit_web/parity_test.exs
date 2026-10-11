@@ -89,6 +89,10 @@ defmodule DokkitWeb.ParityTest do
     "POST /logout" => "A session ends; a token is revoked with DELETE /api/v1/keys/:id.",
     "GET /setup" => "First-run setup makes the first owner, once, with the code in the log.",
     "POST /setup" => "First-run setup makes the first owner, once, with the code in the log.",
+    "GET /login/code" => "The second step of signing in belongs to the browser.",
+    "POST /login/code" => "The second step of signing in belongs to the browser.",
+    "GET /two-step" => "A person turns their own two-step sign-in on and off; a token has none.",
+    "POST /two-step" => "A person turns their own two-step sign-in on and off; a token has none.",
     "GET /password" => "A person changes their own password; a token has none.",
     "POST /password" => "A person changes their own password; a token has none."
   }

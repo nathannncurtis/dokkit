@@ -53,7 +53,8 @@ defmodule Dokkit.MixProject do
       {:bandit, "~> 1.5"},
       {:crontab, "~> 1.1"},
       {:req, "~> 0.5"},
-      {:gen_smtp, "~> 1.2"}
+      {:gen_smtp, "~> 1.2"},
+      {:eqrcode, "~> 0.2"}
     ]
   end
 

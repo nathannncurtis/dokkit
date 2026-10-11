@@ -5,6 +5,8 @@ defmodule DokkitWeb.SessionController do
 
   @too_many "Too many attempts. Wait ten minutes and try again."
 
+  @wrong_code "That code is not right. Codes change every 30 seconds and work once."
+
   plug :put_layout, false
 
   def new(conn, _) do
@@ -23,7 +25,10 @@ defmodule DokkitWeb.SessionController do
       case Accounts.authenticate(name, password) do
         {:ok, user} ->
           LoginThrottle.refund(key, address)
-          conn |> Auth.sign_in(user) |> redirect(to: ~p"/")
+
+          if user.totp_on,
+            do: conn |> Auth.await_code(user) |> redirect(to: ~p"/login/code"),
+            else: conn |> Auth.sign_in(user) |> redirect(to: ~p"/")
 
         :error ->
           Process.sleep(500)
@@ -33,6 +38,72 @@ defmodule DokkitWeb.SessionController do
           |> render(:login, error: "That name and password do not match.", name: name)
       end
     end
+  end
+
+  def code(conn, _) do
+    if Auth.awaiting_code(conn),
+      do: render(conn, :code, error: nil),
+      else: redirect(conn, to: ~p"/login")
+  end
+
+  def check_code(conn, %{"code" => code}) do
+    user = Auth.awaiting_code(conn)
+
+    cond do
+      user == nil ->
+        redirect(conn, to: ~p"/login")
+
+      LoginThrottle.attempt(String.downcase(user.name), address(conn)) == :blocked ->
+        conn |> blocked() |> render(:code, error: @too_many)
+
+      Accounts.totp_check(user, code) ->
+        LoginThrottle.refund(String.downcase(user.name), address(conn))
+        conn |> Auth.sign_in(user) |> redirect(to: ~p"/")
+
+      true ->
+        conn |> put_status(401) |> render(:code, error: @wrong_code)
+    end
+  end
+
+  def two_step(conn, _), do: render_two_step(conn, nil)
+
+  def change_two_step(conn, %{"code" => code}) do
+    user = conn.assigns.current_user
+    key = String.downcase(user.name)
+    address = address(conn)
+
+    if LoginThrottle.attempt(key, address) == :blocked do
+      conn |> blocked() |> render_two_step(@too_many)
+    else
+      result =
+        if user.totp_on,
+          do: Accounts.totp_off(user, code),
+          else: Accounts.totp_confirm(user, code)
+
+      case result do
+        :ok ->
+          LoginThrottle.refund(key, address)
+          conn |> assign(:current_user, Accounts.get(user.id)) |> render_two_step(nil)
+
+        :error ->
+          conn |> put_status(422) |> render_two_step(@wrong_code)
+      end
+    end
+  end
+
+  # An unconfirmed secret is kept across a wrong code, so the QR code already scanned still works.
+  defp render_two_step(conn, error) do
+    user = conn.assigns.current_user
+
+    secret =
+      cond do
+        user.totp_on -> nil
+        error && user.totp_secret -> user.totp_secret
+        true -> Accounts.totp_begin(user)
+      end
+
+    qr = secret && Accounts.totp_uri(user, secret) |> EQRCode.encode() |> EQRCode.svg(width: 220)
+    render(conn, :two_step, error: error, on: user.totp_on, secret: secret, qr: qr)
   end
 
   def delete(conn, _), do: conn |> Auth.sign_out() |> redirect(to: ~p"/login")

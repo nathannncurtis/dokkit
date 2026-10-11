@@ -46,6 +46,52 @@ defmodule DokkitWeb.SessionHTML do
     """
   end
 
+  defp code_field(assigns) do
+    ~H"""
+    <label>
+      Code from your authenticator app<input
+        class="inp mono"
+        name="code"
+        inputmode="numeric"
+        pattern="[0-9 ]*"
+        autocomplete="one-time-code"
+        required
+        autofocus
+      />
+    </label>
+    """
+  end
+
+  def code(assigns) do
+    ~H"""
+    <.door title="Enter your code" error={@error} action={~p"/login/code"} button="Sign in">
+      <.code_field /> <a href={~p"/login"}>Start again</a>
+    </.door>
+    """
+  end
+
+  def two_step(%{on: true} = assigns) do
+    ~H"""
+    <.door title="Two-step sign-in" error={@error} action={~p"/two-step"} button="Turn off">
+      <:lead>
+        On. Signing in asks for your password and then a code from your authenticator app.
+      </:lead>
+      <.code_field /> <a href={~p"/settings"}>Back to settings</a>
+    </.door>
+    """
+  end
+
+  def two_step(assigns) do
+    ~H"""
+    <.door title="Two-step sign-in" error={@error} action={~p"/two-step"} button="Turn on">
+      <:lead>Scan this with your authenticator app, then enter the code it shows.</:lead>
+      <div class="qr">{Phoenix.HTML.raw(@qr)}</div>
+      <small class="mute">Or type this key into the app: <code class="mono">{@secret}</code></small>
+      <.code_field /> <a href={~p"/settings"}>Back to settings</a>
+    </.door>
+    """
+  end
+
   def password(assigns) do
     ~H"""
     <.door title="Change your password" error={@error} action={~p"/password"} button="Change password">

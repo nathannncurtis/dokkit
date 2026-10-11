@@ -287,6 +287,9 @@ defmodule Dokkit.User do
     field :password_hash, :string, redact: true
     field :role, Ecto.Enum, values: [:owner, :member, :viewer]
     field :sessions_after, :integer, default: 0
+    field :totp_secret, :string, redact: true
+    field :totp_on, :boolean, default: false
+    field :totp_step, :integer, default: 0
     timestamps()
   end
 end

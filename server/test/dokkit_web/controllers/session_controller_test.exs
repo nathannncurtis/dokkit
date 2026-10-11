@@ -139,4 +139,37 @@ defmodule DokkitWeb.SessionControllerTest do
     assert {:ok, _} = Accounts.authenticate("password-pat", "another long phrase")
     assert Accounts.authenticate("password-pat", @password) == :error
   end
+
+  test "with two-step sign-in on, the password alone does not sign in and a code works once", %{
+    conn: conn
+  } do
+    {:ok, user} = Accounts.add("totp-tom", "member", @password)
+    conn = from(conn, 21)
+    inside = recycle(post(conn, "/login", %{name: "totp-tom", password: @password}))
+
+    page = html_response(get(inside, "/two-step"), 200)
+    assert page =~ "<svg"
+    secret = Accounts.get(user.id).totp_secret
+    assert page =~ secret
+
+    assert html_response(post(inside, "/two-step", %{code: "000000"}), 422) =~ "not right"
+    assert Accounts.get(user.id).totp_secret == secret
+    code = Accounts.totp_code(secret)
+    assert html_response(post(inside, "/two-step", %{code: code}), 200) =~ "Turn off"
+
+    half = post(conn, "/login", %{name: "totp-tom", password: @password})
+    assert redirected_to(half) == "/login/code"
+    half = recycle(half)
+    assert redirected_to(get(half, "/")) == "/login"
+    assert html_response(post(half, "/login/code", %{code: code}), 401) =~ "work once"
+
+    next = Accounts.totp_code(secret, Accounts.totp_step() + 1)
+    done = post(half, "/login/code", %{code: next})
+    assert redirected_to(done) == "/"
+    assert html_response(get(recycle(done), "/"), 200) =~ "Inbox"
+
+    assert redirected_to(get(conn, "/login/code")) == "/login"
+    Accounts.totp_reset("Totp-Tom")
+    assert redirected_to(post(conn, "/login", %{name: "totp-tom", password: @password})) == "/"
+  end
 end

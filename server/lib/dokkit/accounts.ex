@@ -153,6 +153,78 @@ defmodule Dokkit.Accounts do
     end
   end
 
+  @doc "A fresh secret for the authenticator app. Nothing asks for a code until one confirms it."
+  def totp_begin(%User{totp_on: false} = user) do
+    secret = Base.encode32(:crypto.strong_rand_bytes(20), padding: false)
+    Repo.update_all(from(u in User, where: u.id == ^user.id), set: [totp_secret: secret])
+    secret
+  end
+
+  def totp_uri(%User{name: name}, secret) do
+    name = URI.encode(name, &URI.char_unreserved?/1)
+    "otpauth://totp/Dokkit:#{name}?secret=#{secret}&issuer=Dokkit"
+  end
+
+  def totp_confirm(%User{totp_on: false} = user, code), do: totp_set(user, code, true)
+  def totp_off(%User{totp_on: true} = user, code), do: totp_set(user, code, false)
+
+  defp totp_set(user, code, on) do
+    if totp_check(user, code) do
+      secret = if on, do: user.totp_secret
+
+      Repo.update_all(from(u in User, where: u.id == ^user.id),
+        set: [totp_on: on, totp_secret: secret]
+      )
+
+      :ok
+    else
+      :error
+    end
+  end
+
+  @doc ~S"""
+  For someone who lost their phone, from the server itself:
+  bin/dokkit rpc 'Dokkit.Accounts.totp_reset("name")'
+  """
+  def totp_reset(name) do
+    Repo.update_all(
+      from(u in User, where: fragment("lower(?)", u.name) == ^String.downcase(name)),
+      set: [totp_on: false, totp_secret: nil]
+    )
+  end
+
+  @doc "True once per code: the step it was made in cannot be used again."
+  def totp_check(%User{totp_secret: secret} = user, code)
+      when is_binary(secret) and is_binary(code) do
+    code = String.replace(code, ~r/\s/, "")
+    now = totp_step()
+
+    step =
+      Enum.find([now, now - 1, now + 1], fn step ->
+        step > user.totp_step and Plug.Crypto.secure_compare(totp_code(secret, step), code)
+      end)
+
+    step != nil and
+      match?(
+        {1, _},
+        Repo.update_all(from(u in User, where: u.id == ^user.id and u.totp_step < ^step),
+          set: [totp_step: step]
+        )
+      )
+  end
+
+  def totp_check(_, _), do: false
+
+  def totp_step, do: div(System.os_time(:second), 30)
+
+  @doc false
+  def totp_code(secret, step \\ totp_step()) do
+    mac = :crypto.mac(:hmac, :sha, Base.decode32!(secret, padding: false), <<step::64>>)
+    skip = rem(:binary.last(mac), 16)
+    <<_::binary-size(^skip), _::1, n::31, _::binary>> = mac
+    n |> rem(1_000_000) |> Integer.to_string() |> String.pad_leading(6, "0")
+  end
+
   defp normal(code), do: (code || "") |> String.trim() |> String.upcase()
 
   defp hash(password, salt \\ :crypto.strong_rand_bytes(16), rounds \\ @rounds) do

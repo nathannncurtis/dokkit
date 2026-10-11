@@ -25,6 +25,8 @@ defmodule DokkitWeb.Router do
 
     get "/login", SessionController, :new
     post "/login", SessionController, :create
+    get "/login/code", SessionController, :code
+    post "/login/code", SessionController, :check_code
     post "/logout", SessionController, :delete
     get "/setup", SessionController, :setup
     post "/setup", SessionController, :claim
@@ -35,6 +37,8 @@ defmodule DokkitWeb.Router do
 
     get "/password", SessionController, :password
     post "/password", SessionController, :change_password
+    get "/two-step", SessionController, :two_step
+    post "/two-step", SessionController, :change_two_step
 
     live_session :user, on_mount: {DokkitWeb.Auth, :user} do
       live "/", InboxLive

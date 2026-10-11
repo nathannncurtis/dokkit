@@ -199,6 +199,7 @@ defmodule DokkitWeb.SettingsLive do
     <Layouts.app active={:settings} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Settings</h1>
+        <a class="btn ghost sm" href={~p"/two-step"}>Two-step sign-in</a>
         <a class="btn ghost sm" href={~p"/password"}>Change password</a>
       </div>
 
