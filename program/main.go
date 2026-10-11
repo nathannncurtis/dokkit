@@ -45,7 +45,7 @@ dokkit imessage on|off|status
 dokkit imessage test <recipient> [words...]
 dokkit doctor
 dokkit service install|uninstall|update|start|stop
-dokkit updater install|uninstall|run|status
+dokkit updater install|uninstall|run|status|rehearse <folder>
 dokkit version
 dokkit scan [--no-services] [--no-ports] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]
 dokkit propose

@@ -11,6 +11,8 @@ The release workflow builds the files, then writes two more:
 - `SHA256SUMS`: the first line is `version v1.2.3`, then one line per file, `<sha-256 in lower-case hex><two spaces><file name>`, the way `sha256sum` writes it. Line endings are `\n`.
 - `SHA256SUMS.sig`: the Ed25519 signature of the exact bytes of `SHA256SUMS`, in base64, on one line.
 
+The first install checks the same signature. `get.sh`, `get.ps1` and the Windows server's `install.ps1` fetch `SHA256SUMS` and `SHA256SUMS.sig` from the folder the files come from, check the signature against the public key written in the script, then check the file's SHA-256 against the signed list, and install nothing when any step fails. The signature is checked with `openssl pkeyutl -verify -rawin` where `openssl` is OpenSSL 3, otherwise with perl (`Math::BigInt`, `Digest::SHA`), otherwise with python3's standard library; macOS has only LibreSSL, which cannot verify Ed25519, and relies on its perl. `get.ps1` and `install.ps1` verify with .NET's `BigInteger` and need nothing beyond Windows PowerShell 5.1. A machine with none of them is told so and nothing is installed. Another source is `DOKKIT_RELEASE_BASE` (`DOKKIT_RELEASE_URL` for `install.ps1`); a Dokkit server's release store is `https://<server>/api/v1/releases/<version>`, which needs a machine key given as `DOKKIT_RELEASE_KEY`.
+
 The private key is the repository secret `RELEASE_SIGNING_KEY` (PEM, PKCS#8) and exists nowhere else. The public key is 32 bytes, in base64:
 
 ```
@@ -72,7 +74,11 @@ A file it has fetched lives in a folder only administrators and the system accou
 - registers a scheduled task, **Dokkit updater**, that runs `dokkit-updater.exe updater run` as the system account every five minutes and at start-up. It is not a service and listens on nothing;
 - runs it once and prints what it found.
 
+`dokkit updater install` needs the program's service installed first (`dokkit service install`): the updater takes the server address and key from it, and without it the command changes nothing and says so.
+
 `dokkit updater status` prints the installed versions, the last check and the last result. `dokkit updater run` is what the task runs; from an administrator prompt it does one check now. `dokkit updater uninstall` removes the task and the copied file.
+
+`dokkit updater rehearse <folder>` does one real check against the server, with the real signature and hash checks, but installs into that folder only: no service is touched, no installer is run and no result is sent. It needs no administrator; on Windows `--server` also rehearses the server part.
 
 ## On Linux and macOS
 
