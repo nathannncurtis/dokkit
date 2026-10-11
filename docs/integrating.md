@@ -4,8 +4,8 @@ Five steps. The first four need no code change in the app.
 
 1. **Declare it.** In the app's repo, run `dokkit init`. It asks what the app is and writes `dokkit.toml`. The file format is in `spec/dokkit-toml.md`. An app that runs as many processes of a program shared with other apps (`python.exe`) is told apart by a `process` check with `command_has`, a piece of the executable path on Windows or of the command line elsewhere.
 2. **Check it.** Run `dokkit check`. It runs every check once on this machine and shows what Dokkit would receive. No server is involved.
-3. **Try it locally.** Run the app with its environment set to `dev`. It shows up in Dokkit and never alerts.
-4. **Ship it.** Commit the file. On deploy, `dokkit` on the machine picks it up from the app's folder, or CI runs `dokkit apply`.
+3. **Try it locally.** Run the app with its environment set to `dev`. It shows up in Dokkit as its own service, next to the production one, and never alerts. An app that only uses a library does this with `DOKKIT_ENV=dev`.
+4. **Ship it.** Commit the file. On deploy, `dokkit` on the machine picks it up from the app's folder, or CI runs `dokkit apply` with the app's key, which may declare that app only.
 5. **Add the library only when the app needs to say something about its own insides:** a beat from its main loop, job progress, its own checks, errors. See `spec/library.md`.
 
 ## What each step gets you

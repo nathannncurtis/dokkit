@@ -125,6 +125,12 @@ Every line has `type` and `at`. With a machine key the machine is known. With an
 
 An app key may not send `state` or `inventory`.
 
+Any line, and the bodies of `POST /errors` and `POST /deploys`, may carry `environment`. Which service it lands on:
+
+- A service with a `dokkit.toml` declaration keeps the environment the file gives it, whatever a line says.
+- Otherwise `production`, no environment, or a value that is not lower-case letters, digits, dots, dashes and underscores (32 at most) leaves the line on the key's own service.
+- Any other value is stored on a sibling service of the same machine with the slug `<slug>~<environment>`, the name `<name> (<environment>)` and that environment. It never alerts and the production service is not changed by it. A service takes at most 5 such siblings; a line for a sixth is refused with `too_many_environments`.
+
 ### Ping URLs
 
 For anything that can only make a web request, such as a cron job on a storage box.
@@ -140,6 +146,8 @@ A POST body, if there is one, is kept as the last lines of output. `?run=<id>` t
 ### `PUT /declare`
 
 The contents of a `dokkit.toml`, sent as JSON with the same structure. Sending the same file twice changes nothing. Checks, jobs, logs and stats become active. See `dokkit-toml.md`.
+
+A machine key declares any service on its machine. An app key declares the one service it belongs to: `service.id` must be that service's slug, or the answer is `422`. The service keeps its machine and kind, and the file may set its name and environment. Only `schema`, `service`, `check` and `job` are read. Checks of type `beat` or `custom`, which only wait for reports, are accepted and any other check type is refused. A job keeps `id`, `schedule`, `grace` and `max_runtime`. At most 100 checks and jobs. An app key counts against its rate limit.
 
 ### `POST /proposals`
 

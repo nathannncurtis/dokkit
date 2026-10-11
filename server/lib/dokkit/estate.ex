@@ -176,6 +176,7 @@ defmodule Dokkit.Estate do
     end
   end
 
+  @app_checks 100
   @kinds ~w(service job dependency app)
   @types ~w(http tcp process windows-service systemd beat stats threshold expiry custom)
 
@@ -183,7 +184,8 @@ defmodule Dokkit.Estate do
   Takes the contents of a dokkit.toml for a machine. The file owns the service and its
   checks, so checks it no longer lists are removed. Sending the same file twice changes nothing.
   """
-  def declare(machine_id, %{"service" => %{"id" => slug} = about} = doc) when is_binary(slug) do
+  def declare(machine_id, %{"service" => %{"id" => slug} = about} = doc)
+      when is_binary(machine_id) and is_binary(slug) do
     checks = named(List.wrap(doc["check"]))
     jobs = List.wrap(doc["job"])
 
@@ -284,6 +286,45 @@ defmodule Dokkit.Estate do
 
           service
         end)
+    end
+  end
+
+  @app_check_types ~w(beat custom)
+  @app_job_fields ~w(id schedule grace max_runtime)
+
+  @doc """
+  An app key declares only the service it belongs to. It keeps its machine and kind, may set a
+  name and environment, and may list jobs (schedule, grace, max_runtime) and checks of type beat
+  or custom, which only wait for reports. Any other check type is refused; other sections are dropped.
+  """
+  def declare(%Service{} = own, %{"service" => %{"id" => slug} = about} = doc) do
+    checks = List.wrap(doc["check"])
+    jobs = List.wrap(doc["job"])
+
+    cond do
+      slug != own.slug ->
+        {:error, "This key belongs to #{inspect(own.slug)}, so service.id must be that."}
+
+      bad = Enum.find(checks, &(not is_map(&1) or &1["type"] not in @app_check_types)) ->
+        {:error,
+         "An app key may declare checks of type #{Enum.join(@app_check_types, " or ")} only, not #{inspect(is_map(bad) && bad["type"])}."}
+
+      length(checks) + length(jobs) > @app_checks ->
+        {:error, "A service takes at most #{@app_checks} checks from an app key."}
+
+      Enum.any?(jobs, &(not is_map(&1))) ->
+        {:error, "Every job needs an id."}
+
+      true ->
+        about =
+          Map.merge(about, %{"kind" => to_string(own.kind), "name" => about["name"] || own.name})
+
+        declare(own.machine_id, %{
+          "schema" => doc["schema"],
+          "service" => about,
+          "check" => checks,
+          "job" => Enum.map(jobs, &Map.take(&1, @app_job_fields))
+        })
     end
   end
 

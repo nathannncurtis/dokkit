@@ -62,7 +62,7 @@ degraded = "push"
 Two ways, both supported:
 
 1. **`dokkit` reads it.** `dokkit`'s own configuration lists the folders it may read `dokkit.toml` files from. That configuration is only editable by an administrator. `dokkit` re-reads a file when it changes.
-2. **It is sent.** `dokkit apply` sends the file from anywhere that has a key, for example from CI.
+2. **It is sent.** `dokkit apply` sends the file from anywhere that has a key, for example from CI. A machine key may declare any service on its machine. An app key may declare only the service it belongs to: `[service] id` must match, the machine and kind stay as they are, `[service]` may set the name and environment, `[[job]]` keeps `id`, `schedule`, `grace` and `max_runtime`, `[[check]]` may be of type `beat` or `custom` only (any other type is refused), and the other sections are dropped.
 
 ## Checking it
 
