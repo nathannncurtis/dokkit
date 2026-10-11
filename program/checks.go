@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -47,6 +48,8 @@ type check struct {
 	Every, Timeout, Slow  string
 	DateFrom              string `toml:"date_from"`
 	CommandHas            string `toml:"command_has"`
+	AtLeast               int    `toml:"at_least"`
+	Status                any
 	name, dir             string
 	next                  time.Time
 	restart               bool
@@ -151,6 +154,9 @@ func readDeclaration(path string) (*declaration, error) {
 	if d.Service.ID == "" {
 		return nil, errors.New("[service] needs an id")
 	}
+	if err := d.validate(); err != nil {
+		return nil, err
+	}
 	// The same names the server gives: the check's name, or its type, numbered when it repeats.
 	seen := map[string]int{}
 	for i := range d.Check {
@@ -178,6 +184,17 @@ func (c *check) problem() (runs bool, err error) {
 			if _, err := time.ParseDuration(d); err != nil {
 				return false, fmt.Errorf("%q is not a time such as 30s or 5m", d)
 			}
+		}
+	}
+	if c.AtLeast != 0 && (c.Type != "process" || c.AtLeast < 1) {
+		return false, errors.New("at_least is a number of processes, 1 or more, and only for a process check")
+	}
+	if c.Status != nil {
+		if c.Type != "http" {
+			return false, errors.New("status is only for an http check")
+		}
+		if _, err := statusRanges(c.Status); err != nil {
+			return false, err
 		}
 	}
 	if c.Slow != "" {
@@ -334,11 +351,17 @@ func (c *check) run() result {
 	switch c.Type {
 	case "http":
 		var res *http.Response
-		res, err = (&http.Client{Timeout: c.timeout()}).Get(c.URL)
+		want, _ := statusRanges(c.Status)
+		client := &http.Client{Timeout: c.timeout()}
+		if slices.ContainsFunc(want, func(r [2]int) bool { return r[1] >= 300 && r[0] < 400 }) {
+			client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+		}
+		res, err = client.Get(c.URL)
 		if err == nil {
 			res.Body.Close()
-			if res.StatusCode >= 400 {
-				err = fmt.Errorf("answered %d", res.StatusCode)
+			code := res.StatusCode
+			if len(want) == 0 && code >= 400 || len(want) > 0 && !slices.ContainsFunc(want, func(r [2]int) bool { return code >= r[0] && code <= r[1] }) {
+				err = fmt.Errorf("answered %d", code)
 			}
 		}
 		if slow, perr := time.ParseDuration(c.Slow); err == nil && perr == nil && time.Since(started) > slow {
@@ -361,7 +384,10 @@ func (c *check) run() result {
 			return expiryResult(until, time.Now())
 		}
 	case "process":
-		err = processRunning(c.Name, c.CommandHas)
+		var n int
+		if n, err = processCount(c.Name, c.CommandHas); err == nil {
+			return processResult(n, c.AtLeast)
+		}
 	case "windows-service", "systemd":
 		if c.Type == "systemd" {
 			err = systemdActive(c.Name)
@@ -418,7 +444,7 @@ func expiryResult(until, at time.Time) result {
 	switch {
 	case left < 0:
 		return result{state: "down", value: days, note: "ran out on " + until.Format("Jan 2 2006")}
-	case days < 30:
+	case left <= 30:
 		return result{state: "degraded", value: days, note: fmt.Sprintf("runs out in %.0f days, on %s", days, until.Format("Jan 2 2006"))}
 	}
 	return result{ok: true, value: days}
@@ -437,24 +463,40 @@ func short(err error) string {
 	return s
 }
 
-func processRunning(name, has string) error {
+// processResult is ok with the count as its value, or degraded when fewer than at_least are running.
+func processResult(n, atLeast int) result {
+	if n < atLeast {
+		return result{state: "degraded", value: float64(n), note: fmt.Sprintf("%d running, at least %d wanted", n, atLeast)}
+	}
+	return result{ok: true, value: float64(n)}
+}
+
+// processCount is how many processes match, and an error when none do.
+func processCount(name, has string) (int, error) {
 	if has != "" {
 		return processWithText(name, has)
 	}
 	if runtime.GOOS == "windows" {
 		out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq "+name, "/NH", "/FO", "CSV").Output()
 		if err != nil {
-			return cannotTell{"this account may not list processes"}
+			return 0, cannotTell{"this account may not list processes"}
 		}
-		if !strings.Contains(strings.ToLower(string(out)), strings.ToLower(`"`+name+`"`)) {
-			return errors.New("not running")
+		n := 0
+		for _, l := range strings.Split(strings.ToLower(string(out)), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(l), strings.ToLower(`"`+name+`"`)) {
+				n++
+			}
 		}
-		return nil
+		if n == 0 {
+			return 0, errors.New("not running")
+		}
+		return n, nil
 	}
-	if err := exec.Command("pgrep", "-x", name).Run(); err != nil {
-		return errors.New("not running")
+	out, err := exec.Command("pgrep", "-x", name).Output()
+	if n := len(strings.Fields(string(out))); err == nil && n > 0 {
+		return n, nil
 	}
-	return nil
+	return 0, errors.New("not running")
 }
 
 func serviceRunning(name string) error {
@@ -522,6 +564,10 @@ func checkOnce(path string) int {
 		return 1
 	}
 	fmt.Printf("%s: %s, %d check(s)\n", path, d.Service.ID, len(d.Check))
+	if err := d.misplaced(); err != nil {
+		fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
+		return 1
+	}
 	bad := 0
 	for i := range d.Check {
 		c := &d.Check[i]
@@ -599,6 +645,9 @@ type watcher struct {
 	unsaved  bool
 	blocked  []string        // folders this account cannot list, with why
 	told     map[string]bool // blocked folders already written to the log
+
+	statsBusy, statsReady atomic.Bool
+	statsNoted            map[string]time.Time
 }
 
 // checkFolders notes each folder in the configuration that this account cannot list.
@@ -800,9 +849,10 @@ func (c *client) watch() int {
 			w.reload()
 			w.refresh()
 			c.beat(w.versions())
-			if lines := w.stats(); len(lines) > 0 {
-				c.report(lines...)
-			}
+			w.statsSoon()
+			ran++
+		}
+		if w.statsReady.Swap(false) {
 			ran++
 		}
 		ran += w.tick(at)

@@ -34,6 +34,10 @@ Dokkit also reads the Compact Log Event Format, the open line format written by 
 | `@x` | `fields.exception` |
 | Everything else | `fields` |
 
+## Limits
+
+A message is kept to 64 KiB, and so are a line's `fields` taken together (over that they are dropped); the stored line is marked as cut. `dokkit` applies the same limit to a line the server will not take whole, and adds `[dokkit cut N bytes]` to the end of a cut message. A batch is at most 10,000 lines and 5 MB compressed; `dokkit` halves a batch the server answers `413` for. Lines the server refuses one by one (the `refused` list of the report answer) are kept by `dokkit` in the spool as `.rejected` with the reason, and counted in a warning log line.
+
 ## Storage
 
 Postgres, one partition per month. Twelve months are kept live. Each older month is archived as one compressed file and can be loaded back.

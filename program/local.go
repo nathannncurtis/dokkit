@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,45 +93,6 @@ func diskUsed(d found) (float64, bool) {
 	total, _ := strconv.ParseFloat(d["total_bytes"], 64)
 	free, _ := strconv.ParseFloat(d["free_bytes"], 64)
 	return 100 * (total - free) / total, total > 0
-}
-
-// stats fetches the stats document of each service whose file says where it is.
-func (w *watcher) stats() []any {
-	var todo []*declaration
-	for _, d := range w.files {
-		if d.Stats.URL != "" {
-			todo = append(todo, d)
-		}
-	}
-	lines := make([]any, len(todo))
-	parallel(len(todo), func(i int) { lines[i] = fetchStats(todo[i]) })
-	return lines
-}
-
-func fetchStats(d *declaration) any {
-	var document map[string]any
-	req, err := http.NewRequest("GET", d.Stats.URL, nil)
-	if k := d.Stats.KeyEnv; err == nil && k != "" && !strings.HasPrefix(k, statsKeyPrefix) {
-		err = errors.New("key_env must name a variable that starts with " + statsKeyPrefix)
-	}
-	if err == nil {
-		if d.Stats.KeyEnv != "" {
-			req.Header.Set("X-Stats-Key", os.Getenv(d.Stats.KeyEnv))
-		}
-		var res *http.Response
-		if res, err = (&http.Client{Timeout: 5 * time.Second}).Do(req); err == nil {
-			if res.StatusCode != 200 {
-				err = fmt.Errorf("answered %d", res.StatusCode)
-			} else {
-				err = json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&document)
-			}
-			res.Body.Close()
-		}
-	}
-	if err != nil {
-		return map[string]any{"type": "state", "at": now(), "service": d.Service.ID, "check": "stats", "state": "down", "note": "stats: " + short(err)}
-	}
-	return map[string]any{"type": "stats", "at": now(), "service": d.Service.ID, "document": document}
 }
 
 // What dokkit watch writes down each minute for dokkit status to read.
