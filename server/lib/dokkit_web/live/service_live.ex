@@ -1,6 +1,7 @@
 defmodule DokkitWeb.ServiceLive do
   use DokkitWeb, :live_view
   alias Dokkit.{Alerts, Estate, Issue, Issues}
+  alias DokkitWeb.WhoPick
   alias Phoenix.LiveView.JS
 
   @cols "150px 110px 90px 90px minmax(0,1fr) 16px;--ncols:96px 72px 84px 56px minmax(0,1fr) 16px;--minw:426px"
@@ -60,6 +61,11 @@ defmodule DokkitWeb.ServiceLive do
     if socket.assigns.current_user.role != :viewer,
       do: Estate.set_routing(socket.assigns.service, params)
 
+    {:noreply, load(socket)}
+  end
+
+  def handle_event("who", %{"who" => params}, socket) do
+    if socket.assigns.current_user.role == :owner, do: WhoPick.save(params)
     {:noreply, load(socket)}
   end
 
@@ -133,7 +139,9 @@ defmodule DokkitWeb.ServiceLive do
       issue: Estate.open_issue(service),
       runs: Estate.runs(service),
       logs: Dokkit.Logs.list(service: service.id, limit: 20),
-      defaults: Alerts.config()
+      defaults: Alerts.config(),
+      people: Dokkit.People.list(),
+      who: Dokkit.People.audience_rows()
     )
   end
 
@@ -305,6 +313,16 @@ defmodule DokkitWeb.ServiceLive do
                 {target(c)}<span :if={c.checked_at}> · checked {at(c.checked_at)} UTC</span><span :if={
                   c.source == :file
                 }> · from dokkit.toml</span>
+              </span>
+              <span style="grid-column: 1 / -1">
+                <WhoPick.pick
+                  scope="check"
+                  id={c.id}
+                  people={@people}
+                  who={@who}
+                  above="Told as the service says."
+                  disabled={@current_user.role != :owner}
+                />
               </span>
             </div>
           </div>
@@ -489,8 +507,10 @@ defmodule DokkitWeb.ServiceLive do
             </dl>
           </div>
           
-          <form class="card" phx-change="route" id="route-form">
+          <div class="card">
             <h2>Who hears about it</h2>
+
+            <form phx-change="route" id="route-form">
             
             <dl class="kv">
               <dt>{if @job, do: "If a run fails", else: "If it stops"}</dt>
@@ -527,7 +547,24 @@ defmodule DokkitWeb.ServiceLive do
                 <span class="hint">Off holds its alerts until the night ends, if the issue is still open.</span>
               </dd>
             </dl>
-          </form>
+            </form>
+
+            <dl class="kv">
+              <dt>Told</dt>
+
+              <dd>
+                <WhoPick.pick
+                  scope="service"
+                  id={@service.id}
+                  people={@people}
+                  who={@who}
+                  above="Told as the rule or the default says."
+                  disabled={@current_user.role != :owner}
+                />
+                <span :if={@current_user.role != :owner} class="hint">An owner changes this.</span>
+              </dd>
+            </dl>
+          </div>
         </div>
       </div>
     </Layouts.app>

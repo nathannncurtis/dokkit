@@ -49,7 +49,7 @@ defmodule DokkitWeb.McpControllerTest do
     tools = json_response(rpc(read, "tools/list"), 200)["result"]["tools"]
 
     assert Enum.map(tools, & &1["name"]) ==
-             ~w(attention find service jobs job_runs errors since_deploy machines machine issues issue deploys versions rules proposals series day alert_settings alert_suggestions releases certificate)
+             ~w(attention find service jobs job_runs errors since_deploy machines machine issues issue deploys versions rules proposals series day alert_settings alert_people alert_who alert_suggestions releases certificate)
 
     assert Enum.all?(tools, & &1["annotations"]["readOnlyHint"])
 
@@ -88,8 +88,8 @@ defmodule DokkitWeb.McpControllerTest do
   end
 
   @acting ~w(snooze acknowledge unsnooze note bulk watch unwatch routing hold accept_proposal dismiss_proposal keep_messages set_job_timing scan_machine)
-  @admin ~w(add_rule update_rule delete_rule set_checks allow_restart keys make_key revoke_key people add_person remove_person update_program update_machine update_all set_certificate remove_certificate certificate_settings set_certificate_settings renew_certificate add_app add_dependency add_job set_alert_settings test_alert accept_suggestion dismiss_suggestion restore_archive)
-  @everything ~w(attention find service jobs job_runs logs snooze acknowledge errors since_deploy machines machine issues issue deploys versions rules proposals series day unsnooze note bulk watch unwatch routing hold accept_proposal dismiss_proposal add_rule update_rule delete_rule set_checks allow_restart keys make_key revoke_key people add_person remove_person alert_settings alert_suggestions archives keep_messages set_job_timing update_program releases certificate set_certificate remove_certificate certificate_settings set_certificate_settings renew_certificate update_machine scan_machine update_all add_app add_dependency add_job set_alert_settings test_alert accept_suggestion dismiss_suggestion restore_archive)
+  @admin ~w(add_rule update_rule delete_rule set_checks allow_restart keys make_key revoke_key people add_person remove_person update_program update_machine update_all set_certificate remove_certificate certificate_settings set_certificate_settings renew_certificate add_app add_dependency add_job set_alert_settings test_alert set_alert_person set_alert_who accept_suggestion dismiss_suggestion restore_archive)
+  @everything ~w(attention find service jobs job_runs logs snooze acknowledge errors since_deploy machines machine issues issue deploys versions rules proposals series day unsnooze note bulk watch unwatch routing hold accept_proposal dismiss_proposal add_rule update_rule delete_rule set_checks allow_restart keys make_key revoke_key people add_person remove_person alert_settings alert_people alert_who alert_suggestions archives keep_messages set_job_timing update_program releases certificate set_certificate remove_certificate certificate_settings set_certificate_settings renew_certificate update_machine scan_machine update_all add_app add_dependency add_job set_alert_settings test_alert set_alert_person set_alert_who accept_suggestion dismiss_suggestion restore_archive)
 
   test "a token with only read is offered no act or admin tool and cannot call one", %{read: read} do
     names = Enum.map(json_response(rpc(read, "tools/list"), 200)["result"]["tools"], & &1["name"])

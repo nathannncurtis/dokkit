@@ -7,7 +7,7 @@ defmodule Dokkit.Alerts do
   use GenServer
   import Ecto.Query
   require Logger
-  alias Dokkit.{Alert, Issue, Machine, Repo, Service, Setting, WorkRun}
+  alias Dokkit.{Alert, Issue, Machine, People, Repo, Service, Setting, WorkRun}
 
   @defaults %{
     "down" => "page",
@@ -20,7 +20,7 @@ defmodule Dokkit.Alerts do
     "night_offset" => "0"
   }
   @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user smtp_password twilio_token)
-  @plain ~w(disk_limit memory_limit ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to digest_at heartbeat_url imessage_machine imessage_to twilio_sid twilio_from sms_to)
+  @plain ~w(disk_limit memory_limit ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to digest_at heartbeat_url imessage_machine imessage_to twilio_sid twilio_from sms_to self_down self_degraded)
   @max_attempts 5
   @imessage_wait 300
   @smtp_ports [25, 465, 587, 2525]
@@ -125,7 +125,8 @@ defmodule Dokkit.Alerts do
   def view do
     c = config()
     marks = Map.new(@hidden, &{&1, if(c[&1] in [nil, ""], do: "not set", else: "set")})
-    c |> Map.drop(@hidden) |> Map.merge(marks)
+    {_, notice} = imessage_status(c)
+    c |> Map.drop(@hidden) |> Map.merge(marks) |> Map.put("imessage_status", notice)
   end
 
   @doc """
@@ -154,7 +155,13 @@ defmodule Dokkit.Alerts do
     channels = for {_, v} <- @channels, do: v
 
     Enum.find_value(
-      %{"down" => channels, "degraded" => channels, "push_with" => ~w(ntfy pushover pagerduty)},
+      %{
+        "down" => channels,
+        "degraded" => channels,
+        "self_down" => channels,
+        "self_degraded" => channels,
+        "push_with" => ~w(ntfy pushover pagerduty)
+      },
       fn {k, ok} ->
         if String.trim(params[k] || "") not in ["" | ok],
           do: "#{k} is one of #{Enum.join(ok, ", ")}."
@@ -171,16 +178,36 @@ defmodule Dokkit.Alerts do
 
   defp bad_recipients(params) do
     bad_mac(params) ||
-      Enum.find_value(
-        [{"imessage_to", [@phone, @email]}, {"sms_to", [@phone]}, {"twilio_from", [@phone]}],
-        fn {k, ok} ->
-          Enum.find_value(recipients(params[k]), fn r ->
-            unless Enum.any?(ok, &Regex.match?(&1, r)),
-              do:
-                "#{k}: #{r} is not a #{if length(ok) == 2, do: "phone number or an email address", else: "phone number"}."
-          end)
-        end
-      ) || bad_sid(params)
+      recipient_error(params, [
+        {"imessage_to", [@phone, @email]},
+        {"sms_to", [@phone]},
+        {"twilio_from", [@phone]}
+      ]) || bad_sid(params)
+  end
+
+  defp recipient_error(params, fields) do
+    Enum.find_value(fields, fn {k, ok} ->
+      Enum.find_value(recipients(params[k]), fn r ->
+        unless Enum.any?(ok, &Regex.match?(&1, r)),
+          do:
+            "#{k}: #{r} is not a #{if length(ok) == 2, do: "phone number or an email address", else: "phone number"}."
+      end)
+    end)
+  end
+
+  @doc "An error for a person's destinations that are not what they should be, or nil."
+  def contact_error(params) do
+    recipient_error(params, [
+      {"email", [@email]},
+      {"phone", [@phone]},
+      {"imessage", [@phone, @email]}
+    ]) ||
+      with url when url not in [nil, ""] <- String.trim(params["ntfy_url"] || ""),
+           {:error, why} <- check_url(url) do
+        "ntfy_url: #{why}"
+      else
+        _ -> nil
+      end
   end
 
   defp bad_sid(params) do
@@ -337,7 +364,10 @@ defmodule Dokkit.Alerts do
         for r <- rules(), do: if(r["id"] == id, do: Map.update!(r, "on", &(!&1)), else: r)
       )
 
-  def delete_rule(id), do: save_rules(Enum.reject(rules(), &(&1["id"] == id)))
+  def delete_rule(id) do
+    People.forget("rule", id)
+    save_rules(Enum.reject(rules(), &(&1["id"] == id)))
+  end
 
   @often 6
 
@@ -386,6 +416,29 @@ defmodule Dokkit.Alerts do
     end
   end
 
+  @doc "The channels the row for Dokkit itself uses when it stops taking reports (down) and for lesser trouble (degraded)."
+  def self_routes(config \\ config()) do
+    {blank(pick(@channels, config["self_down"]), highest(config)),
+     blank(pick(@channels, config["self_degraded"]), "push")}
+  end
+
+  defp blank("", fallback), do: fallback
+  defp blank(value, _), do: value
+
+  @doc "The loudest channel that is set up: a page, then SMS, iMessage, push, email."
+  def highest(config) do
+    set? = &(config[&1] not in [nil, ""])
+
+    cond do
+      set?.("pagerduty_key") -> "page"
+      set?.("twilio_sid") and set?.("twilio_token") and set?.("sms_to") -> "sms"
+      set?.("imessage_machine") and set?.("imessage_to") -> "imessage"
+      set?.("ntfy_url") or (set?.("pushover_token") and set?.("pushover_user")) -> "push"
+      set?.("email_to") -> "email"
+      true -> "push"
+    end
+  end
+
   defp pick(options, value), do: Enum.find_value(options, "", fn {_, v} -> v == value && v end)
 
   defp save_rules(list) do
@@ -400,9 +453,9 @@ defmodule Dokkit.Alerts do
   defp ruled(%Issue{} = issue, machine) do
     kind = if issue.kind in ~w(job machine), do: issue.kind, else: "check"
 
-    Enum.find_value(rules(), fn r ->
-      (r["on"] and r["kind"] in ["", kind] and r["state"] in ["", to_string(issue.state)] and
-         r["machine"] in ["", machine]) && r["channel"]
+    Enum.find(rules(), fn r ->
+      r["on"] and r["kind"] in ["", kind] and r["state"] in ["", to_string(issue.state)] and
+        r["machine"] in ["", machine]
     end)
   end
 
@@ -414,20 +467,23 @@ defmodule Dokkit.Alerts do
 
   def plan(%Issue{} = issue, %Service{environment: "production"} = service, now) do
     # A soon issue never takes a rule, and never pages: a page for it goes as a push.
+    rule = !issue.soon && ruled(issue, machine_name(issue.machine_id))
+
     channel =
-      Map.get(service, :"route_#{issue.state}") ||
-        (!issue.soon && ruled(issue, machine_name(issue.machine_id))) ||
+      Map.get(service, :"route_#{issue.state}") || (rule && rule["channel"]) ||
         config()[to_string(issue.state)]
 
     channel = if issue.soon and channel == "page", do: "push", else: channel
 
     unless Dokkit.Issues.machine_down?(issue.machine_id) do
-      insert(issue, channel, if(holds?(service, channel, now), do: :held, else: :pending))
+      insert(issue, channel, if(holds?(service, channel, now), do: :held, else: :pending), rule)
     end
   end
 
-  def plan(%Issue{kind: "machine"} = issue, nil, _),
-    do: insert(issue, ruled(issue, machine_name(issue.machine_id)) || config()["down"], :pending)
+  def plan(%Issue{kind: "machine"} = issue, nil, _) do
+    rule = ruled(issue, machine_name(issue.machine_id))
+    insert(issue, (rule && rule["channel"]) || config()["down"], :pending, rule)
+  end
 
   def plan(_, _, _), do: nil
 
@@ -435,9 +491,39 @@ defmodule Dokkit.Alerts do
   defp holds?(%Service{night: false}, channel, now), do: channel != "digest" and night?(now)
   defp holds?(_, _, _), do: false
 
-  defp insert(issue, channel, status) do
-    if sends?(channel),
-      do: Repo.insert!(%Alert{issue_id: issue.id, channel: channel, status: status})
+  # An issue that opens again inside the 30 minutes is told to whoever is named now.
+  defp retarget(issue) do
+    rule = !issue.soon && ruled(issue, machine_name(issue.machine_id))
+
+    who =
+      People.audience(check: issue.check_id, service: issue.service_id, rule: rule && rule["id"])
+
+    ids = if who == :everyone, do: [], else: who
+
+    for a <- Repo.all(from a in Alert, where: a.issue_id == ^issue.id and a.status == :pending) do
+      Repo.delete_all(
+        from t in Dokkit.AlertTarget, where: t.alert_id == ^a.id and t.person_id not in ^ids
+      )
+
+      People.target(a.id, who)
+    end
+  end
+
+  defp insert(issue, channel, status, rule) do
+    if sends?(channel) do
+      alert = Repo.insert!(%Alert{issue_id: issue.id, channel: channel, status: status})
+
+      People.target(
+        alert.id,
+        People.audience(
+          check: issue.check_id,
+          service: issue.service_id,
+          rule: rule && rule["id"]
+        )
+      )
+
+      alert
+    end
   end
 
   @doc "Held alerts whose night is over are sent if their issue is still open and not snoozed or seen, else dropped. Returns how many go out."
@@ -509,6 +595,20 @@ defmodule Dokkit.Alerts do
 
     Repo.update_all(from(a in resolved, where: a.channel not in ^resolving), set: [status: :sent])
 
+    Repo.update_all(
+      from(t in Dokkit.AlertTarget,
+        where:
+          t.alert_id in subquery(
+            from a in Alert,
+              where: a.issue_id == ^id and a.status == :pending and a.channel in ^resolving,
+              select: a.id
+          )
+      ),
+      set: [opened: false, closed: false]
+    )
+
+    retarget(issue)
+
     if held,
       do:
         Repo.update_all(
@@ -523,6 +623,17 @@ defmodule Dokkit.Alerts do
   defp snoozed?(%Issue{snoozed_until: at}, now), do: DateTime.compare(at, now) == :gt
 
   def closing(%Issue{id: id}) do
+    Repo.update_all(
+      from(a in Alert,
+        where:
+          a.issue_id == ^id and a.status == :failed and
+            a.id in subquery(
+              from t in Dokkit.AlertTarget, where: t.opened and not t.closed, select: t.alert_id
+            )
+      ),
+      set: [status: :closing, attempts: 0]
+    )
+
     Repo.update_all(
       from(a in Alert,
         where: a.issue_id == ^id and a.status in [:pending, :sending, :failed, :held]
@@ -563,11 +674,7 @@ defmodule Dokkit.Alerts do
       action = if alert.status == :closing, do: :close, else: :open
 
       about = about(alert.issue)
-
-      sent =
-        if alert.channel == "imessage" and action == :open,
-          do: imessage(alert, about, config),
-          else: send_to(provider(alert.channel, config), action, about, config)
+      sent = deliver(alert, action, about, config, People.targets(alert.id))
 
       change =
         case sent do
@@ -590,6 +697,46 @@ defmodule Dokkit.Alerts do
       Repo.update!(Ecto.Changeset.change(alert, [attempts: alert.attempts + 1] ++ change))
     end)
     |> length()
+  end
+
+  defp deliver(alert, :open, about, config, [_ | _] = targets) when alert.channel == "imessage" do
+    to = targets |> Enum.flat_map(&recipients(&1.person.imessage)) |> Enum.uniq()
+
+    if to == [],
+      do: {:error, "None of the people told has an iMessage address."},
+      else: imessage(alert, about, Map.put(config, "imessage_to", Enum.join(to, ", ")))
+  end
+
+  defp deliver(alert, action, about, config, [_ | _] = targets)
+       when alert.channel not in ["imessage", "webhook"] do
+    mine =
+      Enum.filter(targets, fn t ->
+        if action == :open, do: not t.opened, else: t.opened and not t.closed
+      end)
+
+    results =
+      for t <- mine do
+        field = if action == :open, do: :opened, else: :closed
+        own = People.overlay(config, t.person, alert.channel)
+        for_them = Map.update!(about, :id, &"#{&1}-#{t.person.id}")
+
+        case send_to(provider(alert.channel, own), action, for_them, own) do
+          :ok ->
+            People.mark(alert.id, t.person.id, field)
+            :ok
+
+          {:error, text} ->
+            {:error, "#{t.person.name}: #{text}"}
+        end
+      end
+
+    Enum.find(results, :ok, &(&1 != :ok))
+  end
+
+  defp deliver(alert, action, about, config, _) do
+    if alert.channel == "imessage" and action == :open,
+      do: imessage(alert, about, config),
+      else: send_to(provider(alert.channel, config), action, about, config)
   end
 
   defp not_picked_up(name),
@@ -701,17 +848,21 @@ defmodule Dokkit.Alerts do
   Sends a test. An iMessage goes the way an alert does, and the answer is waited for up to a
   minute; a run nobody picked up by then is withdrawn so it does not send later.
   """
-  def test("imessage") do
-    config = config()
+  def test(channel, person \\ nil)
+
+  def test("imessage", person) do
+    config = told(config(), person, "imessage")
 
     with {:ok, mac} <- imessage_mac(config), {:ok, to} <- imessage_to(config) do
       run = Dokkit.Work.imessage(mac.id, to, "A test from Dokkit (dokkit, DOK-0)")
-      wait_for(run, mac, Application.get_env(:dokkit, :imessage_test_wait, @test_wait))
+      answer = wait_for(run, mac, Application.get_env(:dokkit, :imessage_test_wait, @test_wait))
+      if answer == :ok, do: remember_imessage(mac.id)
+      answer
     end
   end
 
-  def test(channel) do
-    config = config()
+  def test(channel, person) do
+    config = told(config(), person, channel)
 
     about = %{
       id: "test",
@@ -730,6 +881,62 @@ defmodule Dokkit.Alerts do
         do: send_to(provider, :close, about, config),
         else: :ok
     end
+  end
+
+  defp told(config, nil, _), do: config
+  defp told(config, person, channel), do: People.overlay(config, person, channel)
+
+  defp remember_imessage(machine_id) do
+    value = %{"machine" => machine_id, "at" => DateTime.to_iso8601(DateTime.utc_now())}
+
+    Repo.insert!(%Setting{key: "imessage_ok", value: value},
+      on_conflict: {:replace, [:value, :updated_at]},
+      conflict_target: :key
+    )
+  end
+
+  @doc """
+  Where iMessage sending stands: `{:ready, text}` once the chosen Mac has answered a test, else
+  `{:missing, text}` saying what is still missing.
+  """
+  def imessage_status(config \\ config()) do
+    mac = imessage_mac(config)
+    ok = (Repo.get(Setting, "imessage_ok") || %Setting{value: %{}}).value
+
+    cond do
+      config["imessage_machine"] in [nil, ""] ->
+        {:missing, "No Mac is chosen yet."}
+
+      match?({:error, _}, mac) ->
+        {:missing, "The Mac that was chosen is not enrolled any more."}
+
+      recipients(config["imessage_to"]) == [] and not any_imessage_address?() ->
+        {:missing, "No address is set to send to."}
+
+      ok["machine"] == config["imessage_machine"] ->
+        {:ready, "iMessage sending is set up. #{elem(mac, 1).name} answered a test."}
+
+      refused?(elem(mac, 1)) ->
+        {:missing,
+         "#{elem(mac, 1).name} is chosen but its program has not picked up the test. It must be running, and told it may send with dokkit imessage on."}
+
+      true ->
+        {:missing, "#{elem(mac, 1).name} is chosen. Send a test to finish setting it up."}
+    end
+  end
+
+  defp any_imessage_address?, do: Enum.any?(People.list(), &(&1.imessage not in [nil, ""]))
+
+  defp refused?(mac) do
+    match?(
+      %WorkRun{state: :refused},
+      Repo.one(
+        from r in WorkRun,
+          where: r.machine_id == ^mac.id and r.name == "dokkit:imessage",
+          order_by: [desc: r.inserted_at],
+          limit: 1
+      )
+    )
   end
 
   defp wait_for(run, mac, left) do

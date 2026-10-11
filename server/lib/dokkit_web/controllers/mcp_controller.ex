@@ -20,6 +20,7 @@ defmodule DokkitWeb.McpController do
     "machine" => @text,
     "channel" => @channel
   }
+  @person Map.new(Dokkit.People.fields(), &{&1, @text})
   @settings Map.merge(
               Map.new(Dokkit.Alerts.setting_keys(), &{&1, @text}),
               %{
@@ -215,6 +216,12 @@ defmodule DokkitWeb.McpController do
     {"alert_settings", "read",
      "The alert settings: who is told by default, the limits, the night and the mail settings. Addresses, user names and secrets are only shown as set or not set.",
      %{}, []},
+    {"alert_people", "read",
+     "The people alerts can be told, each with their own destinations: email, phone for SMS, iMessage address, ntfy address, Pushover user key and PagerDuty routing key. The ntfy address, Pushover key and routing key are only shown as set or not set.",
+     %{}, []},
+    {"alert_who", "read",
+     "Who is told at each level where someone is named: the default, a rule, a service, a check. Where nothing is named the level above decides, and the default is everyone.",
+     %{}, []},
     {"alert_suggestions", "read",
      "Changes Dokkit suggests: an issue that keeps opening and is snoozed, which the daily digest could take instead.",
      %{}, []},
@@ -287,8 +294,20 @@ defmodule DokkitWeb.McpController do
      "Change alert settings. A setting left out stays as it was; an empty secret clears it. If the address a secret is sent to changes (ntfy_url, smtp_host), send the secret again in the same call or it is cleared, and the answer says so. Addresses must be https, not this machine; mail ports are 25, 465, 587 and 2525.",
      @settings, []},
     {"test_alert", "admin",
-     "Send a test alert by one channel. Answers sent, or one fixed reason. Four at once, then one every 25 seconds.",
-     %{"channel" => @channel}, ["channel"]},
+     "Send a test alert by one channel, to the server-wide destination or, with person, to that person's. Answers sent, or one fixed reason. Four at once, then one every 25 seconds.",
+     %{"channel" => @channel, "person" => @text}, ["channel"]},
+    {"set_alert_person", "admin",
+     "Change a person's destinations. Takes the id from alert_people. A destination left out stays as it was; an empty one clears it.",
+     Map.put(@person, "id", @text), ["id"]},
+    {"set_alert_who", "admin",
+     "Name who is told at one level. scope is default, rule, service or check; id is the rule, service or check (not for default); for a check, service and name may be sent instead of id; to is a list of person ids from alert_people, or [\"everyone\"] for the server-wide destinations. An empty list names nobody there, so the level above decides. The check comes before the service, the service before the rule, the rule before the default.",
+     %{
+       "scope" => %{"type" => "string", "enum" => Dokkit.People.scopes()},
+       "id" => @text,
+       "service" => @text,
+       "name" => @text,
+       "to" => %{"type" => "array", "items" => @text}
+     }, ["scope", "to"]},
     {"accept_suggestion", "admin",
      "Send that service's issues to the daily digest from now on. Takes the id from alert_suggestions.",
      %{"id" => @text}, ["id"]},
@@ -478,6 +497,10 @@ defmodule DokkitWeb.McpController do
   defp tool("add_person", args), do: Api.new_person(args) |> r()
   defp tool("remove_person", %{"id" => id}), do: Api.drop_person(id) |> r()
   defp tool("alert_settings", _), do: Dokkit.Alerts.view()
+  defp tool("alert_people", _), do: Dokkit.People.view()
+  defp tool("alert_who", _), do: Dokkit.People.who_list()
+  defp tool("set_alert_person", %{"id" => _} = args), do: Api.save_person(args) |> r()
+  defp tool("set_alert_who", args), do: Api.save_who(args) |> r()
   defp tool("alert_suggestions", _), do: Read.suggestions()
   defp tool("archives", _), do: Read.archives()
   defp tool("keep_messages", %{"id" => id} = args), do: Api.set_keep(id, args["keep"]) |> r()

@@ -75,7 +75,11 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `add_dependency` | `admin` | Adds something outside that is depended on. With a check (`http` url or `tcp` address) it is put on an enrolled machine whose program runs the check; without one it belongs to the group Outside. |
 | `add_job` | `admin` | Adds a job to watch. Its key and addresses are returned once. |
 | `set_alert_settings` | `admin` | Changes alert settings. A setting left out stays as it was; an empty secret clears it. If the address a secret goes to changes (`ntfy_url`, `smtp_host`), send the secret again in the same call or it is cleared, and the answer says so. |
-| `test_alert` | `admin` | Sends a test alert by one channel. Answers sent, or one fixed reason. Four at once for each token, then one every 25 seconds. |
+| `alert_people` | `read` | Lists the people alerts can be told with their own destinations. The ntfy address, Pushover key and routing key are only set or not set. |
+| `alert_who` | `read` | Lists who is told at each level where someone is named. |
+| `set_alert_person` | `admin` | Changes a person's destinations. A field not given stays; an empty one clears it. |
+| `set_alert_who` | `admin` | Names who is told at one level (`default`, `rule`, `service` or `check`): person ids, or `["everyone"]`. |
+| `test_alert` | `admin` | Sends a test alert by one channel, or to one person's destination with `person`. Answers sent, or one fixed reason. Four at once for each token, then one every 25 seconds. |
 | `accept_suggestion` | `admin` | Sends a service's issues to the daily digest from now on. |
 | `dismiss_suggestion` | `admin` | Dismisses an alert suggestion. |
 | `restore_archive` | `admin` | Loads an archived month of logs back for a week. |

@@ -171,6 +171,10 @@ defmodule DokkitWeb.Router do
     get "/alerts", ApiController, :alert_settings
     put "/alerts", ApiController, :set_alert_settings
     post "/alerts/test", ApiController, :test_alert
+    get "/alerts/people", ApiController, :alert_people
+    put "/alerts/people/:id", ApiController, :set_alert_person
+    get "/alerts/who", ApiController, :alert_who
+    put "/alerts/who", ApiController, :set_alert_who
     get "/alerts/suggestions", ApiController, :suggestions
     post "/alerts/suggestions/:id/accept", ApiController, :accept_suggestion
     post "/alerts/suggestions/:id/dismiss", ApiController, :dismiss_suggestion
