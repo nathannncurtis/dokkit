@@ -165,7 +165,11 @@ defmodule Dokkit.Accounts do
     "otpauth://totp/Dokkit:#{name}?secret=#{secret}&issuer=Dokkit"
   end
 
-  def totp_confirm(%User{totp_on: false} = user, code), do: totp_set(user, code, true)
+  @doc "Turns two-step on and returns the first set of recovery codes, which exist in the clear only in this return value."
+  def totp_confirm(%User{totp_on: false} = user, code) do
+    with :ok <- totp_set(user, code, true), do: {:ok, recovery_make(user)}
+  end
+
   def totp_off(%User{totp_on: true} = user, code), do: totp_set(user, code, false)
 
   defp totp_set(user, code, on) do
@@ -176,6 +180,7 @@ defmodule Dokkit.Accounts do
         set: [totp_on: on, totp_secret: secret]
       )
 
+      unless on, do: recovery_delete(user.id)
       :ok
     else
       :error
@@ -191,6 +196,100 @@ defmodule Dokkit.Accounts do
       from(u in User, where: fragment("lower(?)", u.name) == ^String.downcase(name)),
       set: [totp_on: false, totp_secret: nil]
     )
+
+    Repo.delete_all(
+      from r in "recovery_codes",
+        where:
+          r.user_id in subquery(
+            from u in User,
+              where: fragment("lower(?)", u.name) == ^String.downcase(name),
+              select: u.id
+          )
+    )
+  end
+
+  @doc "Ends the old set and makes ten new codes; they are returned once and only their hashes are kept."
+  def recovery_make(%User{id: id} = user) do
+    codes = for _ <- 1..10, do: recovery_new()
+    now = DateTime.utc_now()
+
+    {:ok, _} =
+      Repo.transaction(fn ->
+        recovery_delete(id)
+
+        Repo.insert_all(
+          "recovery_codes",
+          for code <- codes do
+            %{
+              id: Ecto.UUID.bingenerate(),
+              user_id: Ecto.UUID.dump!(id),
+              code_hash: recovery_hash(user, code),
+              inserted_at: now
+            }
+          end
+        )
+      end)
+
+    codes
+  end
+
+  def recovery_renew(%User{totp_on: true} = user, code) do
+    if totp_check(user, code), do: {:ok, recovery_make(user)}, else: :error
+  end
+
+  def recovery_left(%User{id: id}) do
+    Repo.aggregate(
+      from(r in "recovery_codes",
+        where: r.user_id == type(^id, :binary_id) and is_nil(r.used_at)
+      ),
+      :count
+    )
+  end
+
+  @doc "True once per code. Every unused hash is compared, so the time does not say which one matched."
+  def recovery_use(%User{id: id} = user, code) when is_binary(code) do
+    wanted = recovery_hash(user, code)
+
+    rows =
+      Repo.all(
+        from r in "recovery_codes",
+          where: r.user_id == type(^id, :binary_id) and is_nil(r.used_at),
+          select: {r.id, r.code_hash}
+      )
+
+    hit =
+      Enum.reduce(rows, nil, fn {row, stored}, hit ->
+        if Plug.Crypto.secure_compare(stored, wanted), do: row, else: hit
+      end)
+
+    hit != nil and
+      match?(
+        {1, _},
+        Repo.update_all(
+          from(r in "recovery_codes", where: r.id == ^hit and is_nil(r.used_at)),
+          set: [used_at: DateTime.utc_now()]
+        )
+      )
+  end
+
+  def recovery_use(_, _), do: false
+
+  defp recovery_delete(id),
+    do: Repo.delete_all(from r in "recovery_codes", where: r.user_id == type(^id, :binary_id))
+
+  # A random 59-bit code cannot be searched for offline against a fast hash, so no slow one is needed.
+  defp recovery_hash(%User{id: id}, code) do
+    code = code |> String.upcase() |> String.replace(~r/[^A-Z0-9]/, "")
+    :crypto.hash(:sha256, id <> ":" <> code) |> Base.encode16(case: :lower)
+  end
+
+  defp recovery_new do
+    raw =
+      for <<b <- :crypto.strong_rand_bytes(12)>>,
+        into: "",
+        do: <<Enum.at(@code_letters, rem(b, 30))>>
+
+    String.slice(raw, 0, 6) <> "-" <> String.slice(raw, 6, 6)
   end
 
   @doc "True once per code: the step it was made in cannot be used again."

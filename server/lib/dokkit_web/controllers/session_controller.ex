@@ -7,6 +7,8 @@ defmodule DokkitWeb.SessionController do
 
   @wrong_code "That code is not right. Codes change every 30 seconds and work once."
 
+  @shown_once "Recovery codes are shown once, when two-step sign-in is turned on or a new set is made. To get a new set, enter a code and choose Make new recovery codes."
+
   plug :put_layout, false
 
   def new(conn, _) do
@@ -60,14 +62,24 @@ defmodule DokkitWeb.SessionController do
         LoginThrottle.refund(String.downcase(user.name), address(conn))
         conn |> Auth.sign_in(user) |> redirect(to: ~p"/")
 
+      Accounts.recovery_use(user, code) ->
+        LoginThrottle.refund(String.downcase(user.name), address(conn))
+        conn |> Auth.sign_in(user) |> redirect(to: ~p"/two-step?used=1")
+
       true ->
         conn |> put_status(401) |> render(:code, error: @wrong_code)
     end
   end
 
-  def two_step(conn, _), do: render_two_step(conn, nil)
+  def two_step(conn, params), do: render_two_step(conn, nil, params["used"] == "1")
 
-  def change_two_step(conn, %{"code" => code}) do
+  def change_two_step(conn, %{"do" => "on", "code" => _} = params) do
+    if conn.assigns.current_user.totp_on,
+      do: render_two_step(conn, @shown_once),
+      else: change_two_step(conn, Map.delete(params, "do"))
+  end
+
+  def change_two_step(conn, %{"code" => code} = params) do
     user = conn.assigns.current_user
     key = String.downcase(user.name)
     address = address(conn)
@@ -76,11 +88,21 @@ defmodule DokkitWeb.SessionController do
       conn |> blocked() |> render_two_step(@too_many)
     else
       result =
-        if user.totp_on,
-          do: Accounts.totp_off(user, code),
-          else: Accounts.totp_confirm(user, code)
+        cond do
+          not user.totp_on -> Accounts.totp_confirm(user, code)
+          params["do"] == "codes" -> Accounts.recovery_renew(user, code)
+          true -> Accounts.totp_off(user, code)
+        end
 
       case result do
+        {:ok, codes} ->
+          LoginThrottle.refund(key, address)
+
+          conn
+          |> put_resp_header("cache-control", "no-store")
+          |> assign(:current_user, Accounts.get(user.id))
+          |> render(:codes, codes: codes)
+
         :ok ->
           LoginThrottle.refund(key, address)
           conn |> assign(:current_user, Accounts.get(user.id)) |> render_two_step(nil)
@@ -92,13 +114,22 @@ defmodule DokkitWeb.SessionController do
   end
 
   # One unconfirmed secret is kept until it is confirmed, so a reload or a second tab shows the QR code already scanned.
-  defp render_two_step(conn, error) do
+  defp render_two_step(conn, error, used \\ false) do
     user = conn.assigns.current_user
 
     secret = if !user.totp_on, do: user.totp_secret || Accounts.totp_begin(user)
 
     qr = secret && Accounts.totp_uri(user, secret) |> EQRCode.encode() |> EQRCode.svg(width: 220)
-    render(conn, :two_step, error: error, on: user.totp_on, secret: secret, qr: qr)
+    left = if user.totp_on, do: Accounts.recovery_left(user)
+
+    render(conn, :two_step,
+      error: error,
+      on: user.totp_on,
+      secret: secret,
+      qr: qr,
+      left: left,
+      used: used
+    )
   end
 
   def delete(conn, _), do: conn |> Auth.sign_out() |> redirect(to: ~p"/login")
