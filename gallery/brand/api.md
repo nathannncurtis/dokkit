@@ -1569,6 +1569,45 @@ List the releases held. The versions this server holds for the updaters, newest 
 
 `403` The key may not do this.
 
+### GET /api/v1/certificate
+
+The certificates served. The certificate the server was installed with and the one put in place with `PUT`, each `null` when there is none. Never a key. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+`200` The certificates.
+
+```json
+{
+  "installed": {
+    "names": [
+      "web-01"
+    ],
+    "issuer": "web-01",
+    "not_after": "2036-10-01T13:00:00Z",
+    "self_signed": true,
+    "sha256": "a99f59d72d4fe3caf976fa019c671dc3e184b9f9c4e7b6ce4494e9c85df1ad3d"
+  },
+  "uploaded": {
+    "names": [
+      "example.dokkit.dev"
+    ],
+    "issuer": "R11",
+    "not_after": "2027-01-19T13:00:00Z",
+    "self_signed": false,
+    "sha256": "069ea4a89410f21e10658bbdb91aa9555af7e39294d4c08e999c7765ddf0d390"
+  },
+  "renewal": {
+    "at": "2026-12-20T03:00:00Z",
+    "ok": true,
+    "note": "Renewed, runs out 2027-03-20"
+  }
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
 ## Act
 
 Snooze and acknowledge issues, route and hold services, accept found things, run tasks, keep error text and set when a job is late. User token with `act`.
@@ -2726,6 +2765,177 @@ Send:
 `403` The key may not do this.
 
 `422` The version is not one the server holds completely.
+
+### PUT /api/v1/certificate
+
+Put a certificate in place. Checks that both parse, that the key belongs to the first certificate, that it is neither expired nor not yet valid and that it names at least one DNS name, then saves both and serves the certificate at once to clients that ask for one of its names (SNI). Anything else, and a client that connects by address, still gets the installed certificate. A server that does not serve TLS itself answers 422. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+Send:
+
+```
+{
+  "cert": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+  "key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+}
+```
+
+`200` The certificates after the change.
+
+```json
+{
+  "installed": {
+    "names": [
+      "web-01"
+    ],
+    "issuer": "web-01",
+    "not_after": "2036-10-01T13:00:00Z",
+    "self_signed": true,
+    "sha256": "a99f59d72d4fe3caf976fa019c671dc3e184b9f9c4e7b6ce4494e9c85df1ad3d"
+  },
+  "uploaded": {
+    "names": [
+      "example.dokkit.dev"
+    ],
+    "issuer": "R11",
+    "not_after": "2027-01-19T13:00:00Z",
+    "self_signed": false,
+    "sha256": "069ea4a89410f21e10658bbdb91aa9555af7e39294d4c08e999c7765ddf0d390"
+  }
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` A check failed. The message says which.
+
+### DELETE /api/v1/certificate
+
+Remove the uploaded certificate. Removes the uploaded certificate. The installed one is not touched. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+`200` The certificates after the change.
+
+```json
+{
+  "installed": {
+    "names": [
+      "web-01"
+    ],
+    "issuer": "web-01",
+    "not_after": "2036-10-01T13:00:00Z",
+    "self_signed": true,
+    "sha256": "a99f59d72d4fe3caf976fa019c671dc3e184b9f9c4e7b6ce4494e9c85df1ad3d"
+  },
+  "uploaded": {
+    "names": [
+      "example.dokkit.dev"
+    ],
+    "issuer": "R11",
+    "not_after": "2027-01-19T13:00:00Z",
+    "self_signed": false,
+    "sha256": "069ea4a89410f21e10658bbdb91aa9555af7e39294d4c08e999c7765ddf0d390"
+  }
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` A check failed. The message says which.
+
+### GET /api/v1/certificate/settings
+
+Settings for getting a certificate by itself. The name, the Cloudflare token (only as `set` or `not set`) and the certificate authority's directory. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+`200` The settings.
+
+```json
+{
+  "acme_name": "example.dokkit.dev",
+  "acme_cloudflare_token": "set",
+  "acme_directory": "https://acme-v02.api.letsencrypt.org/directory"
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+### PUT /api/v1/certificate/settings
+
+Change those settings. Once `acme_name` and `acme_cloudflare_token` are set, the server gets a certificate for the name from the certificate authority, proving the name with a TXT record at `_acme-challenge.<name>` that it adds at Cloudflare and removes again, and renews it when 30 days or fewer are left. A setting left out stays as it was. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+Send:
+
+```
+{
+  "acme_name": "example.dokkit.dev",
+  "acme_cloudflare_token": "cf-api-token"
+}
+```
+
+`200` The settings after the change.
+
+```json
+{
+  "acme_name": "example.dokkit.dev",
+  "acme_cloudflare_token": "set",
+  "acme_directory": "https://acme-v02.api.letsencrypt.org/directory"
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` A setting is not right. The message says which.
+
+### POST /api/v1/certificate/renew
+
+Get a certificate now. Gets a certificate for `acme_name` now, whatever the one held has left. It waits for the whole exchange, which can take a few minutes. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.
+
+
+`200` The certificates after the change.
+
+```json
+{
+  "installed": {
+    "names": [
+      "web-01"
+    ],
+    "issuer": "web-01",
+    "not_after": "2036-10-01T13:00:00Z",
+    "self_signed": true,
+    "sha256": "a99f59d72d4fe3caf976fa019c671dc3e184b9f9c4e7b6ce4494e9c85df1ad3d"
+  },
+  "uploaded": {
+    "names": [
+      "example.dokkit.dev"
+    ],
+    "issuer": "R11",
+    "not_after": "2027-01-19T13:00:00Z",
+    "self_signed": false,
+    "sha256": "069ea4a89410f21e10658bbdb91aa9555af7e39294d4c08e999c7765ddf0d390"
+  },
+  "renewal": {
+    "at": "2026-12-20T03:00:00Z",
+    "ok": true,
+    "note": "Renewed, runs out 2027-03-20"
+  }
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` It failed. The message says why; the same sentence is kept as `renewal` in `GET /certificate`.
 
 ## MCP
 

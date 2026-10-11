@@ -79,7 +79,58 @@ defmodule Dokkit.Cloudflare do
     end
   end
 
+  # A resolver that caches would keep answering "no such name" from a look made too early,
+  # so the zone's own name servers are asked. Only where they cannot be reached is a resolver used.
   defp visible?(name, value) do
+    case Application.get_env(:dokkit, :acme_authoritative, true) && authoritative(name, value) do
+      :yes -> true
+      :no -> false
+      _ -> resolver?(name, value)
+    end
+  end
+
+  defp authoritative(name, value) do
+    record = String.to_charlist(record_name(name))
+
+    servers =
+      for zone <- candidates(name),
+          host <- :inet_res.lookup(String.to_charlist(zone), :in, :ns, timeout: 3_000),
+          ip <- :inet_res.lookup(host, :in, :a, timeout: 3_000),
+          do: {ip, 53}
+
+    answers =
+      for server <- Enum.take(servers, 2) do
+        case :inet_res.resolve(record, :in, :txt,
+               nameservers: [server],
+               recurse: false,
+               timeout: 3_000
+             ) do
+          {:ok, message} ->
+            texts =
+              for {:dns_rr, _, :txt, _, _, _, parts, _, _, _} <- :inet_dns.msg(message, :anlist),
+                  do: IO.iodata_to_binary(parts)
+
+            if value in texts, do: :yes, else: :no
+
+          {:error, {:nxdomain, _}} ->
+            :no
+
+          {:error, :nxdomain} ->
+            :no
+
+          {:error, _} ->
+            :unreachable
+        end
+      end
+
+    cond do
+      :yes in answers -> :yes
+      :no in answers -> :no
+      true -> :unreachable
+    end
+  end
+
+  defp resolver?(name, value) do
     request =
       [
         method: :get,

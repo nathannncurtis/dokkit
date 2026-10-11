@@ -5,7 +5,7 @@ defmodule DokkitWeb.UpdatesTest do
   alias Dokkit.{Keys, Machine, Releases, Repo, User}
 
   setup do
-    dir = Path.join(System.tmp_dir!(), "dokkit-rel-#{System.unique_integer([:positive])}")
+    dir = Path.join(System.tmp_dir!(), "dokkit-rel-#{Base.encode16(:crypto.strong_rand_bytes(6))}")
     old = Application.get_env(:dokkit, :releases)
     Application.put_env(:dokkit, :releases, dir)
 
