@@ -2,6 +2,7 @@
 
     import dokkit
     dokkit.start(version="2.3.0")      # reads DOKKIT_URL and DOKKIT_KEY; blank means off
+    dokkit.start(version="2.3.0", url=URL, key=KEY)   # given, even blank, the environment is not read
 
     dokkit.beat("worker")              # from the main loop
     with dokkit.job("nightly-purge") as run:
@@ -11,7 +12,8 @@
     logging.getLogger().addHandler(dokkit.handler())
 
 Nothing here raises into the app or waits on the network. Lines wait in a queue of fixed
-size and a background thread sends them. Error message text is never sent.
+size and a background thread sends them. An error report carries the error's type and
+stack, never its message. A log line carries the text and fields the app logs.
 """
 import atexit
 import collections
@@ -19,6 +21,7 @@ import datetime
 import gzip
 import json
 import logging
+import math
 import os
 import re
 import socket
@@ -31,12 +34,14 @@ import uuid
 
 QUEUE = 1000
 MAX_BYTES = 4_000_000
+MAX_LINE = 65536
+FLUSH_SECONDS = 5
 _state = None
 _sending = threading.local()
 
 
 class _State:
-    def __init__(self, url, key, version, environment):
+    def __init__(self, url, key, version, environment, root=None):
         self.url, self.key = url.rstrip("/"), key
         self.version, self.environment = version, environment
         self.host = socket.gethostname()
@@ -44,9 +49,9 @@ class _State:
         self.size = 0
         self.errors = collections.deque(maxlen=100)
         self.dropped = 0
+        self.reported = 0
         self.retry = None
-        # The folder the app was started from: frames under it are the app's own.
-        self.root = os.path.abspath(os.getcwd())
+        self.root = os.path.abspath(root or _root())
         self.restart()
 
     def restart(self, forked=False):
@@ -58,21 +63,26 @@ class _State:
             self.retry = None
             self.size = 0
         self.lock = threading.Lock()
-        self.sending = threading.Lock()
         self.wake = threading.Event()
+        self.waiting = []
         threading.Thread(target=self._run, name="dokkit", daemon=True).start()
 
     def add(self, line):
         line.setdefault("at", _now())
         line["host"] = self.host
+        if self.environment and self.environment != "production":
+            line["environment"] = self.environment
         try:
-            text = json.dumps(line, default=str)
-        except (TypeError, ValueError):
-            self.dropped += 1
-            return
-        if len(text) > MAX_BYTES:
-            self.dropped += 1
-            return
+            try:
+                text = json.dumps(line, default=str, allow_nan=False)
+            except Exception:
+                text = json.dumps(_safe(line))
+        except Exception:
+            return self._count(1)
+        if len(text) > MAX_LINE and "msg" in line:
+            text = _cut(line)
+        if not text or len(text) > MAX_BYTES:
+            return self._count(1)
         with self.lock:
             while self.lines and (len(self.lines) >= QUEUE or self.size + len(text) > MAX_BYTES):
                 self.size -= len(self.lines.popleft())
@@ -80,42 +90,75 @@ class _State:
             self.lines.append(text)
             self.size += len(text)
 
+    def _count(self, dropped):
+        with self.lock:
+            self.dropped += dropped
+
     def _run(self):
         while True:
             self.wake.wait(2)
             self.wake.clear()
-            self.flush()
-
-    def flush(self):
-        with self.sending:
+            with self.lock:
+                waiting, self.waiting = self.waiting, []
             self._flush()
+            for done in waiting:
+                done.set()
+
+    def flush(self, timeout=None):
+        """Has the sender thread make a pass now and waits for it, at most timeout seconds."""
+        done = threading.Event()
+        with self.lock:
+            self.waiting.append(done)
+        self.wake.set()
+        done.wait(FLUSH_SECONDS if timeout is None else timeout)
 
     def _flush(self):
-        try:
-            while self.errors:
-                self._post("/api/v1/errors", json.dumps(self.errors.popleft()).encode(), "application/json")
-            while self.retry or self.lines:
-                if not self.retry:
-                    with self.lock:
-                        batch = [self.lines.popleft() for _ in range(min(500, len(self.lines)))]
-                        self.size -= sum(len(l) for l in batch)
-                    self.retry = [str(uuid.uuid4()), batch, 0]
-                batch_id, batch, tries = self.retry
-                try:
-                    body = gzip.compress("\n".join(batch).encode())
-                    self._post("/api/v1/report", body, "application/x-ndjson", {"Content-Encoding": "gzip", "Dokkit-Batch": batch_id})
+        with self.lock:
+            more = self.dropped != self.reported
+            self.reported = count = self.dropped
+        if more:
+            self.add({"type": "metric", "name": "dokkit_dropped", "value": count})
+        # Lines go first: all of them fit in a few requests, and an error report is one request each.
+        for send in (self._lines, self._errors):
+            try:
+                send()
+            except Exception:
+                pass
+
+    def _lines(self):
+        while self.retry or self.lines:
+            if not self.retry:
+                with self.lock:
+                    batch = [self.lines.popleft() for _ in range(min(500, len(self.lines)))]
+                    self.size -= sum(len(l) for l in batch)
+                self.retry = [str(uuid.uuid4()), batch, 0]
+            batch_id, batch, tries = self.retry
+            try:
+                body = gzip.compress("\n".join(batch).encode())
+                self._post("/api/v1/report", body, "application/x-ndjson", {"Content-Encoding": "gzip", "Dokkit-Batch": batch_id})
+                self.retry = None
+            except Exception:
+                # A failed batch gets one more try; after that it is dropped and counted.
+                if tries:
+                    self._count(len(batch))
                     self.retry = None
-                except Exception:
-                    # A failed batch gets one more try; after that it is dropped and counted.
-                    if tries:
-                        self.dropped += len(batch)
-                        self.retry = None
-                    else:
-                        self.retry[2] = 1
+                else:
+                    self.retry[2] = 1
+                return
+
+    def _errors(self):
+        while self.errors:
+            report = self.errors[0]
+            try:
+                self._post("/api/v1/errors", report, "application/json")
+            except Exception as error:
+                # A report the server refuses is dropped; one it did not answer for waits for the next pass.
+                if getattr(error, "code", 0) == 429 or not 400 <= getattr(error, "code", 0) < 500:
                     return
-        except Exception:
-            # What could not be sent is dropped. The app is never told.
-            pass
+                self._count(1)
+            with self.lock:
+                if self.errors and self.errors[0] is report:
+                    self.errors.popleft()
 
     def _post(self, path, body, kind, headers=None):
         request = urllib.request.Request(self.url + path, data=body, method="POST")
@@ -134,20 +177,25 @@ def _now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
-def start(version=None, environment=None, url=None, key=None):
-    """Turns the library on. With no address or key it stays off and every call does nothing."""
+def start(version=None, environment=None, url=None, key=None, root=None, announce_version=True):
+    """Turns the library on. With no address or key it stays off and every call does nothing.
+
+    url and key left out are read from DOKKIT_URL and DOKKIT_KEY. Given, even blank, they are
+    used as they are. root is the folder of the app's own code, when that is not the program's.
+    announce_version=False leaves out the deploy line that start sends for version.
+    """
     global _state
-    url = url or os.environ.get("DOKKIT_URL", "")
-    key = key or os.environ.get("DOKKIT_KEY", "")
+    url = os.environ.get("DOKKIT_URL", "") if url is None else url
+    key = os.environ.get("DOKKIT_KEY", "") if key is None else key
     if not url or not key or _state:
         return
     if _insecure(url):
         print("dokkit: http:// address to a non-local host; set DOKKIT_INSECURE=1 to allow it. Staying off.", file=sys.stderr)
         return
     try:
-        _state = _State(url, key, version, environment or os.environ.get("DOKKIT_ENV"))
+        _state = _State(url, key, version, environment or os.environ.get("DOKKIT_ENV"), root)
         atexit.register(flush)
-        if version:
+        if version and announce_version:
             _state.add({"type": "deploy", "version": str(version)})
     except Exception:
         _state = None
@@ -168,10 +216,49 @@ if hasattr(os, "register_at_fork"):
     os.register_at_fork(after_in_child=_after_fork)
 
 
-def flush():
-    """Sends what is waiting. Called for you when the app exits."""
+def flush(timeout=None):
+    """Sends what is waiting and returns after at most timeout seconds, FLUSH_SECONDS when not given.
+
+    Called for you when the app exits.
+    """
     if _state:
-        _state.flush()
+        _state.flush(timeout)
+
+
+def enabled():
+    """True when started with an address and key."""
+    return _state is not None
+
+
+def dropped():
+    """How many lines and error reports were dropped: the queue was full, or they could not be sent."""
+    return _state.dropped if _state else 0
+
+
+def _cut(line):
+    """The line with its msg shortened to fit MAX_LINE, fields dropped if that is not enough; "" if nothing fits."""
+    msg = str(line["msg"])
+    for fields in (line.get("fields"), None):
+        cut = msg[:MAX_LINE]
+        while True:
+            text = json.dumps(_safe({**line, "msg": cut + " [cut]", "fields": fields}))
+            if len(text) <= MAX_LINE:
+                return text
+            if not cut:
+                break
+            cut = cut[: len(cut) // 2]
+    return ""
+
+
+def _safe(value, depth=0):
+    """The value as json can write it: what it cannot write is sent as its repr."""
+    if isinstance(value, dict) and depth < 4:
+        return {str(k): _safe(v, depth + 1) for k, v in value.items()}
+    if isinstance(value, (list, tuple)) and depth < 4:
+        return [_safe(v, depth + 1) for v in value]
+    if value is None or isinstance(value, (str, int)) or (isinstance(value, float) and math.isfinite(value)):
+        return value
+    return repr(value)
 
 
 def _add(line):
@@ -252,16 +339,8 @@ def capture(error=None, handled=True, tags=None):
         error = error or sys.exc_info()[1]
         if error is None:
             return
-        frames = [
-            {
-                "file": _path(f.filename),
-                "function": f.name,
-                "line": f.lineno,
-                "own": _own(f.filename),
-            }
-            for f in traceback.extract_tb(error.__traceback__)
-        ]
-        _state.errors.append(
+        frames = _frames(error.__traceback__)
+        report = json.dumps(
             {
                 "at": _now(),
                 "type": type(error).__name__,
@@ -271,16 +350,43 @@ def capture(error=None, handled=True, tags=None):
                 "host": _state.host,
                 "frames": frames,
                 "tags": {str(k): str(v) for k, v in (tags or {}).items()},
-            }
-        )
+            },
+            default=str,
+        ).encode()
+        with _state.lock:
+            # The queue holds the newest hundred.
+            _state.dropped += len(_state.errors) == _state.errors.maxlen
+            _state.errors.append(report)
         _state.wake.set()
     except Exception:
         pass
 
 
+def _frames(trace):
+    return [
+        {"file": _path(f.filename), "function": f.name, "line": f.lineno, "own": _own(f.filename)}
+        for f in traceback.extract_tb(trace)
+    ]
+
+
+def _root():
+    """The program's folder: the executable's when frozen, else the main script's."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    main = getattr(sys.modules.get("__main__"), "__file__", None)
+    # A runner inside the Python install (python -m unittest, gunicorn) is not the app; there the working directory is.
+    if main and not any(_under(main, prefix) for prefix in (sys.prefix, sys.base_prefix)):
+        return os.path.dirname(os.path.abspath(main))
+    return os.getcwd()
+
+
+def _under(filename, folder):
+    path, folder = (os.path.normcase(os.path.abspath(p)) for p in (filename, folder))
+    return path.startswith(folder.rstrip(os.sep) + os.sep)
+
+
 def _own(filename):
-    path = os.path.abspath(filename)
-    return path.startswith(_state.root.rstrip(os.sep) + os.sep) and "site-packages" not in path
+    return _under(filename, _state.root) and "site-packages" not in os.path.abspath(filename)
 
 
 def _path(filename):
@@ -305,17 +411,23 @@ def catch_unhandled():
 
 class _Handler(logging.Handler):
     LEVELS = {10: "debug", 20: "info", 30: "warn", 40: "error", 50: "fatal"}
+    STANDARD = set(vars(logging.makeLogRecord({}))) | {"message", "asctime"}
 
     def emit(self, record):
         try:
             level = self.LEVELS.get(record.levelno // 10 * 10, "info")
-            _add({"type": "log", "t": _now(), "level": level, "msg": record.getMessage(), "fields": {"logger": record.name}})
+            fields = {k: v for k, v in vars(record).items() if k not in self.STANDARD}
+            fields["logger"] = record.name
+            if record.exc_info and record.exc_info[0] and _state:
+                fields["exception"] = record.exc_info[0].__name__
+                fields["stack"] = "\n".join("%s:%s %s" % (f["file"], f["line"], f["function"]) for f in _frames(record.exc_info[2]))
+            _add({"type": "log", "t": _now(), "level": level, "msg": record.getMessage(), "fields": fields})
         except Exception:
             pass
 
 
 def handler(level=logging.INFO):
-    """A handler for the logging module. Its lines go to the Logs page."""
+    """A handler for the logging module. Its lines go to the Logs page, with what was passed as extra= as their fields."""
     h = _Handler()
     h.setLevel(level)
     return h

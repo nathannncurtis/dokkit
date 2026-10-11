@@ -16,16 +16,18 @@ final class Dokkit
 {
     private const QUEUE = 1000;
     private const MAX_BYTES = 4000000;
+    private const MAX_LINE = 65536;
     private static ?array $on = null;
     private static array $lines = [];
     private static array $errors = [];
     private static int $bytes = 0;
+    private static int $retried = 0;
     private static bool $sending = false;
     /** How many lines were dropped because the list was full. */
     public static int $dropped = 0;
 
     /** Turns the library on. With no address or key it stays off and every call does nothing. */
-    public static function start(?string $version = null, ?string $url = null, ?string $key = null): void
+    public static function start(?string $version = null, ?string $url = null, ?string $key = null, bool $announceVersion = true, ?string $environment = null): void
     {
         $url = $url ?: (getenv('DOKKIT_URL') ?: '');
         $key = $key ?: (getenv('DOKKIT_KEY') ?: '');
@@ -40,7 +42,7 @@ final class Dokkit
             'url' => rtrim($url, '/'),
             'key' => $key,
             'version' => $version,
-            'environment' => getenv('DOKKIT_ENV') ?: null,
+            'environment' => $environment ?: (getenv('DOKKIT_ENV') ?: null),
             'host' => gethostname() ?: 'unknown',
             // The folder the app was started from, or above public/ under a web server: frames under it are the app's own.
             'root' => self::root(),
@@ -51,7 +53,7 @@ final class Dokkit
             }
             self::flush();
         });
-        if ($version !== null && PHP_SAPI === 'cli') {
+        if ($version !== null && $announceVersion && PHP_SAPI === 'cli') {
             self::add(['type' => 'deploy', 'version' => $version]);
         }
     }
@@ -155,12 +157,17 @@ final class Dokkit
         if (!self::$on) {
             return;
         }
-        while (self::$errors) {
-            if (!self::post('/api/v1/errors', self::encode(array_shift(self::$errors)), 'application/json', self::uuid())) {
+        $pending = self::$errors;
+        self::$errors = [];
+        foreach ($pending as $i => $error) {
+            $result = self::post('/api/v1/errors', self::encode($error), 'application/json', self::uuid());
+            if ($result === 'failed' && $i >= self::$retried) {
+                self::$errors[] = $error;
+            } elseif ($result !== 'ok') {
                 self::$dropped++;
-                return;
             }
         }
+        self::$retried = count(self::$errors);
         while (self::$lines) {
             $batch = array_splice(self::$lines, 0, 500);
             self::$bytes -= array_sum(array_map('strlen', $batch));
@@ -168,9 +175,15 @@ final class Dokkit
             $body = implode("
 ", $batch);
             // A failed batch gets one more try with the same id; after that it is dropped and counted.
-            if (!self::post('/api/v1/report', $body, 'application/x-ndjson', $id) && !self::post('/api/v1/report', $body, 'application/x-ndjson', $id)) {
+            $result = self::post('/api/v1/report', $body, 'application/x-ndjson', $id);
+            if ($result === 'failed') {
+                $result = self::post('/api/v1/report', $body, 'application/x-ndjson', $id);
+            }
+            if ($result !== 'ok') {
                 self::$dropped += count($batch);
-                return;
+                if ($result === 'failed') {
+                    return;
+                }
             }
         }
     }
@@ -203,10 +216,14 @@ final class Dokkit
         return json_encode($line, JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
     }
 
-    // What cannot be sent is dropped. The app is never told.
-    private static function post(string $path, string $body, string $kind, string $batch): bool
+    // 'failed' (no answer, 429 or a server error) is tried again; 'refused' (any other 4xx) is dropped. The app is never told.
+    private static function post(string $path, string $body, string $kind, string $batch): string
     {
         $headers = ['Authorization: Bearer ' . self::$on['key'], "Content-Type: $kind", "Dokkit-Batch: $batch"];
+        if ($path === '/api/v1/report' && function_exists('gzencode')) {
+            $body = gzencode($body);
+            $headers[] = 'Content-Encoding: gzip';
+        }
         $context = stream_context_create(['http' => ['method' => 'POST', 'header' => implode("\r\n", $headers), 'content' => $body, 'timeout' => 2, 'ignore_errors' => true]]);
         // An error handler that logs the warning from a failed send must not feed it back in.
         self::$sending = true;
@@ -215,7 +232,11 @@ final class Dokkit
         } finally {
             self::$sending = false;
         }
-        return $reply !== false && !preg_match('#^HTTP/\S+ [45]#', $http_response_header[0] ?? '');
+        $status = (int) substr($http_response_header[0] ?? '', 9, 3);
+        if ($reply === false) {
+            return 'failed';
+        }
+        return $status < 400 ? 'ok' : ($status === 429 || $status >= 500 ? 'failed' : 'refused');
     }
 
     /** Whether the library is on. */
@@ -229,8 +250,8 @@ final class Dokkit
         if (!self::$on || self::$sending) {
             return;
         }
-        $text = self::encode(array_filter($line + ['at' => self::now(), 'host' => self::$on['host']], fn ($v) => $v !== null));
-        if (strlen($text) > self::MAX_BYTES) {
+        $text = self::fit(array_filter($line + ['at' => self::now(), 'host' => self::$on['host']], fn ($v) => $v !== null) + (self::$on['environment'] !== null && self::$on['environment'] !== 'production' ? ['environment' => self::$on['environment']] : []));
+        if ($text === null) {
             self::$dropped++;
             return;
         }
@@ -240,6 +261,38 @@ final class Dokkit
         }
         self::$lines[] = $text;
         self::$bytes += strlen($text);
+    }
+
+    // A line over the size limit has its message cut, then its fields dropped; one that still does not fit is dropped.
+    private static function fit(array $line): ?string
+    {
+        $text = self::encode($line);
+        if (strlen($text) <= self::MAX_LINE || !is_string($line['msg'] ?? null)) {
+            return strlen($text) <= self::MAX_LINE ? $text : null;
+        }
+        $msg = $line['msg'];
+        foreach ([true, false] as $keepFields) {
+            if (!$keepFields) {
+                unset($line['fields']);
+            }
+            for ($k = strlen($msg);;) {
+                $head = substr($msg, 0, $k);
+                while ($head !== '' && !preg_match('//u', $head)) {
+                    $head = substr($head, 0, -1);
+                }
+                $line['msg'] = $head . ' [cut]';
+                $text = self::encode($line);
+                $over = strlen($text) - self::MAX_LINE;
+                if ($over <= 0) {
+                    return $text;
+                }
+                if ($k === 0) {
+                    break;
+                }
+                $k = max(0, $k - $over);
+            }
+        }
+        return null;
     }
 
     private static function now(): string

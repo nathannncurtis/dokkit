@@ -3,6 +3,7 @@ import assert from "node:assert";
 import { execFile } from "node:child_process";
 import http from "node:http";
 import test from "node:test";
+import zlib from "node:zlib";
 
 test("off when blank, then one line per call", async () => {
   const got = [];
@@ -118,4 +119,77 @@ test("an error report is sent once even when the answer is a failure; a log line
   );
   server.close();
   assert.deepStrictEqual(posts, ["/api/v1/errors", "/api/v1/report", "/api/v1/report"]);
+});
+
+// Runs a snippet against a server that keeps what it got: path, headers and the raw body.
+async function raw(code, env = {}, status = 200) {
+  const got = [];
+  const server = http.createServer((req, res) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      got.push({ url: req.url, headers: req.headers, body: Buffer.concat(chunks) });
+      res.statusCode = status;
+      res.end("{}");
+    });
+  });
+  await new Promise((done) => server.listen(0, "127.0.0.1", done));
+  const dir = new URL(".", import.meta.url).pathname.replace(/^\/(\w:)/, "$1");
+  const run = await new Promise((done) =>
+    execFile("sh", ["-c", `cd "${dir}" && . ./dokkit.sh; ${code}`], { env: { ...process.env, DOKKIT_URL: `http://127.0.0.1:${server.address().port}`, DOKKIT_KEY: "k", ...env }, maxBuffer: 1 << 26 }, (error, stdout, stderr) => done({ stdout, stderr })),
+  );
+  server.close();
+  const bodies = got.map((g) => (g.headers["content-encoding"] === "gzip" ? zlib.gunzipSync(g.body) : g.body));
+  const lines = bodies.flatMap((b) => b.toString().split("\n").map((l) => JSON.parse(l)));
+  return { got, bodies, lines, ...run };
+}
+
+test("a log line over 64 KB is cut in bytes, never mid-character, with a marker", async () => {
+  const r = await raw(`dokkit_log info "$(awk 'BEGIN { for (i = 0; i < 40000; i++) printf "\\303\\251\\\\" }')"; dokkit_log info short`);
+  assert.ok(r.bodies[0].length <= 65536);
+  assert.ok(r.lines[0].msg.endsWith(" [cut]") && !r.lines[0].msg.includes("�"));
+  assert.strictEqual(r.lines[1].msg, "short");
+});
+
+test("a large report body is gzipped, a small one is not", async () => {
+  const r = await raw(`dokkit_log info "$(awk 'BEGIN { for (i = 0; i < 3000; i++) printf "abc " }')"; dokkit_log info small`);
+  assert.deepStrictEqual(r.got.map((g) => g.headers["content-encoding"]), ["gzip", undefined]);
+  assert.strictEqual(r.lines[0].msg.length, 12000);
+});
+
+test("DOKKIT_VERSION is announced once, first, unless DOKKIT_ANNOUNCE_VERSION=0; dokkit_deploy sends at once", async () => {
+  const on = await raw(`dokkit_beat a; dokkit_beat b`, { DOKKIT_VERSION: "2.3.0" });
+  assert.deepStrictEqual(on.lines.map((l) => l.type), ["deploy", "beat", "beat"]);
+  assert.strictEqual(on.lines[0].version, "2.3.0");
+  assert.strictEqual(on.got.length, 2);
+  const off = await raw(`dokkit_beat a`, { DOKKIT_VERSION: "2.3.0", DOKKIT_ANNOUNCE_VERSION: "0" });
+  assert.deepStrictEqual(off.lines.map((l) => l.type), ["beat"]);
+  const d = await raw(`dokkit_deploy 9.1; dokkit_beat a`, { DOKKIT_VERSION: "2.3.0" });
+  assert.deepStrictEqual(d.lines.map((l) => l.type + ":" + (l.version || "")), ["deploy:9.1", "beat:"]);
+});
+
+test("dokkit_stats sends a document from JSON or a file, and ignores anything else", async () => {
+  const dir = new URL(".", import.meta.url).pathname.replace(/^\/(\w:)/, "$1");
+  const r = await raw(`dokkit_stats '{"queue": {"depth": 4}}'; dokkit_stats "${dir}test.mjs"; dokkit_stats nope; dokkit_stats ''`);
+  assert.deepStrictEqual(r.lines.map((l) => [l.type, l.document]), [["stats", { queue: { depth: 4 } }]]);
+});
+
+test("an environment other than production goes on every line; production and blank add nothing", async () => {
+  const dev = await raw(`dokkit_log info x; dokkit_beat b; dokkit_job j true`, { DOKKIT_ENV: "dev" });
+  assert.ok(dev.lines.length === 4 && dev.lines.every((l) => l.environment === "dev"));
+  for (const env of ["production", ""]) {
+    const r = await raw(`dokkit_log info x; dokkit_beat b`, { DOKKIT_ENV: env });
+    assert.ok(r.lines.every((l) => !("environment" in l)));
+  }
+});
+
+test("an error report is tried again only when nothing could connect", async () => {
+  const closed = http.createServer();
+  await new Promise((done) => closed.listen(0, "127.0.0.1", done));
+  const port = closed.address().port;
+  await new Promise((done) => closed.close(done));
+  const dir = new URL(".", import.meta.url).pathname.replace(/^\/(\w:)/, "$1");
+  await new Promise((done) => execFile("sh", ["-c", `cd "${dir}" && . ./dokkit.sh; dokkit_capture E`], { env: { ...process.env, DOKKIT_URL: `http://127.0.0.1:${port}`, DOKKIT_KEY: "k" } }, done));
+  const r = await raw(`dokkit_capture E`, {}, 429);
+  assert.strictEqual(r.got.length, 1);
 });

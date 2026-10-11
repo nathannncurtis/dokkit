@@ -3,15 +3,18 @@ import assert from "node:assert";
 import { execFile } from "node:child_process";
 import http from "node:http";
 import os from "node:os";
+import zlib from "node:zlib";
 import test from "node:test";
 import * as dokkit from "./dokkit.js";
 
 test("everything is off until started, then sends", async () => {
   const got = [];
   const server = http.createServer((req, res) => {
-    let body = "";
-    req.on("data", (c) => (body += c));
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
     req.on("end", () => {
+      const raw = Buffer.concat(chunks);
+      const body = (req.headers["content-encoding"] === "gzip" ? zlib.gunzipSync(raw) : raw).toString();
       for (const line of body.split("\n")) got.push([req.url, req.headers.authorization, JSON.parse(line)]);
       res.end("{}");
     });
@@ -46,14 +49,17 @@ test("everything is off until started, then sends", async () => {
 });
 
 // Each case runs in its own process because the library keeps one global state.
-async function scenario(code, { status = 200, env = {} } = {}) {
+async function scenario(code, { status = 200, statuses = {}, env = {} } = {}) {
   const got = [];
   const server = http.createServer((req, res) => {
-    let body = "";
-    req.on("data", (c) => (body += c));
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
     req.on("end", () => {
-      got.push({ url: req.url, batch: req.headers["dokkit-batch"], lines: body.split("\n").map((l) => JSON.parse(l)) });
-      res.statusCode = status;
+      const raw = Buffer.concat(chunks);
+      const zipped = req.headers["content-encoding"] === "gzip";
+      const body = (zipped ? zlib.gunzipSync(raw) : raw).toString();
+      got.push({ url: req.url, batch: req.headers["dokkit-batch"], zipped, lines: body.split("\n").map((l) => JSON.parse(l)) });
+      res.statusCode = statuses[req.url] ?? status;
       res.end("{}");
     });
   });
@@ -92,10 +98,13 @@ test("a plain http address to another host keeps it off", async () => {
   assert.strictEqual(r.got.length, 0);
 });
 
-test("the insecure option allows plain http, and a line over the byte limit is dropped alone", async () => {
-  const r = await scenario(`dokkit.start({ url: url.replace("127.0.0.1", "localhost"), key: "k" }); dokkit.beat("small"); dokkit.log("info", "x".repeat(5_000_000)); await dokkit.flush(); console.log(dokkit.dropped);`);
-  assert.strictEqual(r.got[0].lines.length, 1);
-  assert.strictEqual(r.stdout.trim(), "1");
+test("the insecure option allows plain http, and a line over 64 KB is cut", async () => {
+  const r = await scenario(`dokkit.start({ url: url.replace("127.0.0.1", "localhost"), key: "k" }); dokkit.beat("small"); dokkit.log("info", "\u00e9".repeat(5_000_000), { a: 1 }); await dokkit.flush(); console.log(dokkit.dropped);`);
+  const big = r.got[0].lines.at(-1);
+  assert.strictEqual(r.got[0].lines.length, 2);
+  assert.ok(Buffer.byteLength(JSON.stringify(big)) <= 65536);
+  assert.ok(big.msg.endsWith(" [cut]") && !big.msg.includes("\ufffd") && big.fields === undefined);
+  assert.strictEqual(r.stdout.trim(), "0");
   const o = await scenario(`dokkit.start({ url: "http://example.com", key: "k", insecure: true }); dokkit.beat("x"); console.log("on");`);
   assert.strictEqual(o.stderr, "");
 });
@@ -200,4 +209,80 @@ test("patchConsole keeps console properties, and a second patch restores fully",
     r2();
     process.stdout.write(JSON.stringify([had, kept, console === original]));`);
   assert.strictEqual(r.stdout.trim(), "[true,true,true]");
+});
+
+test("a report body is gzipped, and a start without announceVersion sends no deploy line", async () => {
+  const r = await scenario(`dokkit.start({ version: "1", url, key: "k", announceVersion: false }); dokkit.beat("x"); await dokkit.flush();`);
+  assert.ok(r.got[0].zipped);
+  assert.deepStrictEqual(r.got[0].lines.map((l) => l.type), ["beat"]);
+  const d = await scenario(`dokkit.start({ version: "1", url, key: "k" }); dokkit.start({ version: "2", url, key: "k" }); await dokkit.flush(); await dokkit.flush();`);
+  assert.deepStrictEqual(d.got.flatMap((g) => g.lines.map((l) => l.type + l.version)), ["deploy1"]);
+});
+
+test("without CompressionStream the body is sent plain", async () => {
+  const r = await scenario(`delete globalThis.CompressionStream; dokkit.start({ url, key: "k" }); dokkit.beat("x"); await dokkit.flush();`);
+  assert.ok(!r.got[0].zipped);
+  assert.strictEqual(r.got[0].lines[0].type, "beat");
+});
+
+test("console output while the library's own fetch runs is not queued", async () => {
+  const r = await scenario(`
+    const bodies = [];
+    globalThis.fetch = (u, o) => { console.warn("own"); bodies.push(o.body); return Promise.resolve({ ok: true, status: 200 }); };
+    dokkit.start({ url, key: "k", announceVersion: false });
+    const restore = dokkit.patchConsole();
+    console.info("app");
+    await dokkit.flush();
+    console.info("app2");
+    await dokkit.flush();
+    restore();
+    const { gunzipSync } = await import("node:zlib");
+    console.log(bodies.map((b) => (b instanceof Uint8Array ? gunzipSync(b).toString() : b)).join("|").match(/"msg":"[a-z0-9]+"/g).join(" "));`);
+  assert.strictEqual(r.stdout.trim().split("\n").pop(), '"msg":"app" "msg":"app2"');
+  assert.match(r.stderr, /own/);
+});
+
+test("a failed error report is kept and the lines still go; a refused one is dropped and counted", async () => {
+  const r = await scenario(
+    `dokkit.start({ url, key: "k", announceVersion: false }); dokkit.capture(new Error("x")); dokkit.beat("x"); await dokkit.flush(); console.log(dokkit.dropped);`,
+    { statuses: { "/api/v1/errors": 503 } },
+  );
+  assert.deepStrictEqual(r.got.slice(0, 2).map((g) => g.url), ["/api/v1/errors", "/api/v1/report"]);
+  assert.strictEqual(r.stdout.trim(), "0");
+  const k = await scenario(
+    `dokkit.start({ url, key: "k", announceVersion: false }); dokkit.capture(new Error("x")); await dokkit.flush(); await dokkit.flush();`,
+    { statuses: { "/api/v1/errors": 429 } },
+  );
+  assert.ok(k.got.length >= 2);
+  const f = await scenario(
+    `dokkit.start({ url, key: "k", announceVersion: false }); dokkit.capture(new Error("x")); dokkit.beat("x"); await dokkit.flush(); await dokkit.flush(); console.log(dokkit.dropped);`,
+    { statuses: { "/api/v1/errors": 400 } },
+  );
+  assert.deepStrictEqual(f.got.slice(0, 2).map((g) => g.url), ["/api/v1/errors", "/api/v1/report"]);
+  assert.strictEqual(f.stdout.trim(), "1");
+});
+
+test("a failed log batch does not stop the error reports", async () => {
+  const r = await scenario(
+    `dokkit.start({ url, key: "k", announceVersion: false }); dokkit.beat("x"); dokkit.capture(new Error("x")); await dokkit.flush();`,
+    { statuses: { "/api/v1/report": 503 } },
+  );
+  assert.deepStrictEqual(r.got.slice(0, 2).map((g) => g.url), ["/api/v1/errors", "/api/v1/report"]);
+});
+
+test("stack paths are relative to the app's folder, and files outside carry only a name or what follows node_modules", async () => {
+  const r = await scenario(`
+    dokkit.start({ url, key: "k", announceVersion: false });
+    const cwd = process.cwd().replace(/\\\\/g, "/");
+    dokkit.capture({ name: "E", stack: ["Error", "    at a (" + cwd + "/src/app.js:1:2)", "    at b (" + cwd + "/node_modules/pkg/i.js:3:4)", "    at c (/elsewhere/deep/o.js:5:6)"].join("\\n") });
+    await dokkit.flush();`);
+  assert.deepStrictEqual(r.got[0].lines[0].frames.map((f) => [f.file, f.own]), [["o.js", false], ["node_modules/pkg/i.js", false], ["src/app.js", true]]);
+});
+
+test("a non-production environment is on every line, production adds nothing", async () => {
+  const code = (e) => `dokkit.start({ version: "1", url, key: "k", environment: "${e}" }); dokkit.log("info", "m"); dokkit.beat("b"); await dokkit.job("j", async () => 1); await dokkit.flush();`;
+  const d = await scenario(code("dev"));
+  assert.ok(d.got[0].lines.length >= 5 && d.got[0].lines.every((l) => l.environment === "dev"));
+  const p = await scenario(code("production"));
+  assert.ok(p.got[0].lines.every((l) => !("environment" in l)));
 });
