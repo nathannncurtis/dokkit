@@ -26,13 +26,19 @@ func serviceFiles() (string, string) {
 	if runtime.GOOS == "linux" {
 		return configFile, stateDir
 	}
+	if runtime.GOOS == "darwin" {
+		return macConfigFile, macStateDir
+	}
 	return "", ""
 }
 
 // listsPath is the file naming the services this machine may start and the hosts it may reach,
 // used only while root owns it and the folder and nobody else can write to either.
 func listsPath() string {
-	const p = "/etc/dokkit/config.json"
+	p := "/etc/dokkit/config.json"
+	if runtime.GOOS == "darwin" {
+		p = macConfigFile
+	}
 	for _, f := range []string{p, filepath.Dir(p)} {
 		fi, err := os.Stat(f)
 		if err != nil {
