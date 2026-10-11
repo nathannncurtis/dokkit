@@ -249,6 +249,18 @@ defmodule DokkitWeb.ApiController do
 
   def add_job(conn, params), do: reply(conn, new_job(params))
 
+  def new_app(params) do
+    with true <- texts?(params, ~w(name)),
+         {:ok, %{service: s, key: key}} <- Dokkit.Estate.add_app(params) do
+      %{id: s.id, name: s.name, slug: s.slug, key: key}
+    else
+      false -> {:error, "bad_app", "The name is text."}
+      {:error, why} -> {:error, "bad_app", why}
+    end
+  end
+
+  def add_app(conn, params), do: reply(conn, new_app(params))
+
   def job_timing(%{"id" => id} = params) do
     with true <- texts?(params, ~w(grace max_runtime)),
          %{} = service <- Dokkit.Estate.service(id),
@@ -289,8 +301,11 @@ defmodule DokkitWeb.ApiController do
         {:error, why} -> {:error, "send_failed", why}
       end
     else
-      false -> {:error, "bad_channel", "channel is page, push, email, imessage, sms, digest or webhook."}
-      {:wait, s} -> {:error, "slow_down", "Too many tests. Wait #{s} seconds."}
+      false ->
+        {:error, "bad_channel", "channel is page, push, email, imessage, sms, digest or webhook."}
+
+      {:wait, s} ->
+        {:error, "slow_down", "Too many tests. Wait #{s} seconds."}
     end
   end
 
@@ -459,7 +474,7 @@ defmodule DokkitWeb.ApiController do
       {"GET", _, _} -> "read"
       {_, area, _} when area in ["rules", "alerts", "releases"] -> "admin"
       {"POST", "tasks", last} when last in ["accept", "dismiss"] -> "admin"
-      {"POST", "jobs", "jobs"} -> "admin"
+      {"POST", area, area} when area in ["jobs", "apps"] -> "admin"
       {_, _, last} -> if last in ~w(checks restart update restore), do: "admin", else: "act"
     end
   end

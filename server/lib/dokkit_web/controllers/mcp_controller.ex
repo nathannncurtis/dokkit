@@ -202,6 +202,9 @@ defmodule DokkitWeb.McpController do
     {"update_all", "admin",
      "Ask the updater on every machine that has one to move to a release this server holds completely, such as v1.2.3.",
      %{"version" => @text}, ["version"]},
+    {"add_app", "admin",
+     "Add an app that runs on many machines, such as a desktop program. Its key is returned once and goes into the app's build.",
+     %{"name" => @text}, ["name"]},
     {"add_job", "admin",
      "Add a job to watch. The key and the addresses the job calls are returned once. schedule is a cron line read as UTC; grace and max_runtime are times such as 30m.",
      %{
@@ -407,6 +410,7 @@ defmodule DokkitWeb.McpController do
 
   defp tool("update_all", %{"version" => version}), do: Api.approve_update(version, :all) |> r()
   defp tool("add_job", args), do: Api.new_job(args) |> r()
+  defp tool("add_app", args), do: Api.new_app(args) |> r()
   defp tool("set_alert_settings", args), do: Api.save_alerts(args) |> r()
 
   defp tool("accept_suggestion", %{"id" => id}),

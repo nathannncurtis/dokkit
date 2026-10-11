@@ -124,6 +124,18 @@ defmodule DokkitWeb.GapsTest do
       assert json_response(call(:put, "/services/nope/messages", act, %{keep: true}), 404)
     end
 
+    test "POST /apps makes an app under no one machine, with its key", %{act: act, ops: ops} do
+      assert json_response(call(:post, "/apps", act, %{name: "Order Fetcher"}), 403)
+
+      assert %{"id" => id, "slug" => "order-fetcher", "key" => "dka_" <> _} =
+               json_response(call(:post, "/apps", ops, %{name: "Order Fetcher"}), 200)
+
+      app = Dokkit.Repo.get!(Dokkit.Service, id) |> Dokkit.Repo.preload(:machine)
+      assert {app.kind, app.machine.name, app.machine.kind} == {:app, "Apps", :group}
+      assert code(call(:post, "/apps", ops, %{name: "Order Fetcher"}), 422) == "bad_app"
+      assert code(call(:post, "/apps", ops, %{name: " "}), 422) == "bad_app"
+    end
+
     test "POST /jobs", %{act: act, ops: ops, read: read} do
       body = %{name: "Weekly report", machine: "nas", schedule: "0 2 * * 1", grace: "20m"}
       assert json_response(call(:post, "/jobs", act, body), 403)

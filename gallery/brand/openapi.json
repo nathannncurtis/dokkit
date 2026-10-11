@@ -3736,6 +3736,124 @@
         ]
       }
     },
+    "/api/v1/apps": {
+      "post": {
+        "operationId": "addApp",
+        "summary": "Add an app that runs on many machines",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Adds an app, such as a desktop program, that belongs to no one machine. Its key is returned once and goes into the app's build. Takes a user token (`dku_`) with the `admin` scope.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "name": "Label printer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The app, with its key shown once.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "id": "5f0c1c0e-2a52-4c0f-9d5e-6f1b2f9a7c11",
+                  "name": "Label printer",
+                  "slug": "label-printer",
+                  "key": "dka_..."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_job",
+                    "message": "A job needs a name and the machine it runs on."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
     "/api/v1/jobs": {
       "get": {
         "operationId": "listJobs",

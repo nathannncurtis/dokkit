@@ -2013,6 +2013,36 @@ Send:
 Keys, people, alert rules and settings, interface-added checks, restart, making jobs, accepting tasks, updating the program and loading logs back. User token with `admin`.
 
 
+### POST /api/v1/apps
+
+Add an app that runs on many machines. Adds an app, such as a desktop program, that belongs to no one machine. Its key is returned once and goes into the app's build. Takes a user token (`dku_`) with the `admin` scope.
+
+
+Send:
+
+```
+{
+  "name": "Label printer"
+}
+```
+
+`200` The app, with its key shown once.
+
+```json
+{
+  "id": "5f0c1c0e-2a52-4c0f-9d5e-6f1b2f9a7c11",
+  "name": "Label printer",
+  "slug": "label-printer",
+  "key": "dka_..."
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` The input is not right.
+
 ### POST /api/v1/jobs
 
 Add a job to watch. Adds a job and its machine if it is new. The key and the addresses the job calls are returned once. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.

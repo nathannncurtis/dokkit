@@ -258,6 +258,7 @@ A login session, or a user token with `act`. Keys, people, rules, alert settings
 | `PUT /services/<id>/restart` (`admin`) | Allow or stop automatic restart. |
 | `POST /proposals/<id>/accept`, `/dismiss` | Accept all or some of a proposal, or dismiss it. |
 | `PUT /services/<id>/messages` | `{"keep": true}` keeps the text of the service's errors from now on; `false` stops. |
+| `POST /apps` (`admin`) | Add an app that runs on many machines, such as a desktop program: `name`. Answers with its `id`, `slug` and `key`, shown once. The app belongs to no one machine; each PC it reports from is listed as it is seen. |
 | `POST /jobs` (`admin`) | Add a job: `name` and `machine`, and optionally `schedule` (cron, UTC), `grace` and `max_runtime` (such as `30m`). Answers with the job's `key` and the `ping` addresses, shown once. A new machine name adds the machine. |
 | `PUT /jobs/<id>/timing` | Set `grace` and `max_runtime` of a job added in the interface. A field left out stays as it was; an empty one clears it. A job from a `dokkit.toml` answers `422`: change the file. |
 | `POST /rules`, `PUT /rules/<id>`, `DELETE /rules/<id>` (`admin`) | Alert rules. `PUT` changes only the fields sent; an empty one clears it. A `kind`, `state` or `channel` that is not one of its choices, `null`, or a `machine` that is not text answers `422`. |

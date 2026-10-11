@@ -151,6 +151,31 @@ defmodule Dokkit.Estate do
     end
   end
 
+  @doc """
+  Adds an app that runs on many machines, such as a desktop program, and makes its key. It
+  belongs to no one machine: each PC it reports from shows up as it is seen.
+  """
+  def add_app(params) do
+    name = String.trim(params["name"] || "")
+    slug = name |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-") |> String.trim("-")
+
+    if slug == "" do
+      {:error, "An app needs a name."}
+    else
+      Repo.transaction(fn ->
+        home =
+          Repo.get_by(Machine, name: "Apps") || Repo.insert!(%Machine{name: "Apps", kind: :group})
+
+        if Repo.get_by(Service, machine_id: home.id, slug: slug),
+          do: Repo.rollback("There is already an app called #{name}.")
+
+        service = Repo.insert!(%Service{machine_id: home.id, slug: slug, name: name, kind: :app})
+        {key, _} = Keys.mint(:app, %{service_id: service.id, label: name})
+        %{service: service, key: key}
+      end)
+    end
+  end
+
   @kinds ~w(service job dependency app)
   @types ~w(http tcp process windows-service systemd beat stats threshold expiry custom)
 
