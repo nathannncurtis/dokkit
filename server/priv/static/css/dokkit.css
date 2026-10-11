@@ -242,7 +242,7 @@ a.li:hover, .li.hov:hover { background: var(--raise); }
 .empty { padding: 44px 16px; text-align: center; color: var(--mute); }
 .empty i { font-size: 30px; display: block; margin-bottom: 8px; }
 .empty .ph-check-circle { color: var(--ok); }
-.cols-jobs { grid-template-columns: minmax(0, 1.5fr) 110px 150px 130px 132px 190px 16px; }
+.cols-jobs { grid-template-columns: minmax(0, 1.5fr) 110px 150px 130px 168px 190px 16px; }
 .cols-found { grid-template-columns: 18px minmax(0, 1fr) 250px minmax(0, 1.2fr) 28px; }
 label.li { cursor: pointer; }
 .card > h2 .end { display: flex; align-items: center; gap: 8px; }

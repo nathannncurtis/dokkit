@@ -2,13 +2,43 @@ defmodule DokkitWeb.EverythingLive do
   use DokkitWeb, :live_view
   alias Dokkit.Estate
 
-  def mount(_params, _session, socket), do: {:ok, load(assign(socket, page_title: "Everything"))}
+  def mount(_params, _session, socket),
+    do:
+      {:ok,
+       load(assign(socket, page_title: "Everything", dep_open: false, dep_error: nil, dep: %{}))}
 
   def handle_info(:issues_changed, socket),
     do: {:noreply, DokkitWeb.Auth.debounce(socket, :page, &load/1)}
 
   def handle_info({:settled, :page}, socket),
     do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
+
+  def handle_event("dep_open", _, socket),
+    do: {:noreply, assign(socket, dep_open: !socket.assigns.dep_open, dep_error: nil)}
+
+  def handle_event("dependency", %{"dep" => p}, socket) do
+    target = String.trim(p["target"] || "")
+
+    check =
+      case p["type"] do
+        "http" -> %{"type" => "http", "url" => target}
+        "tcp" -> %{"type" => "tcp", "address" => target}
+        _ -> nil
+      end
+
+    with true <- socket.assigns.current_user.role == :owner,
+         {:ok, id} <-
+           Estate.add_dependency(%{
+             "name" => p["name"],
+             "machine" => p["machine"],
+             "check" => check
+           }) do
+      {:noreply, push_navigate(socket, to: ~p"/s/#{id}")}
+    else
+      false -> {:noreply, assign(socket, dep: p, dep_error: "An owner adds dependencies.")}
+      {:error, why} -> {:noreply, assign(socket, dep: p, dep_error: why)}
+    end
+  end
 
   def handle_event("update", %{"machine" => id}, socket),
     do: owner(socket, fn held -> Dokkit.Releases.approve(held, id) end)
@@ -73,11 +103,87 @@ defmodule DokkitWeb.EverythingLive do
           </button>
           
           <.link class="btn" navigate={~p"/machines/new"}><.ic name="hard-drives" />Add a machine</.link>
-          <.link class="btn primary" navigate={~p"/jobs/new"}><.ic name="plus" />New job</.link>
+          <button
+            class="btn"
+            type="button"
+            id="add-dependency"
+            phx-click="dep_open"
+            aria-expanded={to_string(@dep_open)}
+          >
+            <.ic name="plugs" />Add a dependency
+          </button>
+           <.link class="btn primary" navigate={~p"/jobs/new"}><.ic name="plus" />New job</.link>
         </div>
       </div>
       
       <div class="body">
+        <form :if={@dep_open} class="card" id="dependency-form" phx-submit="dependency">
+          <h2>Add a dependency</h2>
+          
+          <dl class="kv">
+            <dt>Name</dt>
+            
+            <dd>
+              <input
+                class="inp"
+                style="flex: 1 1 260px"
+                name="dep[name]"
+                value={@dep["name"]}
+                placeholder="Payment gateway"
+                required
+                aria-label="Name"
+              />
+            </dd>
+            
+            <dt>Checked from</dt>
+            
+            <dd>
+              <select class="inp" name="dep[machine]" aria-label="Checked from">
+                <option value="">No check yet (kept under Outside)</option>
+                
+                <option
+                  :for={m <- @machines}
+                  :if={m.kind == :enrolled}
+                  value={m.name}
+                  selected={@dep["machine"] == m.name}
+                >
+                  {m.name}
+                </option>
+              </select>
+               <span class="hint">The machine whose dokkit runs the check.</span>
+            </dd>
+            
+            <dt>Check</dt>
+            
+            <dd>
+              <select class="inp" name="dep[type]" aria-label="Check type">
+                <option value="">None</option>
+                
+                <option value="http" selected={@dep["type"] == "http"}>Web address</option>
+                
+                <option value="tcp" selected={@dep["type"] == "tcp"}>Port</option>
+              </select>
+              
+              <input
+                class="inp mono"
+                style="flex: 1 1 260px"
+                name="dep[target]"
+                value={@dep["target"]}
+                placeholder="https://pay.example.com/health, or host:443"
+                aria-label="Address"
+              />
+            </dd>
+          </dl>
+          
+          <div class="foot">
+            <span :if={@dep_error} class="bad" role="alert">{@dep_error}</span>
+            <span :if={@current_user.role != :owner} class="hint">An owner adds dependencies.</span>
+            <span class="end">
+              <button class="btn primary" type="submit" disabled={@current_user.role != :owner}>Add the dependency</button>
+            </span>
+          </div>
+        </form>
+        
         <div class="card">
           <div :if={@machines == []} class="empty">
             <.ic name="squares-four" />Nothing is being watched yet. Add a job to start.
