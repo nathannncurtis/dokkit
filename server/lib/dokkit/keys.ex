@@ -1,7 +1,7 @@
 defmodule Dokkit.Keys do
   @moduledoc "Keys are shown once; only a hash is stored."
   import Ecto.Query
-  alias Dokkit.{Key, Repo}
+  alias Dokkit.{Key, Machine, Repo}
 
   @prefixes %{enrol: "dke_", machine: "dkm_", app: "dka_", user: "dku_"}
   @alphabet ~c"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -15,6 +15,17 @@ defmodule Dokkit.Keys do
       )
 
     {text, key}
+  end
+
+  @enrol_life 4 * 3600
+  @enrol_most 72 * 3600
+
+  def enrol_life, do: @enrol_life
+  def enrol_most_hours, do: div(@enrol_most, 3600)
+
+  @doc "An enrolment token for one machine name (or none), good for `seconds`."
+  def mint_enrol(label, seconds \\ @enrol_life) when seconds in 1..@enrol_most do
+    mint(:enrol, %{expires_at: DateTime.add(DateTime.utc_now(), seconds), label: label})
   end
 
   def generate(kind) do
@@ -63,6 +74,42 @@ defmodule Dokkit.Keys do
         order_by: [desc: k.inserted_at],
         preload: [:machine, :service]
     )
+  end
+
+  @doc "Enrolment tokens that are made, not yet used and not run out."
+  def waiting, do: Enum.filter(list(), &(&1.kind == :enrol and is_nil(&1.used_at)))
+
+  @doc "The time a token has left, as words; nil when it has none or never runs out."
+  def left(%Key{expires_at: nil}, _now), do: nil
+
+  def left(%Key{expires_at: at}, now) do
+    s = DateTime.diff(at, now)
+
+    cond do
+      s <= 0 -> nil
+      s >= 3600 -> "#{div(s, 3600)} h #{div(rem(s, 3600), 60)} min"
+      true -> "#{div(s, 60) + 1} min"
+    end
+  end
+
+  @doc "The machine a spent token became: the one it records, else the one named as its label, else the latest enrolled."
+  def arrived(%Key{id: id}) do
+    with %Key{used_at: %DateTime{} = used} = key <- Repo.get(Key, id) do
+      (key.machine_id && Repo.get(Machine, key.machine_id)) ||
+        (key.label &&
+           Repo.one(
+             from m in Machine,
+               where: m.name == ^key.label and m.kind == :enrolled and m.updated_at >= ^used
+           )) ||
+        Repo.one(
+          from m in Machine,
+            where: m.kind == :enrolled and m.updated_at >= ^used,
+            order_by: [desc: m.updated_at],
+            limit: 1
+        )
+    else
+      _ -> nil
+    end
   end
 
   def used(%Key{id: id}) do

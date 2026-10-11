@@ -30,7 +30,11 @@ defmodule DokkitWeb.ParityTest do
       "update" => {:owner, ["POST /api/v1/machines/:id/update"]},
       "update_all" => {:owner, ["POST /api/v1/update-all"]}
     },
-    "EnrolLive" => %{"token" => {:owner, ["POST /api/v1/keys"]}, "form" => @view},
+    "EnrolLive" => %{
+      "token" => {:owner, ["POST /api/v1/keys"]},
+      "revoke" => {:owner, ["DELETE /api/v1/keys/:id"]},
+      "form" => @view
+    },
     "InboxLive" => %{
       "tab" => @view,
       "pick" => @view,

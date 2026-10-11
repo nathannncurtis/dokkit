@@ -276,7 +276,10 @@ defmodule DokkitWeb.SettingsLive do
             </span>
             <span class="mono">{at(k.inserted_at)}</span>
             <span :if={k.used_at} class="mono">{at(k.used_at)}</span>
-            <span :if={!k.used_at} class="mute">Never</span>
+            <span :if={!k.used_at and k.kind == :enrol} class="mono left">
+              Unused, {Keys.left(k, DateTime.utc_now())} left
+            </span>
+            <span :if={!k.used_at and k.kind != :enrol} class="mute">Never</span>
             <button
               :if={@owner}
               class="btn sm"

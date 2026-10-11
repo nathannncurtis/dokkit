@@ -9,8 +9,9 @@ document.addEventListener("click", (e) => {
   const button = e.target.closest("[data-copy]")
   const source = button && document.querySelector(button.dataset.copy)
   if (!source) return
+  const label = button.textContent
   navigator.clipboard.writeText(source.textContent.trim()).then(() => {
     button.textContent = "Copied"
-    setTimeout(() => (button.textContent = "Copy"), 2000)
+    setTimeout(() => (button.textContent = label), 2000)
   })
 })

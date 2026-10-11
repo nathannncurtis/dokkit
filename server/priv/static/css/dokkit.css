@@ -527,6 +527,7 @@ button.li:hover .ti { color: var(--ink); }
   .li.cols-task > :nth-child(3)::before { content: "Last run "; }
   .li.cols-rule > :nth-child(3)::before { content: "Alerts after "; }
   .li.cols-key > :nth-child(4)::before { content: "Last used "; }
+  .li.cols-key > .left:nth-child(4)::before { content: "Left "; }
   .li.cols-pcs > :nth-child(2)::before { content: "Last seen "; }
   .li.cols-pcs.app:not(:has(.lvl.away)) > .meta::before { content: "Other apps"; }
   .li.cols-rule > :nth-child(3), .li.cols-all.dp > .mute:not(.mono) { color: var(--ink); }

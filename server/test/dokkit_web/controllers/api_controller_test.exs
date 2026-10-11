@@ -344,6 +344,24 @@ defmodule DokkitWeb.ApiControllerTest do
     assert %{"key" => "dke_" <> _} =
              json_response(call(:post, "/keys", admin, %{kind: "enrol"}), 200)
 
+    left = fn %{"key" => text} ->
+      {:ok, key} = Dokkit.Keys.verify(text, :enrol)
+      DateTime.diff(key.expires_at, DateTime.utc_now())
+    end
+
+    assert_in_delta left.(json_response(call(:post, "/keys", admin, %{kind: "enrol"}), 200)),
+                    4 * 3600,
+                    60
+
+    assert_in_delta left.(
+                      json_response(call(:post, "/keys", admin, %{kind: "enrol", hours: 24}), 200)
+                    ),
+                    24 * 3600,
+                    60
+
+    assert json_response(call(:post, "/keys", admin, %{kind: "enrol", hours: 500}), 422)
+    assert json_response(call(:post, "/keys", admin, %{kind: "enrol", hours: 0}), 422)
+
     service = Dokkit.Repo.get_by!(Dokkit.Service, slug: "nightly-backup")
 
     assert %{"key" => "dka_" <> _} =
