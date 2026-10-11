@@ -218,7 +218,7 @@ func pinTo(pin string) {
 					return nil
 				}
 			}
-			return errors.New("the server's certificate is not the one this machine enrolled with")
+			return errPinMismatch
 		},
 	}
 	toServer = t
@@ -724,25 +724,30 @@ func (c *client) doctor() int {
 	sent := time.Now()
 	res, err := c.http.Do(req)
 	if err != nil {
-		fmt.Println("Cannot reach the server:", err)
+		what, todo := explainReach(err, c.url)
+		fmt.Println(what)
+		fmt.Println("To fix:", todo)
 		return 1
 	}
 	defer res.Body.Close()
 	var a struct{ Time time.Time }
 	json.NewDecoder(res.Body).Decode(&a)
-	switch {
-	case res.StatusCode == 401:
-		fmt.Println("The server is there, but it does not know this key.")
-		return 1
-	case res.StatusCode != 200:
-		fmt.Println("The server answered", res.StatusCode)
+	if res.StatusCode != 200 {
+		what, todo := explainStatus(res.StatusCode)
+		fmt.Println(what)
+		fmt.Println("To fix:", todo)
 		return 1
 	}
 	fmt.Println("The server is reachable and knows this key.")
 	if off := a.Time.Sub(sent).Round(time.Second); off > 30*time.Second || off < -30*time.Second {
 		fmt.Printf("This machine's clock is %s away from the server's.\n", off)
-	} else {
-		fmt.Println("The clock agrees with the server's, within 30 seconds.")
+		fmt.Println("To fix:", clockAdvice)
+		return 1
+	}
+	fmt.Println("The clock agrees with the server's, within 30 seconds.")
+	if hint := c.macBlockedHint(); hint != "" {
+		fmt.Println(hint)
+		return 1
 	}
 	if left, _ := c.flush(10 * time.Second); left > 0 {
 		fmt.Println(left, "report(s) are still waiting in", c.spool)
