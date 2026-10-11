@@ -125,6 +125,12 @@ Every line has `type` and `at`. With a machine key the machine is known. With an
 
 An app key may not send `state` or `inventory`.
 
+Any line, and the bodies of `POST /errors` and `POST /deploys`, may carry `environment`. Which service it lands on:
+
+- A service with a `dokkit.toml` declaration keeps the environment the file gives it, whatever a line says.
+- Otherwise `production`, no environment, or a value that is not lower-case letters, digits, dots, dashes and underscores (32 at most) leaves the line on the key's own service.
+- Any other value is stored on a sibling service of the same machine with the slug `<slug>~<environment>`, the name `<name> (<environment>)` and that environment. It never alerts and the production service is not changed by it. A service takes at most 5 such siblings; a line for a sixth is refused with `too_many_environments`.
+
 ### Ping URLs
 
 For anything that can only make a web request, such as a cron job on a storage box.

@@ -77,6 +77,7 @@ defmodule Dokkit.Envelope do
       "frames" => frames,
       "handled" => get_in(exception, ["mechanism", "handled"]) != false,
       "release" => event["release"],
+      "environment" => event["environment"],
       "host" => event["server_name"],
       "tags" => tags(event["tags"]),
       "at" => at(event["timestamp"])

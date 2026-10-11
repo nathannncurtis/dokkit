@@ -31,6 +31,8 @@ Environment variables:
 | `DOKKIT_KEY` | An app key. |
 | `DOKKIT_INSECURE` | `1` allows an `http://` address to a host other than this machine. The browser library takes an `insecure` option for the same. |
 
+`DOKKIT_ENV` names the environment of a run, such as `dev`. A library sends it on its error reports, and a line it sends may carry it too. What the server does with it is in `api.md`, under `POST /report`: a run in another environment shows up as its own service and never alerts, and the production service is left as it was.
+
 The service's id and version come from the app key and from what the app passes at start.
 
 ## Machines with no `dokkit`

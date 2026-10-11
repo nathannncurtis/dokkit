@@ -173,7 +173,7 @@
         "tags": [
           "Intake"
         ],
-        "description": "The main door. The body is newline-delimited JSON, one item per line, with a `type` and an `at` or `t`. The types are `state`, `inventory`, `metric`, `beat`, `job`, `stats`, `log`, `deploy` and `custom`. A batch is at most 5 MB compressed and 10,000 lines. A refused line does not fail the batch. Send the same `Dokkit-Batch` id again and nothing is stored twice. An app key may not send `state` or `inventory`, and may make 100 checks per service. Takes a machine key (`dkm_`) or an app key (`dka_`).",
+        "description": "The main door. The body is newline-delimited JSON, one item per line, with a `type` and an `at` or `t`. The types are `state`, `inventory`, `metric`, `beat`, `job`, `stats`, `log`, `deploy` and `custom`. A batch is at most 5 MB compressed and 10,000 lines. A refused line does not fail the batch. Send the same `Dokkit-Batch` id again and nothing is stored twice. An app key may not send `state` or `inventory`, and may make 100 checks per service. Any line may carry `environment`: a value other than `production` is stored on a sibling service of that environment that never alerts, unless the service is declared by a `dokkit.toml`, which keeps its own environment. Takes a machine key (`dkm_`) or an app key (`dka_`).",
         "parameters": [
           {
             "name": "Dokkit-Batch",
