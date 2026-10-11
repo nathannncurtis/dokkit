@@ -297,6 +297,37 @@ func launchdPlist(exe string) string {
 `
 }
 
+// mountOf is the mount point that holds file: the longest one that is a folder above it.
+func mountOf(file string, mounts []string) string {
+	best := "/"
+	for _, m := range mounts {
+		if m = strings.TrimSuffix(m, "/"); strings.HasPrefix(file, m+"/") && len(m) > len(best) {
+			best = m
+		}
+	}
+	return best
+}
+
+// parseMounts reads the mount points from /proc/mounts.
+func parseMounts(s string) (out []string) {
+	for _, l := range strings.Split(s, "\n") {
+		if f := strings.Fields(l); len(f) > 1 {
+			out = append(out, strings.ReplaceAll(f[1], `\040`, " "))
+		}
+	}
+	return out
+}
+
+// cronExe is the updater's file named by its line in a crontab, or "".
+func cronExe(tab string) string {
+	for _, l := range strings.Split(tab, "\n") {
+		if f := strings.Fields(l); len(f) > 5 && strings.HasSuffix(l, cronMarker) && !strings.HasPrefix(f[0], "#") {
+			return f[5]
+		}
+	}
+	return ""
+}
+
 func cronLine(exe string) string {
 	return "*/5 * * * * " + exe + " updater run >/dev/null 2>&1 " + cronMarker
 }

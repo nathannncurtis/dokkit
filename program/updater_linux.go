@@ -15,14 +15,63 @@ import (
 )
 
 const (
-	updaterDir  = "/usr/local/lib/dokkit-updater"
-	updaterData = "/var/lib/dokkit-updater"
-
 	timerServicePath = "/etc/systemd/system/" + timerName + ".service"
 	timerUnitPath    = "/etc/systemd/system/" + timerName + ".timer"
+
+	volumeFolder = ".dokkit-updater"
 )
 
 var qnapCrontab = "/etc/config/crontab"
+
+var updaterDir, updaterData = locateUpdater()
+
+// On QNAP the root file system is emptied at every restart, so the updater lives on the data
+// volume and its crontab line, which survives, is what says where.
+func locateUpdater() (dir, data string) {
+	if b, err := os.ReadFile(qnapCrontab); err == nil {
+		if dir = filepath.Dir(cronExe(string(b))); filepath.Base(filepath.Dir(dir)) == volumeFolder {
+			return dir, filepath.Join(filepath.Dir(dir), "data")
+		}
+	}
+	return "/usr/local/lib/dokkit-updater", "/var/lib/dokkit-updater"
+}
+
+func init() { placeUpdater = placeOnVolume }
+
+func placeOnVolume(c upConfig) error {
+	if !exists(qnapCrontab) || systemdRunning() {
+		return nil
+	}
+	mounts, _ := os.ReadFile("/proc/mounts")
+	vol := mountOf(c.Program, parseMounts(string(mounts)))
+	if vol == "/" {
+		return fmt.Errorf("%s is on the root file system, which this machine empties at every restart, so the updater has nowhere lasting to live beside it. Nothing was changed. Keep the program on a data volume, then install again", c.Program)
+	}
+	root := filepath.Join(vol, volumeFolder)
+	if exists(root) {
+		if err := rootOnly(root); err != nil {
+			return err
+		}
+		es, err := os.ReadDir(root)
+		if err != nil {
+			return err
+		}
+		for _, e := range es {
+			if e.Name() != "program" && e.Name() != "data" {
+				return fmt.Errorf("%s holds %s, which the updater did not put there. Nothing was changed. Move that out, then install again", root, e.Name())
+			}
+		}
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return err
+	}
+	if err := os.Chmod(root, 0o700); err != nil {
+		return err
+	}
+	updaterDir, updaterData = filepath.Join(root, "program"), filepath.Join(root, "data")
+	upConfigPath = filepath.Join(updaterDir, "config.json")
+	return nil
+}
 
 var errNoCron = errors.New("this machine has neither a running systemd nor a crontab command, so there is nothing to run the updater from")
 
@@ -134,7 +183,8 @@ func removeTimer() (string, error) {
 }
 
 // editCrontab rewrites root's crontab with edit and reports where it is and whether it changed.
-// Where /etc/config/crontab exists (QNAP) that file is the one cron reads, and cron is told to reread it.
+// Where /etc/config/crontab exists (QNAP) that file is the one cron reads. Loading it is enough: QNAP's
+// "crond.sh restart" rewrites and reorders the other lines of that file, so it is never run.
 func editCrontab(edit func(string) string) (where string, changed bool, err error) {
 	if b, rerr := os.ReadFile(qnapCrontab); rerr == nil {
 		next := edit(string(b))
@@ -146,9 +196,6 @@ func editCrontab(edit func(string) string) (where string, changed bool, err erro
 		}
 		if out, err := runCmd("crontab", qnapCrontab); err != nil {
 			return "", false, fmt.Errorf("crontab %s: %v %s", qnapCrontab, err, out)
-		}
-		if exists("/etc/init.d/crond.sh") {
-			runCmd("/etc/init.d/crond.sh", "restart")
 		}
 		return qnapCrontab, true, nil
 	}

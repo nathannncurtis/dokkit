@@ -21,6 +21,9 @@ import (
 
 var upConfigPath = filepath.Join(updaterDir, "config.json")
 
+// placeUpdater chooses where the updater lives before it is installed; a system sets it if it must.
+var placeUpdater = func(upConfig) error { return nil }
+
 func init() {
 	loadClient = programClient
 	statusExtra = func() {
@@ -80,18 +83,6 @@ func realHost() hostOps {
 		portUp:    func(string) bool { return false },
 		versionOf: versionAs,
 	}
-}
-
-func lockFile(path string) (func(), error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return nil, err
-	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		f.Close()
-		return nil, err
-	}
-	return func() { f.Close() }, nil
 }
 
 func sameFile(a, b string) bool {
@@ -221,7 +212,7 @@ func restartProcess(c upConfig) error {
 			return err
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, c.Program, "watch", "--background")
 	cmd.Env, cmd.Dir = childEnv(c), "/"
@@ -328,6 +319,9 @@ func updaterInstall() int {
 	}
 	cfg, err := detect()
 	if err == nil {
+		err = placeUpdater(cfg)
+	}
+	if err == nil {
 		err = installChecks()
 	}
 	var how string
@@ -338,8 +332,8 @@ func updaterInstall() int {
 		fmt.Fprintln(os.Stderr, "dokkit:", err)
 		return 1
 	}
-	fmt.Printf("The updater is installed.\n  It looks after %s, run by %s (%s %s), reading %s.\n  Its program: %s. Its state and log: %s.\n  Its timer: %s.\nRunning one check:\n",
-		cfg.Program, cfg.User, cfg.Method, cfg.Unit, cfg.Config, where.updaterExe, updaterData, how)
+	fmt.Printf("The updater is installed.\n  It looks after %s, run by %s (%s), reading %s.\n  Its program: %s. Its state and log: %s.\n  Its timer: %s.\nRunning one check:\n",
+		cfg.Program, cfg.User, strings.TrimSpace(cfg.Method+" "+cfg.Unit), cfg.Config, where.updaterExe, updaterData, how)
 	code := updaterRun()
 	updaterStatus()
 	return code
