@@ -84,7 +84,8 @@ defmodule DokkitWeb.ParityTest do
            "POST /api/v1/proposals/:id/dismiss",
            "POST /api/v1/proposals/accept",
            "POST /api/v1/proposals/dismiss"
-         ]}
+         ]},
+      "scan" => {:member, ["POST /api/v1/machines/:id/scan"]}
     }
   }
 

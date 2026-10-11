@@ -99,6 +99,7 @@ defmodule DokkitWeb.Router do
     post "/proposals", IntakeController, :propose
     post "/deploys", IntakeController, :deploy
     get "/checks", IntakeController, :checks
+    get "/records", IntakeController, :records
     get "/program/:target", IntakeController, :program
     get "/update", IntakeController, :update
     post "/update/result", IntakeController, :update_result
@@ -166,6 +167,7 @@ defmodule DokkitWeb.Router do
     post "/dependencies", ApiController, :add_dependency
     put "/jobs/:id/timing", ApiController, :set_job_timing
     post "/machines/:id/update", ApiController, :update_program
+    post "/machines/:id/scan", ApiController, :scan_machine
     get "/alerts", ApiController, :alert_settings
     put "/alerts", ApiController, :set_alert_settings
     post "/alerts/test", ApiController, :test_alert

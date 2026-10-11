@@ -10,6 +10,7 @@ defmodule Dokkit.Work do
   @max_output 256 * 1024
   @imessage "dokkit:imessage"
   @update "dokkit:update"
+  @scan "dokkit:scan"
 
   @doc "The version of the program this server holds for machines to fetch, or nil."
   def program_version do
@@ -42,6 +43,9 @@ defmodule Dokkit.Work do
   def update(machine_id, by) do
     if program_version(), do: queue(%WorkRun{machine_id: machine_id, name: @update, by: by})
   end
+
+  @doc "Asks a machine to look itself over again and send what it finds. Takes no parameters."
+  def scan(machine_id, by), do: queue(%WorkRun{machine_id: machine_id, name: @scan, by: by})
 
   @doc "Queues a run that sends an iMessage from this Mac. It is offered only to this machine."
   def imessage(machine_id, to, text, alert_id \\ nil) do
