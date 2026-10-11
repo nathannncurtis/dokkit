@@ -128,4 +128,21 @@ defmodule DokkitWeb.SettingsLiveTest do
     assert length(Keys.list()) == 1
     assert length(Accounts.list()) == 1
   end
+
+  test "Appearance offers the theme, the dark base and the accent, and says nothing needs saving",
+       %{conn: conn} do
+    {:ok, _view, html} = live(signed_in(conn), "/settings")
+
+    for {key, values} <- [
+          {"theme", ~w(light dark)},
+          {"base", ~w(neutral plum slate ember)},
+          {"accent", ~w(violet orange blue teal)}
+        ],
+        value <- values do
+      assert html =~ ~s(data-look="#{key}")
+      assert html =~ ~s|data-value="#{value}"|
+    end
+
+    assert html =~ "There is nothing to save"
+  end
 end

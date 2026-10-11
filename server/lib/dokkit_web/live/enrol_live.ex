@@ -1,10 +1,9 @@
 defmodule DokkitWeb.EnrolLive do
   use DokkitWeb, :live_view
-  import Ecto.Query
-  alias Dokkit.{Key, Keys, Machine, Repo}
+  alias Dokkit.{Key, Keys, Repo}
 
-  @life 4 * 3600
   @tick 5_000
+  @cols "--cols:minmax(0,1.4fr) 110px 150px 150px 96px;--minw:640px"
 
   def mount(_params, _session, socket) do
     if connected?(socket), do: Process.send_after(self(), :tick, @tick)
@@ -17,7 +16,8 @@ defmodule DokkitWeb.EnrolLive do
        machine: nil,
        mode: "service",
        name: "",
-       now: DateTime.utc_now()
+       now: DateTime.utc_now(),
+       waiting: Keys.waiting()
      )}
   end
 
@@ -25,7 +25,7 @@ defmodule DokkitWeb.EnrolLive do
 
   def handle_info(:tick, socket) do
     Process.send_after(self(), :tick, @tick)
-    {:noreply, assign(socket, now: DateTime.utc_now(), machine: arrived(socket.assigns))}
+    {:noreply, refresh(socket)}
   end
 
   def handle_event("form", params, socket), do: {:noreply, shape(socket, params)}
@@ -36,15 +36,22 @@ defmodule DokkitWeb.EnrolLive do
       name = socket.assigns.name
 
       {token, key} =
-        Keys.mint(:enrol, %{
-          expires_at: DateTime.add(DateTime.utc_now(), @life),
-          label: if(name == "", do: "Made by #{socket.assigns.current_user.name}", else: name)
-        })
+        Keys.mint_enrol(
+          if(name == "", do: "Made by #{socket.assigns.current_user.name}", else: name)
+        )
 
-      {:noreply, assign(socket, token: token, key: key, machine: nil, now: DateTime.utc_now())}
+      {:noreply, refresh(assign(socket, token: token, key: key, machine: nil))}
     else
       {:noreply, socket}
     end
+  end
+
+  def handle_event("revoke", %{"id" => id}, socket) do
+    if socket.assigns.current_user.role == :owner and
+         Enum.any?(socket.assigns.waiting, &(&1.id == id)),
+       do: Keys.revoke(id)
+
+    {:noreply, refresh(socket)}
   end
 
   defp shape(socket, params),
@@ -54,32 +61,23 @@ defmodule DokkitWeb.EnrolLive do
         name: String.trim(params["name"] || "")
       )
 
-  defp arrived(%{key: %Key{} = key, machine: nil}) do
-    with %Key{used_at: %DateTime{} = used} <- Repo.get(Key, key.id) do
-      Repo.one(
-        from m in Machine,
-          where: m.kind == :enrolled and m.updated_at >= ^used,
-          order_by: [desc: m.updated_at],
-          limit: 1
-      )
-    end
+  defp refresh(socket) do
+    %{key: key, machine: machine} = socket.assigns
+    key = key && Repo.get(Key, key.id)
+
+    assign(socket,
+      key: key,
+      machine: machine || (key && Keys.arrived(key)),
+      waiting: Keys.waiting(),
+      now: DateTime.utc_now()
+    )
   end
 
-  defp arrived(%{machine: machine}), do: machine
-
-  defp left(key, now) do
-    s = DateTime.diff(key.expires_at, now)
-
-    cond do
-      s <= 0 -> nil
-      s >= 3600 -> "#{div(s, 3600)} h #{div(rem(s, 3600), 60)} min"
-      true -> "#{div(s, 60) + 1} min"
-    end
-  end
-
-  defp commands(token, mode) do
-    "dokkit enrol #{Dokkit.Certificate.url()} #{token}#{pin()}\n" <>
+  defp lines(token, mode) do
+    [
+      "dokkit enrol #{Dokkit.Certificate.url()} #{token}#{pin()}",
       if(mode == "service", do: "dokkit service install", else: "dokkit watch")
+    ]
   end
 
   # The fingerprint of the certificate this server serves, when it serves one itself.
@@ -95,6 +93,8 @@ defmodule DokkitWeb.EnrolLive do
   end
 
   def render(assigns) do
+    assigns = assign(assigns, cols: @cols)
+
     ~H"""
     <Layouts.app active={:all} shell={@shell} user={@current_user}>
       <div class="crumb">
@@ -166,9 +166,15 @@ defmodule DokkitWeb.EnrolLive do
 
         <div :if={@token} class="card" id="enrol-card">
           <h2>3. Paste this on the machine</h2>
-          <div class="once">
-            <pre class="mono" id="enrol-commands" style="margin: 0; white-space: pre-wrap">{commands(@token, @mode)}</pre>
-            <button class="btn sm" type="button" data-copy="#enrol-commands">Copy</button>
+          <span hidden id="enrol-commands">{Enum.join(lines(@token, @mode), "\n")}</span>
+          <div :for={{line, n} <- Enum.with_index(lines(@token, @mode), 1)} class="once">
+            <pre class="mono" id={"enrol-line-#{n}"} style="margin: 0; white-space: pre-wrap">{line}</pre>
+            <button class="btn sm" type="button" data-copy={"#enrol-line-#{n}"}>Copy</button>
+          </div>
+          <div class="foot">
+            <span class="end">
+              <button class="btn sm" type="button" data-copy="#enrol-commands">Copy both</button>
+            </span>
           </div>
           <p :if={@mode == "service"} class="lead">
             Run both lines in a terminal opened as administrator, or with <code>sudo</code>
@@ -182,16 +188,45 @@ defmodule DokkitWeb.EnrolLive do
           </p>
           <div class="foot" id="enrol-state">
             <span :if={@machine}>
-              <.ic name="check-circle" />
-              <.link navigate={~p"/all#m-#{@machine.id}"}>{@machine.name}</.link>
-              is enrolled. It reports once a minute; three minutes of silence opens an issue.
+              <.ic name="check-circle" /> Token <span class="mono">{@key.hint}</span>
+              became <.link navigate={~p"/all#m-#{@machine.id}"}>{@machine.name}</.link>
+              and is spent. It reports once a minute; three minutes of silence opens an issue.
             </span>
-            <span :if={!@machine and left(@key, @now)}>
-              Waiting for the machine. The token runs out in {left(@key, @now)}, and it is shown only now.
+            <span :if={!@machine and @key.revoked_at}>
+              The token was revoked. Make another one above.
             </span>
-            <span :if={!@machine and !left(@key, @now)}>
+            <span :if={!@machine and !@key.revoked_at and Keys.left(@key, @now)}>
+              Waiting for the machine. The token runs out in {Keys.left(@key, @now)}, and it is shown only now.
+            </span>
+            <span :if={!@machine and !@key.revoked_at and !Keys.left(@key, @now)}>
               The token has run out. Make another one above.
             </span>
+          </div>
+        </div>
+
+        <div :if={@current_user.role == :owner and @waiting != []} class="card" id="waiting">
+          <h2>Tokens waiting<span class="cnt">{length(@waiting)}</span></h2>
+          <p class="lead">Made and not used yet. Revoke one that is no longer wanted.</p>
+          <div class="lh cols-key" style={@cols}>
+            <span>Token</span><span>For</span><span>Made</span><span>Time left</span><span></span>
+          </div>
+          <div :for={k <- @waiting} class="li slim cols-key" style={@cols} id={"waiting-#{k.id}"}>
+            <div>
+              <div class="ti"><span>{k.label || "Unnamed"}</span></div>
+              <div class="sub mono">{k.hint}</div>
+            </div>
+            <span class="tag">Enrolment token</span>
+            <span class="mono">{at(k.inserted_at)}</span>
+            <span class="mono left">{Keys.left(k, @now)}</span>
+            <button
+              class="btn sm"
+              type="button"
+              phx-click="revoke"
+              phx-value-id={k.id}
+              data-confirm="Revoke this token? The machine it was made for cannot use it."
+            >
+              Revoke
+            </button>
           </div>
         </div>
       </div>

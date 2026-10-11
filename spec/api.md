@@ -43,7 +43,7 @@ Every key has a recognisable prefix and a built-in checksum, so a leaked one can
 
 | Key | Prefix | Held by | Can do |
 |---|---|---|---|
-| Enrolment token | `dke_` | Pasted once into `dokkit enrol` | One use, expires. Trades for a machine key. |
+| Enrolment token | `dke_` | Pasted once into `dokkit enrol` | One use, expires after 4 hours. Trades for a machine key. |
 | Machine key | `dkm_` | `dokkit` | Report for that machine, propose, take work. |
 | App key | `dka_` | A library, or a script inside an app | Write-only, for one service. It can read nothing, is rate-limited and can be revoked, so it is safe inside a desktop or phone app. |
 | User token | `dku_` | Scripts and the MCP | Scopes: `read`, `read-logs`, `act`, `admin`. |
@@ -95,7 +95,7 @@ Machine key or app key.
 {"token": "dke_...", "hostname": "host-01", "os": "windows", "arch": "amd64", "dokkit": "0.1.0"}
 ```
 
-Answers `{"machine": "<id>", "key": "dkm_..."}`. The token is spent. A name that is already enrolled answers `409` and the token is kept, unless the token was made for that machine (`POST /keys` with `{"kind": "enrol", "machine": "host-01"}`); then it enrols again and revokes that machine's earlier keys.
+Answers `{"machine": "<id>", "key": "dkm_..."}`. The token is spent. A name that is already enrolled answers `409` and the token is kept, unless the token was made for that machine (`POST /keys` with `{"kind": "enrol", "machine": "host-01"}`); then it enrols again and revokes that machine's earlier keys. A token made with `POST /keys` lasts 4 hours, the same as one made in the interface; `{"hours": 24}` sets another whole number of hours from 1 to 72 and anything else answers `422` with code `bad_hours`. Settings and the Add a machine page list tokens that are made and not yet used, with the time each has left, and revoke one with `DELETE /keys/<id>`. When a machine enrols the page names which token became it.
 
 ### `POST /report`
 

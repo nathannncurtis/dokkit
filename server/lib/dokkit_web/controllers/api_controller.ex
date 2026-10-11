@@ -66,9 +66,14 @@ defmodule DokkitWeb.ApiController do
   end
 
   def make_key(%{"kind" => "enrol"} = p, _) do
-    expires = DateTime.add(DateTime.utc_now(), 3600)
     label = if is_binary(p["machine"]) and p["machine"] != "", do: String.trim(p["machine"])
-    minted(Keys.mint(:enrol, %{expires_at: expires, label: label}))
+    hours = Map.get(p, "hours", div(Keys.enrol_life(), 3600))
+
+    if is_integer(hours) and hours in 1..Keys.enrol_most_hours() do
+      minted(Keys.mint_enrol(label, hours * 3600))
+    else
+      {:error, "bad_hours", "hours is a whole number from 1 to #{Keys.enrol_most_hours()}."}
+    end
   end
 
   def make_key(_, _),

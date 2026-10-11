@@ -191,6 +191,8 @@ defmodule DokkitWeb.SettingsLive do
         key_cols: @key_cols,
         roles: @roles,
         kinds: @kinds,
+        bases: [{"neutral", "Neutral"}, {"plum", "Plum"}, {"slate", "Slate"}, {"ember", "Ember"}],
+        accents: [{"violet", "Violet"}, {"orange", "Orange"}, {"blue", "Blue"}, {"teal", "Teal"}],
         host: Dokkit.Certificate.address(),
         owner: assigns.current_user.role == :owner
       )
@@ -274,7 +276,10 @@ defmodule DokkitWeb.SettingsLive do
             </span>
             <span class="mono">{at(k.inserted_at)}</span>
             <span :if={k.used_at} class="mono">{at(k.used_at)}</span>
-            <span :if={!k.used_at} class="mute">Never</span>
+            <span :if={!k.used_at and k.kind == :enrol} class="mono left">
+              Unused, {Keys.left(k, DateTime.utc_now())} left
+            </span>
+            <span :if={!k.used_at and k.kind != :enrol} class="mute">Never</span>
             <button
               :if={@owner}
               class="btn sm"
@@ -597,18 +602,83 @@ defmodule DokkitWeb.SettingsLive do
         <div class="card">
           <h2>Appearance</h2>
 
-          <dl class="kv">
+          <dl class="kv" id="look" phx-hook="Look" phx-update="ignore">
             <dt>Theme</dt>
-
             <dd>
-              <button class="btn" type="button" onclick="dokkitTheme('light')"><.ic name="sun" />Light</button>
-              <button class="btn" type="button" onclick="dokkitTheme('dark')"><.ic name="moon" />Dark</button>
-              <button class="btn" type="button" onclick="dokkitTheme(null)">Follow this device</button>
+              <div class="opts">
+                <.look_opt key="theme" value="light" label="Light" sw="t-light" />
+                <.look_opt key="theme" value="dark" label="Dark" sw="t-dark" />
+                <.look_opt key="theme" value="" label="Follow this device" sw="" />
+              </div>
+            </dd>
+            <dt>Dark base</dt>
+            <dd>
+              <div class="opts">
+                <.look_opt
+                  :for={{v, l} <- @bases}
+                  key="base"
+                  value={v}
+                  label={l}
+                  sw={"t-dark d-#{v}"}
+                />
+              </div>
+              <span class="hint">Applies in dark</span>
+            </dd>
+            <dt>Accent</dt>
+            <dd>
+              <div class="opts">
+                <button
+                  :for={{v, l} <- @accents}
+                  class="opt"
+                  type="button"
+                  data-look="accent"
+                  data-value={v}
+                  onclick={"dokkitLook('accent', '#{v}')"}
+                >
+                  <span class="sw ac"><i class={"t-light a-#{v}"}></i><i class={"t-dark a-#{v}"}></i></span>{l}
+                </button>
+              </div>
+            </dd>
+            <dt>Preview</dt>
+            <dd>
+              <div class="look-pv">
+                <button class="btn primary" type="button">Primary</button>
+                <button class="btn" type="button">Plain</button>
+                <span class="tag">12</span>
+                <a href="#look">A link</a>
+                <span class="dots">
+                  <b style="color: var(--ok)">Fine</b>
+                  <b style="color: var(--warn)">Needs a look</b>
+                  <b style="color: var(--bad)">Down</b>
+                </span>
+              </div>
+              <span class="hint">
+                Each choice applies as you click it and is kept in this browser. There is nothing to save.
+              </span>
             </dd>
           </dl>
         </div>
       </div>
     </Layouts.app>
+    """
+  end
+
+  attr :key, :string, required: true
+  attr :value, :string, required: true
+  attr :label, :string, required: true
+  attr :sw, :string, required: true
+
+  defp look_opt(assigns) do
+    ~H"""
+    <button
+      class="opt"
+      type="button"
+      data-look={@key}
+      data-value={@value}
+      onclick={"dokkitLook('#{@key}', '#{@value}')"}
+    >
+      <span class={["sw", @sw]}></span>{@label}
+    </button>
     """
   end
 
