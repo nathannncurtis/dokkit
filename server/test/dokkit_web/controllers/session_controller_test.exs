@@ -152,10 +152,15 @@ defmodule DokkitWeb.SessionControllerTest do
     secret = Accounts.get(user.id).totp_secret
     assert page =~ secret
 
+    assert html_response(get(inside, "/two-step"), 200) =~ secret
+    assert Accounts.get(user.id).totp_secret == secret
+
     assert html_response(post(inside, "/two-step", %{code: "000000"}), 422) =~ "not right"
     assert Accounts.get(user.id).totp_secret == secret
     code = Accounts.totp_code(secret)
-    assert html_response(post(inside, "/two-step", %{code: code}), 200) =~ "Turn off"
+
+    assert html_response(post(inside, "/two-step", %{code: code}), 200) =~
+             "Two-step sign-in is on"
 
     half = post(conn, "/login", %{name: "totp-tom", password: @password})
     assert redirected_to(half) == "/login/code"

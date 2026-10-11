@@ -116,6 +116,7 @@ defmodule DokkitWeb.Router do
     get "/day", ApiController, :day
     get "/issues", ApiController, :issues
     get "/machines", ApiController, :machines
+    get "/machines/:id/series", ApiController, :machine_series
     get "/services", ApiController, :services
     get "/services/:id", ApiController, :service
     get "/services/:id/series", ApiController, :series

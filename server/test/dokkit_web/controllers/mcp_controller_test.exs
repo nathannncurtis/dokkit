@@ -109,8 +109,9 @@ defmodule DokkitWeb.McpControllerTest do
           r.plug == DokkitWeb.ApiController,
           do: r.plug_opts
 
-    # update_machine shares POST /machines/:id/update with update_program.
-    assert length(Enum.uniq(calls)) + 1 == length(@everything)
+    # update_machine shares POST /machines/:id/update with update_program, and series
+    # serves both series routes: one tool more and one less.
+    assert length(Enum.uniq(calls)) == length(@everything)
 
     for %{"name" => name, "annotations" => hints} <- tools do
       cond do

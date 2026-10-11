@@ -72,9 +72,9 @@ defmodule DokkitWeb.SessionHTML do
 
   def two_step(%{on: true} = assigns) do
     ~H"""
-    <.door title="Two-step sign-in" error={@error} action={~p"/two-step"} button="Turn off">
+    <.door title="Two-step sign-in is on" error={@error} action={~p"/two-step"} button="Turn it off">
       <:lead>
-        On. Signing in asks for your password and then a code from your authenticator app.
+        Signing in now asks for your password and then a code from your authenticator app. Nothing more to do here. To turn it off, enter a code.
       </:lead>
       <.code_field /> <a href={~p"/settings"}>Back to settings</a>
     </.door>
@@ -83,7 +83,7 @@ defmodule DokkitWeb.SessionHTML do
 
   def two_step(assigns) do
     ~H"""
-    <.door title="Two-step sign-in" error={@error} action={~p"/two-step"} button="Turn on">
+    <.door title="Turn on two-step sign-in" error={@error} action={~p"/two-step"} button="Turn on">
       <:lead>Scan this with your authenticator app, then enter the code it shows.</:lead>
       <div class="qr">{Phoenix.HTML.raw(@qr)}</div>
       <small class="mute">Or type this key into the app: <code class="mono">{@secret}</code></small>

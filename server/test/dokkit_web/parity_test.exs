@@ -45,6 +45,8 @@ defmodule DokkitWeb.ParityTest do
     "JobsLive" => %{"add" => {:owner, ["POST /api/v1/jobs"]}},
     "LogsLive" => %{"filter" => {:viewer, ["GET /api/v1/logs"]}},
     "ServiceLive" => %{
+      "range" =>
+        {:viewer, ["GET /api/v1/services/:id/series", "GET /api/v1/machines/:id/series"]},
       "timing_typed" => @view,
       "timing" => {:member, ["PUT /api/v1/jobs/:id/timing"]},
       "route" => {:member, ["PUT /api/v1/services/:id/routing"]},

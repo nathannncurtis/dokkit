@@ -31,7 +31,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `versions` | `read` | Lists the versions of the apps Dokkit watches. |
 | `rules` | `read` | Lists the alert rules. |
 | `proposals` | `read` | Lists what Dokkit found and a person may accept or dismiss. |
-| `series` | `read` | Shows numbers over time for a service. |
+| `series` | `read` | Shows numbers over time for a service (`id`), or for a machine's own disks, memory and processor (`machine`). |
 | `day` | `read` | Shows the last 24 hours in half hours: for each machine whether something was down, needed a look, or nothing happened, or it was not heard from, and the issues that opened. |
 | `alert_settings` | `read` | Shows the alert settings. Addresses, user names and secrets are only `set` or `not set`. |
 | `alert_suggestions` | `read` | Lists issues that keep opening, which the daily digest could take instead. |

@@ -3179,6 +3179,25 @@
                               ]
                             }
                           }
+                        },
+                        "metrics": {
+                          "type": "array",
+                          "description": "The latest reading of each of the machine's own numbers, however old.",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": "number"
+                              },
+                              "at": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -3197,7 +3216,170 @@
                   "thresholds": {
                     "disk_used_percent": 90,
                     "memory_used_percent": 90
+                  },
+                  "metrics": [
+                    {
+                      "name": "disk.used_percent.C",
+                      "value": 71.4,
+                      "at": "2026-10-05T21:14:03Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
                   }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/machines/{id}/series": {
+      "get": {
+        "operationId": "machineSeries",
+        "summary": "Get chart data for a machine's own numbers",
+        "tags": [
+          "Read"
+        ],
+        "description": "Without `metric`, the names of the metrics the machine reports itself (disks, memory, processor). With `metric`, its points between `from` and `to`. Answers 404 for an unknown machine, a time that is not RFC 3339, or a `from` that is not before `to`. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, error messages and notes are left out of the answer. Machine numbers are kept for 30 days.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the machine.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "description": "The metric's name.",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Start, RFC 3339. Defaults to 24 hours before `to`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": false
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "End, RFC 3339. Defaults to now.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": false
+          },
+          {
+            "name": "points",
+            "in": "query",
+            "description": "How many points.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 24
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "metrics": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "metric": {
+                      "type": "string"
+                    },
+                    "points": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "description": "One point: `at`, the start of its slice of time, and `value`, the average over it, or null when nothing was reported."
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "metric": "disk.used_percent.C",
+                  "points": [
+                    {
+                      "at": "2026-10-05T20:00:00Z",
+                      "value": 71.4
+                    }
+                  ]
                 }
               }
             }

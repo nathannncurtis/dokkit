@@ -91,16 +91,11 @@ defmodule DokkitWeb.SessionController do
     end
   end
 
-  # An unconfirmed secret is kept across a wrong code, so the QR code already scanned still works.
+  # One unconfirmed secret is kept until it is confirmed, so a reload or a second tab shows the QR code already scanned.
   defp render_two_step(conn, error) do
     user = conn.assigns.current_user
 
-    secret =
-      cond do
-        user.totp_on -> nil
-        error && user.totp_secret -> user.totp_secret
-        true -> Accounts.totp_begin(user)
-      end
+    secret = if !user.totp_on, do: user.totp_secret || Accounts.totp_begin(user)
 
     qr = secret && Accounts.totp_uri(user, secret) |> EQRCode.encode() |> EQRCode.svg(width: 220)
     render(conn, :two_step, error: error, on: user.totp_on, secret: secret, qr: qr)

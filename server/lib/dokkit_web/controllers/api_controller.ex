@@ -422,6 +422,9 @@ defmodule DokkitWeb.ApiController do
 
   def series(conn, %{"id" => id} = params), do: one(conn, Read.series(id, params))
 
+  def machine_series(conn, %{"id" => id} = params),
+    do: one(conn, Read.machine_series(id, params))
+
   def runs(conn, %{"id" => id}), do: list(conn, Read.runs(id))
   def logs(conn, params), do: list(conn, Read.logs(params))
 
