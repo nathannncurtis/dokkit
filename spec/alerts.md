@@ -7,7 +7,7 @@
 - A run that is still going past its maximum is `down` ("has run too long") and takes the down route. A run that finished over its maximum is `soon` ("ran long"): it lists under Soon and never pages.
 - A disk or memory over its limit on the Alerts page is `degraded` and takes the degraded route (a push unless changed). From 98 percent used it is `down`. A limit a `dokkit.toml` declares for a number is `down` as soon as it is passed.
 - A disk heading for its limit within 14 days is `soon`, and stays soon until the line is more than 16 days away. It needs readings over at least 4 days, and a rise in the whole of the last 7 days and in each half of them; the slowest of the three decides the days. A step up that then stays flat is not a rise. The forecast runs every 30 minutes; it closes when the limit is switched off or the readings stop. A disk over its limit whose readings stopped for a day closes too.
-- A job found by a scan and watched waits for its first report, and is not judged late until it has reported once. Only `dokkit run --job <name> -- <command>` can report it.
+- A job found by a scan and watched waits for its first report, and is not judged late until it has reported once. A Windows scheduled task or a systemd timer is reported by the program from the system's own record, with the next run after it was accepted; any other job is reported with `dokkit run --job <name> -- <command>` or `dokkit ping <name> ok`. A found job with no schedule is never judged late, and still raises an issue when a run fails.
 - A machine that has not reported for 3 minutes is down.
 - Anything in an environment other than `production` never opens an issue that alerts.
 

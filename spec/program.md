@@ -32,7 +32,7 @@ Each is a choice. None is a requirement for the next.
 |---|---|---|
 | Declared | No administrator, no scan | Checks only what is listed in `dokkit.toml` files or added in the interface. |
 | User-space | No administrator | `dokkit watch` under a login. Sees ports, processes, disks and readable logs. Stops at logoff and cannot restart services. |
-| Installed service | Administrator, once | Survives logoff, restarts allow-listed services, and scans when asked. |
+| Installed service | Administrator, once | Survives logoff, restarts allow-listed services, scans once a day and when asked. |
 
 ## How it behaves
 
@@ -42,7 +42,7 @@ Each is a choice. None is a requirement for the next.
 
 **`dokkit run` and `dokkit ping` work with or without `dokkit` running.** If it is running they leave their report in the spool folder. If not, they send it themselves.
 
-**It only does what it is told by name.** The server can ask the program to fetch the newer copy of itself, and a Mac to send an iMessage, and nothing else.
+**It only does what it is told by name.** The server can ask the program to fetch the newer copy of itself, to look itself over again, and a Mac to send an iMessage, and nothing else. It never runs a command someone defined, and a found job's command line is only shown.
 
 **It sends an iMessage only from a Mac told it may.** Alerts by iMessage go out through a Mac signed in to Messages. The server asks with a built-in piece of work, `dokkit:imessage`, naming the recipients and the text; each is sent through the Messages app with `osascript`, the recipient and text passed as arguments and never as part of the script, and the run gets one line per recipient. `dokkit imessage on` records in the saved configuration (`imessage`) that this Mac may, and it is off by default; without it, on any other system, or with no recipient or text, the machine refuses the work. A recipient that is not a phone number or an email address is not sent to, and a text is cut at 1000 characters. `dokkit imessage test <recipient>` sends one from this Mac without the server. The first send makes macOS ask once, on the Mac's screen, whether `dokkit` may control Messages; a signed build is needed for macOS to remember the answer.
 
@@ -59,11 +59,37 @@ Each is a choice. None is a requirement for the next.
 | Containers | Running containers and their images. |
 | Sites | Sites configured in a web server. |
 | Disks | Volumes and free space. |
+| Jobs | Scheduled work, to be watched and never run: Task Scheduler tasks on Windows; cron entries and systemd timers on Linux; cron entries and launchd jobs on macOS. |
 | Declarations | `dokkit.toml` files in the allowed folders. |
 
 Each part can be switched off with a flag. The proposal file shows everything found before anything is sent.
 
-A scan never reads file contents, credentials, browser data, or another program's memory.
+A scan never reads file contents, credentials, browser data, or another program's memory. The one exception is the files cron itself reads (the account's crontab, `/etc/crontab`, `/etc/cron.d`, and for root `/var/spool/cron`), which are the schedule. A command line shown for a job has anything after `password`, `secret`, `token` or `api_key` replaced by `***` and is cut at 300 characters.
+
+**What a scan costs.** It runs a handful of the machine's own listing commands (on Windows `sc`, `netstat`, `tasklist`, `schtasks`, and `docker` and `appcmd` where they are installed; on Linux `systemctl`, `ss`, `crontab` and `docker`), which together take a few seconds, reads the files named above, changes nothing, and sends one document of at most 2000 findings.
+
+### Jobs
+
+Each job is proposed with a name, its schedule turned into a five-field cron line, the last run time and last result where the system records them, and its command line, shown so a person recognises it. A cron line is read as UTC, so a schedule in the machine's local time is converted with the offset the machine has at the moment of the scan, and the proposal says so. A schedule that cannot be put in a cron line (at logon, on idle, every 14 days, several times, a day such as the last of the month) is proposed with no schedule and a note saying why; such a job is noticed when a run fails and not when a run does not happen.
+
+| System | Where jobs are found | Last run and result | Cannot be seen by an unprivileged account |
+|---|---|---|---|
+| Windows | `schtasks /query /fo csv /v`. Tasks under `\Microsoft\` and disabled tasks are left out. | Yes, from Task Scheduler. | Tasks only administrators or the system account can read are not listed. |
+| Linux | The account's `crontab -l`, `/etc/crontab`, `/etc/cron.d/*` where readable, and `systemctl list-timers --all` (timers named `systemd-*` are left out). | Timers only. Cron does not record runs. | Other accounts' crontabs (`/var/spool/cron`), user timers (`systemctl --user`), and the scripts in `/etc/cron.daily` and the like. |
+| macOS | cron as on Linux, and launchd jobs with a calendar or interval schedule in `~/Library/LaunchAgents`, `/Library/LaunchAgents` and `/Library/LaunchDaemons` (Apple's own are left out). | Launchd only, the last exit status. | Jobs in directories the account cannot read. |
+
+The proposal's `notes` say what the scan could not see; the Found page shows them with the jobs.
+
+An accepted job waits for its first report and is not judged late until it has had one. How its runs are reported depends on where it was found:
+
+- Windows Task Scheduler tasks and systemd timers are watched from the machine's own record. Each minute `dokkit watch` fetches the accepted jobs of this kind (`GET /records`), reads each one's last run time and last result (`schtasks /query /tn`, or `systemctl show` for the timer and its service), and reports a run when they differ from the last reading, with the time the system gives and, for a timer, how long the run took. The first reading after a job is accepted only sets the starting point, so the first run reported is the next one. Nothing about the task or timer changes. The last readings are kept in `records.json` in the spool folder.
+- Cron entries and launchd jobs need the wrapper: the Found page shows the line to use, `dokkit run --job <name> -- <command>`, or `dokkit ping <name> ok` (and `fail`) at the end of the script.
+
+Containers are proposed only when they publish a TCP port on the machine, as a service with a `tcp` check on that port; no check type looks inside a container, so one with no published port is not listed. IIS sites are proposed with an `http` check on the address of their first http or https binding. Sites of nginx and Apache are found by name only (their configuration files are not read), so they are not proposed. Disks are watched as the machine's own readings and are not proposed.
+
+### When a scan runs
+
+A program running as the installed service, or as `dokkit watch`, scans on its own about two minutes after it starts and then once a day, and sends the proposal. The Found page has a Look again button for each machine, which queues the built-in piece of work `dokkit:scan`. It carries no parameters; the program runs the same read-only scan, sends the proposal, and answers with the counts. An older program that does not know it answers with a refusal, which the page shows as "this machine's program is too old to be asked". The API is `POST /api/v1/machines/:id/scan` (scope `act`), and the AI tool is `scan_machine`.
 
 ## Updates
 
@@ -103,7 +129,7 @@ An `http` check with `slow` set reports `degraded`, with the time in millisecond
 
 `dokkit service install` on Windows copies the program to `Program Files\DokkitProgram` and the saved address, key and folders to `ProgramData\DokkitProgram`, which only administrators and the system account can change, then registers a service that starts with Windows, runs as Local Service and restarts a minute after a failure. Local Service may read that folder and write only the spool and the log inside it. It cannot read another account's profile folder, so a `dokkit.toml` kept under `C:\Users\<someone>` is not seen by the service; it starts a stopped service only when that service's own permissions let Local Service. `service install` waits for the service to be running and prints the end of its log when it is not. It refuses to install when `ProgramData\DokkitProgram` already exists and is owned by anyone but administrators or the system account, or holds anything but `config.json`, `spool`, `dokkit.log` and `update`, and says what it found. These folders are the program's alone: the server's installer uses `Program Files\Dokkit` and `ProgramData\Dokkit`, which an earlier program used too. `service install` and `service update` find a program installed there (an administrator-owned `config.json` and `dokkit.exe`), copy only its `config.json`, `spool` and `dokkit.log` to the new folder, point the service at the new `dokkit.exe`, and leave everything in the old folders as it was, saying where the old copies are. The folder is set once, with inheritance off and no `/T`, and what is inside is then reset to inherit from it. From an administrator prompt, `dokkit status` and `dokkit doctor` read that configuration. On other systems, `dokkit watch` runs from a systemd unit.
 
-`dokkit scan` writes `dokkit-proposal.json` in the current folder, and each part has a `--no-` flag.
+`dokkit scan` writes `dokkit-proposal.json` in the current folder, and each part has a `--no-` flag (`--no-jobs` leaves the scheduled jobs out).
 
 `dokkit watch` holds a request open to the server and does the work it is given, one run at a time. A name it does not know is answered with a refusal. A result that cannot be delivered is sent again for several minutes. The server ends a run still running after 12 hours, or still queued after a day.
 

@@ -76,7 +76,8 @@ defmodule DokkitWeb.ParityTest do
     },
     "FoundLive" => %{
       "sweep" =>
-        {:member, ["POST /api/v1/proposals/:id/accept", "POST /api/v1/proposals/:id/dismiss"]}
+        {:member, ["POST /api/v1/proposals/:id/accept", "POST /api/v1/proposals/:id/dismiss"]},
+      "scan" => {:member, ["POST /api/v1/machines/:id/scan"]}
     }
   }
 

@@ -216,6 +216,11 @@ defmodule DokkitWeb.IntakeController do
     with {:ok, machine} <- machine(conn), do: json(conn, %{items: Dokkit.Found.checks(machine)})
   end
 
+  @doc "The found jobs whose runs the program reads from the machine's own record."
+  def records(conn, _params) do
+    with {:ok, machine} <- machine(conn), do: json(conn, %{items: Dokkit.Found.records(machine)})
+  end
+
   @doc "The newer program, for a machine asked to fetch it."
   def program(conn, %{"target" => target}) do
     with {:ok, _machine} <- machine(conn) do

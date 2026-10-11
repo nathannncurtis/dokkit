@@ -201,6 +201,9 @@ defmodule DokkitWeb.McpController do
     {"update_machine", "admin",
      "Ask the updater on a machine to move to a release this server holds completely, such as v1.2.3. Takes the id from machines and the version from releases. Only a signed release installs.",
      %{"id" => @text, "version" => @text}, ["id", "version"]},
+    {"scan_machine", "act",
+     "Ask an enrolled machine to look itself over again and send what it finds to proposals. Read-only on the machine; nothing found is watched until accepted. Takes the id from machines. Answers with the run id; a program too old to know it refuses.",
+     %{"id" => @text}, ["id"]},
     {"update_all", "admin",
      "Ask the updater on every machine that has one to move to a release this server holds completely, such as v1.2.3.",
      %{"version" => @text}, ["version"]},
@@ -415,6 +418,7 @@ defmodule DokkitWeb.McpController do
   defp tool("update_machine", %{"id" => id, "version" => version}),
     do: Api.approve_update(version, id) |> r()
 
+  defp tool("scan_machine", %{"id" => id}), do: Api.look_again(id, "mcp") |> r()
   defp tool("update_all", %{"version" => version}), do: Api.approve_update(version, :all) |> r()
   defp tool("add_job", args), do: Api.new_job(args) |> r()
   defp tool("add_app", args), do: Api.new_app(args) |> r()

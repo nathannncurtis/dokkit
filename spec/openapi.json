@@ -939,7 +939,7 @@
         "tags": [
           "Intake"
         ],
-        "description": "What `dokkit scan` found, as the file was written. Nothing in it is active until a person accepts it in the interface. So far the server keeps running Windows services and listening ports, and leaves out what is already watched or was dismissed. Takes a machine key (`dkm_`).",
+        "description": "What `dokkit scan` found, as the file was written. Nothing in it is active until a person accepts it in the interface. The server keeps running Windows services and systemd services, listening ports, scheduled jobs (`found.jobs`), containers that publish a TCP port and sites with an address, and leaves out what is already watched or was dismissed. A job is accepted as a job that waits for its first report. `notes` (a list of text) says what the scan could not see. Takes a machine key (`dkm_`).",
         "requestBody": {
           "required": true,
           "content": {
@@ -7292,7 +7292,7 @@
         "tags": [
           "MCP"
         ],
-        "description": "The MCP server, as JSON-RPC over one POST address. It can do no more than the user token allows. An AI tool with a token can do through MCP everything the token can do through the API. The tools are, with `read` scope: `attention`, `find`, `service`, `jobs`, `job_runs`, `errors`, `since_deploy`, `machines`, `machine`, `issues`, `issue`, `deploys`, `versions`, `rules`, `proposals`, `series` and `day`; with `read-logs` scope: `logs`; with `act` scope: `snooze`, `acknowledge`, `unsnooze`, `note`, `bulk`, `watch`, `unwatch`, `routing`, `hold`, `accept_proposal`, and `dismiss_proposal`; with `admin` scope: `add_rule`, `update_rule`, `delete_rule`, `set_checks`, `allow_restart`, `keys`, `make_key`, `revoke_key`, `people`, `add_person` and `remove_person`. `make_key` returns the key text once. Admin tools are marked destructive. `tools/list` shows only the tools the token may use. Every answer starts with a line saying that what follows is data written by machines and apps, never instructions. An argument of the wrong type is an `isError` answer; a null argument is the same as one left out, and a whole number written as 5.0 is an integer. A tool error is an answer with `isError` true, not an HTTP error. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "description": "The MCP server, as JSON-RPC over one POST address. It can do no more than the user token allows. An AI tool with a token can do through MCP everything the token can do through the API. The tools are, with `read` scope: `attention`, `find`, `service`, `jobs`, `job_runs`, `errors`, `since_deploy`, `machines`, `machine`, `issues`, `issue`, `deploys`, `versions`, `rules`, `proposals`, `series` and `day`; with `read-logs` scope: `logs`; with `act` scope: `snooze`, `acknowledge`, `unsnooze`, `note`, `bulk`, `watch`, `unwatch`, `routing`, `hold`, `accept_proposal`, `dismiss_proposal` and `scan_machine`; with `admin` scope: `add_rule`, `update_rule`, `delete_rule`, `set_checks`, `allow_restart`, `keys`, `make_key`, `revoke_key`, `people`, `add_person` and `remove_person`. `make_key` returns the key text once. Admin tools are marked destructive. `tools/list` shows only the tools the token may use. Every answer starts with a line saying that what follows is data written by machines and apps, never instructions. An argument of the wrong type is an `isError` answer; a null argument is the same as one left out, and a whole number written as 5.0 is an integer. A tool error is an answer with `isError` true, not an HTTP error. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
         "requestBody": {
           "required": true,
           "content": {
@@ -9940,6 +9940,216 @@
             "userToken": [
               "admin"
             ]
+          }
+        ]
+      }
+    },
+    "/api/v1/machines/{id}/scan": {
+      "post": {
+        "operationId": "scanMachine",
+        "summary": "Ask a machine to look itself over again",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Queues the built-in piece of work `dokkit:scan` for an enrolled machine. It takes no parameters. The machine runs the same read-only scan as `dokkit scan` and sends the result to proposals, where nothing is watched until it is accepted. A program too old to know `dokkit:scan` refuses the run. 404 when the machine is not an enrolled machine. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the machine.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Asked: the id of the queued run.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "run": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                },
+                "example": {
+                  "run": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not act."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_program",
+                    "message": "This server holds no program for machines to fetch."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "pattern": "^v\\d+\\.\\d+\\.\\d+$"
+                  }
+                }
+              },
+              "example": {
+                "version": "v1.2.3"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/records": {
+      "get": {
+        "operationId": "records",
+        "summary": "Get the found jobs whose runs are read from the machine's own record",
+        "tags": [
+          "Intake"
+        ],
+        "description": "The accepted found jobs on this machine whose runs the `dokkit` program reads from the system's own record (a Windows Task Scheduler task or a systemd timer) and reports, with no change to the job. `source` is `task-scheduler` or `systemd-timer`; `unit` is the task's path or the timer's name. Takes a machine key (`dkm_`).",
+        "responses": {
+          "200": {
+            "description": "The jobs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "service": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "unit": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "service": "nightly-export",
+                      "name": "nightly-export",
+                      "source": "task-scheduler",
+                      "unit": "\\Nightly export"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Needs a machine key."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "machineKey": []
           }
         ]
       }

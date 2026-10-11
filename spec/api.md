@@ -143,7 +143,11 @@ The contents of a `dokkit.toml`, sent as JSON with the same structure. Sending t
 
 ### `POST /proposals`
 
-What a scan found: the file `dokkit scan` wrote, as it is. Nothing in a proposal is active until it is accepted in the interface. So far the server keeps the running Windows services and the listening ports, and leaves out what is already watched or was dismissed.
+What a scan found: the file `dokkit scan` wrote, as it is. Nothing in a proposal is active until it is accepted in the interface. The server keeps the running Windows and systemd services, the listening ports, scheduled jobs (`found.jobs`, with `notes` saying what the scan could not see), containers that publish a TCP port and sites that have an address, and leaves out what is already watched or was dismissed. A job is accepted as a job that waits for its first report; a container becomes a service with a `tcp` check and a site a service with an `http` check.
+
+### `GET /records`
+
+The accepted found jobs on this machine whose runs the program reads from the system's own record: `{"items": [{"service": "nightly-export", "name": "nightly-export", "source": "task-scheduler", "unit": "\\Nightly export"}]}`. `source` is `task-scheduler` or `systemd-timer`.
 
 ### `GET /checks`
 
@@ -264,6 +268,7 @@ A login session, or a user token with `act`. Keys, people, rules, alert settings
 | `POST /alerts/suggestions/<id>/accept`, `/dismiss` (`admin`) | Send that service's issues to the daily digest from now on, or drop the suggestion. |
 | `POST /logs/archives/<name>/restore` (`admin`) | Load an archived month back for a week. Answers with the number of `lines` loaded. |
 | `POST /machines/<id>/update` (`admin`) | `{"version": "v1.2.3"}` sets the machine's wanted version, for its updater to act on, and only to a release the server holds completely: `422` with code `not_held` otherwise, `bad_version` when it is not `v` and three numbers. Answers `{"ok": true, "version": "v1.2.3"}`. Without a body, it asks an enrolled machine to fetch the newer `dokkit` program, which a person finishes on the machine; `422` when the server holds no program. |
+| `POST /machines/<id>/scan` (`act`) | Asks an enrolled machine to look itself over again and send what it finds to proposals: the built-in work `dokkit:scan`, which takes no parameters. Answers `{"run": "<id>"}`; `404` for a machine that is not enrolled. A program too old to know it refuses the run. |
 | `POST /update-all` (`admin`) | The same body, for every machine that has an updater. Answers `{"ok": true, "version": "v1.2.3", "machines": 3}`. |
 | `PUT /releases/<version>/<file>` (`admin`) | The body is the file, as is, up to 200 MB (`413` over that), written to disk as it arrives. Replaces a file of that name. The server does not check it; the updater does. A version or file name of anything but letters, digits, dots, dashes and underscores, or one that starts with a dot, answers `422` with code `bad_name`. |
 | `DELETE /releases/<version>` (`admin`) | Removes that version's files. |

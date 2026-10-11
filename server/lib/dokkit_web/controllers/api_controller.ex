@@ -336,6 +336,17 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
+  @doc "Asks an enrolled machine to look itself over again and send what it finds."
+  def look_again(id, who) do
+    case Read.machine(id) do
+      %{kind: :enrolled} -> %{run: Dokkit.Work.scan(id, who).id}
+      _ -> not_found()
+    end
+  end
+
+  def scan_machine(conn, %{"id" => id}),
+    do: reply(conn, look_again(id, "token " <> (conn.assigns.key.label || "")))
+
   @doc "Approves a release for one machine, or for every machine that has an updater."
   def approve_update(version, id) do
     case Dokkit.Releases.approve(version, id) do
