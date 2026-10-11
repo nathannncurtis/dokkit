@@ -152,9 +152,7 @@ func serviceCommand(action string) int {
 		os.WriteFile(file, b, 0o600)
 		return s.Delete()
 	}()
-	if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
-		err = errors.New("run this from an administrator prompt")
-	}
+	err = explainDenied(err, windows.GetCurrentProcessToken().IsElevated())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "dokkit:", err)
 		return 1
@@ -164,6 +162,14 @@ func serviceCommand(action string) int {
 		fmt.Println(stillEnrolled)
 	}
 	return 0
+}
+
+// explainDenied blames the prompt only when it is not elevated; otherwise the refused path in err is the answer.
+func explainDenied(err error, elevated bool) error {
+	if errors.Is(err, windows.ERROR_ACCESS_DENIED) && !elevated {
+		return errors.New("run this from an administrator prompt")
+	}
+	return err
 }
 
 // install copies this program and the saved configuration to where only an administrator
@@ -295,11 +301,28 @@ func migrateOld() (string, error) {
 	if _, err := os.Stat(oc); err != nil || trustedOwner(oc) != nil {
 		return "", nil
 	}
-	dir := machineDir()
+	return copyOwn(od, ox, machineDir())
+}
+
+// lockFolder gives a new folder its owner and permissions before anything is copied in, so files made in it inherit them.
+var lockFolder = func(dir string) error {
+	for _, args := range permissionSteps(dir, "*S-1-5-32-544")[:2] {
+		if out, err := exec.Command("icacls", args...).CombinedOutput(); err != nil {
+			return fmt.Errorf("could not set who may use %s: %s", args[0], out)
+		}
+	}
+	return nil
+}
+
+func copyOwn(od, ox, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
+	if err := lockFolder(dir); err != nil {
+		return "", err
+	}
 	var copied []string
+	var left string
 	for _, n := range ownItems {
 		to := filepath.Join(dir, n)
 		if _, err := os.Stat(to); err == nil {
@@ -309,11 +332,15 @@ func migrateOld() (string, error) {
 			continue
 		}
 		if err := copyTree(filepath.Join(od, n), to); err != nil {
+			if n == "dokkit.log" {
+				left = fmt.Sprintf(" %s could not be read (%v), so it was left behind.", n, err)
+				continue
+			}
 			return "", err
 		}
 		copied = append(copied, n)
 	}
-	return fmt.Sprintf("Copied %s from %s to %s. The old copies are still in %s, with %s, and nothing else there was touched. Delete them when you are sure.\n", strings.Join(copied, ", "), od, dir, od, ox), nil
+	return fmt.Sprintf("Copied %s from %s to %s.%s The old copies are still in %s, with %s, and nothing else there was touched. Delete them when you are sure.\n", strings.Join(copied, ", "), od, dir, left, od, ox), nil
 }
 
 func copyTree(from, to string) error {
@@ -492,6 +519,14 @@ func finishUpdate(path string) string {
 	return "To finish, on that machine, from an administrator prompt: \"" + path + "\" service update"
 }
 
+type installedService interface {
+	Control(svc.Cmd) (svc.Status, error)
+	Query() (svc.Status, error)
+	Config() (mgr.Config, error)
+	UpdateConfig(mgr.Config) error
+	Start(...string) error
+}
+
 // updateService puts this copy in the installed one's place. It is run by a person, from
 // the newer copy, as an administrator: the service never replaces itself.
 func updateService(s *mgr.Service) error {
@@ -499,7 +534,10 @@ func updateService(s *mgr.Service) error {
 	if err != nil {
 		return err
 	}
-	to := installedExe()
+	return replaceInstalled(s, from, installedExe(), migrateOld)
+}
+
+func replaceInstalled(s installedService, from, to string, migrate func() (string, error)) error {
 	if sameFile(from, to) {
 		return errors.New("run this from the newer copy, not from the installed one")
 	}
@@ -510,32 +548,43 @@ func updateService(s *mgr.Service) error {
 		}
 		time.Sleep(time.Second)
 	}
-	note, err := migrateOld()
+	note, err := swap(s, from, to, migrate)
 	if err != nil {
-		return err
+		if serr := s.Start(); serr != nil {
+			return fmt.Errorf("%w. The service is stopped and could not be started again: %v", err, serr)
+		}
+		return fmt.Errorf("%w. The service was started again as it was", err)
+	}
+	fmt.Print(note)
+	return s.Start()
+}
+
+func swap(s installedService, from, to string, migrate func() (string, error)) (string, error) {
+	note, err := migrate()
+	if err != nil {
+		return "", err
 	}
 	file := filepath.Join(machineDir(), "config.json")
 	if _, err := os.Stat(file); err != nil {
-		return fmt.Errorf("no configuration is in %s, or in the old %s", machineDir(), oldData(os.Getenv("ProgramData")))
+		return "", fmt.Errorf("no configuration is in %s, or in the old %s", machineDir(), oldData(os.Getenv("ProgramData")))
 	}
 	if note != "" {
 		if err := secure(machineDir()); err != nil {
-			return err
+			return "", err
 		}
 	}
 	if err := copyFile(from, to); err != nil {
-		return err
+		return "", err
 	}
 	cfg, err := s.Config()
 	if err != nil {
-		return err
+		return "", err
 	}
 	cfg.BinaryPathName = syscall.EscapeArg(to)
 	// Blank leaves the account as it is; naming it again would need its password.
 	cfg.ServiceStartName = ""
 	if err := s.UpdateConfig(cfg); err != nil {
-		return err
+		return "", fmt.Errorf("could not point the service at %s: %w", to, err)
 	}
-	fmt.Print(note)
-	return s.Start()
+	return note, nil
 }
