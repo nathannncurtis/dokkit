@@ -258,7 +258,7 @@ func repeating(h, m, every, offset int) (string, string) {
 		}
 	}
 	if every < 60 {
-		return shift(strings.Join(minutes, ","), "*", "*", "*", "*", offset)
+		return shift(fmt.Sprintf("%d-59/%d", start%every, every), "*", "*", "*", "*", offset)
 	}
 	hour := strings.Join(hours, ",")
 	if len(hours) == 24 {
@@ -274,7 +274,7 @@ func shift(minute, hour, dom, mon, dow string, offset int) (string, string) {
 		return "", "Its time of day could not be moved to UTC in a cron line."
 	}
 	if offset != 0 {
-		return line, fmt.Sprintf("Read in UTC: converted from this machine's local time, %s hours from UTC now.", offsetText(offset))
+		return line, fmt.Sprintf("Converted from this machine's local time, which is %s hours from UTC now.", offsetText(offset))
 	}
 	return line, ""
 }

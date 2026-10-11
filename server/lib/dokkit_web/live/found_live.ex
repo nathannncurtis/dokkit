@@ -138,9 +138,7 @@ defmodule DokkitWeb.FoundLive do
                 </label>
                 <div :if={f.kind == "job"} class="lead" style="padding: 0 16px 12px 42px">
                   <div :if={f.detail["schedule"]}>
-                    Schedule <code>{f.detail["schedule"]}</code>, read as UTC. {f.detail[
-                      "schedule_note"
-                    ]}
+                    Schedule <code>{f.detail["schedule"]}</code> (read as UTC). {f.detail["schedule_note"]}
                   </div>
                   <div :if={!f.detail["schedule"]}>
                     No schedule Dokkit can read: {f.detail["schedule_note"]} A run that fails is noticed; a run that does not happen is not.
@@ -191,10 +189,15 @@ defmodule DokkitWeb.FoundLive do
         <div class="card" id="look-again">
           <h2>Look again</h2>
           <div :if={@machines == []} class="empty">No machine has joined yet.</div>
-          <div :for={m <- @machines} class="li slim hov" id={"look-#{m.id}"}>
+          <div
+            :for={m <- @machines}
+            class="li slim hov"
+            id={"look-#{m.id}"}
+            style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap"
+          >
             <div class="ti"><span>{m.name}</span></div>
             <span class="mute">{scan_says(@scans[m.id])}</span>
-            <span class="end">
+            <span class="end" style="margin-left: auto">
               <button
                 class="btn sm"
                 type="button"

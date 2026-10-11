@@ -82,7 +82,7 @@ func TestWindowsSchedules(t *testing.T) {
 		{"Monthly", "2:00:00 AM", "1, 15", "JAN, JUL", "Disabled", 0, "0 2 1,15 1,7 *"},
 		{"Monthly", "1:00:00 AM", "1", "Every month", "Disabled", 120, ""},
 		{"Monthly", "2:00:00 AM", "Last", "Every month", "Disabled", 0, ""},
-		{"One Time Only, Minute", "10:07:00 AM", "N/A", "N/A", "0 Hour(s), 15 Minute(s)", 0, "7,22,37,52 * * * *"},
+		{"One Time Only, Minute", "10:07:00 AM", "N/A", "N/A", "0 Hour(s), 15 Minute(s)", 0, "7-59/15 * * * *"},
 		{"One Time Only, Hourly", "10:07:00 AM", "N/A", "N/A", "6 Hour(s), 0 Minute(s)", 0, "7 4,10,16,22 * * *"},
 		{"One Time Only", "10:07:00 AM", "N/A", "N/A", "Disabled", 0, ""},
 		{"On idle time", "N/A", "N/A", "N/A", "Disabled", 0, ""},
@@ -297,7 +297,7 @@ func TestLaunchd(t *testing.T) {
 		t.Fatalf("%v", j)
 	}
 	every := map[string]any{"Label": "com.example.poll", "StartInterval": 900.0}
-	if j, _ := parseLaunchd(every, "", 0); j["schedule"] != "0,15,30,45 * * * *" {
+	if j, _ := parseLaunchd(every, "", 0); j["schedule"] != "0-59/15 * * * *" {
 		t.Fatalf("%v", j)
 	}
 	if _, ok := parseLaunchd(map[string]any{"Label": "com.apple.thing", "StartInterval": 60.0}, "", 0); ok {
