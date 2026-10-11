@@ -46,6 +46,11 @@ func listsPath() string {
 
 func asService() bool { return false }
 
+func pidAlive(pid int) bool {
+	err := syscall.Kill(pid, 0)
+	return err == nil || err == syscall.EPERM
+}
+
 // fileIdentity names the file itself, whatever its path: the device and the inode.
 func fileIdentity(f *os.File) string {
 	fi, err := f.Stat()

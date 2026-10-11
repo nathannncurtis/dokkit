@@ -257,12 +257,6 @@ func installBinary() error {
 	return os.Rename(tmp, installedExe)
 }
 
-func sameFile(a, b string) bool {
-	x, err1 := os.Stat(a)
-	y, err2 := os.Stat(b)
-	return err1 == nil && err2 == nil && os.SameFile(x, y)
-}
-
 func finishUpdate(path string) string {
 	return "To finish: that file is your own copy, and only you should run it. An administrator updates the service by running get.sh as root, then: dokkit service update"
 }
