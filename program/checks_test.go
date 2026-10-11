@@ -73,7 +73,7 @@ func TestFilesAndKeysStayWhereTheFileAllows(t *testing.T) {
 	if err != nil {
 		t.Fatal("the file is kept; only the key is refused:", err)
 	}
-	if line := fetchStats(d).(map[string]any); line["state"] != "down" || !strings.Contains(line["note"].(string), statsKeyPrefix) {
+	if line := fetchStats(d).(map[string]any); line["type"] != "log" || line["level"] != "warn" || !strings.Contains(line["msg"].(string), statsKeyPrefix) {
 		t.Fatalf("key_env outside the stats prefix is reported: %v", line)
 	}
 	day := filepath.Join(dir, "when")

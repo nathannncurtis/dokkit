@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -606,6 +607,9 @@ type watcher struct {
 	unsaved  bool
 	blocked  []string        // folders this account cannot list, with why
 	told     map[string]bool // blocked folders already written to the log
+
+	statsBusy, statsReady atomic.Bool
+	statsNoted            map[string]time.Time
 }
 
 // checkFolders notes each folder in the configuration that this account cannot list.
@@ -807,9 +811,10 @@ func (c *client) watch() int {
 			w.reload()
 			w.refresh()
 			c.beat(w.versions())
-			if lines := w.stats(); len(lines) > 0 {
-				c.report(lines...)
-			}
+			w.statsSoon()
+			ran++
+		}
+		if w.statsReady.Swap(false) {
 			ran++
 		}
 		ran += w.tick(at)
