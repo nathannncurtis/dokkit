@@ -248,3 +248,25 @@ func TestCopyPlainNeverWritesThroughAnExistingName(t *testing.T) {
 		t.Fatal("not replaced, or a .new is left")
 	}
 }
+
+func TestUpdaterVolumeAndCronLine(t *testing.T) {
+	mounts := parseMounts("none / tmpfs rw 0 0\n/dev/mapper/cachedev1 /share/CACHEDEV1_DATA ext4 rw 0 0\n/dev/loop0 /share/CACHEDEV1_DATA/a\\040b ext4 rw 0 0\n")
+	for file, want := range map[string]string{
+		"/share/CACHEDEV1_DATA/dokkit/dokkit": "/share/CACHEDEV1_DATA",
+		"/share/CACHEDEV1_DATA/a b/dokkit":    "/share/CACHEDEV1_DATA/a b",
+		"/share/CACHEDEV1_DATA2/dokkit":       "/",
+		"/tmp/dokkit":                         "/",
+	} {
+		if got := mountOf(file, mounts); got != want {
+			t.Errorf("%s: %q, want %q", file, got, want)
+		}
+	}
+	exe := "/share/CACHEDEV1_DATA/.dokkit-updater/program/dokkit"
+	tab := "# m h dom m dow cmd\n0 3 * * * /sbin/other\n" + cronLine(exe) + "\n"
+	if got := cronExe(tab); got != exe {
+		t.Fatalf("%q", got)
+	}
+	if cronExe("0 3 * * * /sbin/other\n# "+cronLine(exe)+"\n") != "" {
+		t.Fatal("a commented line is not the updater's")
+	}
+}

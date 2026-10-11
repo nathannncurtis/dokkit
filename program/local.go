@@ -206,6 +206,16 @@ func openLog(path string) (*os.File, error) {
 
 // background starts watch as an ordinary program that keeps running after this one ends.
 func (c *client) background() int {
+	lock := filepath.Join(c.spool, "start.lock")
+	release, err := lockFile(lock)
+	for end := time.Now().Add(45 * time.Second); err != nil && time.Now().Before(end); release, err = lockFile(lock) {
+		time.Sleep(200 * time.Millisecond)
+	}
+	if err != nil {
+		fmt.Println("another dokkit watch --background has been starting for 45 seconds; this one does nothing")
+		return 0
+	}
+	defer release()
 	var s status
 	if b, err := os.ReadFile(filepath.Join(c.spool, "status.json")); err == nil && json.Unmarshal(b, &s) == nil && time.Since(s.At) < 90*time.Second && pidAlive(s.Pid) {
 		fmt.Println("dokkit watch is already running as process", s.Pid)
@@ -230,5 +240,11 @@ func (c *client) background() int {
 		return 1
 	}
 	fmt.Printf("dokkit watch is running as process %d. It writes to %s\n", cmd.Process.Pid, log)
+	// The next caller decides from status.json, so the lock is kept until the new process is in it.
+	for end := time.Now().Add(30 * time.Second); time.Now().Before(end); time.Sleep(500 * time.Millisecond) {
+		if b, err := os.ReadFile(filepath.Join(c.spool, "status.json")); err == nil && json.Unmarshal(b, &s) == nil && s.Pid == cmd.Process.Pid {
+			break
+		}
+	}
 	return 0
 }

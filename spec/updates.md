@@ -84,7 +84,7 @@ A file it has fetched lives in a folder only administrators and the system accou
 - It sets up a timer that runs `updater run` as root every five minutes, and says which and where:
   - where systemd is running: `dokkit-updater.service` (one-shot) and `dokkit-updater.timer` in `/etc/systemd/system`, started a minute after boot and five minutes after each run ends;
   - on macOS: the LaunchDaemon `com.dokkit.updater` in `/Library/LaunchDaemons`, `StartInterval` 300;
-  - otherwise: a line ending `# dokkit-updater` in root's crontab. Where `/etc/config/crontab` exists (QNAP), that file is edited, loaded with `crontab /etc/config/crontab`, and `crond` restarted.
+  - otherwise: a line ending `# dokkit-updater` in root's crontab. Where `/etc/config/crontab` exists (QNAP), that file is edited and loaded with `crontab /etc/config/crontab`. `crond` is not restarted: it rereads what is loaded, and QNAP's `crond.sh restart` rewrites and reorders the other lines of that file.
 - It runs one check and prints what it found.
 
 `updater run` does what the contract above says, with these differences:
@@ -99,6 +99,10 @@ A file it has fetched lives in a folder only administrators and the system accou
 - **A program path that is a link, or anything but a plain file, is refused** before anything is copied or replaced.
 - **The program's file is never run with root's rights.** Reading its version for the check runs it as the account that owns it.
 - The server is not hosted by this updater on these systems; `server` is left out of the question, and the updater itself is replaced last, as on Windows.
+
+**On a QNAP** (no systemd, `/etc/config/crontab` present) the root file system is memory and is emptied at every restart, while the crontab line survives. So the updater lives on the data volume that holds the program being looked after: `<volume>/.dokkit-updater/program` (its copy of the program and `config.json`) and `<volume>/.dokkit-updater/data` (state, log, fetched files). The volume is the mount point, from `/proc/mounts`, that holds the program's file; a program on the root file system is refused. `.dokkit-updater` is owned by root, mode 0700, a dot-folder at the volume's top, which QNAP does not share, and it holds only those two folders. After a restart the updater finds its folder from the path in its own crontab line.
+
+A plain background program is started by `dokkit watch --background`, which takes a lock in the spool and holds it until the new process appears in `status.json`. The updater and a start script run from cron by the same minute therefore cannot start two.
 
 `dokkit updater status` prints the versions, what the updater looks after and how, the last check and the last result (the last two to root only). `dokkit updater uninstall`, as root, removes the timer (the units, the plist or the crontab line), the updater's copy of the program and `config.json`. Its state and log are left. `dokkit updater rehearse <folder>` does one real check into a folder of its own, restarts nothing and sends no result; it needs no root.
 
