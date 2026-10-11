@@ -46,6 +46,7 @@ type check struct {
 	Port                  int
 	Every, Timeout, Slow  string
 	DateFrom              string `toml:"date_from"`
+	CommandHas            string `toml:"command_has"`
 	name, dir             string
 	next                  time.Time
 	restart               bool
@@ -200,6 +201,9 @@ func (c *check) problem() (runs bool, err error) {
 			return false, errors.New("needs a port")
 		}
 	case "process", "windows-service", "systemd":
+		if c.CommandHas != "" && c.Type != "process" {
+			return false, errors.New("command_has is only for a process check")
+		}
 		if c.Name == "" {
 			return false, errors.New("needs a name")
 		}
@@ -357,7 +361,7 @@ func (c *check) run() result {
 			return expiryResult(until, time.Now())
 		}
 	case "process":
-		err = processRunning(c.Name)
+		err = processRunning(c.Name, c.CommandHas)
 	case "windows-service", "systemd":
 		if c.Type == "systemd" {
 			err = systemdActive(c.Name)
@@ -433,7 +437,10 @@ func short(err error) string {
 	return s
 }
 
-func processRunning(name string) error {
+func processRunning(name, has string) error {
+	if has != "" {
+		return processWithText(name, has)
+	}
 	if runtime.GOOS == "windows" {
 		out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq "+name, "/NH", "/FO", "CSV").Output()
 		if err != nil {
