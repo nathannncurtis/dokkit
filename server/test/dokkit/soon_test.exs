@@ -43,6 +43,28 @@ defmodule Dokkit.SoonTest do
     refute Enum.any?(titles(), &(&1 =~ "soon-"))
   end
 
+  test "a step up that then stays flat is not a rise" do
+    m = Repo.insert!(%Machine{name: "soon-step", kind: :enrolled})
+    now = disk(m, "disk.used_percent.S", [8, 8, 8, 58, 58, 58, 58, 58])
+    Numbers.forecast(now)
+    refute Enum.any?(titles(), &(&1 =~ "soon-step"))
+  end
+
+  test "a rise that only holds in one half of the week is not a rise" do
+    m = Repo.insert!(%Machine{name: "soon-half", kind: :enrolled})
+    now = disk(m, "disk.used_percent.H", [50, 54, 58, 62, 62, 62, 62, 62])
+    Numbers.forecast(now)
+    refute Enum.any?(titles(), &(&1 =~ "soon-half"))
+  end
+
+  test "an over-limit issue of a disk that is no longer reported closes" do
+    m = Repo.insert!(%Machine{name: "soon-gone", kind: :enrolled})
+    for _ <- 1..3, do: Numbers.record(m.id, nil, "disk.used_percent.G", 94, DateTime.utc_now())
+    assert Enum.any?(titles(), &(&1 =~ "Disk G is nearly full"))
+    Numbers.forecast(DateTime.add(DateTime.utc_now(), 2 * 86_400))
+    refute Enum.any?(titles(), &(&1 =~ "Disk G"))
+  end
+
   test "a disk over its limit has no forecast issue and says when it will be full" do
     m = Repo.insert!(%Machine{name: "soon-d", kind: :enrolled})
     name = "disk.used_percent.E"

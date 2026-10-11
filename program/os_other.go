@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -113,12 +114,27 @@ func cpuTimes() (idle, total uint64, ok bool) {
 	return idle, total, total > 0
 }
 
-func findDisks() (all []found) {
-	for _, l := range output("df", "-P", "-k") {
+func findDisks() []found { return disksFrom(output("df", "-P", "-k")) }
+
+var apfsSlice = regexp.MustCompile(`^(/dev/disk\d+)s\d+.*`)
+
+// A disk is listed once however many mounts show it: the volumes of an APFS container (the
+// first, "/", stands for it) and bind mounts and subvolumes of one device all report one disk.
+// The helper volumes macOS mounts under /System/Volumes and the Recovery volume, and the
+// read-only loop devices of snap packages, are not disks anyone fills.
+func disksFrom(lines []string) (all []found) {
+	seen := map[string]bool{}
+	for _, l := range lines {
 		f := strings.Fields(l)
-		if len(f) < 6 || !strings.HasPrefix(f[0], "/dev/") {
+		if len(f) < 6 || !strings.HasPrefix(f[0], "/dev/") || strings.HasPrefix(f[0], "/dev/loop") ||
+			strings.HasPrefix(f[5], "/System/Volumes/") || f[5] == "/Volumes/Recovery" {
 			continue
 		}
+		device := apfsSlice.ReplaceAllString(f[0], "$1")
+		if seen[device] {
+			continue
+		}
+		seen[device] = true
 		total, _ := strconv.ParseInt(f[1], 10, 64)
 		free, _ := strconv.ParseInt(f[3], 10, 64)
 		all = append(all, found{"mount": f[5], "total_gb": fmt.Sprint(total >> 20), "free_gb": fmt.Sprint(free >> 20), "total_bytes": fmt.Sprint(total << 10), "free_bytes": fmt.Sprint(free << 10)})
