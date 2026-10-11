@@ -14,12 +14,26 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.GZIPInputStream;
 
 public class Test {
+    static boolean anyHas(List<String> got, String... parts) {
+        synchronized (got) {
+            for (String g : got) {
+                boolean all = true;
+                for (String p : parts) all &= g.contains(p);
+                if (all) return true;
+            }
+        }
+        return false;
+    }
+
     public static void main(String[] args) throws Exception {
         // The JDK client's own request logging, which is what fed the handler back before.
         System.setProperty("jdk.httpclient.HttpClient.log", "requests,errors");
         List<String> got = new ArrayList<>();
         AtomicInteger posts = new AtomicInteger();
         AtomicBoolean refused = new AtomicBoolean();
+        AtomicBoolean errorsDown = new AtomicBoolean();
+        AtomicBoolean reportsDownOnce = new AtomicBoolean();
+        List<String> hits = new ArrayList<>();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             posts.incrementAndGet();
@@ -29,7 +43,11 @@ public class Test {
             if (!"Bearer dka_test".equals(exchange.getRequestHeaders().getFirst("Authorization"))) text = "BAD KEY";
             // The first report is refused once; the library has to send it again.
             boolean refuse = exchange.getRequestURI().getPath().equals("/api/v1/report") && refused.compareAndSet(false, true);
+            String path = exchange.getRequestURI().getPath();
+            if (path.equals("/api/v1/errors") && errorsDown.get()) refuse = true;
+            if (path.equals("/api/v1/report") && reportsDownOnce.compareAndSet(true, false)) refuse = true;
             synchronized (got) {
+                hits.add(path + (refuse ? " 503" : " 200"));
                 if (!refuse) for (String line : text.split("\n")) got.add(exchange.getRequestURI().getPath() + " " + line);
             }
             exchange.sendResponseHeaders(refuse ? 503 : 200, -1);
@@ -64,6 +82,58 @@ public class Test {
         Dokkit.flush();
         Dokkit.flush();
 
+        errorsDown.set(true);
+        Dokkit.log("info", "line while errors are down");
+        Dokkit.capture(new IllegalArgumentException("kept"));
+        Dokkit.flush();
+        boolean keptWhileDown = anyHas(got, "line while errors are down") && !anyHas(got, "IllegalArgumentException");
+        errorsDown.set(false);
+        Dokkit.flush();
+
+        reportsDownOnce.set(true);
+        Dokkit.log("info", "line retried");
+        Dokkit.capture(new ArithmeticException("independent"));
+        Dokkit.flush();
+        Dokkit.flush();
+        boolean independent = false;
+        synchronized (got) {
+            for (int i = 0; i + 1 < hits.size(); i++) if (hits.get(i).equals("/api/v1/report 503") && hits.get(i + 1).startsWith("/api/v1/errors")) independent = true;
+        }
+
+        Dokkit.log("info", "é".repeat(50000));
+        Dokkit.log("info", "a".repeat(70000));
+        Dokkit.flush();
+        int cut = 0;
+        boolean cutOk = true;
+        synchronized (got) {
+            for (String g : got) if (g.contains(" [cut]\",")) { cut++; if (g.getBytes(StandardCharsets.UTF_8).length > 65536 + 20) cutOk = false; }
+        }
+        cutOk = cutOk && cut == 2;
+
+        java.lang.reflect.Field httpField = Dokkit.class.getDeclaredField("http");
+        httpField.setAccessible(true);
+        String address = "http://127.0.0.1:" + server.getAddress().getPort() + "/";
+        Dokkit.start("9.9.9", address, "dka_test");
+        Dokkit.flush();
+        boolean announcedOnce = !anyHas(got, "9.9.9");
+        httpField.set(null, null);
+        java.lang.reflect.Field env = Dokkit.class.getDeclaredField("environment");
+        env.setAccessible(true);
+        env.set(null, "dev");
+        Dokkit.start("8.8.8", address, "dka_test", false);
+        env.set(null, "dev");
+        Dokkit.beat("after quiet start");
+        Dokkit.log("info", "dev log");
+        Dokkit.job("dev-job", run -> { });
+        Dokkit.flush();
+        boolean quiet = anyHas(got, "after quiet start") && !anyHas(got, "8.8.8");
+        boolean devOk = true;
+        for (String w : new String[] {"after quiet start", "dev log", "dev-job"}) devOk &= anyHas(got, w, "\"environment\":\"dev\"");
+        env.set(null, "production");
+        Dokkit.beat("production beat");
+        Dokkit.flush();
+        boolean prodOk = anyHas(got, "production beat") && !anyHas(got, "production beat", "\"environment\"");
+
         // With the JDK client's request logging on, one app line is one small, bounded number of posts.
         int before = posts.get();
         java.util.logging.Logger root = java.util.logging.Logger.getLogger("");
@@ -92,6 +162,15 @@ public class Test {
         for (String w : want) if (!all.contains(w)) missing.add(w);
         if (!all.contains("\"document\":{   \"stat\": 7 }")) missing.add("stats on one line");
         if (!java.util.regex.Pattern.compile("\"java.lang.Integer\"[^}]*\"own\":false").matcher(all).find()) missing.add("jdk frame not own");
+        if (!keptWhileDown) missing.add("a line is sent while error posts fail, and the error is kept");
+        if (!anyHas(got, "/api/v1/errors", "IllegalArgumentException")) missing.add("kept error sent later");
+        if (!anyHas(got, "ArithmeticException") || !anyHas(got, "line retried")) missing.add("failed batch retried");
+        if (!independent) missing.add("a failed log batch does not skip error reports");
+        if (!cutOk) missing.add("long lines cut under 64 KB with the marker, got " + cut);
+        if (!announcedOnce) missing.add("second start announces nothing");
+        if (!quiet) missing.add("announceVersion false sends no deploy line");
+        if (!devOk) missing.add("dev environment on log, beat and job lines");
+        if (!prodOk) missing.add("production adds no environment");
         if (!guarded) missing.add("http to another machine refused");
         if (fed < 1 || fed > 3) missing.add("one app line is one to three posts, got " + fed);
         if (all.split("one app line", -1).length != 2) missing.add("the app line once");

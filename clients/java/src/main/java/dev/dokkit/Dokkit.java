@@ -39,6 +39,7 @@ import java.util.zip.GZIPOutputStream;
 public final class Dokkit {
     private static final int QUEUE = 1000;
     private static final int QUEUE_BYTES = 4 << 20; // counted in chars, about
+    private static final int MAX_LINE = 65536;
     private static final Object gate = new Object();
     private static final Object sending = new Object();
     private static final ArrayDeque<String> lines = new ArrayDeque<>();
@@ -61,7 +62,12 @@ public final class Dokkit {
         start(version, System.getenv("DOKKIT_URL"), System.getenv("DOKKIT_KEY"));
     }
 
-    public static synchronized void start(String version, String url, String key) {
+    public static void start(String version, String url, String key) {
+        start(version, url, key, true);
+    }
+
+    /** The version is announced once as a deploy line unless announceVersion is false; the server records a deploy only when the version changes. */
+    public static synchronized void start(String version, String url, String key, boolean announceVersion) {
         try {
             if (url == null || url.isEmpty() || key == null || key.isEmpty() || http != null) return;
             if (!safe(url)) {
@@ -85,7 +91,7 @@ public final class Dokkit {
             sender.setDaemon(true);
             sender.start();
             Runtime.getRuntime().addShutdownHook(new Thread(() -> { flush(); flush(); }));
-            if (version != null) add(line("deploy", "version", version));
+            if (version != null && announceVersion) add(line("deploy", "version", version));
         } catch (Exception e) {
             http = null;
         }
@@ -244,24 +250,40 @@ public final class Dokkit {
         synchronized (sending) {
             sendingNow.set(true);
             try {
-                while (http != null) {
-                    Batch batch = retry != null ? retry : next();
-                    retry = null;
-                    if (batch == null) return;
-                    int status;
-                    try { status = post(batch); } catch (Exception e) { status = 599; }
-                    if (status < 400) continue;
-                    // A failed batch gets one more try; what is lost then is counted.
-                    boolean again = (status >= 500 || status == 429) && batch.gzip;
-                    if (again && ++batch.tries < 2) retry = batch;
-                    else synchronized (gate) { dropped += batch.count; }
-                    if (again) return;
-                }
-            } catch (Exception e) {
-                // What could not be sent is dropped. The app is never told.
+                try { sendLines(); } catch (Exception e) { /* What could not be sent is dropped. The app is never told. */ }
+                try { sendErrors(); } catch (Exception e) { }
             } finally {
                 sendingNow.set(false);
             }
+        }
+    }
+
+    private static void sendLines() throws Exception {
+        while (http != null) {
+            Batch batch = retry != null ? retry : next();
+            retry = null;
+            if (batch == null) return;
+            int status;
+            try { status = post(batch); } catch (Exception e) { status = 599; }
+            if (status < 400) continue;
+            // A failed batch gets one more try; what is lost then is counted.
+            boolean again = status >= 500 || status == 429;
+            if (again && ++batch.tries < 2) retry = batch;
+            else synchronized (gate) { dropped += batch.count; }
+            if (again) return;
+        }
+    }
+
+    private static void sendErrors() {
+        while (http != null) {
+            Map<String, Object> error;
+            synchronized (gate) { error = errors.peek(); }
+            if (error == null) return;
+            int status;
+            try { status = post(new Batch("/api/v1/errors", json(error).getBytes(StandardCharsets.UTF_8), "application/json", false, 1)); } catch (Exception e) { status = 599; }
+            // A report the server did not answer for stays for the next pass; one it refuses is dropped.
+            if (status >= 500 || status == 429) return;
+            synchronized (gate) { errors.poll(); if (status >= 400) dropped++; }
         }
     }
 
@@ -279,17 +301,14 @@ public final class Dokkit {
     }
 
     private static Batch next() throws Exception {
-        Map<String, Object> error;
         List<String> batch = new ArrayList<>();
         synchronized (gate) {
-            error = errors.poll();
-            while (error == null && !lines.isEmpty() && batch.size() < 500) {
+            while (!lines.isEmpty() && batch.size() < 500) {
                 String line = lines.poll();
                 lineBytes -= line.length();
                 batch.add(line);
             }
         }
-        if (error != null) return new Batch("/api/v1/errors", json(error).getBytes(StandardCharsets.UTF_8), "application/json", false, 1);
         if (batch.isEmpty()) return null;
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         try (GZIPOutputStream z = new GZIPOutputStream(buffer)) {
@@ -309,9 +328,10 @@ public final class Dokkit {
     private static void add(Map<String, Object> line) {
         if (http == null || sendingNow.get()) return;
         line.put("host", host);
-        String text = json(line);
+        if (environment != null && !environment.isEmpty() && !environment.equals("production")) line.put("environment", environment);
+        String text = fit(line);
         synchronized (gate) {
-            if (text.length() > QUEUE_BYTES) { dropped++; return; }
+            if (text == null) { dropped++; return; }
             while (!lines.isEmpty() && (lines.size() >= QUEUE || lineBytes + text.length() > QUEUE_BYTES)) {
                 lineBytes -= lines.poll().length();
                 dropped++;
@@ -319,6 +339,25 @@ public final class Dokkit {
             lines.add(text);
             lineBytes += text.length();
         }
+    }
+
+    private static int size(String text) { return text.getBytes(StandardCharsets.UTF_8).length; }
+
+    private static String fit(Map<String, Object> line) {
+        String text = json(line);
+        int over = size(text) - MAX_LINE;
+        if (over <= 0) return text;
+        if (!(line.get("msg") instanceof String)) return null;
+        String msg = (String) line.get("msg");
+        int n = msg.length();
+        while (over > 0 && n > 0) {
+            n = Math.max(0, n - over - 6);
+            if (n > 0 && Character.isHighSurrogate(msg.charAt(n - 1))) n--;
+            line.put("msg", msg.substring(0, n) + " [cut]");
+            text = json(line);
+            over = size(text) - MAX_LINE;
+        }
+        return over > 0 ? null : text;
     }
 
     private static Map<String, Object> line(String type, Object... pairs) {
