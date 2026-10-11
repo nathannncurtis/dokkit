@@ -67,6 +67,12 @@ defmodule Dokkit.Self do
   @warn_days 21
 
   defp certificate(service, now) do
+    failed =
+      case Dokkit.Acme.renewal() do
+        %{ok: false, note: note} -> " " <> note
+        _ -> ""
+      end
+
     case Dokkit.Certificate.days_left(now) do
       nil ->
         nil
@@ -75,7 +81,7 @@ defmodule Dokkit.Self do
         Issues.record(check(service, "certificate"), :down,
           at: now,
           value: days,
-          note: "The uploaded certificate has run out."
+          note: "The uploaded certificate has run out." <> failed
         )
 
       days when days <= @warn_days ->
@@ -83,11 +89,15 @@ defmodule Dokkit.Self do
           at: now,
           value: days,
           soon: true,
-          note: "The uploaded certificate runs out in #{trunc(days)} days."
+          note: "The uploaded certificate runs out in #{trunc(days)} days." <> failed
         )
 
       days ->
-        Issues.record(check(service, "certificate"), :ok, at: now, value: days)
+        Issues.record(check(service, "certificate"), :ok,
+          at: now,
+          value: days,
+          note: String.trim(failed)
+        )
     end
   end
 

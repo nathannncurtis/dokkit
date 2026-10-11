@@ -16,12 +16,25 @@ defmodule DokkitWeb.SettingsLive do
          full: false,
          full_ok: false,
          cert_result: nil,
-         cert_n: 0
+         cert_n: 0,
+         acme_result: nil,
+         acme_busy: false,
+         acme_n: 0
        )
      )}
   end
 
   def handle_info(:issues_changed, socket), do: {:noreply, socket}
+
+  def handle_info({:renewed, result}, socket) do
+    result =
+      case result do
+        {:ok, note} -> {:ok, note}
+        {:error, text} -> {:error, text}
+      end
+
+    {:noreply, load(assign(socket, acme_busy: false, acme_result: result))}
+  end
 
   def handle_event("add", %{"person" => p}, socket) do
     owner(socket, fn ->
@@ -118,6 +131,28 @@ defmodule DokkitWeb.SettingsLive do
     end)
   end
 
+  def handle_event("acme_save", %{"acme" => a}, socket) do
+    socket = assign(socket, acme_n: socket.assigns.acme_n + 1)
+    a = if a["acme_cloudflare_token"] == "", do: Map.delete(a, "acme_cloudflare_token"), else: a
+
+    owner(socket, fn ->
+      case Dokkit.Acme.save(a) do
+        {:ok, _} -> assign(socket, acme_result: {:ok, "Saved"})
+        {:error, text} -> assign(socket, acme_result: {:error, text})
+      end
+    end)
+  end
+
+  def handle_event("acme_now", _, socket) do
+    if socket.assigns.current_user.role == :owner and not socket.assigns.acme_busy do
+      lv = self()
+      Task.start(fn -> send(lv, {:renewed, Dokkit.Acme.renew()}) end)
+      {:noreply, assign(socket, acme_busy: true, acme_result: nil)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_event("certificate_remove", _, socket) do
     owner(socket, fn ->
       case Dokkit.Certificate.delete() do
@@ -145,6 +180,7 @@ defmodule DokkitWeb.SettingsLive do
       keys: Keys.list(),
       releases: Dokkit.Releases.list(),
       certificates: Dokkit.Certificate.view(),
+      acme: Dokkit.Acme.view(),
       archives: (dir && Dokkit.Logs.archives(dir)) || []
     )
   end
@@ -351,6 +387,70 @@ defmodule DokkitWeb.SettingsLive do
                   Remove
                 </button>
                  <button class="btn primary" type="submit">Save</button>
+              </span>
+            </span>
+          </form>
+          <form
+            style="display:grid; gap:12px; padding:12px 16px 0"
+            phx-submit="acme_save"
+            id={"acme-form-#{@acme_n}"}
+          >
+            <p class="lead" style="margin:0">
+              Dokkit can get this certificate and renew it by itself from Let's Encrypt, proving the name with a DNS record at Cloudflare.
+            </p>
+            <label style="display:grid; gap:6px">
+              DNS name
+              <input
+                class="inp"
+                name="acme[acme_name]"
+                value={@acme["acme_name"]}
+                placeholder="example.dokkit.dev"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+            <label style="display:grid; gap:6px">
+              Cloudflare API token that may edit DNS in that name's zone
+              <input
+                class="inp"
+                type="password"
+                name="acme[acme_cloudflare_token]"
+                placeholder={if @acme["acme_cloudflare_token"] == "set", do: "set", else: "not set"}
+                autocomplete="new-password"
+              />
+            </label>
+            <label style="display:grid; gap:6px">
+              Certificate authority directory
+              <input
+                class="inp"
+                name="acme[acme_directory]"
+                value={@acme["acme_directory"]}
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+            <span class="foot" style="padding-inline:16px; margin-inline:-16px">
+              <span
+                :if={@certificates.renewal}
+                class={@certificates.renewal.ok == false && "bad"}
+                id="certificate-renewal"
+              >
+                {@certificates.renewal.note}
+              </span>
+              <span :if={@acme_busy} role="status">Working, this takes a few minutes.</span>
+              <span
+                :if={@acme_result}
+                class={elem(@acme_result, 0) == :error && "bad"}
+                role="status"
+                id="acme-result"
+              >
+                {elem(@acme_result, 1)}
+              </span>
+              <span class="end">
+                <button class="btn" type="button" phx-click="acme_now" disabled={@acme_busy}>
+                  Get a certificate now
+                </button>
+                <button class="btn primary" type="submit">Save</button>
               </span>
             </span>
           </form>

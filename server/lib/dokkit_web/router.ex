@@ -99,6 +99,9 @@ defmodule DokkitWeb.Router do
     get "/certificate", ApiController, :certificate
     put "/certificate", ApiController, :put_certificate
     delete "/certificate", ApiController, :delete_certificate
+    get "/certificate/settings", ApiController, :get_certificate_settings
+    put "/certificate/settings", ApiController, :put_certificate_settings
+    post "/certificate/renew", ApiController, :renew
     put "/releases/:version/:file", ReleaseController, :put
     get "/releases/:version/:file", ReleaseController, :show
     delete "/releases/:version", ReleaseController, :delete

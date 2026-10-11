@@ -22,7 +22,8 @@ defmodule Dokkit.Certificate do
   defp key_path, do: Path.join(dir(), "key.pem")
 
   @doc "Both certificates, as the API shows them. Never a key."
-  def view, do: %{installed: installed(), uploaded: uploaded_info()}
+  def view,
+    do: %{installed: installed(), uploaded: uploaded_info(), renewal: Dokkit.Acme.renewal()}
 
   defp installed do
     with path when is_binary(path) <- Application.get_env(:dokkit, :cert),
@@ -120,9 +121,9 @@ defmodule Dokkit.Certificate do
     end
   end
 
-  defp serves_tls do
-    if Application.get_env(:dokkit, :cert), do: :ok, else: {:error, @no_tls}
-  end
+  def serves_tls?, do: Application.get_env(:dokkit, :cert) != nil
+
+  defp serves_tls, do: if(serves_tls?(), do: :ok, else: {:error, @no_tls})
 
   defp parse(cert, key) do
     with [leaf | _] = chain <- chain(cert),
@@ -189,7 +190,7 @@ defmodule Dokkit.Certificate do
       {:error, "The certificate could not be saved: #{:file.format_error(e.reason)}"}
   end
 
-  defp write(path, text) do
+  def write(path, text) do
     tmp = path <> ".new"
     File.write!(tmp, text)
     File.rename!(tmp, path)

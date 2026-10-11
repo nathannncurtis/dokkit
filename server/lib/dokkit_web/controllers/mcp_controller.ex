@@ -203,6 +203,15 @@ defmodule DokkitWeb.McpController do
      "Put a certificate for a real name in place: cert is the PEM of the certificate followed by its chain, key is its PEM private key. It is served at once to clients that ask for one of its names.",
      %{"cert" => @text, "key" => @text}, ["cert", "key"]},
     {"remove_certificate", "admin", "Remove the uploaded certificate.", %{}, []},
+    {"certificate_settings", "admin",
+     "The settings for getting and renewing the uploaded certificate by itself: the DNS name, the certificate authority's directory, and whether a Cloudflare token is set. The token is never shown.",
+     %{}, []},
+    {"set_certificate_settings", "admin",
+     "Change those settings: acme_name (such as example.dokkit.dev), acme_cloudflare_token (a Cloudflare API token that may edit DNS in the name's zone; an empty one clears it) and acme_directory (Let's Encrypt production when empty). A setting left out stays as it was.",
+     %{"acme_name" => @text, "acme_cloudflare_token" => @text, "acme_directory" => @text}, []},
+    {"renew_certificate", "admin",
+     "Get a certificate for acme_name now from the certificate authority, proving the name with a DNS record at Cloudflare. It can take a few minutes. Answers with the certificates, or the reason it failed.",
+     %{}, []},
     {"update_machine", "admin",
      "Ask the updater on a machine to move to a release this server holds completely, such as v1.2.3. Takes the id from machines and the version from releases. Only a signed release installs.",
      %{"id" => @text, "version" => @text}, ["id", "version"]},
@@ -415,6 +424,10 @@ defmodule DokkitWeb.McpController do
   defp tool("certificate", _), do: Dokkit.Certificate.view()
   defp tool("set_certificate", args), do: Api.new_certificate(args) |> r()
   defp tool("remove_certificate", _), do: Api.drop_certificate() |> r()
+
+  defp tool("certificate_settings", _), do: Api.certificate_settings()
+  defp tool("set_certificate_settings", args), do: Api.save_certificate_settings(args) |> r()
+  defp tool("renew_certificate", _), do: Api.renew_certificate() |> r()
 
   defp tool("update_machine", %{"id" => id, "version" => version}),
     do: Api.approve_update(version, id) |> r()

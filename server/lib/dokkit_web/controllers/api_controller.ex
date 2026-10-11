@@ -399,8 +399,31 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
-  def put_certificate(conn, params), do: reply(conn, new_certificate(params))
-  def delete_certificate(conn, _), do: reply(conn, drop_certificate())
+  def certificate_settings, do: Dokkit.Acme.view()
+
+  def save_certificate_settings(params) do
+    case Dokkit.Acme.save(params) do
+      {:ok, view} -> view
+      {:error, why} -> {:error, "bad_settings", why}
+    end
+  end
+
+  def renew_certificate do
+    case Dokkit.Acme.renew() do
+      {:ok, _} -> Dokkit.Certificate.view()
+      {:error, why} -> {:error, "renewal_failed", why}
+    end
+  end
+
+  def get_certificate_settings(conn, _), do: json(conn, certificate_settings())
+  def put_certificate_settings(conn, params), do: reply(conn, save_certificate_settings(params))
+  def renew(conn, _), do: certificates(conn, renew_certificate())
+
+  defp certificates(conn, {:error, code, message}), do: fail(conn, 422, code, message)
+  defp certificates(conn, view), do: json(conn, view)
+
+  def put_certificate(conn, params), do: certificates(conn, new_certificate(params))
+  def delete_certificate(conn, _), do: certificates(conn, drop_certificate())
 
   def archives(conn, _), do: list(conn, Read.archives())
 
@@ -489,6 +512,7 @@ defmodule DokkitWeb.ApiController do
   def needs(method, path) do
     case {method, Enum.at(path, 2), List.last(path)} do
       {_, area, _} when area in ["keys", "users", "update-all"] -> "admin"
+      {"GET", "certificate", "settings"} -> "admin"
       {"GET", "logs", _} -> "read-logs"
       {"GET", _, _} -> "read"
       {_, area, _} when area in ["rules", "alerts", "releases", "certificate"] -> "admin"
