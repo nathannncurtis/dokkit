@@ -47,6 +47,64 @@ defmodule DokkitWeb.Show do
     """
   end
 
+  attr :points, :list, required: true
+  attr :limit, :any, default: nil
+  attr :label, :string, required: true
+
+  @doc "A line of percent readings across the points' span. A gap is a time with no number."
+  def line(assigns) do
+    values = assigns.points |> Enum.map(& &1.value) |> Enum.reject(&is_nil/1)
+    limit = assigns.limit
+    all = if limit, do: [limit | values], else: values
+    lo = max(0, floor((Enum.min(all, fn -> 0 end) - 3) / 10) * 10)
+    hi = min(100, max(lo + 10, ceil((Enum.max(all, fn -> 100 end) + 3) / 10) * 10))
+    n = max(length(assigns.points) - 1, 1)
+    x = fn i -> Float.round(54 + 538 * i / n, 1) end
+    y = fn v -> Float.round(120 - 110 * (v - lo) / (hi - lo), 1) end
+
+    path =
+      assigns.points
+      |> Enum.with_index()
+      |> Enum.chunk_by(fn {p, _} -> is_nil(p.value) end)
+      |> Enum.reject(fn [{p, _} | _] -> is_nil(p.value) end)
+      |> Enum.map_join(" ", fn [{p, i} | rest] ->
+        "M#{x.(i)} #{y.(p.value)}" <>
+          if(rest == [],
+            do: " h0.1",
+            else: Enum.map_join(rest, "", fn {q, j} -> " L#{x.(j)} #{y.(q.value)}" end)
+          )
+      end)
+
+    first = List.first(assigns.points)
+    last = List.last(assigns.points)
+
+    assigns =
+      assign(assigns,
+        lo: lo,
+        hi: hi,
+        mid: (lo + hi) / 2,
+        path: path,
+        y: y,
+        first: first && first.at,
+        last: last && last.at
+      )
+
+    ~H"""
+    <svg viewBox="0 0 600 150" role="img" aria-label={@label} class="line">
+      <line :for={v <- [@lo, @mid, @hi]} x1="54" x2="592" y1={@y.(v)} y2={@y.(v)} />
+      <text :for={v <- [@lo, @mid, @hi]} x="48" y={@y.(v) + 4} text-anchor="end">{round(v)}%</text>
+       <line :if={@limit} class="mk" x1="54" x2="592" y1={@y.(@limit)} y2={@y.(@limit)} />
+      <text :if={@limit} class="mk" x="592" y={@y.(@limit) - 4} text-anchor="end">
+        limit {round(@limit)}%
+      </text>
+       <path d={@path} />
+      <text x="54" y="144">{at(@first)}</text>
+      
+      <text x="592" y="144" text-anchor="end">{at(@last)}</text>
+    </svg>
+    """
+  end
+
   def at(nil), do: nil
   def at(%DateTime{} = t), do: Calendar.strftime(t, "%b %-d %H:%M")
 

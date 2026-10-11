@@ -12,7 +12,7 @@ defmodule DokkitWeb.ServiceLive do
 
       service ->
         {:ok,
-         load(assign(socket, page_title: service.name, id: id, timing_error: nil, timing: %{}))}
+         load(assign(socket, page_title: service.name, id: id, timing_error: nil, timing: %{}, range: "7"))}
     end
   end
 
@@ -21,6 +21,15 @@ defmodule DokkitWeb.ServiceLive do
 
   def handle_info({:settled, :page}, socket),
     do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
+
+  @ranges [
+    {"1", "The last 24 hours", 96},
+    {"7", "The last 7 days", 168},
+    {"30", "The last 30 days", 180}
+  ]
+
+  def handle_event("range", %{"range" => range}, socket) when range in ~w(1 7 30),
+    do: {:noreply, load(assign(socket, range: range))}
 
   def handle_event("timing_typed", %{"timing" => params}, socket),
     do: {:noreply, assign(socket, timing: params)}
@@ -106,7 +115,8 @@ defmodule DokkitWeb.ServiceLive do
         {name, values, values |> Enum.reject(&is_nil/1) |> List.last()}
       end
 
-    socket = assign(socket, numbers: numbers)
+    history = history(service, socket.assigns.range, now)
+    socket = assign(socket, numbers: numbers, history: history)
 
     assign(socket,
       service: service,
@@ -119,8 +129,37 @@ defmodule DokkitWeb.ServiceLive do
     )
   end
 
+  defp history(%{slug: "machine"} = service, range, now) do
+    {_, _, points} = List.keyfind(@ranges, range, 0)
+    from = DateTime.add(now, -String.to_integer(range) * 86_400)
+
+    for name <- Dokkit.Numbers.names({:machine, service.machine_id}) do
+      check = Enum.find(service.checks, &(&1.name == name))
+      open? = check != nil and check.state != :ok
+
+      %{
+        name: name,
+        open: open?,
+        note: open? && check.note,
+        limit: check && Dokkit.Numbers.limit(check),
+        points: Dokkit.Numbers.series({:machine, service.machine_id}, name, from, now, points)
+      }
+    end
+    |> Enum.sort_by(&{!&1.open, !String.starts_with?(&1.name, "disk."), &1.name})
+  end
+
+  defp history(_, _, _), do: nil
+
+  defp latest(points),
+    do: points |> Enum.map(& &1.value) |> Enum.reject(&is_nil/1) |> List.last()
+
+  defp title("memory.used_percent"), do: "Memory in use"
+  defp title("cpu.percent"), do: "Processor in use"
+  defp title("disk.used_percent." <> disk), do: "Disk #{disk} in use"
+  defp title(name), do: name
+
   def render(assigns) do
-    assigns = assign(assigns, cols: @cols, routes: Dokkit.Alerts.channels())
+    assigns = assign(assigns, cols: @cols, ranges: @ranges, routes: Dokkit.Alerts.channels())
 
     ~H"""
     <Layouts.app active={:all} shell={@shell} user={@current_user}>
@@ -168,6 +207,35 @@ defmodule DokkitWeb.ServiceLive do
 
       <div class="body rail">
         <div class="col">
+          <div :if={@history} class="card" id="history">
+            <h2>
+              History
+              <span class="end">
+                <form phx-change="range" id="range-form">
+                  <span class="dd">
+                    <select class="inp" name="range" aria-label="Show">
+                      <option :for={{v, text, _} <- @ranges} value={v} selected={v == @range}>{text}</option>
+                    </select>
+                    <.ic name="caret-down" />
+                  </span>
+                </form>
+              </span>
+            </h2>
+
+            <p :if={@history == []} class="lead">
+              No readings yet. This machine's disks, memory and processor appear here once it reports them.
+            </p>
+
+            <div :for={h <- @history} class="chart" id={"history-" <> h.name}>
+              <div class="top">
+                <b>{title(h.name)}</b>
+                <span class="mono">{latest(h.points) && "#{Float.round(latest(h.points), 1)}%"}</span>
+                <span :if={h.note} class="st warn">{h.note}</span>
+              </div>
+              <DokkitWeb.Show.line points={h.points} limit={h.limit} label={title(h.name)} />
+            </div>
+          </div>
+
           <div :if={@issue} class="card">
             <h2>Notes<span :if={@issue.notes != []} class="cnt">{length(@issue.notes)}</span></h2>
 

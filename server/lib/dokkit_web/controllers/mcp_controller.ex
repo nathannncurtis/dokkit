@@ -72,14 +72,15 @@ defmodule DokkitWeb.McpController do
     {"proposals", "read",
      "Things Dokkit found that a person may accept or dismiss: services and ports.", %{}, []},
     {"series", "read",
-     "Numbers over time for one service. Without metric, lists the metric names. from and to are RFC 3339 and default to the last day.",
+     "Numbers over time for one service, or for a machine's own disks, memory and processor when given machine instead of id. Without metric, lists the metric names. from and to are RFC 3339 and default to the last day.",
      %{
        "id" => @text,
+       "machine" => @text,
        "metric" => @text,
        "from" => @text,
        "to" => @text,
        "points" => %{"type" => "integer", "minimum" => 1, "maximum" => 500}
-     }, ["id"]},
+     }, []},
     {"day", "read",
      "The last 24 hours in half hours: for each machine, which half hours had something down, something that needed a look, nothing, or no signal, and the issues that opened. to is RFC 3339 and defaults to now.",
      %{"to" => @text}, []},
@@ -363,8 +364,17 @@ defmodule DokkitWeb.McpController do
   defp tool("rules", _), do: Read.rules()
   defp tool("proposals", _), do: Read.proposals()
 
-  defp tool("series", %{"id" => id} = args),
-    do: seen(Read.series(id, Map.update(args, "points", nil, &to_string(trunc(&1)))))
+  defp tool("series", args) do
+    params = Map.update(args, "points", nil, &to_string(trunc(&1)))
+
+    seen(
+      cond do
+        args["machine"] -> Read.machine_series(args["machine"], params)
+        args["id"] -> Read.series(args["id"], params)
+        true -> nil
+      end
+    )
+  end
 
   defp tool("day", args), do: Api.the_day(args) |> r()
   defp tool("unsnooze", %{"id" => id}), do: known(Issues.unsnooze(id))

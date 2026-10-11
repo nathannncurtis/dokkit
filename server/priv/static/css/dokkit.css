@@ -310,6 +310,11 @@ button.li:hover .ti { color: var(--ink); }
 .page > .lead { padding: 8px 28px 0; }
 .chart line.mk { stroke: var(--ink); stroke-dasharray: 3 3; }
 .chart text.mk { fill: var(--ink); }
+.chart path { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.chart + .chart { border-top: 1px solid var(--line); }
+@media (max-width: 600px) { .chart svg.line text { font-size: 19px; } }
+.chart .top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; margin-bottom: 6px; }
+.chart .top .st { margin-left: auto; }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 180ms; }
 [style*="--cols"] { grid-template-columns: var(--cols); }
 @media (max-width: 1100px) {

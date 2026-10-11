@@ -162,6 +162,7 @@ defmodule Dokkit.Read do
       config = Dokkit.Alerts.config()
 
       Map.merge(m, %{
+        metrics: Dokkit.Numbers.machine_latest(id),
         services: services(%{"machine" => id}),
         thresholds: %{
           disk_used_percent: config["disk_limit"],
@@ -395,10 +396,18 @@ defmodule Dokkit.Read do
 
   @doc "Chart data for one service. nil when the service or the times are not there."
   def series(id, params) do
+    with %{} = s <- Estate.service(id), do: chart(s.id, params)
+  end
+
+  @doc "Chart data for a machine's own numbers, like a service's."
+  def machine_series(id, params) do
+    with %{} <- Enum.find(Issues.machines(), &(&1.id == id)), do: chart({:machine, id}, params)
+  end
+
+  defp chart(owner, params) do
     now = DateTime.utc_now()
 
-    with %{} = s <- Estate.service(id),
-         {:ok, to} <- time(params["to"], now),
+    with {:ok, to} <- time(params["to"], now),
          {:ok, from} <- time(params["from"], DateTime.add(to, -86_400)),
          :lt <- DateTime.compare(from, to) do
       points =
@@ -408,8 +417,8 @@ defmodule Dokkit.Read do
         end
 
       case params["metric"] do
-        nil -> %{metrics: Dokkit.Numbers.names(s.id)}
-        name -> %{metric: name, points: Dokkit.Numbers.series(s.id, name, from, to, points)}
+        nil -> %{metrics: Dokkit.Numbers.names(owner)}
+        name -> %{metric: name, points: Dokkit.Numbers.series(owner, name, from, to, points)}
       end
     else
       _ -> nil

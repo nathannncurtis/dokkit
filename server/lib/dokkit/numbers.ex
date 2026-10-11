@@ -330,15 +330,18 @@ defmodule Dokkit.Numbers do
     |> Map.new(fn {id, pairs} -> {id, Map.new(pairs)} end)
   end
 
-  @doc "One metric of a service as evenly spaced points, each the average of its slice of time."
-  def series(service_id, name, from, to, points) do
+  @doc """
+  One metric of a service, or of a machine itself as `{:machine, id}`, as evenly spaced points,
+  each the average of its slice of time.
+  """
+  def series(owner, name, from, to, points) do
     span = max(DateTime.diff(to, from, :millisecond), 1)
 
     rows =
       Repo.all(
         from m in Metric,
-          where:
-            m.service_id == ^service_id and m.name == ^name and m.at >= ^from and m.at <= ^to,
+          where: ^owned(owner),
+          where: m.name == ^name and m.at >= ^from and m.at <= ^to,
           select: {m.at, m.value}
       )
 
@@ -361,13 +364,27 @@ defmodule Dokkit.Numbers do
     end
   end
 
-  def names(service_id) do
+  defp owned({:machine, id}), do: dynamic([m], m.machine_id == ^id and is_nil(m.service_id))
+  defp owned(service_id), do: dynamic([m], m.service_id == ^service_id)
+
+  def names(owner) do
     Repo.all(
       from m in Metric,
-        where: m.service_id == ^service_id,
+        where: ^owned(owner),
         distinct: true,
         select: m.name,
         order_by: m.name
+    )
+  end
+
+  @doc "The latest reading of each of a machine's own numbers, as [%{name, value, at}]."
+  def machine_latest(machine_id) do
+    Repo.all(
+      from m in Metric,
+        where: ^owned({:machine, machine_id}),
+        distinct: m.name,
+        order_by: [m.name, desc: m.at],
+        select: %{name: m.name, value: m.value, at: m.at}
     )
   end
 
