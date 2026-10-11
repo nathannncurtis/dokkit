@@ -11,7 +11,7 @@ Application.put_env(
   :dokkit,
   Dokkit.Repo,
   Keyword.merge(Application.get_env(:dokkit, Dokkit.Repo, []),
-    database: "dokkit_sample",
+    database: System.get_env("DOKKIT_SAMPLE_DB", "dokkit_sample"),
     pool_size: 5
   )
 )
@@ -20,7 +20,7 @@ Application.put_env(
   :dokkit,
   DokkitWeb.Endpoint,
   Keyword.merge(Application.get_env(:dokkit, DokkitWeb.Endpoint, []),
-    http: [ip: {127, 0, 0, 1}, port: 4010],
+    http: [ip: {127, 0, 0, 1}, port: String.to_integer(System.get_env("DOKKIT_SAMPLE_PORT", "4010"))],
     server: true,
     code_reloader: false,
     watchers: []
@@ -103,8 +103,6 @@ extra = %{
   "mail-tls" => [%{"type" => "expiry", "name" => "certificate"}]
 }
 
-nginx_task = %{"id" => "reload-nginx", "run" => "nginx -s reload", "pin" => String.duplicate("a1", 32), "file" => "/etc/dokkit/nginx.toml"}
-
 for {name, _, slugs} <- estate, slug <- slugs do
   job? = Map.has_key?(jobs, slug)
   checks = if job?, do: [], else: [%{"type" => "http", "name" => "up", "url" => "http://localhost/#{slug}"}]
@@ -118,8 +116,7 @@ for {name, _, slugs} <- estate, slug <- slugs do
       "environment" => if(slug == "web-preview", do: "dev", else: "production")
     },
     "check" => Enum.map(checks ++ Map.get(extra, slug, []), &Map.put(&1, "fail_after", 1)),
-    "job" => if(job?, do: [Map.put(jobs[slug], "id", slug)], else: []),
-    "task" => if(slug == "nginx", do: [nginx_task], else: [])
+    "job" => if(job?, do: [Map.put(jobs[slug], "id", slug)], else: [])
   }
 
   {:ok, _} = Dokkit.Estate.declare(Repo.get_by!(Machine, name: name).id, doc)
@@ -187,7 +184,7 @@ Dokkit.Issues.snooze(Repo.get_by!(Issue, title: "Report builder is slow").id, 8 
 
 # What the scans found and nobody has decided about.
 Dokkit.Found.propose(Repo.get_by!(Machine, name: "build").id, %{"os" => "windows", "found" => %{"ports" => [%{"port" => 22, "program" => "sshd"}], "services" => [%{"name" => "Spooler", "display" => "Print Spooler", "state" => "running"}]}})
-Dokkit.Found.propose(Repo.get_by!(Machine, name: "sql").id, %{"os" => "windows", "found" => %{"tasks" => [%{"name" => "defrag", "runs" => "defrag.exe", "schedule" => "0 3 * * 0"}]}})
+Dokkit.Found.propose(Repo.get_by!(Machine, name: "sql").id, %{"os" => "windows", "found" => %{"jobs" => [%{"name" => "defrag", "source" => "task-scheduler", "schedule" => "0 3 * * 0"}]}})
 Dokkit.Found.propose(Repo.get_by!(Machine, name: "web-02").id, %{"os" => "linux", "found" => %{"ports" => [%{"port" => 8443}]}})
 
 # A deploy an hour ago, and the errors after it.
@@ -216,14 +213,18 @@ logs =
 send!.(keys["web-02"], logs)
 send!.(keys["db-01"], for(i <- 1..8, do: %{"type" => "log", "at" => iso.(ago.(i * 11)), "level" => if(i == 5, do: "warn", else: "info"), "msg" => if(i == 5, do: "checkpoint took 38 s", else: "checkpoint complete")}))
 
-# One task a person accepted, and its run.
-task = Repo.get_by!(Dokkit.Task, name: "reload-nginx")
-:ok = Dokkit.Tasks.decide(task.id, task.command, task.pin, :accepted)
-queued = Dokkit.Tasks.run(task.id, "sample")
-%{id: taken} = Dokkit.Tasks.take(task.machine_id, 0)
-^taken = queued.id
-Dokkit.Tasks.output(task.machine_id, queued.id, "nginx: configuration test is successful\n")
-Dokkit.Tasks.result(task.machine_id, queued.id, %{"exit_code" => 0, "duration_ms" => 1800})
+# A job part way through, a dependency, a staging copy of the portal and a week of memory readings.
+send!.(keys["build"], [%{"type" => "job", "service" => "nightly-build", "run" => "build-2", "event" => "start", "at" => iso.(ago.(6))}, %{"type" => "job", "service" => "nightly-build", "run" => "build-2", "event" => "progress", "done" => 4000, "total" => 9000, "at" => iso.(ago.(1))}])
+
+{:ok, _} = Dokkit.Estate.add_dependency(%{"name" => "Payment gateway", "machine" => "web-02", "check" => %{"type" => "http", "url" => "https://payments.example.com/health"}})
+send!.(keys["web-02"], [%{"type" => "state", "service" => "payment-gateway", "check" => "http", "state" => "ok"}])
+
+staging = %{"schema" => 1, "service" => %{"id" => "upload-portal-staging", "name" => "Upload portal", "kind" => "service", "environment" => "staging"}, "check" => [%{"type" => "http", "name" => "up", "url" => "http://localhost:8081/healthz"}]}
+{:ok, _} = Dokkit.Estate.declare(Repo.get_by!(Machine, name: "web-02").id, staging)
+send!.(keys["web-02"], [%{"type" => "state", "service" => "upload-portal-staging", "check" => "up", "state" => "ok"}])
+
+memory = fn at, v -> %{"type" => "metric", "name" => "memory.used_percent", "value" => v, "at" => iso.(at)} end
+send!.(keys["db-01"], for(i <- 0..13, do: memory.(ago.((13 - i) * 720 + 30), 55.0 + rem(i * 7, 11))))
 
 # The last day: every enrolled machine was heard from in all 48 half hours; the PC only in office hours.
 last = Dokkit.Slots.slot(now)
@@ -241,7 +242,7 @@ cells = Dokkit.Read.day().machines |> Enum.flat_map(& &1.cells) |> Enum.frequenc
 IO.puts("""
 
 Sample estate ready.
-  Address   http://127.0.0.1:4010
+  Address   http://127.0.0.1:#{System.get_env("DOKKIT_SAMPLE_PORT", "4010")}
   Sign in   sample / sample-password-1
   Needs you #{length(inbox.needs_you)}, Soon #{length(inbox.soon)}, Not watched #{length(inbox.not_watched)}, Snoozed #{length(inbox.snoozed)}
   Other environments #{Enum.sum(for e <- inbox.other_environments, do: length(e.issues))}, fine #{inbox.fine.services} services on #{inbox.fine.machines} machines
