@@ -83,6 +83,9 @@ func startup(bool) error {
 }
 
 func memoryUsed() (float64, bool) {
+	if runtime.GOOS == "darwin" {
+		return macMemoryUsed()
+	}
 	b, err := os.ReadFile("/proc/meminfo")
 	if err != nil {
 		return 0, false
@@ -98,6 +101,9 @@ func memoryUsed() (float64, bool) {
 }
 
 func cpuTimes() (idle, total uint64, ok bool) {
+	if runtime.GOOS == "darwin" {
+		return macCPUTimes()
+	}
 	b, err := os.ReadFile("/proc/stat")
 	if err != nil {
 		return 0, 0, false
