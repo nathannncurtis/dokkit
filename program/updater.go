@@ -496,6 +496,9 @@ func putFile(from, to string) error {
 func installProgram(newFile string) error {
 	to := where.programExe
 	prev := to + ".previous"
+	if fi, err := os.Lstat(to); err == nil && !fi.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a plain file, so nothing was replaced", to)
+	}
 	if err := ops.stopService(programService); err != nil {
 		ops.startService(programService)
 		return fmt.Errorf("could not stop the service: %w", err)

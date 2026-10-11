@@ -45,6 +45,25 @@ func TestPreviousFileIsKeptWithTheProgramsMode(t *testing.T) {
 	}
 }
 
+func TestProgramPathThatIsALinkIsNotCopiedOrReplaced(t *testing.T) {
+	r := newRig(t, false)
+	secret := filepath.Join(r.dir, "secret")
+	os.WriteFile(secret, []byte("root only"), 0o600)
+	os.Remove(where.programExe)
+	os.Symlink(secret, where.programExe)
+	r.publish("v1.1.0", nil)
+	r.wanted = "v1.1.0"
+	if updaterRun() == 0 {
+		t.Fatalf("%+v", r.results)
+	}
+	if exists(where.programExe+".previous") || r.read(secret) != "root only" {
+		t.Fatal("the link's target was copied or replaced")
+	}
+	if fi, _ := os.Lstat(where.programExe); fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("the link was replaced")
+	}
+}
+
 func TestSecondRunIsRefusedByTheLock(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "run.lock")
 	release, err := lockFile(p)
