@@ -154,9 +154,11 @@ defmodule Dokkit.Numbers do
   @longest_full 60
 
   @doc """
-  Every half hour: a disk under its limit that a straight line through its last 7 days of
-  readings carries to the limit within 14 days opens a soon issue. It closes when the line
-  is more than 16 days from the limit, the limit is switched off, or the readings stop.
+  Every half hour: a disk under its limit that is rising over at least 4 days of readings,
+  in the whole of its last 7 days and in each half of them, and whose slowest such rise carries
+  it to the limit within 14 days opens a soon issue. A step up that then stays flat is not a
+  rise. It closes when the line is more than 16 days from the limit, the limit is switched off,
+  or the readings stop; an over-limit issue of a disk that is no longer reported closes too.
   A disk over its limit says in its note when it will be full, if that is within 60 days.
   """
   def forecast(now \\ DateTime.utc_now()) do
@@ -165,6 +167,8 @@ defmodule Dokkit.Numbers do
         {n, _} -> n
         :error -> nil
       end
+
+    middle = DateTime.add(now, -div(7 * 86_400, 2))
 
     rows =
       Repo.all(
@@ -177,7 +181,20 @@ defmodule Dokkit.Numbers do
             name: m.name,
             first: min(m.at),
             last: max(m.at),
-            slope: fragment("regr_slope(?, extract(epoch from ?)::float8)", m.value, m.at),
+            slopes:
+              fragment(
+                "array[regr_slope(?, extract(epoch from ?)::float8), regr_slope(?, extract(epoch from ?)::float8) filter (where ? < ?), regr_slope(?, extract(epoch from ?)::float8) filter (where ? >= ?)]",
+                m.value,
+                m.at,
+                m.value,
+                m.at,
+                m.at,
+                ^middle,
+                m.value,
+                m.at,
+                m.at,
+                ^middle
+              ),
             current: fragment("(array_agg(? order by ? desc))[1]", m.value, m.at)
           }
       )
@@ -199,10 +216,10 @@ defmodule Dokkit.Numbers do
     soon_ids =
       for r <- rows, limit, watched = checks[{r.machine_id, r.name}], reduce: [] do
         kept ->
-          per_day = if r.slope, do: r.slope * 86_400, else: 0
+          per_day = if Enum.all?(r.slopes), do: Enum.min(r.slopes) * 86_400, else: 0
 
           known =
-            DateTime.diff(r.last, r.first) >= 2 * 86_400 and DateTime.diff(now, r.last) <= 86_400 and
+            DateTime.diff(r.last, r.first) >= 4 * 86_400 and DateTime.diff(now, r.last) <= 86_400 and
               per_day > 0
 
           days = fn target -> max(1, round((target - r.current) / per_day)) end
@@ -255,6 +272,18 @@ defmodule Dokkit.Numbers do
           ),
         c.id not in soon_ids,
         do: Issues.record(c, :ok, at: now)
+
+    fresh = for r <- rows, DateTime.diff(now, r.last) <= 86_400, do: {r.machine_id, r.name}
+
+    for c <-
+          Repo.all(
+            from c in Check,
+              join: s in assoc(c, :service),
+              where: s.slug == "machine" and like(c.name, ^(@disk <> "%")) and c.state != :ok,
+              preload: [service: s]
+          ),
+        {c.service.machine_id, c.name} not in fresh,
+        do: Issues.record(%{c | passes: c.fail_after}, :ok, at: now)
 
     # A full-in-days note whose disk has no limit or no readings now is stale.
     live = for r <- rows, limit, c = checks[{r.machine_id, r.name}], do: c.id
