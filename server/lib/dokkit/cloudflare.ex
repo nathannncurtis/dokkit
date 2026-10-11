@@ -56,8 +56,8 @@ defmodule Dokkit.Cloudflare do
       {:ok, %{status: status}} ->
         {:error, "Cloudflare answered #{status}."}
 
-      {:error, _} ->
-        {:error, "Cloudflare could not be reached."}
+      {:error, e} ->
+        {:error, "Cloudflare could not be reached: #{String.slice(Exception.message(e), 0, 200)}"}
     end
   end
 
