@@ -9802,6 +9802,305 @@
           }
         ]
       }
+    },
+    "/api/v1/certificate": {
+      "get": {
+        "operationId": "getCertificate",
+        "summary": "The certificates served",
+        "tags": [
+          "Read"
+        ],
+        "description": "The certificate the server was installed with and the one put in place with `PUT`, each `null` when there is none. Never a key. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "responses": {
+          "200": {
+            "description": "The certificates.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Certificates"
+                },
+                "example": {
+                  "installed": {
+                    "names": [
+                      "web-01"
+                    ],
+                    "issuer": "web-01",
+                    "not_after": "2036-10-01T13:00:00Z",
+                    "self_signed": true,
+                    "sha256": "a99f59d72d4fe3caf976fa019c671dc3e184b9f9c4e7b6ce4494e9c85df1ad3d"
+                  },
+                  "uploaded": {
+                    "names": [
+                      "example.dokkit.dev"
+                    ],
+                    "issuer": "R11",
+                    "not_after": "2027-01-19T13:00:00Z",
+                    "self_signed": false,
+                    "sha256": "069ea4a89410f21e10658bbdb91aa9555af7e39294d4c08e999c7765ddf0d390"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "operationId": "putCertificate",
+        "summary": "Put a certificate in place",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Checks that both parse, that the key belongs to the first certificate, that it is neither expired nor not yet valid and that it names at least one DNS name, then saves both and serves the certificate at once to clients that ask for one of its names (SNI). Anything else, and a client that connects by address, still gets the installed certificate. A server that does not serve TLS itself answers 422. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "cert",
+                  "key"
+                ],
+                "properties": {
+                  "cert": {
+                    "type": "string",
+                    "description": "PEM: the leaf certificate first, then its chain."
+                  },
+                  "key": {
+                    "type": "string",
+                    "description": "PEM private key of the leaf certificate, not encrypted."
+                  }
+                }
+              },
+              "example": {
+                "cert": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+                "key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The certificates after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Certificates"
+                },
+                "example": {
+                  "installed": {
+                    "names": [
+                      "web-01"
+                    ],
+                    "issuer": "web-01",
+                    "not_after": "2036-10-01T13:00:00Z",
+                    "self_signed": true,
+                    "sha256": "a99f59d72d4fe3caf976fa019c671dc3e184b9f9c4e7b6ce4494e9c85df1ad3d"
+                  },
+                  "uploaded": {
+                    "names": [
+                      "example.dokkit.dev"
+                    ],
+                    "issuer": "R11",
+                    "not_after": "2027-01-19T13:00:00Z",
+                    "self_signed": false,
+                    "sha256": "069ea4a89410f21e10658bbdb91aa9555af7e39294d4c08e999c7765ddf0d390"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A check failed. The message says which.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_certificate",
+                    "message": "The key does not belong to the certificate."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deleteCertificate",
+        "summary": "Remove the uploaded certificate",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Removes the uploaded certificate. The installed one is not touched. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, task output, error messages and notes are left out of the answer.",
+        "responses": {
+          "200": {
+            "description": "The certificates after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Certificates"
+                },
+                "example": {
+                  "installed": {
+                    "names": [
+                      "web-01"
+                    ],
+                    "issuer": "web-01",
+                    "not_after": "2036-10-01T13:00:00Z",
+                    "self_signed": true,
+                    "sha256": "a99f59d72d4fe3caf976fa019c671dc3e184b9f9c4e7b6ce4494e9c85df1ad3d"
+                  },
+                  "uploaded": {
+                    "names": [
+                      "example.dokkit.dev"
+                    ],
+                    "issuer": "R11",
+                    "not_after": "2027-01-19T13:00:00Z",
+                    "self_signed": false,
+                    "sha256": "069ea4a89410f21e10658bbdb91aa9555af7e39294d4c08e999c7765ddf0d390"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A check failed. The message says which.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_certificate",
+                    "message": "The key does not belong to the certificate."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -11029,6 +11328,60 @@
           "complete": {
             "type": "boolean",
             "description": "True when both `SHA256SUMS` and `SHA256SUMS.sig` are held."
+          }
+        }
+      },
+      "Certificate": {
+        "type": "object",
+        "properties": {
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The DNS names the certificate covers. A `*.` name covers one label."
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "not_after": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the certificate runs out."
+          },
+          "self_signed": {
+            "type": "boolean"
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Hex SHA-256 fingerprint of the leaf certificate's DER."
+          }
+        }
+      },
+      "Certificates": {
+        "type": "object",
+        "properties": {
+          "installed": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Certificate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The certificate the server was installed with, which enrolled machines pin."
+          },
+          "uploaded": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Certificate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The certificate put in place through the API, served to clients that ask for one of its names."
           }
         }
       }

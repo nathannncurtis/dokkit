@@ -6,6 +6,7 @@ defmodule Dokkit.Application do
   def start(_type, _args) do
     Dokkit.LoginThrottle.init()
     Dokkit.Slots.init()
+    Dokkit.Certificate.load()
     watch = Application.get_env(:dokkit, :watch, true)
 
     children =

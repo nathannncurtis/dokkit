@@ -16,6 +16,7 @@ config :dokkit,
 # Configure the endpoint
 config :dokkit, DokkitWeb.Endpoint,
   url: [host: "localhost"],
+  check_origin: {Dokkit.Certificate, :origin?, []},
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
     formats: [html: DokkitWeb.ErrorHTML, json: DokkitWeb.ErrorJSON],

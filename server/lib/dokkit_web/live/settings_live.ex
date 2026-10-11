@@ -14,7 +14,9 @@ defmodule DokkitWeb.SettingsLive do
          error: nil,
          new_token: nil,
          full: false,
-         full_ok: false
+         full_ok: false,
+         cert_result: nil,
+         cert_n: 0
        )
      )}
   end
@@ -98,16 +100,36 @@ defmodule DokkitWeb.SettingsLive do
         text =
           if label == "",
             do: "Say what the token is for.",
-            else: "Type #{DokkitWeb.Endpoint.host()} exactly, and tick the box."
+            else: "Type #{Dokkit.Certificate.address()} exactly, and tick the box."
 
         assign(socket, error: text, full_form: f)
       end
     end)
   end
 
+  def handle_event("certificate_save", %{"certificate" => c}, socket) do
+    socket = assign(socket, cert_n: socket.assigns.cert_n + 1)
+
+    owner(socket, fn ->
+      case Dokkit.Certificate.put(c["cert"], c["key"]) do
+        {:ok, _} -> assign(socket, cert_result: {:ok, "Saved"})
+        {:error, text} -> assign(socket, cert_result: {:error, text})
+      end
+    end)
+  end
+
+  def handle_event("certificate_remove", _, socket) do
+    owner(socket, fn ->
+      case Dokkit.Certificate.delete() do
+        {:ok, _} -> assign(socket, cert_result: {:ok, "Removed"})
+        {:error, text} -> assign(socket, cert_result: {:error, text})
+      end
+    end)
+  end
+
   defp sure?(f),
     do:
-      String.trim(f["confirm"] || "") == DokkitWeb.Endpoint.host() and f["sure"] == "true" and
+      Dokkit.Certificate.mine?(String.trim(f["confirm"] || "")) and f["sure"] == "true" and
         String.trim(f["label"] || "") != ""
 
   defp owner(socket, fun) do
@@ -122,6 +144,7 @@ defmodule DokkitWeb.SettingsLive do
       people: Accounts.list(),
       keys: Keys.list(),
       releases: Dokkit.Releases.list(),
+      certificates: Dokkit.Certificate.view(),
       archives: (dir && Dokkit.Logs.archives(dir)) || []
     )
   end
@@ -132,7 +155,7 @@ defmodule DokkitWeb.SettingsLive do
         key_cols: @key_cols,
         roles: @roles,
         kinds: @kinds,
-        host: DokkitWeb.Endpoint.host(),
+        host: Dokkit.Certificate.address(),
         owner: assigns.current_user.role == :owner
       )
 
@@ -252,6 +275,87 @@ defmodule DokkitWeb.SettingsLive do
           </div>
         </div>
 
+        <div :if={@owner} class="card" id="certificate">
+          <h2>Certificate</h2>
+          
+          <div
+            :for={
+              {label, c} <- [
+                {"Installed", @certificates.installed},
+                {"Uploaded", @certificates.uploaded}
+              ]
+            }
+            class="est"
+            id={"certificate-#{String.downcase(label)}"}
+          >
+            <b>{label}</b> <span :if={!c} class="mute">None</span>
+            <span :if={c}>
+              <span class="mono">{Enum.join(c.names, ", ")}</span> {c.issuer}, runs out {String.slice(
+                c.not_after,
+                0,
+                10
+              )} <span :if={c.self_signed} class="tag">self-signed</span>
+            </span>
+          </div>
+          
+          <p class="lead">
+            A certificate for a real name, with its chain after it, is served to clients that ask for that name. Machines pinned to the installed certificate are not affected.
+          </p>
+          
+          <form
+            style="display:grid; gap:12px; padding:12px 16px 0"
+            phx-submit="certificate_save"
+            id={"certificate-form-#{@cert_n}"}
+          >
+            <label style="display:grid; gap:6px">
+              Certificate and chain <textarea
+                class="inp"
+                style="height:auto; padding:8px 10px; width:100%; resize:vertical"
+                name="certificate[cert]"
+                rows="4"
+                spellcheck="false"
+                required
+              ></textarea>
+            </label>
+            
+            <label style="display:grid; gap:6px">
+              Private key <textarea
+                class="inp"
+                style="height:auto; padding:8px 10px; width:100%; resize:vertical"
+                name="certificate[key]"
+                rows="4"
+                spellcheck="false"
+                autocomplete="off"
+                required
+              ></textarea>
+            </label>
+            
+            <span class="foot" style="padding-inline:0; margin-inline:-16px; padding-inline:16px">
+              <span
+                :if={@cert_result}
+                class={elem(@cert_result, 0) == :error && "bad"}
+                role="status"
+                id="certificate-result"
+              >
+                {elem(@cert_result, 1)}
+              </span>
+              
+              <span class="end">
+                <button
+                  :if={@certificates.uploaded}
+                  class="btn"
+                  type="button"
+                  phx-click="certificate_remove"
+                  data-confirm="Remove the uploaded certificate?"
+                >
+                  Remove
+                </button>
+                 <button class="btn primary" type="submit">Save</button>
+              </span>
+            </span>
+          </form>
+        </div>
+        
         <div :if={@owner} class="card">
           <h2>Access for scripts and AI tools</h2>
 

@@ -196,6 +196,13 @@ defmodule DokkitWeb.McpController do
     {"releases", "read",
      "The program releases this server holds, each with its files and whether it is complete. Only a complete release can be approved.",
      %{}, []},
+    {"certificate", "read",
+     "The certificates this server serves itself: the installed one and the uploaded one, each with its names, issuer, when it runs out, whether it is self-signed and its SHA-256 fingerprint.",
+     %{}, []},
+    {"set_certificate", "admin",
+     "Put a certificate for a real name in place: cert is the PEM of the certificate followed by its chain, key is its PEM private key. It is served at once to clients that ask for one of its names.",
+     %{"cert" => @text, "key" => @text}, ["cert", "key"]},
+    {"remove_certificate", "admin", "Remove the uploaded certificate.", %{}, []},
     {"update_machine", "admin",
      "Ask the updater on a machine to move to a release this server holds completely, such as v1.2.3. Takes the id from machines and the version from releases. Only a signed release installs.",
      %{"id" => @text, "version" => @text}, ["id", "version"]},
@@ -404,6 +411,10 @@ defmodule DokkitWeb.McpController do
   defp tool("dismiss_task", %{"id" => _} = args), do: Api.decide_task(args, :dismissed) |> r()
   defp tool("update_program", %{"id" => id}), do: Api.fetch_program(id, "an AI tool") |> r()
   defp tool("releases", _), do: %{items: Dokkit.Releases.list()}
+
+  defp tool("certificate", _), do: Dokkit.Certificate.view()
+  defp tool("set_certificate", args), do: Api.new_certificate(args) |> r()
+  defp tool("remove_certificate", _), do: Api.drop_certificate() |> r()
 
   defp tool("update_machine", %{"id" => id, "version" => version}),
     do: Api.approve_update(version, id) |> r()

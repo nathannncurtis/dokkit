@@ -60,6 +60,16 @@ releases =
 
 config :dokkit, releases: System.get_env("DOKKIT_RELEASES") || releases
 
+# The second certificate, put in place through the API. Beside the settings file in production.
+tls =
+  cond do
+    config_env() != :prod -> Path.join(System.tmp_dir!(), "dokkit-tls-#{config_env()}")
+    Path.type(settings) == :absolute -> Path.join(Path.dirname(settings), "tls")
+    true -> "tls"
+  end
+
+config :dokkit, tls: System.get_env("DOKKIT_TLS") || tls
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
@@ -97,7 +107,8 @@ if config_env() == :prod do
         ip: any,
         port: port,
         certfile: cert,
-        keyfile: System.fetch_env!("DOKKIT_CERT_KEY")
+        keyfile: System.fetch_env!("DOKKIT_CERT_KEY"),
+        thousand_island_options: [transport_options: [sni_fun: &Dokkit.Certificate.sni/1]]
       ],
       http: false,
       secret_key_base: secret_key_base

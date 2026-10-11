@@ -721,7 +721,7 @@ defmodule Dokkit.Alerts do
       note: "If you can read this, the #{channel} channel works.",
       machine: "dokkit",
       state: if(channel == "page", do: :down, else: :degraded),
-      url: DokkitWeb.Endpoint.url()
+      url: Dokkit.Certificate.url()
     }
 
     provider = provider(channel, config)
@@ -762,7 +762,7 @@ defmodule Dokkit.Alerts do
       note: i.check && i.check.note,
       machine: i.machine.name,
       state: i.state,
-      url: DokkitWeb.Endpoint.url()
+      url: Dokkit.Certificate.url()
     }
   end
 

@@ -206,7 +206,7 @@ defmodule DokkitWeb.JobsLive do
   defp example(added) do
     """
     # With the dokkit program, which also sends the exit code, the time taken and the output:
-    DOKKIT_URL=#{DokkitWeb.Endpoint.url()} DOKKIT_KEY=#{added.key} dokkit run --job #{added.service.slug} -- ./the-job.sh
+    DOKKIT_URL=#{Dokkit.Certificate.url()} DOKKIT_KEY=#{added.key} dokkit run --job #{added.service.slug} -- ./the-job.sh
 
     # With nothing but curl:
     curl -fsS #{ping(added, "start")}

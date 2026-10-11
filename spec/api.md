@@ -272,5 +272,8 @@ A login session, or a user token with `act`. Keys, people, rules, alert settings
 | `POST /update-all` (`admin`) | The same body, for every machine that has an updater. Answers `{"ok": true, "version": "v1.2.3", "machines": 3}`. |
 | `PUT /releases/<version>/<file>` (`admin`) | The body is the file, as is, up to 200 MB (`413` over that), written to disk as it arrives. Replaces a file of that name. The server does not check it; the updater does. A version or file name of anything but letters, digits, dots, dashes and underscores, or one that starts with a dot, answers `422` with code `bad_name`. |
 | `DELETE /releases/<version>` (`admin`) | Removes that version's files. |
+| `GET /certificate` | The certificates the server serves itself: `installed` (the one it was installed with, which enrolled machines pin) and `uploaded`, each `null` when there is none, otherwise `names` (DNS names), `issuer`, `not_after`, `self_signed` and `sha256` (hex fingerprint of the leaf). Never a key. |
+| `PUT /certificate` (`admin`) | `{"cert": "<PEM, leaf then its chain>", "key": "<PEM private key>"}`. `422` with code `bad_certificate` and a sentence when a file cannot be read, the key is not the leaf's, the leaf is expired or not yet valid, or it names no DNS name; also when the server does not serve TLS itself. Otherwise saved and served at once to clients that ask for one of its names; any other name, and a client that connects by address, still gets the installed certificate. Answers as `GET` does. |
+| `DELETE /certificate` (`admin`) | Removes the uploaded certificate. Answers as `GET` does. |
 
 Keys, tokens and users are managed with the `admin` scope. A token can make a token only with scopes it holds itself, and never one with `admin`: that is made in Settings.

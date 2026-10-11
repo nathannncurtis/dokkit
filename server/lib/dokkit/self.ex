@@ -60,7 +60,35 @@ defmodule Dokkit.Self do
     end
 
     reports(service, now, booted)
+    certificate(service, now)
     archive(service, now)
+  end
+
+  @warn_days 21
+
+  defp certificate(service, now) do
+    case Dokkit.Certificate.days_left(now) do
+      nil ->
+        nil
+
+      days when days <= 0 ->
+        Issues.record(check(service, "certificate"), :down,
+          at: now,
+          value: days,
+          note: "The uploaded certificate has run out."
+        )
+
+      days when days <= @warn_days ->
+        Issues.record(check(service, "certificate"), :degraded,
+          at: now,
+          value: days,
+          soon: true,
+          note: "The uploaded certificate runs out in #{trunc(days)} days."
+        )
+
+      days ->
+        Issues.record(check(service, "certificate"), :ok, at: now, value: days)
+    end
   end
 
   @quiet_minutes 10

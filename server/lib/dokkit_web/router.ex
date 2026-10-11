@@ -96,6 +96,9 @@ defmodule DokkitWeb.Router do
     get "/update", IntakeController, :update
     post "/update/result", IntakeController, :update_result
     get "/releases", ApiController, :releases
+    get "/certificate", ApiController, :certificate
+    put "/certificate", ApiController, :put_certificate
+    delete "/certificate", ApiController, :delete_certificate
     put "/releases/:version/:file", ReleaseController, :put
     get "/releases/:version/:file", ReleaseController, :show
     delete "/releases/:version", ReleaseController, :delete

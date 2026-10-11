@@ -64,6 +64,8 @@ defmodule DokkitWeb.ParityTest do
       "restore" => {:owner, ["POST /api/v1/logs/archives/:name/restore"]},
       "revoke" => {:owner, ["DELETE /api/v1/keys/:id"]},
       "token" => {:owner, ["POST /api/v1/keys"]},
+      "certificate_save" => {:owner, ["PUT /api/v1/certificate"]},
+      "certificate_remove" => {:owner, ["DELETE /api/v1/certificate"]},
       "full" => @view,
       "full_typed" => @view,
       "full_token" => @session

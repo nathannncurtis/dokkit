@@ -383,6 +383,25 @@ defmodule DokkitWeb.ApiController do
 
   def update_all(conn, params), do: reply(conn, approve_update(params["version"], :all))
 
+  def certificate(conn, _), do: json(conn, Dokkit.Certificate.view())
+
+  def new_certificate(params) do
+    case Dokkit.Certificate.put(params["cert"], params["key"]) do
+      {:ok, view} -> view
+      {:error, why} -> {:error, "bad_certificate", why}
+    end
+  end
+
+  def drop_certificate do
+    case Dokkit.Certificate.delete() do
+      {:ok, view} -> view
+      {:error, why} -> {:error, "bad_certificate", why}
+    end
+  end
+
+  def put_certificate(conn, params), do: reply(conn, new_certificate(params))
+  def delete_certificate(conn, _), do: reply(conn, drop_certificate())
+
   def archives(conn, _), do: list(conn, Read.archives())
 
   def restore_month(name) do
@@ -472,7 +491,7 @@ defmodule DokkitWeb.ApiController do
       {_, area, _} when area in ["keys", "users", "update-all"] -> "admin"
       {"GET", "logs", _} -> "read-logs"
       {"GET", _, _} -> "read"
-      {_, area, _} when area in ["rules", "alerts", "releases"] -> "admin"
+      {_, area, _} when area in ["rules", "alerts", "releases", "certificate"] -> "admin"
       {"POST", "tasks", last} when last in ["accept", "dismiss"] -> "admin"
       {"POST", area, area} when area in ["jobs", "apps"] -> "admin"
       {_, _, last} -> if last in ~w(checks restart update restore), do: "admin", else: "act"

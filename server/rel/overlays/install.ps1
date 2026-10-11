@@ -246,6 +246,10 @@ try {
     New-Item -ItemType Directory -Force $releases | Out-Null
     & icacls $releases /inheritance:r /grant:r "${administrators}:(OI)(CI)F" "${system}:(OI)(CI)F" "${localService}:(OI)(CI)M" | Out-Null
     Test-Ok 'Locking down the releases folder'
+    $tls = if ($values['DOKKIT_TLS']) { $values['DOKKIT_TLS'] } else { Join-Path $folder 'tls' }
+    New-Item -ItemType Directory -Force $tls | Out-Null
+    & icacls $tls /inheritance:r /grant:r "${administrators}:(OI)(CI)F" "${system}:(OI)(CI)F" "${localService}:(OI)(CI)M" | Out-Null
+    Test-Ok 'Locking down the tls folder'
     if ($values['DOKKIT_ARCHIVE']) {
         New-Item -ItemType Directory -Force $values['DOKKIT_ARCHIVE'] | Out-Null
         & icacls $values['DOKKIT_ARCHIVE'] /grant "${localService}:(OI)(CI)M" | Out-Null
