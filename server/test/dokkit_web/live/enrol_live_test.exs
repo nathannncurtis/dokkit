@@ -17,7 +17,7 @@ defmodule DokkitWeb.EnrolLiveTest do
     assert html =~ ~r/dokkit enrol \S+ dke_\w{36}\ndokkit service install/
     assert html =~ ~s(data-copy="#enrol-commands")
     assert html =~ "Waiting for the machine"
-    assert html =~ "runs out in 3 h 5"
+    assert html =~ ~r/runs out in (4 h 0|3 h 59)/
     assert html =~ "dokkit folder add"
 
     html = view |> form("#token-form", mode: "login") |> render_change()
