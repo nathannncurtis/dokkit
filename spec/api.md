@@ -125,6 +125,10 @@ Every line has `type` and `at`. With a machine key the machine is known. With an
 
 An app key may not send `state` or `inventory`.
 
+### `POST /api/events/raw`
+
+The door for apps that log to Seq, at the address Seq clients post to (`POST /ingest/clef` takes the same body, where newer clients post CLEF). An app moves by changing its server address and API key. The body is CLEF, one JSON event a line (`Content-Type: application/vnd.serilog.clef`, or `?clef`), or Seq's older JSON form, `{"Events": [{"Timestamp", "Level", "MessageTemplate", "Properties", "Exception", "RenderedMessage"}]}`. The key is an app key, in `X-Seq-ApiKey` or `?apiKey=`. Each event becomes a `log` line of the key's service through the same path as `POST /report`, with the same limits, bucket and storage; see `log-lines.md`. The answer is Seq's: `201` with `{"MinimumLevelAccepted": null}`, or `{"Error": "..."}` with `400` (not CLEF or Seq JSON, or no event stored), `401`, `413` (more than 10,000 events or 5 MB) or `429` with `Retry-After`.
+
 ### Ping URLs
 
 For anything that can only make a web request, such as a cron job on a storage box.
