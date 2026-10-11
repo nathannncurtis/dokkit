@@ -304,8 +304,10 @@ defmodule DokkitWeb.SettingsLive do
           >
             <div>
               <div class="ti"><span class="mono">{r.version}</span></div>
+
               <div class="sub mono">{Enum.join(r.files, ", ")}</div>
             </div>
+
             <span class={["tag", !r.complete && "warn"]}>
               {if r.complete, do: "Complete", else: "Incomplete"}
             </span>
@@ -314,7 +316,7 @@ defmodule DokkitWeb.SettingsLive do
 
         <div :if={@owner} class="card" id="certificate">
           <h2>Certificate</h2>
-          
+
           <div
             :for={
               {label, c} <- [
@@ -334,11 +336,11 @@ defmodule DokkitWeb.SettingsLive do
               )} <span :if={c.self_signed} class="tag">self-signed</span>
             </span>
           </div>
-          
+
           <p class="lead">
             A certificate for a real name, with its chain after it, is served to clients that ask for that name. Machines pinned to the installed certificate are not affected.
           </p>
-          
+
           <form
             style="display:grid; gap:12px; padding:12px 16px 0"
             phx-submit="certificate_save"
@@ -354,7 +356,7 @@ defmodule DokkitWeb.SettingsLive do
                 required
               ></textarea>
             </label>
-            
+
             <label style="display:grid; gap:6px">
               Private key <textarea
                 class="inp"
@@ -366,7 +368,7 @@ defmodule DokkitWeb.SettingsLive do
                 required
               ></textarea>
             </label>
-            
+
             <span class="foot" style="padding-inline:0; margin-inline:-16px; padding-inline:16px">
               <span
                 :if={@cert_result}
@@ -376,7 +378,7 @@ defmodule DokkitWeb.SettingsLive do
               >
                 {elem(@cert_result, 1)}
               </span>
-              
+
               <span class="end">
                 <button
                   :if={@certificates.uploaded}
@@ -387,10 +389,11 @@ defmodule DokkitWeb.SettingsLive do
                 >
                   Remove
                 </button>
-                 <button class="btn primary" type="submit">Save</button>
+                <button class="btn primary" type="submit">Save</button>
               </span>
             </span>
           </form>
+
           <form
             style="display:grid; gap:12px; padding:12px 16px 0"
             phx-submit="acme_save"
@@ -399,6 +402,7 @@ defmodule DokkitWeb.SettingsLive do
             <p class="lead" style="margin:0">
               Dokkit can get this certificate and renew it by itself from Let's Encrypt, proving the name with a DNS record at Cloudflare.
             </p>
+
             <label style="display:grid; gap:6px">
               DNS name
               <input
@@ -410,6 +414,7 @@ defmodule DokkitWeb.SettingsLive do
                 spellcheck="false"
               />
             </label>
+
             <label style="display:grid; gap:6px">
               Cloudflare API token that may edit DNS in that name's zone
               <input
@@ -420,6 +425,7 @@ defmodule DokkitWeb.SettingsLive do
                 autocomplete="new-password"
               />
             </label>
+
             <label style="display:grid; gap:6px">
               Certificate authority directory
               <input
@@ -430,6 +436,7 @@ defmodule DokkitWeb.SettingsLive do
                 spellcheck="false"
               />
             </label>
+
             <span class="foot" style="padding-inline:16px; margin-inline:-16px">
               <span
                 :if={@certificates.renewal}
@@ -447,6 +454,7 @@ defmodule DokkitWeb.SettingsLive do
               >
                 {elem(@acme_result, 1)}
               </span>
+
               <span class="end">
                 <button class="btn" type="button" phx-click="acme_now" disabled={@acme_busy}>
                   Get a certificate now
@@ -456,27 +464,38 @@ defmodule DokkitWeb.SettingsLive do
             </span>
           </form>
         </div>
-        
+
         <div :if={@owner} class="card">
           <h2>Access for scripts and AI tools</h2>
 
           <p class="lead">
             A user token reads Dokkit through the API. Give it only what it needs: log contents are a separate permission, and so is acting on issues.
           </p>
-          <pre :if={@new_token} class="logbox" id="new-token">{@new_token}</pre>
+
+          <div :if={@new_token} class="once">
+            <span class="mono" id="new-token">{@new_token}</span>
+            <button class="btn sm" type="button" data-copy="#new-token">Copy</button>
+          </div>
+
+          <p :if={@new_token} class="lead" style="padding-top: 0">
+            Shown only now. Send it with each request as
+            <code>Authorization: Bearer &lt;token&gt;</code>
+            to <code>{Dokkit.Certificate.url()}/api/v1/machines</code>
+            for a first try; AI tools use <code>{Dokkit.Certificate.url()}/mcp</code>.
+          </p>
+
           <form class="foot" phx-submit="token" id="token-form">
             <input
               class="inp"
               name="token[label]"
-              placeholder="What it is for"
+              placeholder="What will use it"
               aria-label="What it is for"
               required
             /> <label><input type="checkbox" name="token[read]" value="true" checked /> Read</label>
             <label><input type="checkbox" name="token[read-logs]" value="true" /> Read logs</label>
             <label><input type="checkbox" name="token[act]" value="true" />
             Act: snooze, acknowledge, watch, route, run tasks</label>
-            <span :if={@new_token}>Shown only now.</span>
-            <span class="end"><button class="btn primary" type="submit">Make a token</button></span>
+            <span class="end"><button class="btn primary" type="submit">Make a user token</button></span>
           </form>
 
           <div :if={!@full} class="est">

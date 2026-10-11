@@ -53,6 +53,8 @@ defmodule DokkitWeb.SettingsLiveTest do
 
     [token] = Regex.run(~r/dku_\w{36}/, html)
     assert {:ok, %{scopes: ["read", "read-logs"]}} = Keys.verify(token, :user)
+    assert html =~ ~s(data-copy="#new-token")
+    assert html =~ "Authorization: Bearer"
 
     # The ordinary form cannot make a token that manages keys and people.
     html = render_submit(view, "token", %{"token" => %{"label" => "sly", "admin" => "true"}})

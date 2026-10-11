@@ -193,7 +193,7 @@ defmodule DokkitWeb.CertificateTest do
   describe "the enrol page" do
     defp command(conn) do
       {:ok, view, _} = live(signed_in(conn), "/machines/new")
-      view |> element("button", "Make a token") |> render_click()
+      view |> form("#token-form") |> render_submit()
       render(view)
     end
 
