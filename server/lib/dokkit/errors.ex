@@ -109,7 +109,7 @@ defmodule Dokkit.Errors do
     query = from g in ErrorGroup, order_by: [desc: g.last_seen], preload: [service: :machine]
     query = if id = opts[:service], do: where(query, [g], g.service_id == ^id), else: query
     query = if t = opts[:since], do: where(query, [g], g.first_seen >= ^t), else: query
-    Repo.all(limit(query, 200))
+    Repo.all(limit(query, ^(opts[:limit] || 200)))
   end
 
   @doc "One group with its latest report. nil when there is none."

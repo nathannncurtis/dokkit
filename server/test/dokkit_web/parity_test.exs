@@ -27,6 +27,8 @@ defmodule DokkitWeb.ParityTest do
       "test" => {:owner, ["POST /api/v1/alerts/test"]}
     },
     "EverythingLive" => %{
+      "dep_open" => @view,
+      "dependency" => {:owner, ["POST /api/v1/dependencies"]},
       "update" => {:owner, ["POST /api/v1/machines/:id/update"]},
       "update_all" => {:owner, ["POST /api/v1/update-all"]}
     },
@@ -76,7 +78,13 @@ defmodule DokkitWeb.ParityTest do
     },
     "FoundLive" => %{
       "sweep" =>
-        {:member, ["POST /api/v1/proposals/:id/accept", "POST /api/v1/proposals/:id/dismiss"]}
+        {:member,
+         [
+           "POST /api/v1/proposals/:id/accept",
+           "POST /api/v1/proposals/:id/dismiss",
+           "POST /api/v1/proposals/accept",
+           "POST /api/v1/proposals/dismiss"
+         ]}
     }
   }
 

@@ -1,7 +1,7 @@
 defmodule Dokkit.Read do
   @moduledoc "What the API and the MCP answer with, as plain maps."
-  import Ecto.Query, only: [from: 2]
-  alias Dokkit.{Estate, Issue, Issues, Logs, Machine, MachineSlot, Repo, Slots}
+  import Ecto.Query, only: [from: 2, dynamic: 2]
+  alias Dokkit.{Estate, Install, Issue, Issues, Logs, Machine, MachineSlot, Repo, Service, Slots}
 
   def inbox do
     %{needs_you: needs_you, soon: soon, other: other} = Issues.groups()
@@ -204,10 +204,24 @@ defmodule Dokkit.Read do
     with {:ok, id} <- Ecto.UUID.cast(id),
          %Issue{} = i <- Repo.get(Issue, id) do
       i = Repo.preload(i, [:machine, :service, :check, :alert])
-      Map.merge(issue(i), %{closed_at: i.closed_at, notes: i.notes})
+      Map.merge(issue(i), %{closed_at: i.closed_at, notes: i.notes, history: history(i)})
     else
       _ -> nil
     end
+  end
+
+  defp history(i) do
+    notes =
+      for n <- i.notes,
+          {:ok, at, _} <- [DateTime.from_iso8601(to_string(n["at"]))],
+          do: %{at: at, event: "note", by: n["by"], note: n["text"]}
+
+    ([%{at: i.since, event: "opened"}] ++
+       notes ++
+       if(i.acknowledged_at, do: [%{at: i.acknowledged_at, event: "acknowledged"}], else: []) ++
+       if(i.snoozed_until, do: [%{at: nil, event: "snoozed", until: i.snoozed_until}], else: []) ++
+       if(i.closed_at, do: [%{at: i.closed_at, event: "closed"}], else: []))
+    |> Enum.sort_by(&DateTime.to_unix(&1.at || i.since, :microsecond))
   end
 
   @doc "What waits to be accepted: the things a scan found."
@@ -249,6 +263,9 @@ defmodule Dokkit.Read do
     for m <- Estate.machines(),
         s <- m.services,
         params["machine"] in [nil, m.id, m.name],
+        params["environment"] in [nil, s.environment],
+        params["kind"] in [nil, to_string(s.kind)],
+        params["service"] in [nil, s.id, s.slug],
         q == "" or String.contains?(String.downcase(s.name <> " " <> s.slug), q),
         do: service_row(s, m)
   end
@@ -268,13 +285,42 @@ defmodule Dokkit.Read do
         keep_messages: s.keep_messages,
         stats: s.stats,
         stats_at: s.stats_at,
+        facts: (s.declared && s.declared["service"]) || %{},
+        versions: versions_of(s),
+        deploys: deploys(service: s.id, limit: 10),
         open_issue: open && issue(Repo.preload(open, [:machine, :service, :check, :alert]))
       })
     end
   end
 
-  def jobs do
-    for j <- Estate.jobs() do
+  defp versions_of(%{kind: :app} = s) do
+    for i <-
+          Repo.all(
+            from i in Install,
+              where: i.service_id == ^s.id,
+              order_by: [desc: i.seen_at],
+              preload: :machine
+          ),
+        do: %{machine: i.machine.name, version: i.version, seen_at: i.seen_at}
+  end
+
+  defp versions_of(s) do
+    Repo.all(
+      from x in Service,
+        join: m in assoc(x, :machine),
+        where: x.slug == ^s.slug,
+        order_by: m.name,
+        select: %{machine: m.name, version: x.version, held: x.held, environment: x.environment}
+    )
+  end
+
+  def jobs(params \\ %{}) do
+    for j <- Estate.jobs(),
+        params["machine"] in [nil, j.machine.id, j.machine.name],
+        params["service"] in [nil, j.service.id, j.service.slug],
+        params["environment"] in [nil, j.service.environment],
+        params["state"] in [nil, to_string(j.check.state)],
+        like?(params, [j.service.name, j.check.name]) do
       %{
         id: j.service.id,
         name: Dokkit.Intake.label(j.service, j.check.name),
@@ -305,50 +351,24 @@ defmodule Dokkit.Read do
   def without_logs(list) when is_list(list), do: Enum.map(list, &without_logs/1)
   def without_logs(x), do: x
 
-  @doc "nil when a service or machine is named and does not exist, or a time is not one."
+  @doc "The newest 500 log lines that match, or nil when a service or machine is named and does not exist, or a time is not one."
   def logs(params) do
-    service = params["service"] && Estate.service(params["service"])
-
-    machine =
-      params["machine"] && Enum.find(Issues.machines(), &(params["machine"] in [&1.id, &1.name]))
-
-    with true <- !((params["service"] && !service) || (params["machine"] && !machine)),
-         {:ok, from} <- time(params["from"], nil),
-         {:ok, to} <- time(params["to"], nil) do
-      for l <-
-            Logs.list(
-              q: params["q"],
-              level: params["level"],
-              service: service && service.id,
-              machine: machine && machine.id,
-              from: from,
-              to: to,
-              limit: 500
-            ) do
-        %{
-          t: l.at,
-          level: l.level,
-          msg: l.msg,
-          fields: l.fields,
-          machine: l.machine.name,
-          service: l.service && l.service.slug
-        }
-      end
-    else
+    case list(:logs, Map.delete(params, "cursor")) do
+      %{items: items} -> items
       _ -> nil
     end
   end
 
-  def deploys(opts \\ []) do
-    for d <- Dokkit.Deploys.list(opts) do
-      d
-      |> Map.take([:from, :version, :commit, :by, :how, :at])
-      |> Map.merge(%{
-        service: d.service_id,
-        name: d.service.name,
-        machine: d.service.machine.name
-      })
-    end
+  def deploys(opts \\ []), do: Enum.map(Dokkit.Deploys.list(opts), &deploy/1)
+
+  defp deploy(d) do
+    d
+    |> Map.take([:from, :version, :commit, :by, :how, :at])
+    |> Map.merge(%{
+      service: d.service_id,
+      name: d.service.name,
+      machine: d.service.machine.name
+    })
   end
 
   @doc "The latest deploy of a service, and the issues and errors first seen after it."
@@ -378,12 +398,30 @@ defmodule Dokkit.Read do
 
   def errors(opts \\ []), do: Enum.map(Dokkit.Errors.list(opts), &error_group/1)
 
-  def error(id) do
-    with %{group: group, latest: latest} <- Dokkit.Errors.get(id) do
+  def error(id, params \\ %{}) do
+    with %{group: group, latest: latest} <- Dokkit.Errors.get(id),
+         {:ok, at} <- cursor_at(params) do
+      n = limit(params)
+
+      events =
+        Repo.all(
+          from e in Dokkit.ErrorEvent,
+            where: e.group_id == ^group.id,
+            where: ^after_time(at, :at),
+            order_by: [desc: e.at, desc: e.id],
+            limit: ^(n + 1)
+        )
+
+      reports =
+        events
+        |> cut(n, &tkey(&1.at, &1.id))
+        |> mapped(&Map.take(&1, [:id, :at, :release, :host, :handled, :message, :tags, :frames]))
+
       Map.merge(error_group(group), %{
         frames: (latest && latest.frames) || [],
         tags: (latest && latest.tags) || %{},
-        message: latest && latest.message
+        message: latest && latest.message,
+        reports: reports
       })
     end
   end
@@ -422,6 +460,360 @@ defmodule Dokkit.Read do
       end
     else
       _ -> nil
+    end
+  end
+
+  @default_limit 100
+  @max_limit 500
+  @reach 1000
+
+  defp limit(params, default \\ @default_limit) do
+    n = params["limit"]
+    n = if is_float(n), do: trunc(n), else: n
+
+    case Integer.parse(to_string(n)) do
+      {n, ""} when n >= 1 -> min(n, @max_limit)
+      _ -> default
+    end
+  end
+
+  @doc """
+  One page of a list: `%{items: [...], next: cursor or nil}`, or an error tuple. A cursor is
+  the sort key of the last item, so a page is the same whatever is added or removed meanwhile.
+  `q`, `machine`, `service`, `environment`, `from` and `to` narrow the list where they make sense.
+  """
+  def list(:issues, params) do
+    with {:ok, at} <- cursor_at(params),
+         {:ok, from, to} <- times(params),
+         {:ok, state} <- issue_state(params["state"]) do
+      n = limit(params)
+      now = DateTime.utc_now()
+
+      filters = [
+        state.(now),
+        params["machine"] &&
+          dynamic(
+            [i, s, m],
+            m.name == ^params["machine"] or fragment("?::text", m.id) == ^params["machine"]
+          ),
+        params["service"] &&
+          case Ecto.UUID.cast(params["service"]) do
+            {:ok, id} -> dynamic([i], i.service_id == ^id)
+            _ -> dynamic([], false)
+          end,
+        params["environment"] && dynamic([i, s], s.environment == ^params["environment"]),
+        like_text(params["q"]) &&
+          dynamic(
+            [i],
+            ilike(i.title, ^like_text(params["q"])) or
+              ilike(fragment("'DOK-' || ?::text", i.number), ^like_text(params["q"]))
+          ),
+        from && dynamic([i], i.since >= ^from),
+        to && dynamic([i], i.since <= ^to),
+        after_time(at, :since)
+      ]
+
+      Repo.all(
+        from i in Issue,
+          left_join: s in assoc(i, :service),
+          left_join: m in assoc(i, :machine),
+          where: ^all_of(filters),
+          order_by: [desc: i.since, desc: i.id],
+          limit: ^(n + 1),
+          preload: [:machine, :service, :check, :alert]
+      )
+      |> cut(n, &tkey(&1.since, &1.id))
+      |> mapped(&issue/1)
+    end
+  end
+
+  def list(:machines, params) do
+    for(
+      m <- machines(),
+      like?(params, [m.name, m.os]),
+      params["machine"] in [nil, m.id, m.name],
+      do: m
+    )
+    |> page(params, &(down(&1.name) <> "\0" <> &1.id))
+  end
+
+  def list(:services, params),
+    do: services(params) |> page(params, &(down(&1.machine <> "\0" <> &1.name) <> &1.id))
+
+  def list(:jobs, params),
+    do: jobs(params) |> page(params, &(down(&1.machine <> "\0" <> &1.name) <> &1.id))
+
+  def list({:runs, id}, params) do
+    with %{} = s <- Estate.service(id),
+         {:ok, at} <- cursor_at(params),
+         {:ok, from, to} <- times(params) do
+      n = limit(params)
+
+      Estate.runs(s, n + 1,
+        after: at,
+        from: from,
+        to: to,
+        result: params["result"]
+      )
+      |> cut(n, &tkey(&1.started_at || &1.finished_at, &1.id))
+      |> mapped(&run/1)
+    end
+  end
+
+  def list(:deploys, params) do
+    with {:ok, from, to} <- times(params) do
+      Dokkit.Deploys.list(limit: @reach)
+      |> Enum.filter(fn d ->
+        params["service"] in [nil, d.service_id, d.service.slug] and
+          params["machine"] in [nil, d.service.machine.id, d.service.machine.name] and
+          params["environment"] in [nil, d.service.environment] and
+          like?(params, [d.service.name, d.version, d.commit, d.by]) and within?(d.at, from, to)
+      end)
+      |> page(params, &tkey(&1.at, &1.id), :desc)
+      |> mapped(&deploy/1)
+    end
+  end
+
+  def list(:errors, params) do
+    with {:ok, from, to} <- times(params) do
+      Dokkit.Errors.list(limit: @reach)
+      |> Enum.filter(fn g ->
+        params["service"] in [nil, g.service_id, g.service.slug] and
+          params["machine"] in [nil, g.service.machine.id, g.service.machine.name] and
+          params["environment"] in [nil, g.service.environment] and
+          like?(params, [g.type, g.top, g.service.name]) and within?(g.last_seen, from, to)
+      end)
+      |> page(params, &tkey(&1.last_seen, &1.id), :desc)
+      |> mapped(&error_group/1)
+    end
+  end
+
+  def list(:rules, params),
+    do:
+      rules()
+      |> Enum.filter(&like?(params, Map.values(&1)))
+      |> ordered(params)
+
+  def list(:proposals, params) do
+    for(
+      f <- Dokkit.Found.list(),
+      params["machine"] in [nil, f.machine.id, f.machine.name],
+      params["kind"] in [nil, f.kind],
+      like?(params, [f.key, f.machine.name, f.detail["label"], f.detail["saw"]]),
+      do: f
+    )
+    |> page(params, &(&1.kind <> "\0" <> down(&1.key) <> "\0" <> &1.id))
+    |> mapped(&found/1)
+  end
+
+  def list(:keys, params) do
+    with {:ok, from, to} <- times(params) do
+      for(
+        k <- keys(),
+        like?(params, [k.label, k.hint]),
+        params["kind"] in [nil, to_string(k.kind)],
+        params["machine"] in [nil, k.machine],
+        within?(k.inserted_at, from, to),
+        do: k
+      )
+      |> page(params, &tkey(&1.inserted_at, &1.id), :desc)
+    end
+  end
+
+  def list(:users, params),
+    do:
+      users()
+      |> Enum.filter(&like?(params, [&1.name]))
+      |> page(params, &(down(&1.name) <> "\0" <> &1.id))
+
+  def list(:releases, params),
+    do:
+      Dokkit.Releases.list()
+      |> Enum.filter(&like?(params, [&1.version]))
+      |> ordered(params)
+
+  def list(:logs, params) do
+    service = params["service"] && Estate.service(params["service"])
+
+    machine =
+      params["machine"] && Enum.find(Issues.machines(), &(params["machine"] in [&1.id, &1.name]))
+
+    with true <- !((params["service"] && !service) || (params["machine"] && !machine)),
+         {:ok, from} <- time(params["from"], nil),
+         {:ok, to} <- time(params["to"], nil),
+         {:ok, at} <- cursor_at(params) do
+      n = limit(params, 500)
+
+      Logs.list(
+        q: params["q"],
+        level: params["level"],
+        service: service && service.id,
+        machine: machine && machine.id,
+        from: from,
+        to: to,
+        before: at,
+        limit: n + 1
+      )
+      |> cut(n, &tkey(&1.at, &1.id))
+      |> mapped(fn l ->
+        %{
+          t: l.at,
+          level: l.level,
+          msg: l.msg,
+          fields: l.fields,
+          machine: l.machine.name,
+          service: l.service && l.service.slug
+        }
+      end)
+    else
+      {:error, _, _} = e -> e
+      _ -> nil
+    end
+  end
+
+  defp issue_state(nil), do: {:ok, fn _ -> dynamic([i], is_nil(i.closed_at)) end}
+  defp issue_state("all"), do: {:ok, fn _ -> dynamic([], true) end}
+  defp issue_state("closed"), do: {:ok, fn _ -> dynamic([i], not is_nil(i.closed_at)) end}
+
+  defp issue_state("open"),
+    do:
+      {:ok,
+       fn now ->
+         dynamic(
+           [i],
+           is_nil(i.closed_at) and (is_nil(i.snoozed_until) or i.snoozed_until <= ^now)
+         )
+       end}
+
+  defp issue_state("snoozed"),
+    do: {:ok, fn now -> dynamic([i], is_nil(i.closed_at) and i.snoozed_until > ^now) end}
+
+  defp issue_state(_),
+    do: {:error, "bad_state", "state is open, snoozed, closed or all."}
+
+  defp all_of(filters),
+    do:
+      Enum.reduce(Enum.filter(filters, & &1), dynamic([], true), fn d, acc ->
+        dynamic([], ^acc and ^d)
+      end)
+
+  defp like_text(q) when is_binary(q) do
+    case String.trim(q) do
+      "" -> nil
+      q -> "%" <> String.replace(q, ["\\", "%", "_"], &("\\" <> &1)) <> "%"
+    end
+  end
+
+  defp like_text(_), do: nil
+
+  defp after_time(nil, _), do: dynamic([], true)
+
+  defp after_time({at, id}, field),
+    do:
+      dynamic(
+        [x],
+        field(x, ^field) < ^at or (field(x, ^field) == ^at and x.id < ^id)
+      )
+
+  defp like?(params, fields) do
+    case String.downcase(String.trim(to_string(params["q"] || ""))) do
+      "" ->
+        true
+
+      q ->
+        Enum.any?(fields, &(is_binary(&1) and String.contains?(String.downcase(&1), q)))
+    end
+  end
+
+  defp within?(at, from, to),
+    do:
+      (is_nil(from) or DateTime.compare(at, from) != :lt) and
+        (is_nil(to) or DateTime.compare(at, to) != :gt)
+
+  defp times(params) do
+    with {:ok, from} <- time(params["from"], nil), {:ok, to} <- time(params["to"], nil) do
+      {:ok, from, to}
+    else
+      _ -> {:error, "bad_time", "from and to are times, in RFC 3339."}
+    end
+  end
+
+  defp down(text), do: String.downcase(text || "")
+
+  defp pad(n), do: n |> Integer.to_string() |> String.pad_leading(20, "0")
+
+  defp tkey(at, id), do: pad(if(at, do: DateTime.to_unix(at, :microsecond), else: 0)) <> id
+
+  defp page(items, params, key, dir \\ :asc) do
+    case cursor(params) do
+      {:ok, after_key} ->
+        sorted = Enum.sort_by(items, key, dir)
+
+        rest =
+          if after_key,
+            do: Enum.drop_while(sorted, &(not after?(key.(&1), after_key, dir))),
+            else: sorted
+
+        cut(rest, limit(params), key)
+
+      error ->
+        error
+    end
+  end
+
+  defp ordered(items, params) do
+    case page(Enum.with_index(items), params, &pad(elem(&1, 1))) do
+      %{items: items} = page -> %{page | items: Enum.map(items, &elem(&1, 0))}
+      error -> error
+    end
+  end
+
+  defp after?(key, cursor, :asc), do: key > cursor
+  defp after?(key, cursor, :desc), do: key < cursor
+
+  defp cut(rows, n, key) do
+    {items, more} = Enum.split(rows, n)
+
+    %{
+      items: items,
+      next:
+        if(more == [], do: nil, else: Base.url_encode64(key.(List.last(items)), padding: false))
+    }
+  end
+
+  defp mapped(%{items: items} = page, f), do: %{page | items: Enum.map(items, f)}
+  defp mapped(other, _), do: other
+
+  defp cursor(%{"cursor" => text}) when is_binary(text) and text != "" do
+    with {:ok, key} <- Base.url_decode64(text, padding: false),
+         true <- String.valid?(key) do
+      {:ok, key}
+    else
+      _ -> {:error, "bad_cursor", "cursor is the next value of an earlier answer."}
+    end
+  end
+
+  defp cursor(_), do: {:ok, nil}
+
+  defp cursor_at(params) do
+    case cursor(params) do
+      {:ok, nil} ->
+        {:ok, nil}
+
+      {:ok, <<micro::binary-size(20), id::binary>>} ->
+        with {n, ""} <- Integer.parse(micro),
+             {:ok, id} <- Ecto.UUID.cast(id),
+             {:ok, at} <- DateTime.from_unix(n, :microsecond) do
+          {:ok, {at, id}}
+        else
+          _ -> {:error, "bad_cursor", "cursor is the next value of an earlier answer."}
+        end
+
+      {:ok, _} ->
+        {:error, "bad_cursor", "cursor is the next value of an earlier answer."}
+
+      error ->
+        error
     end
   end
 
@@ -473,5 +865,16 @@ defmodule Dokkit.Read do
   end
 
   defp run(r),
-    do: Map.take(r, [:run, :result, :started_at, :finished_at, :exit_code, :duration_ms, :tail])
+    do:
+      Map.take(r, [
+        :run,
+        :result,
+        :started_at,
+        :finished_at,
+        :exit_code,
+        :duration_ms,
+        :done,
+        :total,
+        :tail
+      ])
 end
