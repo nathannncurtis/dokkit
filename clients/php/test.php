@@ -3,7 +3,12 @@
 //     php test.php
 // Served by PHP's own web server, this same file is the server: it writes down what it is sent.
 if (PHP_SAPI !== 'cli') {
-    file_put_contents(__DIR__ . '/out/got.txt', $_SERVER['REQUEST_URI'] . ' ' . ($_SERVER['HTTP_AUTHORIZATION'] ?? '') . "\n" . file_get_contents('php://input') . "\n", FILE_APPEND);
+    $body = file_get_contents('php://input');
+    $encoding = $_SERVER['HTTP_CONTENT_ENCODING'] ?? '';
+    file_put_contents(__DIR__ . '/out/got.txt', $_SERVER['REQUEST_URI'] . ' ' . ($_SERVER['HTTP_AUTHORIZATION'] ?? '') . " $encoding\n" . ($encoding === 'gzip' ? gzdecode($body) : $body) . "\n", FILE_APPEND);
+    if ($_SERVER['REQUEST_URI'] === '/api/v1/errors' && is_file(__DIR__ . '/out/status.txt')) {
+        http_response_code((int) file_get_contents(__DIR__ . '/out/status.txt'));
+    }
     echo '{}';
     return;
 }
@@ -11,6 +16,7 @@ if (PHP_SAPI !== 'cli') {
 require __DIR__ . '/Dokkit.php';
 @mkdir(__DIR__ . '/out');
 file_put_contents(__DIR__ . '/out/got.txt', '');
+@unlink(__DIR__ . '/out/status.txt');
 $port = 47913;
 $server = proc_open([PHP_BINARY, '-S', "127.0.0.1:$port", __FILE__], [['pipe', 'r'], ['file', __DIR__ . '/out/server.log', 'w'], ['file', __DIR__ . '/out/server.log', 'a']], $pipes);
 for ($i = 0; $i < 50 && !@fsockopen('127.0.0.1', $port); $i++) {
@@ -42,18 +48,109 @@ try {
 } catch (DomainException) {
 }
 Dokkit::flush();
-proc_terminate($server);
 
 $all = file_get_contents(__DIR__ . '/out/got.txt');
 $want = [
     '/api/v1/report Bearer dka_test', '"type":"deploy","version":"2.3.0"', '"every_seconds":30', '"state":"degraded","value":14',
     'oldest item is \"14\" minutes old', '"level":"error","msg":"Upload failed"', '"level":"warn","msg":"Slow query"', '"event":"start"', '"event":"progress","done":4000,"total":9000',
-    '"event":"fail","exit_code":1', '/api/v1/errors Bearer dka_test', '"type":"DomainException","handled":false', '"function":"purge","line":38,"own":true}]',
+    '"event":"fail","exit_code":1', '/api/v1/errors Bearer dka_test', '"type":"DomainException","handled":false', '"function":"purge","line":44,"own":true}]',
 ];
 $missing = array_filter($want, fn ($w) => !str_contains($all, $w));
 // What the library does with its own pieces, and when the server cannot be reached.
 $call = fn (string $name, ...$args) => (new ReflectionMethod('Dokkit', $name))->invoke(null, ...$args);
 $bad = [];
+if (!str_contains($all, '/api/v1/report Bearer dka_test gzip')) {
+    $bad[] = 'a report body is not gzipped';
+}
+$got = fn () => file_get_contents(__DIR__ . '/out/got.txt');
+$reset = fn () => file_put_contents(__DIR__ . '/out/got.txt', '');
+$reset();
+Dokkit::log('info', str_repeat('é', 40000), ['k' => 'v']);
+Dokkit::log('info', 'big fields', ['x' => str_repeat('a', 70000)]);
+Dokkit::flush();
+$cut = 0;
+foreach (explode("\n", $got()) as $row) {
+    $line = json_decode($row, true);
+    if (!is_array($line) || !isset($line['msg'])) {
+        continue;
+    }
+    $cut++;
+    if (strlen($row) > 65536 || !str_ends_with($line['msg'], ' [cut]')) {
+        $bad[] = 'a long log line is not cut to 64 KB with the marker';
+    }
+    if (str_starts_with($line['msg'], 'é') && ($line['fields']['k'] ?? '') !== 'v') {
+        $bad[] = 'a cut log line lost fields that fit';
+    }
+    if (isset($line['fields']['x'])) {
+        $bad[] = 'a line with fields too big to fit kept them';
+    }
+}
+if ($cut !== 2) {
+    $bad[] = 'long log lines were not both sent cut';
+}
+$error = fn () => Dokkit::capture(new RuntimeException('x'));
+$kept = fn () => count((new ReflectionProperty('Dokkit', 'errors'))->getValue());
+$status = __DIR__ . '/out/status.txt';
+Dokkit::$dropped = 0;
+$reset();
+file_put_contents($status, '500');
+$error();
+Dokkit::log('info', 'sent beside a failed error');
+Dokkit::flush();
+if (!str_contains($got(), 'sent beside a failed error') || $kept() !== 1 || Dokkit::$dropped !== 0) {
+    $bad[] = 'a failed error post stopped log lines or was not kept';
+}
+Dokkit::flush();
+if ($kept() !== 0 || Dokkit::$dropped !== 1) {
+    $bad[] = 'an error post that failed twice is not dropped';
+}
+$reset();
+file_put_contents($status, '429');
+$error();
+Dokkit::flush();
+file_put_contents($status, '200');
+Dokkit::flush();
+if ($kept() !== 0 || Dokkit::$dropped !== 1 || substr_count($got(), '/api/v1/errors') !== 2) {
+    $bad[] = 'a 429 error post is not kept and sent on the next pass';
+}
+file_put_contents($status, '400');
+$error();
+Dokkit::flush();
+if ($kept() !== 0 || Dokkit::$dropped !== 2) {
+    $bad[] = 'a refused error post is not dropped at once';
+}
+@unlink($status);
+Dokkit::$dropped = 0;
+$on = new ReflectionProperty('Dokkit', 'on');
+$state = $on->getValue();
+$on->setValue(null, null);
+$reset();
+Dokkit::start('3.0.0', "http://127.0.0.1:$port/", 'dka_test', false);
+Dokkit::beat('quiet');
+Dokkit::flush();
+if (str_contains($got(), '3.0.0') || !str_contains($got(), 'quiet')) {
+    $bad[] = 'announceVersion false still sent a deploy line';
+}
+$on->setValue(null, null);
+$reset();
+Dokkit::start('3.0.0', "http://127.0.0.1:$port/", 'dka_test', false, 'dev');
+Dokkit::beat('b');
+Dokkit::log('info', 'l');
+Dokkit::job('j', fn () => 1);
+Dokkit::flush();
+if (substr_count($got(), '"environment":"dev"') !== 4) {
+    $bad[] = 'a non-production environment is not on every line';
+}
+$on->setValue(null, null);
+$reset();
+Dokkit::start('3.0.0', "http://127.0.0.1:$port/", 'dka_test', false, 'production');
+Dokkit::beat('b');
+Dokkit::flush();
+if (str_contains($got(), '"environment"')) {
+    $bad[] = 'the production environment is sent on a line';
+}
+$on->setValue(null, $state);
+proc_terminate($server);
 if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $call('uuid'))) {
     $bad[] = 'batch id is not a dashed uuid';
 }
@@ -66,8 +163,6 @@ if (!str_contains($call('encode', ['msg' => "bad ± byte"]), '"msg"')) {
 if (str_contains($all, '"type":"deploy"') !== (PHP_SAPI === 'cli')) {
     $bad[] = 'deploy line is for the command line only';
 }
-$on = new ReflectionProperty('Dokkit', 'on');
-$state = $on->getValue();
 $on->setValue(null, ['url' => 'http://127.0.0.1:1'] + $state);
 Dokkit::beat('a');
 Dokkit::beat('b');
