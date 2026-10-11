@@ -238,10 +238,11 @@ type client struct {
 	stuck           map[string]*stuck
 }
 
-// stuck counts the times one thing drew a server error.
+// stuck counts the times one thing drew a server error, and when it may be tried again.
 type stuck struct {
 	n     int
 	since time.Time
+	until time.Time
 }
 
 // takeService removes --service <slug> from the arguments before any "--".
@@ -252,21 +253,6 @@ func takeService(args []string) ([]string, string) {
 		}
 	}
 	return args, ""
-}
-
-// giveUp is true for something that keeps drawing a server error while the server
-// has taken other things since it first did.
-func (c *client) giveUp(key string) bool {
-	if c.stuck == nil {
-		c.stuck = map[string]*stuck{}
-	}
-	s := c.stuck[key]
-	if s == nil {
-		s = &stuck{since: time.Now()}
-		c.stuck[key] = s
-	}
-	s.n++
-	return s.n >= 5 && c.lastOK.After(s.since)
 }
 
 // writeFile replaces a file whole, so a reader never sees half of it.
@@ -605,20 +591,37 @@ func (c *client) flush(wait time.Duration) (int, error) {
 		}
 		name := filepath.Base(f)
 		batch := strings.TrimSuffix(name[21:], ".ndjson")
-		status, answer, err := c.post(batch, body)
+		var es []entry
+		for _, l := range bytes.Split(body, []byte("\n")) {
+			if len(bytes.TrimSpace(l)) > 0 {
+				es = append(es, entry{line: l, raw: l})
+			}
+		}
+		id := func(sub []entry, all bool) string {
+			if all {
+				return batch
+			}
+			h := sha256.New()
+			h.Write([]byte(name))
+			for _, e := range sub {
+				h.Write([]byte("\n"))
+				h.Write(e.raw)
+			}
+			return uuid(h.Sum(nil)[:16])
+		}
+		done, lost, stop := c.deliver(es, id)
+		c.noteLoss(name, lost)
+		var status httpStatus
 		switch {
-		case err != nil:
-			return held + len(files) - i, err
-		case status/100 == 2:
-			refused(answer)
+		case stop == nil:
 			os.Remove(f)
 			delete(counts, name)
-		case status == 413 || status == 422:
-			fmt.Fprintf(os.Stderr, "dokkit: the server will never take this batch (%d), dropping it\n", status)
-			os.Remove(f)
-			delete(counts, name)
+		case !errors.As(stop, &status):
+			c.keepRest(f, es[done:])
+			return held + len(files) - i, stop
 		default:
-			last = fmt.Errorf("the server answered %d", status)
+			c.keepRest(f, es[done:])
+			last = stop
 			held++
 			if counts[name]++; counts[name] >= 5 {
 				doomed = append(doomed, f)
@@ -637,6 +640,20 @@ func (c *client) flush(wait time.Duration) (int, error) {
 		last = nil
 	}
 	return held, last
+}
+
+// keepRest rewrites a spooled batch to the lines still to send, when some were delivered or set aside.
+func (c *client) keepRest(f string, rest []entry) {
+	var b bytes.Buffer
+	for _, e := range rest {
+		if !e.gone {
+			b.Write(e.line)
+			b.WriteByte('\n')
+		}
+	}
+	if b.Len() > 0 {
+		writeFile(f, b.Bytes())
+	}
 }
 
 // failures reads how many times each spooled batch has drawn a server error.

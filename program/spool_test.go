@@ -115,34 +115,6 @@ func TestLogLinesKeepToTheFilesServiceAndGetAMessage(t *testing.T) {
 	}
 }
 
-func TestLogLinesThatKeepDrawingAnErrorAreSkipped(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		z, _ := gzip.NewReader(r.Body)
-		b := make([]byte, 200)
-		n, _ := z.Read(b)
-		if strings.Contains(string(b[:n]), "poison") {
-			w.WriteHeader(500)
-		}
-	}))
-	defer srv.Close()
-	dir := t.TempDir()
-	bad := filepath.Join(dir, "bad.log")
-	os.WriteFile(bad, []byte("poison\n"), 0o600)
-	c := &client{url: srv.URL, key: "dkm_x", spool: t.TempDir(), http: &http.Client{}}
-	positions := map[string]int64{}
-	moved := false
-	for i := 0; i < 6 && !moved; i++ {
-		if i == 1 {
-			os.WriteFile(filepath.Join(dir, "ok.log"), []byte("fine\n"), 0o600)
-			c.sendLog("s", filepath.Join(dir, "ok.log"), positions)
-		}
-		moved = c.sendLog("s", bad, positions)
-	}
-	if !moved {
-		t.Fatal("the bad lines stay forever")
-	}
-}
-
 func TestTrimReportsWhatItDropped(t *testing.T) {
 	dir := t.TempDir()
 	c := &client{spool: dir, spoolMB: 1}
