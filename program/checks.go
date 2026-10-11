@@ -151,6 +151,9 @@ func readDeclaration(path string) (*declaration, error) {
 	if d.Service.ID == "" {
 		return nil, errors.New("[service] needs an id")
 	}
+	if err := d.validate(); err != nil {
+		return nil, err
+	}
 	// The same names the server gives: the check's name, or its type, numbered when it repeats.
 	seen := map[string]int{}
 	for i := range d.Check {
@@ -522,6 +525,10 @@ func checkOnce(path string) int {
 		return 1
 	}
 	fmt.Printf("%s: %s, %d check(s)\n", path, d.Service.ID, len(d.Check))
+	if err := d.misplaced(); err != nil {
+		fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
+		return 1
+	}
 	bad := 0
 	for i := range d.Check {
 		c := &d.Check[i]
