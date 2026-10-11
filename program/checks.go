@@ -49,6 +49,7 @@ type check struct {
 	DateFrom              string `toml:"date_from"`
 	CommandHas            string `toml:"command_has"`
 	AtLeast               int    `toml:"at_least"`
+	Status                any
 	name, dir             string
 	next                  time.Time
 	restart               bool
@@ -187,6 +188,14 @@ func (c *check) problem() (runs bool, err error) {
 	}
 	if c.AtLeast != 0 && (c.Type != "process" || c.AtLeast < 1) {
 		return false, errors.New("at_least is a number of processes, 1 or more, and only for a process check")
+	}
+	if c.Status != nil {
+		if c.Type != "http" {
+			return false, errors.New("status is only for an http check")
+		}
+		if _, err := statusRanges(c.Status); err != nil {
+			return false, err
+		}
 	}
 	if c.Slow != "" {
 		slow, _ := time.ParseDuration(c.Slow)
@@ -342,11 +351,17 @@ func (c *check) run() result {
 	switch c.Type {
 	case "http":
 		var res *http.Response
-		res, err = (&http.Client{Timeout: c.timeout()}).Get(c.URL)
+		want, _ := statusRanges(c.Status)
+		client := &http.Client{Timeout: c.timeout()}
+		if slices.ContainsFunc(want, func(r [2]int) bool { return r[1] >= 300 && r[0] < 400 }) {
+			client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+		}
+		res, err = client.Get(c.URL)
 		if err == nil {
 			res.Body.Close()
-			if res.StatusCode >= 400 {
-				err = fmt.Errorf("answered %d", res.StatusCode)
+			code := res.StatusCode
+			if len(want) == 0 && code >= 400 || len(want) > 0 && !slices.ContainsFunc(want, func(r [2]int) bool { return code >= r[0] && code <= r[1] }) {
+				err = fmt.Errorf("answered %d", code)
 			}
 		}
 		if slow, perr := time.ParseDuration(c.Slow); err == nil && perr == nil && time.Since(started) > slow {

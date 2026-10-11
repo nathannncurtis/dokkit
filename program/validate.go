@@ -67,6 +67,49 @@ func (d *declaration) misplaced() error {
 	return nil
 }
 
+// statusRanges reads status = 200, "200-299", or a list of those, as inclusive ranges of 100 to 599.
+func statusRanges(v any) ([][2]int, error) {
+	bad := fmt.Errorf("status is a code such as 200, a range such as \"200-299\", or a list of those, from 100 to 599")
+	one := func(x any) ([2]int, error) {
+		switch x := x.(type) {
+		case int64:
+			if x >= 100 && x <= 599 {
+				return [2]int{int(x), int(x)}, nil
+			}
+		case string:
+			lo, hi, isRange := strings.Cut(strings.TrimSpace(x), "-")
+			a, err1 := strconv.Atoi(strings.TrimSpace(lo))
+			b, err2 := a, error(nil)
+			if isRange {
+				b, err2 = strconv.Atoi(strings.TrimSpace(hi))
+			}
+			if err1 == nil && err2 == nil && a >= 100 && b <= 599 && a <= b {
+				return [2]int{a, b}, nil
+			}
+		}
+		return [2]int{}, bad
+	}
+	if v == nil {
+		return nil, nil
+	}
+	list, ok := v.([]any)
+	if !ok {
+		list = []any{v}
+	}
+	var out [][2]int
+	for _, x := range list {
+		r, err := one(x)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	if len(out) == 0 {
+		return nil, bad
+	}
+	return out, nil
+}
+
 func slicesHas(list []string, v any) bool {
 	s, ok := v.(string)
 	if !ok {
