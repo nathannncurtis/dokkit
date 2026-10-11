@@ -421,7 +421,7 @@ func expiryResult(until, at time.Time) result {
 	switch {
 	case left < 0:
 		return result{state: "down", value: days, note: "ran out on " + until.Format("Jan 2 2006")}
-	case days < 30:
+	case left <= 30:
 		return result{state: "degraded", value: days, note: fmt.Sprintf("runs out in %.0f days, on %s", days, until.Format("Jan 2 2006"))}
 	}
 	return result{ok: true, value: days}
