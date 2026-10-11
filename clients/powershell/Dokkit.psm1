@@ -19,7 +19,8 @@ $script:Bytes = 0
 
 function Start-Dokkit {
     # Turns the library on. With no address or key it stays off and every call does nothing.
-    param([string]$Version, [string]$Url = $env:DOKKIT_URL, [string]$Key = $env:DOKKIT_KEY)
+    # The deploy line for Version is queued once; the server records it only when the version changed. -AnnounceVersion $false leaves it out.
+    param([string]$Version, [string]$Url = $env:DOKKIT_URL, [string]$Key = $env:DOKKIT_KEY, [bool]$AnnounceVersion = $true, [string]$Root, [string]$Environment = $env:DOKKIT_ENV)
     if (-not $Url -or -not $Key -or $script:On) { return }
     if ($Url -match '^http://' -and $Url -notmatch '^http://(localhost|127(\.\d+){3}|\[::1\])([:/]|$)' -and $env:DOKKIT_INSECURE -ne '1') {
         [Console]::Error.WriteLine('dokkit: http:// address to a non-local host; set DOKKIT_INSECURE=1 to allow it. Staying off.')
@@ -27,17 +28,28 @@ function Start-Dokkit {
     }
     # Windows PowerShell 5.1 on older .NET does not offer TLS 1.2 unless asked.
     try { if ([Net.ServicePointManager]::SecurityProtocol -ne 0) { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } } catch {}
-    $script:On = @{ Url = $Url.TrimEnd('/'); Key = $Key; Version = $Version; Environment = $env:DOKKIT_ENV; Host = [Environment]::MachineName; Root = (Get-Location).Path }
-    if ($Version) { Add-Line @{ type = 'deploy'; version = $Version } }
+    if (-not $Root) { $Root = (Get-PSCallStack)[1].ScriptName | Split-Path -Parent -ErrorAction SilentlyContinue }
+    if (-not $Root) { $Root = $Root }
+    $script:On = @{ Url = $Url.TrimEnd('/'); Key = $Key; Version = $Version; Environment = $Environment; Host = [Environment]::MachineName; Root = (Get-Location).Path }
+    if ($Version -and $AnnounceVersion) { Add-Line @{ type = 'deploy'; version = $Version } }
 }
 
 function Add-Line([hashtable]$Line) {
     if (-not $script:On) { return }
     $Line.at = [DateTime]::UtcNow.ToString('o')
     $Line.host = $script:On.Host
+    if ($script:On.Environment -and $script:On.Environment -ne 'production' -and -not $Line.environment) { $Line.environment = $script:On.Environment }
     foreach ($name in @($Line.Keys)) { if ($null -eq $Line[$name] -or ($Line[$name] -is [string] -and $Line[$name] -eq '')) { $Line.Remove($name) } }
-    try { $text = ConvertTo-Json $Line -Depth 6 -Compress } catch { $script:Dropped++; return }
+    try { $text = ConvertTo-Json $Line -Depth 10 -Compress } catch { $script:Dropped++; return }
     $size = [Text.Encoding]::UTF8.GetByteCount($text)
+    # A line over 65536 bytes loses the end of its message, which then ends with a marker.
+    while ($size -gt 65536 -and $Line.msg -is [string] -and $Line.msg -ne ' [cut]') {
+        $keep = [Math]::Max(0, [int][Math]::Floor($Line.msg.Length * (65536 - 64) / $size))
+        if ($keep -gt 0 -and [char]::IsHighSurrogate($Line.msg[$keep - 1])) { $keep-- }
+        $Line.msg = $Line.msg.Substring(0, $keep) + ' [cut]'
+        $text = ConvertTo-Json $Line -Depth 10 -Compress
+        $size = [Text.Encoding]::UTF8.GetByteCount($text)
+    }
     if ($size -gt 4000000) { $script:Dropped++; return }
     while ($script:Lines.Count -gt 0 -and ($script:Lines.Count -ge 1000 -or $script:Bytes + $size -gt 4000000)) {
         $script:Bytes -= [Text.Encoding]::UTF8.GetByteCount($script:Lines[0]); $script:Lines.RemoveAt(0); $script:Dropped++
@@ -66,6 +78,13 @@ function Write-DokkitLog {
     # Level is trace, debug, info, warn, error or fatal.
     param([Parameter(Mandatory)][string]$Level, [Parameter(Mandatory)][AllowEmptyString()][string]$Message)
     Add-Line @{ type = 'log'; t = [DateTime]::UtcNow.ToString('o'); level = $Level; msg = $Message }
+}
+
+function Send-DokkitStats {
+    # Sends a stats document, an object or a JSON string, for an app that dokkit cannot reach.
+    param([Parameter(Mandatory)]$Document)
+    if ($Document -is [string]) { try { $Document = ConvertFrom-Json $Document } catch { return } }
+    Add-Line @{ type = 'stats'; document = $Document }
 }
 
 function Send-DokkitProgress {
@@ -107,7 +126,7 @@ function Send-DokkitError {
     foreach ($text in ($ErrorRecord.ScriptStackTrace -split "`n")) {
         if ($text -match '^at (?<function>.+), (?<file>.+): line (?<line>\d+)') {
             $file = $Matches.file
-            $own = $file -notmatch '\\Modules\\|<No file>'
+            $own = $file -notmatch '[\\/]Modules[\\/]|<No file>'
             # Relative to the folder the script runs from; other files keep only their name.
             $file = if ($file.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { $file.Substring($root.Length) } else { Split-Path $file -Leaf }
             $frames += @{ function = $Matches.function; file = $file; line = [int]$Matches.line; own = $own }
@@ -124,18 +143,33 @@ function Send-DokkitError {
 function Send-Dokkit {
     # Sends what is waiting. Call it at the end of a script that does not use Invoke-DokkitJob.
     if (-not $script:On) { return }
+    # Returns ok, keep (no answer, 5xx or 429: try again later) or drop (the server refused it).
     $post = {
         param($path, $body, $kind, $id)
         try {
             $headers = @{ Authorization = "Bearer $($script:On.Key)"; 'Dokkit-Batch' = $id }
-            $null = Invoke-WebRequest -Uri ($script:On.Url + $path) -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($body)) -ContentType $kind -Headers $headers -TimeoutSec 10 -UseBasicParsing
-            $true
+            $bytes = [Text.Encoding]::UTF8.GetBytes($body)
+            if ($path -eq '/api/v1/report') {
+                $packed = New-Object IO.MemoryStream
+                $zip = New-Object IO.Compression.GZipStream($packed, [IO.Compression.CompressionMode]::Compress, $true)
+                $zip.Write($bytes, 0, $bytes.Length); $zip.Dispose()
+                $bytes = $packed.ToArray()
+                $headers['Content-Encoding'] = 'gzip'
+            }
+            $null = Invoke-WebRequest -Uri ($script:On.Url + $path) -Method Post -Body $bytes -ContentType $kind -Headers $headers -TimeoutSec 10 -UseBasicParsing
+            'ok'
         }
-        catch { $false }
+        catch {
+            $response = $_.Exception.Response
+            $status = if ($response) { [int]$response.StatusCode } else { 0 }
+            if ($status -ge 400 -and $status -lt 500 -and $status -ne 429) { 'drop' } else { 'keep' }
+        }
     }
     while ($script:Errors.Count -gt 0) {
-        $e = $script:Errors[0]; $script:Errors.RemoveAt(0)
-        if (-not (& $post '/api/v1/errors' (ConvertTo-Json $e -Depth 6 -Compress) 'application/json' ([guid]::NewGuid().ToString()))) { $script:Dropped++; break }
+        $result = & $post '/api/v1/errors' (ConvertTo-Json $script:Errors[0] -Depth 6 -Compress) 'application/json' ([guid]::NewGuid().ToString())
+        if ($result -eq 'keep') { break }
+        $script:Errors.RemoveAt(0)
+        if ($result -eq 'drop') { $script:Dropped++ }
     }
     while ($script:Lines.Count -gt 0) {
         $take = [Math]::Min(500, $script:Lines.Count)
@@ -144,11 +178,11 @@ function Send-Dokkit {
         $id = [guid]::NewGuid().ToString()
         $body = $batch -join "`n"
         # A failed batch gets one more try with the same id; after that it is dropped and counted.
-        if (-not (& $post '/api/v1/report' $body 'application/x-ndjson' $id) -and -not (& $post '/api/v1/report' $body 'application/x-ndjson' $id)) {
+        if ((& $post '/api/v1/report' $body 'application/x-ndjson' $id) -ne 'ok' -and (& $post '/api/v1/report' $body 'application/x-ndjson' $id) -ne 'ok') {
             $script:Dropped += $batch.Count
             break
         }
     }
 }
 
-Export-ModuleMember -Function Start-Dokkit, Send-DokkitBeat, Send-DokkitCheck, Send-DokkitMetric, Write-DokkitLog, Send-DokkitProgress, Invoke-DokkitJob, Send-DokkitError, Send-Dokkit
+Export-ModuleMember -Function Start-Dokkit, Send-DokkitBeat, Send-DokkitCheck, Send-DokkitMetric, Write-DokkitLog, Send-DokkitProgress, Invoke-DokkitJob, Send-DokkitError, Send-DokkitStats, Send-Dokkit

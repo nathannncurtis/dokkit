@@ -5,7 +5,7 @@
     Description          = 'The Dokkit client library'
     PowerShellVersion    = '5.1'
     CompatiblePSEditions = @('Desktop', 'Core')
-    FunctionsToExport    = @('Start-Dokkit', 'Send-DokkitBeat', 'Send-DokkitCheck', 'Send-DokkitMetric', 'Write-DokkitLog', 'Send-DokkitProgress', 'Invoke-DokkitJob', 'Send-DokkitError', 'Send-Dokkit')
+    FunctionsToExport    = @('Start-Dokkit', 'Send-DokkitBeat', 'Send-DokkitCheck', 'Send-DokkitMetric', 'Write-DokkitLog', 'Send-DokkitProgress', 'Invoke-DokkitJob', 'Send-DokkitError', 'Send-DokkitStats', 'Send-Dokkit')
     CmdletsToExport      = @()
     VariablesToExport    = @()
     AliasesToExport      = @()
