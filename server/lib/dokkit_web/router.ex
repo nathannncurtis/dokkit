@@ -52,8 +52,7 @@ defmodule DokkitWeb.Router do
       live "/errors/:id", ErrorsLive
       live "/deploys", DeploysLive, :deploys
       live "/versions", DeploysLive, :versions
-      live "/found", TasksLive, :found
-      live "/tasks", TasksLive, :tasks
+      live "/found", FoundLive
       live "/alerts", AlertsLive
       live "/settings", SettingsLive
     end
@@ -95,7 +94,6 @@ defmodule DokkitWeb.Router do
     post "/proposals", IntakeController, :propose
     post "/deploys", IntakeController, :deploy
     get "/checks", IntakeController, :checks
-    get "/tasks/accepted", IntakeController, :accepted
     get "/program/:target", IntakeController, :program
     get "/update", IntakeController, :update
     post "/update/result", IntakeController, :update_result
@@ -128,9 +126,6 @@ defmodule DokkitWeb.Router do
     get "/errors", ApiController, :errors
     get "/errors/:id", ApiController, :error
     get "/rules", ApiController, :rules
-    get "/tasks", ApiController, :tasks
-    get "/task-runs", ApiController, :task_runs
-    post "/tasks/:id/run", ApiController, :run_task
     get "/keys", ApiController, :keys
     post "/keys", ApiController, :add_key
     delete "/keys/:id", ApiController, :revoke_key
@@ -161,8 +156,6 @@ defmodule DokkitWeb.Router do
     post "/jobs", ApiController, :add_job
     post "/apps", ApiController, :add_app
     put "/jobs/:id/timing", ApiController, :set_job_timing
-    post "/tasks/:id/accept", ApiController, :accept_task
-    post "/tasks/:id/dismiss", ApiController, :dismiss_task
     post "/machines/:id/update", ApiController, :update_program
     get "/alerts", ApiController, :alert_settings
     put "/alerts", ApiController, :set_alert_settings

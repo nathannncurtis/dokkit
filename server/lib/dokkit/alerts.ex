@@ -7,7 +7,7 @@ defmodule Dokkit.Alerts do
   use GenServer
   import Ecto.Query
   require Logger
-  alias Dokkit.{Alert, Issue, Machine, Repo, Service, Setting, TaskRun}
+  alias Dokkit.{Alert, Issue, Machine, Repo, Service, Setting, WorkRun}
 
   @defaults %{
     "down" => "page",
@@ -616,26 +616,26 @@ defmodule Dokkit.Alerts do
     with {:ok, mac} <- imessage_mac(config), {:ok, to} <- imessage_to(config) do
       last =
         Repo.one(
-          from r in TaskRun,
+          from r in WorkRun,
             where: r.alert_id == ^alert.id,
             order_by: [desc: r.inserted_at],
             limit: 1
         )
 
       case last do
-        %TaskRun{state: state} when state in [:queued, :running] ->
+        %WorkRun{state: state} when state in [:queued, :running] ->
           if stale?(last, DateTime.utc_now()),
             do: {:error, not_picked_up(mac.name)},
             else: :waiting
 
         _ ->
-          Dokkit.Tasks.imessage(mac.id, to, summary(about), alert.id)
+          Dokkit.Work.imessage(mac.id, to, summary(about), alert.id)
           :waiting
       end
     end
   end
 
-  defp stale?(%TaskRun{inserted_at: at}, now), do: DateTime.diff(now, at) >= @imessage_wait
+  defp stale?(%WorkRun{inserted_at: at}, now), do: DateTime.diff(now, at) >= @imessage_wait
 
   @doc """
   Fails the iMessage alerts whose Mac has not answered in five minutes. Their run stays, so a
@@ -647,10 +647,9 @@ defmodule Dokkit.Alerts do
     late =
       Repo.all(
         from a in Alert,
-          join: r in TaskRun,
+          join: r in WorkRun,
           on: r.alert_id == a.id and r.state in [:queued, :running],
-          join: t in assoc(r, :task),
-          join: m in assoc(t, :machine),
+          join: m in assoc(r, :machine),
           where: a.status == :sending and r.inserted_at <= ^cutoff,
           select: {a.id, m.name}
       )
@@ -672,7 +671,7 @@ defmodule Dokkit.Alerts do
 
   @doc "A finished iMessage run settles its alert, however late it answers."
   def answered(run_id) do
-    with %TaskRun{alert_id: id} = run when is_binary(id) <- Repo.get(TaskRun, run_id) do
+    with %WorkRun{alert_id: id} = run when is_binary(id) <- Repo.get(WorkRun, run_id) do
       set =
         if run.state == :ok,
           do: [status: :sent, error: nil],
@@ -689,7 +688,7 @@ defmodule Dokkit.Alerts do
     :ok
   end
 
-  defp reason(%TaskRun{output: output, exit_code: code}) do
+  defp reason(%WorkRun{output: output, exit_code: code}) do
     case output |> String.split("\n", trim: true) |> Enum.join("; ") do
       "" -> "The Mac answered with exit code #{code}."
       text -> String.slice(text, 0, 500)
@@ -706,7 +705,7 @@ defmodule Dokkit.Alerts do
     config = config()
 
     with {:ok, mac} <- imessage_mac(config), {:ok, to} <- imessage_to(config) do
-      run = Dokkit.Tasks.imessage(mac.id, to, "A test from Dokkit (dokkit, DOK-0)")
+      run = Dokkit.Work.imessage(mac.id, to, "A test from Dokkit (dokkit, DOK-0)")
       wait_for(run, mac, Application.get_env(:dokkit, :imessage_test_wait, @test_wait))
     end
   end
@@ -734,15 +733,15 @@ defmodule Dokkit.Alerts do
   end
 
   defp wait_for(run, mac, left) do
-    case Repo.get!(TaskRun, run.id) do
-      %TaskRun{state: :ok} ->
+    case Repo.get!(WorkRun, run.id) do
+      %WorkRun{state: :ok} ->
         :ok
 
-      %TaskRun{state: state} = r when state in [:fail, :refused] ->
+      %WorkRun{state: state} = r when state in [:fail, :refused] ->
         {:error, reason(r)}
 
       r when left <= 0 ->
-        Repo.update_all(from(x in TaskRun, where: x.id == ^r.id and x.state == :queued),
+        Repo.update_all(from(x in WorkRun, where: x.id == ^r.id and x.state == :queued),
           set: [state: :refused, finished_at: DateTime.utc_now(), output: "Not picked up."]
         )
 

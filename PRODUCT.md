@@ -25,17 +25,17 @@ One self-hosted place that watches everything a small shop runs and says what ne
 
 - The first screen is "this needs your attention", which is not the same as "this is broken".
 - An app joins by declaring itself in a `dokkit.toml` in its own repo; nothing is wired in by hand on the server.
-- The program on each machine opens no port. Work reaches it over a connection it makes itself, and the server can only ask for named tasks a person accepted.
+- The program on each machine opens no port. Work reaches it over a connection it makes itself.
 - Scanning a machine is offered, never required. Nobody is asked to turn off antivirus.
 - Runs on a Windows box as a native service as readily as in Docker. Postgres, on your own hardware.
 
 ## Operating Context
 
-Checks (http, tcp, process, Windows service, beats, jobs on a schedule, thresholds, expiry dates), job runs, logs kept twelve months live then archived, errors grouped by type and place, versions per machine, deploys, alert rules (page, push, email, text, digest), tasks, an MCP endpoint with a tool for everything the API can do. A token that can do everything is made only after typing the server address to confirm. Issues have short ids (`DOK-12`) and close by themselves when the check recovers.
+Checks (http, tcp, process, Windows service, beats, jobs on a schedule, thresholds, expiry dates), job runs, logs kept twelve months live then archived, errors grouped by type and place, versions per machine, deploys, alert rules (page, push, email, text, digest), an MCP endpoint with a tool for everything the API can do. A token that can do everything is made only after typing the server address to confirm. Issues have short ids (`DOK-12`) and close by themselves when the check recovers.
 
 ## Capabilities and Constraints
 
-- Words: machine, service, check, state, issue, job run, deploy, rule, proposal, task. The program on each machine is "the `dokkit` program", never an "agent" or "runner".
+- Words: machine, service, check, state, issue, job run, deploy, rule, proposal. The program on each machine is "the `dokkit` program", never an "agent" or "runner".
 - Licence: AGPL for the server, Apache 2.0 for the program and the libraries.
 - Also accepts reports from Sentry's open-source SDKs. That is a compatibility note, never the pitch: no "alternative to", no price comparison, "not affiliated with Sentry".
 - No public builds are signed by the project; whoever builds signs their own.

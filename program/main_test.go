@@ -18,7 +18,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -360,14 +359,14 @@ func TestInitWritesAFileThatChecks(t *testing.T) {
 	}
 }
 
-func TestScanWritesAFileAndTasksRunWhereTheirFileIs(t *testing.T) {
+func TestScanWritesAFileAndADeclaredTaskSectionIsIgnored(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	t.Setenv("DOKKIT_CONFIG", filepath.Join(dir, "none.json"))
 	t.Setenv("DOKKIT_URL", "")
 	os.WriteFile("dokkit.toml", []byte("schema = 1\n[service]\nid = \"portal\"\n[[task]]\nid = \"mark\"\nrun = \"echo done > marked.txt\"\n[[task]]\nid = \"bad\"\nrun = \"exit 4\"\n"), 0o600)
 
-	if code := cli([]string{"scan", "--no-tasks", "--no-services", "--no-ports", "--no-containers", "--no-sites"}); code != 0 {
+	if code := cli([]string{"scan", "--no-services", "--no-ports", "--no-containers", "--no-sites"}); code != 0 {
 		t.Fatal(code)
 	}
 	var p struct{ Found map[string][]found }
@@ -376,29 +375,13 @@ func TestScanWritesAFileAndTasksRunWhereTheirFileIs(t *testing.T) {
 	if _, there := p.Found["services"]; there || len(p.Found["disks"]) == 0 {
 		t.Fatalf("proposal: %s", b)
 	}
-
-	if cli([]string{"task", "list"}) != 0 || cli([]string{"task", "run", "nope"}) != 1 {
-		t.Fatal("list works and an unknown task is refused")
-	}
-	if code := cli([]string{"task", "run", "mark"}); code != 0 {
-		t.Fatal(code)
-	}
-	if _, err := os.Stat("marked.txt"); err != nil {
-		t.Fatal("the task did not run in its file's folder")
-	}
-	if code := cli([]string{"task", "run", "bad"}); code != 4 {
-		t.Fatalf("a task exits as its command did, got %d", code)
+	if _, err := readDeclaration("dokkit.toml"); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestWorkRunsOnlyTheAcceptedCommand(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "dokkit.toml"), []byte("schema = 1\n[service]\nid = \"portal\"\n[[task]]\nid = \"hello\"\nrun = \"echo hello from the task\"\n"), 0o600)
-	pin := tasks(declarations([]string{dir}))["hello"].pin()
-	offers := []string{
-		`{"run":"r1","task":"hello","command_sha256":"` + pin + `"}`,
-		`{"run":"r2","task":"hello","command_sha256":"some other command"}`,
-	}
+func TestWorkRefusesWhatItDoesNotKnow(t *testing.T) {
+	offers := []string{`{"run":"r1","task":"hello"}`}
 	got := make(chan string, 8)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
@@ -415,13 +398,13 @@ func TestWorkRunsOnlyTheAcceptedCommand(t *testing.T) {
 		got <- r.URL.Path + " " + string(b)
 	}))
 	defer srv.Close()
-	c := &client{url: srv.URL, key: "dkm_machine", folders: []string{dir}}
+	c := &client{url: srv.URL, key: "dkm_machine"}
 	go c.work()
-	want := []string{"/api/v1/work/r1/output hello from the task", "/api/v1/work/r1/result {", "/api/v1/work/r2/result {\"refused\""}
+	want := []string{"/api/v1/work/r1/result {\"refused\""}
 	for _, w := range want {
 		select {
 		case g := <-got:
-			if !strings.HasPrefix(g, w) || (strings.Contains(w, "r1/result") && !strings.Contains(g, `"exit_code":0`)) {
+			if !strings.HasPrefix(g, w) {
 				t.Fatalf("got %q, want %q", g, w)
 			}
 		case <-time.After(10 * time.Second):
@@ -538,46 +521,6 @@ func TestAStoppedServiceIsStartedOnlyWhenAllowedAndNotOver(t *testing.T) {
 	}
 }
 
-func TestATaskIsAcceptedOnlyAsItWasWritten(t *testing.T) {
-	dir := t.TempDir()
-	zap := task{ID: "zap", Run: "scripts/zap.ps1", dir: dir, file: filepath.Join(dir, "dokkit.toml")}
-	sha := zap.pin()
-	if got := standing(zap, sha, true); got != "accepted" {
-		t.Fatal(got)
-	}
-	more := zap
-	more.Run = "scripts/zap.ps1 --all"
-	if got := standing(more, sha, true); got != "changed since it was accepted" {
-		t.Fatal(got)
-	}
-	if got := standing(zap, "", false); got != "not accepted yet" {
-		t.Fatal(got)
-	}
-	if _, asked := accepted(nil); asked {
-		t.Fatal("a machine that is not enrolled has nobody to ask")
-	}
-}
-
-func TestATaskPinCoversItsScriptAndItsFolder(t *testing.T) {
-	a, b := t.TempDir(), t.TempDir()
-	os.WriteFile(filepath.Join(a, "backup.bat"), []byte("echo one"), 0o600)
-	os.WriteFile(filepath.Join(b, "backup.bat"), []byte("echo one"), 0o600)
-	at := func(dir string) task {
-		return task{ID: "backup", Run: "backup.bat --all", dir: dir, file: filepath.Join(dir, "dokkit.toml")}
-	}
-	before := at(a).pin()
-	if before != at(a).pin() {
-		t.Fatal("the same task has the same pin")
-	}
-	if at(b).pin() == before {
-		t.Fatal("the same task text declared from another folder has another pin")
-	}
-	os.WriteFile(filepath.Join(a, "backup.bat"), []byte("echo two"), 0o600)
-	if at(a).pin() == before {
-		t.Fatal("the pin follows the script's contents")
-	}
-}
-
 func TestAnUpdateIsFetchedAndNothingIsReplaced(t *testing.T) {
 	said := ""
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -603,68 +546,6 @@ func TestAnUpdateIsFetchedAndNothingIsReplaced(t *testing.T) {
 	}
 	if !strings.Contains(said, "The newer copy is at") || !strings.Contains(said, "To finish") {
 		t.Fatalf("the run says where it is and how to finish: %q", said)
-	}
-}
-
-func TestANameDeclaredTwiceBelongsToNeither(t *testing.T) {
-	a, b := t.TempDir(), t.TempDir()
-	toml := func(dir, run string) string {
-		p := filepath.Join(dir, "dokkit.toml")
-		os.WriteFile(p, []byte("schema = 1\n[service]\nid = \"s\"\n[[task]]\nid = \"same\"\nrun = \""+run+"\"\n[[task]]\nid = \"only\"\nrun = \"x\"\n"), 0o600)
-		return p
-	}
-	pa, pb := toml(a, "echo a"), toml(b, "echo b")
-	if got := tasks([]string{pa, pa}); len(got) != 2 {
-		t.Fatalf("one file listed twice is still one file: %v", got)
-	}
-	got := tasks([]string{pa, pb})
-	if _, ok := got["same"]; ok {
-		t.Fatal("a name two files declare must not run")
-	}
-}
-
-func TestATimedOutTaskDoesNotWaitForWhatItStarted(t *testing.T) {
-	killWait = 500 * time.Millisecond
-	slow := "sleep 20 & wait"
-	if runtime.GOOS == "windows" {
-		slow = "ping -n 20 127.0.0.1"
-	}
-	start := time.Now()
-	code := task{ID: "slow", Run: slow, Timeout: "1s", dir: "."}.run(&chunks{}, &chunks{}, nil)
-	if code != 124 || time.Since(start) > 10*time.Second {
-		t.Fatalf("code %d after %s", code, time.Since(start))
-	}
-}
-
-func TestSystemTasksNeedTheMachinesOwnSay(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "dokkit.toml"), []byte("schema = 1\n[service]\nid = \"s\"\n[[task]]\nid = \"hello\"\nrun = \"echo hi\"\n"), 0o600)
-	pin := tasks(declarations([]string{dir}))["hello"].pin()
-	offered := false
-	posts := make(chan string, 8)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			if !offered {
-				offered = true
-				w.Write([]byte(`{"run":"s1","task":"hello","as":"system","command_sha256":"` + pin + `"}`))
-				return
-			}
-			time.Sleep(100 * time.Millisecond)
-			w.WriteHeader(204)
-			return
-		}
-		b, _ := io.ReadAll(r.Body)
-		posts <- r.URL.Path + " " + string(b)
-	}))
-	defer srv.Close()
-	go (&client{url: srv.URL, key: "k", folders: []string{dir}}).work()
-	select {
-	case g := <-posts:
-		if !strings.HasPrefix(g, `/api/v1/work/s1/result {"refused"`) || !strings.Contains(g, "system_tasks") {
-			t.Fatal(g)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("no answer")
 	}
 }
 
@@ -705,42 +586,6 @@ func TestAFetchedUpdateMustMatchTheHashItIsHeldTo(t *testing.T) {
 	}
 	if left, _ := filepath.Glob(filepath.Join(dir, "update", "dokkit*")); len(left) != 0 {
 		t.Fatalf("an earlier copy is still there: %v", left)
-	}
-}
-
-func TestOneFileReachedTwoWaysIsOneFile(t *testing.T) {
-	dir := t.TempDir()
-	p := filepath.Join(dir, "dokkit.toml")
-	os.WriteFile(p, []byte("schema = 1\n[service]\nid = \"s\"\n[[task]]\nid = \"a\"\nrun = \"x\"\n"), 0o600)
-	alias := filepath.Join(dir, ".", "dokkit.toml")
-	if runtime.GOOS == "windows" {
-		alias = strings.ToUpper(p)
-	}
-	if got := tasks([]string{p, alias}); len(got) != 1 {
-		t.Fatalf("the same file twice must not clash with itself: %v", got)
-	}
-}
-
-func TestATaskThatLeavesSomethingRunningStillSucceeds(t *testing.T) {
-	killWait = 500 * time.Millisecond
-	run := "sleep 20 & echo done"
-	if runtime.GOOS == "windows" {
-		run = "start /b ping -n 12 127.0.0.1 & echo done"
-	}
-	if code := (task{ID: "bg", Run: run, Timeout: "30s", dir: "."}).run(&chunks{}, &chunks{}, nil); code != 0 {
-		t.Fatalf("code %d", code)
-	}
-}
-
-func TestABareNameInTheTasksFolderRuns(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("cmd only")
-	}
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "hello.bat"), []byte("@echo hi\r\n"), 0o600)
-	var out chunks
-	if code := (task{ID: "h", Run: "hello.bat", dir: dir}).run(&out, &out, nil); code != 0 {
-		t.Fatalf("code %d: %s", code, out.take())
 	}
 }
 

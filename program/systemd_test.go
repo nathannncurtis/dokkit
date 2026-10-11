@@ -262,7 +262,7 @@ func TestAnUnreadableFolderIsSaid(t *testing.T) {
 	}
 }
 
-func TestTheUpdateTaskUnderTheServiceSaysToUseServiceUpdate(t *testing.T) {
+func TestTheUpdateUnderTheServiceSaysToUseServiceUpdate(t *testing.T) {
 	insideService(t)
 	spool := t.TempDir()
 	_, _, err := (&client{spool: spool}).fetchUpdate()
@@ -274,12 +274,12 @@ func TestTheUpdateTaskUnderTheServiceSaysToUseServiceUpdate(t *testing.T) {
 func TestHelpIsOnlyAskedForOnRealCommands(t *testing.T) {
 	for args, want := range map[string]bool{
 		"scan --no-ports --help": true, "check -h": true, "apply x.toml --help": true,
-		"task run --help": true, "ping --help": true, "run --help": true,
+		"ping --help": true, "run --help": true,
 		"ping help": false, "ping help ok": false, "run --job x -- cmd --help": false,
 		"run --job help -- cmd": false, "ping x --help": false, "nope --help": false, "run help": false,
 		"scan help": true, "propose help": true, "watch help": true, "status help": true, "doctor help": true,
 		"startup help": true, "service help": true, "init help": true, "check help": true, "apply help": true,
-		"enrol help": true, "task help": true, "folder help": true, "task run help": false, "folder add help": false,
+		"enrol help": true, "folder help": true, "folder add help": false,
 	} {
 		if got := wantsHelp(strings.Fields(args)); got != want {
 			t.Errorf("%s: %v", args, got)

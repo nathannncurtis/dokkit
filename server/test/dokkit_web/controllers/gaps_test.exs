@@ -2,7 +2,7 @@ defmodule DokkitWeb.GapsTest do
   # The calls that were once only in the interface: each as an API route, then as an MCP tool.
   # Not async: alert settings and the program folder are global.
   use DokkitWeb.ConnCase, async: false
-  alias Dokkit.{Alerts, Estate, Keys, Machine, Repo, Tasks}
+  alias Dokkit.{Alerts, Estate, Keys, Machine, Repo}
 
   setup do
     {:ok, job} =
@@ -40,26 +40,7 @@ defmodule DokkitWeb.GapsTest do
 
   defp code(conn, status), do: json_response(conn, status)["error"]["code"]
 
-  defp declare_tasks do
-    machine = Repo.insert!(%Machine{name: "vault", kind: :enrolled})
-    {key, _} = Keys.mint(:machine, %{machine_id: machine.id})
-
-    doc = %{
-      schema: 1,
-      service: %{id: "portal"},
-      task: [
-        %{id: "restart", run: "systemctl restart portal", file: "/srv/dokkit.toml", pin: "pin-1"},
-        %{id: "other", run: "echo hi", file: "/srv/dokkit.toml", pin: "pin-2"}
-      ]
-    }
-
-    build_conn()
-    |> put_req_header("authorization", "Bearer " <> key)
-    |> put("/api/v1/declare", doc)
-    |> json_response(200)
-
-    {machine, Map.new(Tasks.waiting(), &{&1.name, &1})}
-  end
+  defp vault, do: Repo.insert!(%Machine{name: "vault", kind: :enrolled})
 
   defp snoozed_often do
     {:ok, a} = Estate.add_job(%{"name" => "Flaky sync", "machine" => "attic"})
@@ -165,40 +146,9 @@ defmodule DokkitWeb.GapsTest do
       assert json_response(call(:put, "/jobs/nope/timing", act, %{}), 404)
     end
 
-    test "POST /tasks/:id/accept and /dismiss", %{act: act, ops: ops, read: read} do
-      {_, %{"restart" => t, "other" => o}} = declare_tasks()
-      assert %{"items" => items} = json_response(call(:get, "/proposals", read), 200)
-      assert %{"pin" => "pin-1"} = Enum.find(items, &(&1["id"] == t.id))
-
-      one = %{command: t.command, pin: t.pin}
-      assert json_response(call(:post, "/tasks/#{t.id}/accept", act, one), 403)
-      assert json_response(call(:post, "/tasks/#{o.id}/dismiss", act, one), 403)
-
-      assert code(call(:post, "/tasks/#{t.id}/accept", ops, %{command: t.command}), 422) ==
-               "bad_task"
-
-      assert code(call(:post, "/tasks/#{t.id}/accept", ops, %{one | command: "rm -rf /"}), 422) ==
-               "changed"
-
-      assert %{"ok" => true} = json_response(call(:post, "/tasks/#{t.id}/accept", ops, one), 200)
-
-      assert %{"items" => [%{"name" => "restart", "as" => "ordinary"}]} =
-               json_response(call(:get, "/tasks", read), 200)
-
-      assert json_response(call(:post, "/tasks/#{t.id}/accept", ops, one), 404)
-
-      assert %{"ok" => true} =
-               json_response(
-                 call(:post, "/tasks/#{o.id}/dismiss", ops, %{command: o.command, pin: o.pin}),
-                 200
-               )
-
-      assert %{"items" => []} = json_response(call(:get, "/proposals", read), 200)
-    end
-
     @tag :tmp_dir
     test "POST /machines/:id/update", %{act: act, ops: ops, read: read, tmp_dir: dir} do
-      {machine, _} = declare_tasks()
+      machine = vault()
       path = "/machines/#{machine.id}/update"
       assert json_response(call(:post, path, act), 403)
       assert code(call(:post, path, ops), 422) == "no_program"
@@ -321,25 +271,9 @@ defmodule DokkitWeb.GapsTest do
                tool(all, "set_job_timing", %{id: id, grace: "soon"})
     end
 
-    test "accept_task and dismiss_task", %{all: all} do
-      {_, %{"restart" => t, "other" => o}} = declare_tasks()
-
-      assert {true, "Needs command and pin, as proposals shows them."} =
-               tool(all, "accept_task", %{id: t.id})
-
-      assert {false, ~s({"ok":true})} =
-               tool(all, "accept_task", %{id: t.id, command: t.command, pin: t.pin, system: false})
-
-      assert {false, ~s({"ok":true})} =
-               tool(all, "dismiss_task", %{id: o.id, command: o.command, pin: o.pin})
-
-      assert {true, "No such thing."} =
-               tool(all, "dismiss_task", %{id: o.id, command: o.command, pin: o.pin})
-    end
-
     @tag :tmp_dir
     test "update_program", %{all: all, tmp_dir: dir} do
-      {machine, _} = declare_tasks()
+      machine = vault()
 
       assert {true, "This server holds no program for machines to fetch."} =
                tool(all, "update_program", %{id: machine.id})

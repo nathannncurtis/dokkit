@@ -66,7 +66,7 @@ defmodule DokkitWeb.IntakeController do
     end
   end
 
-  @doc "Holds the request until there is a task run for this machine, or the wait runs out."
+  @doc "Holds the request until there is a run for this machine, or the wait runs out."
   def work(conn, params) do
     with {:ok, machine} <- machine(conn) do
       wait =
@@ -75,7 +75,7 @@ defmodule DokkitWeb.IntakeController do
           _ -> 50
         end
 
-      case Dokkit.Tasks.take(machine, wait * 1000) do
+      case Dokkit.Work.take(machine, wait * 1000) do
         nil ->
           send_resp(conn, 204, "")
 
@@ -83,13 +83,8 @@ defmodule DokkitWeb.IntakeController do
           json(
             conn,
             Map.merge(
-              %{
-                run: run.id,
-                task: run.task.name,
-                as: Dokkit.Tasks.account(run.task),
-                command_sha256: run.task.accepted_pin
-              },
-              Dokkit.Tasks.extras(run)
+              %{run: run.id, task: run.name},
+              Dokkit.Work.extras(run)
             )
           )
       end
@@ -100,7 +95,7 @@ defmodule DokkitWeb.IntakeController do
     with {:ok, machine} <- machine(conn),
          {:ok, run} <- Ecto.UUID.cast(run),
          {:ok, chunk, conn} <- body(conn),
-         :ok <- Dokkit.Tasks.output(machine, run, chunk) do
+         :ok <- Dokkit.Work.output(machine, run, chunk) do
       json(conn, %{ok: true})
     else
       %Plug.Conn{} = conn -> conn
@@ -111,7 +106,7 @@ defmodule DokkitWeb.IntakeController do
   def work_result(conn, %{"run" => run} = params) do
     with {:ok, machine} <- machine(conn),
          {:ok, run} <- Ecto.UUID.cast(run),
-         :ok <- Dokkit.Tasks.result(machine, run, params) do
+         :ok <- Dokkit.Work.result(machine, run, params) do
       json(conn, %{ok: true})
     else
       %Plug.Conn{} = conn -> conn
@@ -224,7 +219,7 @@ defmodule DokkitWeb.IntakeController do
   @doc "The newer program, for a machine asked to fetch it."
   def program(conn, %{"target" => target}) do
     with {:ok, _machine} <- machine(conn) do
-      case Dokkit.Tasks.program(target) do
+      case Dokkit.Work.program(target) do
         nil ->
           fail(conn, 404, "not_found", "This server holds no program for that kind of machine.")
 
@@ -254,12 +249,6 @@ defmodule DokkitWeb.IntakeController do
           fail(conn, 422, "bad_result", "Needs version, ok and at most 2000 characters of note.")
       end
     end
-  end
-
-  @doc "The tasks accepted for this machine, so `dokkit task list` can say which they are."
-  def accepted(conn, _params) do
-    with {:ok, machine} <- machine(conn),
-         do: json(conn, %{items: Dokkit.Tasks.accepted_for(machine)})
   end
 
   defp machine(conn) do

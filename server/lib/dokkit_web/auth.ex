@@ -60,7 +60,7 @@ defmodule DokkitWeb.Auth do
     shell = %{
       machines: Dokkit.Issues.machines(),
       open: Dokkit.Issues.open_count(),
-      waiting: Dokkit.Tasks.waiting_count() + Dokkit.Found.count()
+      waiting: Dokkit.Found.count()
     }
 
     Phoenix.Component.assign(socket, :shell, shell)

@@ -85,7 +85,6 @@ defmodule DokkitWeb.Layouts do
       {"Manage",
        [
          {:found, "binoculars", "Found", ~p"/found"},
-         {:tasks, "terminal-window", "Tasks", ~p"/tasks"},
          {:alerts, "bell", "Alerts", ~p"/alerts"},
          {:settings, "gear", "Settings", ~p"/settings"}
        ]}

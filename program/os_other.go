@@ -44,38 +44,7 @@ func listsPath() string {
 	return p
 }
 
-// Run as root, a task would be root whatever it was accepted as, so only a task accepted for the system account runs.
-func init() {
-	if os.Geteuid() == 0 {
-		ordinary = func(*exec.Cmd) (func(), error) {
-			return nil, errors.New("dokkit is running as root and tasks cannot be dropped to another account; accept the task as the system account or run dokkit as an ordinary user")
-		}
-	}
-}
-
 func asService() bool { return false }
-
-// taskFolderProblem refuses, when running as root, a task whose folder or script files anyone
-// else owns or can write.
-func taskFolderProblem(dir string, files []string) error {
-	if os.Geteuid() != 0 {
-		return nil
-	}
-	return rootProblem(dir, files)
-}
-
-func rootProblem(dir string, files []string) error {
-	for _, p := range append([]string{dir}, files...) {
-		fi, err := os.Stat(p)
-		if err != nil {
-			return err
-		}
-		if st, ok := fi.Sys().(*syscall.Stat_t); !ok || st.Uid != 0 || fi.Mode().Perm()&0o022 != 0 {
-			return fmt.Errorf("%s is not owned by root or can be written by others, so a task is not run from it as root.", p)
-		}
-	}
-	return nil
-}
 
 // fileIdentity names the file itself, whatever its path: the device and the inode.
 func fileIdentity(f *os.File) string {

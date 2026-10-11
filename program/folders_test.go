@@ -214,7 +214,7 @@ func TestTheWordHelpAfterACommandPrintsHelpAndRunsNothing(t *testing.T) {
 	t.Setenv("DOKKIT_FOLDERS", "")
 	dir := t.TempDir()
 	t.Chdir(dir)
-	for _, name := range []string{"scan", "propose", "watch", "status", "doctor", "startup", "service", "init", "check", "apply", "enrol", "task", "folder"} {
+	for _, name := range []string{"scan", "propose", "watch", "status", "doctor", "startup", "service", "init", "check", "apply", "enrol", "folder"} {
 		type answer struct {
 			code int
 			out  string

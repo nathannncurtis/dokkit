@@ -209,24 +209,8 @@ defmodule Dokkit.Read do
     end
   end
 
-  @doc "What waits to be accepted: found things, and tasks a file offers."
-  def proposals do
-    found =
-      for f <- Dokkit.Found.list(), do: found(f)
-
-    tasks =
-      for t <- Dokkit.Tasks.waiting(),
-          do: %{
-            id: t.id,
-            kind: "task",
-            name: t.name,
-            command: t.command,
-            pin: t.pin,
-            machine: t.machine.name
-          }
-
-    found ++ tasks
-  end
+  @doc "What waits to be accepted: the things a scan found."
+  def proposals, do: for(f <- Dokkit.Found.list(), do: found(f))
 
   @doc "Issues that open again and again, where the digest would do. A person accepts or dismisses."
   def suggestions do
@@ -250,7 +234,7 @@ defmodule Dokkit.Read do
   @doc "The program version the server holds for machines to fetch, and what each machine runs."
   def program do
     %{
-      held: Dokkit.Tasks.program_version(),
+      held: Dokkit.Work.program_version(),
       machines:
         for m <- Estate.machines(), m.kind != :group, m.program_version do
           %{id: m.id, machine: m.name, version: m.program_version}
@@ -311,7 +295,7 @@ defmodule Dokkit.Read do
 
   @log_keys [:tail, :output, :message, :notes, :note]
 
-  @doc "The answer without job output, task output, error messages and issue notes, for a token that may not read logs."
+  @doc "The answer without job output, error messages and issue notes, for a token that may not read logs."
   def without_logs(%{__struct__: _} = x), do: x
 
   def without_logs(%{} = m),
@@ -441,28 +425,6 @@ defmodule Dokkit.Read do
   defp time(_, _), do: :error
 
   def rules, do: Dokkit.Alerts.rules()
-
-  def tasks do
-    for %{task: t, last: last} <- Dokkit.Tasks.accepted() do
-      %{
-        id: t.id,
-        name: t.name,
-        command: t.command,
-        machine: t.machine.name,
-        as: Dokkit.Tasks.account(t),
-        last_run: last && task_run(last)
-      }
-    end
-  end
-
-  def task_runs do
-    for r <- Dokkit.Tasks.runs(),
-        do: Map.merge(task_run(r), %{task: r.task.name, machine: r.task.machine.name})
-  end
-
-  defp task_run(r),
-    do:
-      Map.take(r, [:id, :state, :by, :exit_code, :duration_ms, :output, :started_at, :finished_at])
 
   defp found(f),
     do: %{id: f.id, kind: f.kind, name: f.key, detail: f.detail, machine: f.machine.name}

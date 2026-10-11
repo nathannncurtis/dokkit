@@ -1,6 +1,5 @@
 defmodule Dokkit.WatchMidnightTest do
   use Dokkit.DataCase, async: false
-  import Ecto.Query
   alias Dokkit.{Check, JobRun, Machine, Repo, Service, Watch}
 
   defp job(schedule, declared, grace \\ "30m") do
@@ -116,38 +115,10 @@ defmodule Dokkit.WatchMidnightTest do
         {"in the last minute of a mid-day hour", ~U[2026-03-10 12:59:30.000000Z],
          ~U[2026-03-10 13:45:00.000000Z], 0}
       ] do
-    test "a watched hourly task reported #{label}: #{late} late" do
-      alias Dokkit.{Found, Keys}
-      m = Repo.insert!(%Machine{name: "mid-w", kind: :enrolled, last_seen_at: @old})
-
-      {:ok, _} =
-        Found.propose(m.id, %{
-          "os" => "windows",
-          "found" => %{"tasks" => [%{"name" => "\\Backup", "schedule" => "0 * * * *"}]}
-        })
-
-      [f] = Repo.all(from f in Dokkit.Finding, where: f.machine_id == ^m.id)
-      Found.watch([f.id])
-
-      check =
-        Repo.one!(from c in Check, join: s in assoc(c, :service), where: s.machine_id == ^m.id)
-
-      reported = unquote(Macro.escape(reported))
-      swept = unquote(Macro.escape(swept))
-
-      Repo.update_all(from(c in Check, where: c.id == ^check.id),
-        set: [inserted_at: DateTime.add(reported, -7200)]
-      )
-
-      assert Watch.sweep(swept) == 0
-
-      {_, key} = Keys.mint(:machine, %{machine_id: m.id})
-
-      body =
-        Jason.encode!(%{type: "job", service: "backup", name: "backup", event: "ok", run: "a"})
-
-      assert {:ok, _} = Dokkit.Intake.report(key, nil, body, reported)
-      assert Watch.sweep(swept) == unquote(late)
+    test "a hourly job reported #{label}: #{late} late" do
+      check = job("0 * * * *", @old)
+      ran(check, unquote(Macro.escape(reported)))
+      assert Watch.sweep(unquote(Macro.escape(swept))) == unquote(late)
     end
   end
 

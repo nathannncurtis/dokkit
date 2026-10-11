@@ -186,7 +186,6 @@ defmodule DokkitWeb.ApiController do
 
   def checks(conn, params), do: reply(conn, set_service_checks(params))
 
-  # A found service or port. A task is a command a machine would run, so it goes through accept_task.
   def accept(conn, %{"id" => id}), do: reply(conn, found(id, &Dokkit.Found.watch/1))
   def dismiss(conn, %{"id" => id}), do: reply(conn, found(id, &Dokkit.Found.dismiss/1))
 
@@ -323,33 +322,11 @@ defmodule DokkitWeb.ApiController do
   def dismiss_suggestion(conn, %{"id" => id}),
     do: reply(conn, suggestion(id, &Dokkit.Alerts.dismiss_suggestion/1))
 
-  @doc "Accepts or dismisses the command and pin that proposals showed for a task."
-  def decide_task(%{"id" => id, "command" => command, "pin" => pin} = params, field)
-      when is_binary(command) and is_binary(pin) do
-    cond do
-      !Enum.any?(Dokkit.Tasks.waiting(), &(&1.id == id)) ->
-        not_found()
-
-      Dokkit.Tasks.decide(id, command, pin, field, params["system"] in [true, "true"]) == :ok ->
-        %{ok: true}
-
-      true ->
-        {:error, "changed",
-         "The command or pin is not the one on offer now. Read proposals again."}
-    end
-  end
-
-  def decide_task(_, _),
-    do: {:error, "bad_task", "Needs command and pin, as proposals shows them."}
-
-  def accept_task(conn, params), do: reply(conn, decide_task(params, :accepted))
-  def dismiss_task(conn, params), do: reply(conn, decide_task(params, :dismissed))
-
   @doc "Asks an enrolled machine to fetch the newer program."
   def fetch_program(id, who) do
     case Read.machine(id) do
       %{kind: :enrolled} ->
-        case Dokkit.Tasks.update(id, who) do
+        case Dokkit.Work.update(id, who) do
           nil -> {:error, "no_program", "This server holds no program for machines to fetch."}
           run -> %{run: run.id}
         end
@@ -441,16 +418,6 @@ defmodule DokkitWeb.ApiController do
 
   def error(conn, %{"id" => id}), do: one(conn, Read.error(id))
 
-  def tasks(conn, _), do: list(conn, Read.tasks())
-  def task_runs(conn, _), do: list(conn, Read.task_runs())
-
-  def run_task(conn, %{"id" => id}) do
-    case Dokkit.Tasks.run(id, "token " <> (conn.assigns.key.label || "")) do
-      nil -> missing(conn)
-      run -> json(conn, %{run: run.id})
-    end
-  end
-
   def service(conn, %{"id" => id}), do: one(conn, Read.service(id))
 
   def series(conn, %{"id" => id} = params), do: one(conn, Read.series(id, params))
@@ -507,7 +474,7 @@ defmodule DokkitWeb.ApiController do
 
   # What a call needs follows from the call: reading needs read, log contents need
   # read-logs, keys, people, rules, alert settings, checks, restart, updating the program,
-  # restoring logs, making a job and accepting a task need admin, and anything else
+  # restoring logs, and making a job need admin, and anything else
   # changes something.
   def needs(method, path) do
     case {method, Enum.at(path, 2), List.last(path)} do
@@ -516,7 +483,6 @@ defmodule DokkitWeb.ApiController do
       {"GET", "logs", _} -> "read-logs"
       {"GET", _, _} -> "read"
       {_, area, _} when area in ["rules", "alerts", "releases", "certificate"] -> "admin"
-      {"POST", "tasks", last} when last in ["accept", "dismiss"] -> "admin"
       {"POST", area, area} when area in ["jobs", "apps"] -> "admin"
       {_, _, last} -> if last in ~w(checks restart update restore), do: "admin", else: "act"
     end

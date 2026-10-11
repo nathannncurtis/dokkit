@@ -308,56 +308,15 @@ defmodule Dokkit.ReviewFixesTest do
   end
 
   describe "found" do
-    test "a task listed twice in one scan is kept once" do
+    test "a port listed twice in one scan is kept once" do
       m = Repo.insert!(%Machine{name: "r-dup", kind: :enrolled})
-
-      body = %{
-        "os" => "windows",
-        "found" => %{"tasks" => [%{"name" => "\\Backup"}, %{"name" => "\\Backup"}]}
-      }
-
-      assert {:ok, 1} = Found.propose(m.id, body)
 
       ports = %{
         "os" => "windows",
         "found" => %{"ports" => [%{"port" => 5432}, %{"port" => "5432"}]}
       }
 
-      assert {:ok, 2} = Found.propose(m.id, ports)
-    end
-
-    test "a watched task waits for its first report and is not late until then" do
-      m =
-        Repo.insert!(%Machine{name: "r-wait", kind: :enrolled, last_seen_at: DateTime.utc_now()})
-
-      {:ok, _} =
-        Found.propose(m.id, %{
-          "os" => "windows",
-          "found" => %{"tasks" => [%{"name" => "\\Backup", "schedule" => "0 * * * *"}]}
-        })
-
-      [f] = Repo.all(from f in Dokkit.Finding, where: f.machine_id == ^m.id)
-      assert f.detail["saw"] =~ "dokkit run --job backup -- <command>"
-      Found.watch([f.id])
-
-      check =
-        Repo.one!(from c in Check, join: s in assoc(c, :service), where: s.machine_id == ^m.id)
-
-      reported = ~U[2026-03-10 12:20:00.000000Z]
-      now = ~U[2026-03-10 13:45:00.000000Z]
-
-      Repo.update_all(from(c in Check, where: c.id == ^check.id),
-        set: [inserted_at: DateTime.add(reported, -7200)]
-      )
-
-      assert Dokkit.Watch.sweep(now) == 0
-      assert Repo.reload!(check).state == :unknown
-
-      {_, key} = Keys.mint(:machine, %{machine_id: m.id})
-      body = Jason.encode!(line("backup", "ok", "a", 1000))
-      assert {:ok, _} = Dokkit.Intake.report(key, nil, body, reported)
-      refute Repo.reload!(check).config["waiting"]
-      assert Dokkit.Watch.sweep(now) == 1
+      assert {:ok, 1} = Found.propose(m.id, ports)
     end
   end
 

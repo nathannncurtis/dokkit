@@ -74,10 +74,8 @@ func asService() bool {
 	if out, err := openLog(filepath.Join(machineDir(), "dokkit.log")); err == nil {
 		os.Stdout, os.Stderr = out, out
 	}
-	// The service is Local Service, so a task it runs is already under an ordinary account,
-	// and like the Linux service it fetches no update for an administrator to run.
+	// The service is Local Service, and like the Linux service it fetches no update for an administrator to run.
 	runningAsService = func() bool { return true }
-	notSystem = "This machine's service runs as Local Service, so it has no system account to run a task under. Accept the task for an ordinary account."
 	startService = func(name string) error {
 		m, err := mgr.Connect()
 		if err != nil {
@@ -209,7 +207,7 @@ func install(m *mgr.Mgr) error {
 		return err
 	}
 	os.Remove(file)
-	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders, Restart: lists.Restart, Hosts: lists.Hosts, SpoolMB: int(c.spoolMB), SystemTasks: c.system, UpdateSha256: c.updateSha})
+	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders, Restart: lists.Restart, Hosts: lists.Hosts, SpoolMB: int(c.spoolMB), UpdateSha256: c.updateSha})
 	if err := os.WriteFile(file, b, 0o600); err != nil {
 		return err
 	}
@@ -346,23 +344,6 @@ func trustedOwner(dir string) error {
 		return nil
 	}
 	return fmt.Errorf("%s already exists and is owned by %s, not by administrators. Delete it from an administrator prompt, then install again", dir, owner)
-}
-
-// taskFolderProblem refuses a task whose folder or script files an ordinary account owns or can
-// write, since it could change what the service runs.
-func taskFolderProblem(dir string, files []string) error {
-	if is, _ := svc.IsWindowsService(); !is {
-		return nil
-	}
-	if err := trustedOwner(dir); err != nil {
-		return fmt.Errorf("This task's folder, %s, is not owned by administrators, so the service does not run tasks from it.", dir)
-	}
-	for _, p := range append([]string{dir}, files...) {
-		if err := writableByOthers(p); err != nil {
-			return fmt.Errorf("%s can be changed by accounts other than administrators, so the service does not run this task.", p)
-		}
-	}
-	return nil
 }
 
 // Rights that let an account change a file or folder, or what is in it.

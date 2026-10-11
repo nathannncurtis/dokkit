@@ -132,7 +132,7 @@ func installService() error {
 		return err
 	}
 	os.Chmod(dir, 0o755)
-	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders, Restart: lists.Restart, Hosts: lists.Hosts, SpoolMB: int(c.spoolMB), SystemTasks: c.system, UpdateSha256: c.updateSha})
+	b, _ := json.Marshal(saved{URL: c.url, Key: c.key, Pin: c.pin, Folders: c.folders, Restart: lists.Restart, Hosts: lists.Hosts, SpoolMB: int(c.spoolMB), UpdateSha256: c.updateSha})
 	installed := false
 	// A failed install must not leave the address and key on disk.
 	defer func() {

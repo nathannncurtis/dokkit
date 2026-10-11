@@ -1,9 +1,7 @@
 defmodule Dokkit.Found do
   @moduledoc """
   What a scan found on a machine and nobody has decided about yet. Watching one makes a
-  service with one check, which `dokkit watch` on that machine then runs. A task becomes a job
-  that waits for its first report, since only `dokkit run` can report a task's runs; until
-  then it is not judged late.
+  service with one check, which `dokkit watch` on that machine then runs.
   """
   import Ecto.Query
   alias Dokkit.{Check, Finding, Repo, Service}
@@ -11,7 +9,7 @@ defmodule Dokkit.Found do
   @max 2000
   @runs ~w(http tcp process windows-service systemd)a
 
-  @doc "Takes a proposal file. Only what can be watched today is kept: running services, listening ports and scheduled tasks."
+  @doc "Takes a proposal file. Only what can be watched today is kept: running services, and listening ports."
   def propose(machine_id, %{"found" => %{} = found} = body) do
     watched =
       MapSet.new(checks(machine_id), fn c ->
@@ -33,24 +31,6 @@ defmodule Dokkit.Found do
                "type" => to_string(type)
              }}
 
-    slugs =
-      MapSet.new(Repo.all(from s in Service, where: s.machine_id == ^machine_id, select: s.slug))
-
-    tasks =
-      for %{"name" => name} = t <- List.wrap(found["tasks"]),
-          is_binary(name),
-          label = String.trim_leading(name, "\\"),
-          label != "",
-          slug(label) != "" and not MapSet.member?(slugs, slug(label)),
-          do:
-            {"task", name,
-             %{
-               "label" => label,
-               "saw" =>
-                 "#{text(t["runs"]) || "Scheduled"}. Watching it needs the task to report: run it as `dokkit run --job #{slug(label)} -- <command>`.",
-               "schedule" => cron(t["schedule"])
-             }}
-
     ports =
       for %{"port" => port} = p <- List.wrap(found["ports"]),
           {n, ""} <- [Integer.parse(to_string(port))],
@@ -62,10 +42,10 @@ defmodule Dokkit.Found do
 
     now = DateTime.utc_now()
 
-    # One row for each kind and key: a task with two triggers is listed twice by a scan.
+    # One row for each kind and key: a scan can list the same one twice.
     rows =
       for {kind, key, detail} <-
-            (services ++ ports ++ tasks)
+            (services ++ ports)
             |> Enum.uniq_by(fn {kind, key, _} -> {kind, key} end)
             |> Enum.take(@max) do
         %{
@@ -89,15 +69,6 @@ defmodule Dokkit.Found do
   end
 
   def propose(_, _), do: :error
-
-  # Only a five-field cron line the server can read is kept.
-  defp cron(line) when is_binary(line) do
-    if length(String.split(line)) == 5 and
-         Dokkit.Estate.next_expected(%Check{config: %{"schedule" => line}}),
-       do: line
-  end
-
-  defp cron(_), do: nil
 
   defp text(value), do: is_binary(value) && value != "" && String.slice(value, 0, 200)
 
@@ -124,10 +95,6 @@ defmodule Dokkit.Found do
             {slug(f.key), f.detail["label"], String.to_existing_atom(type), type,
              %{"name" => f.key}}
 
-          "task" ->
-            {slug(f.detail["label"]), f.detail["label"], :job, slug(f.detail["label"]),
-             Map.merge(%{"waiting" => true}, schedule(f.detail["schedule"]))}
-
           "port" ->
             {"port-" <> f.key, "#{f.detail["saw"]} on port #{f.key}", :tcp, "tcp",
              %{"port" => String.to_integer(f.key)}}
@@ -139,7 +106,7 @@ defmodule Dokkit.Found do
             machine_id: f.machine_id,
             slug: slug,
             name: name,
-            kind: if(type == :job, do: :job, else: :service)
+            kind: :service
           })
 
       Repo.get_by(Check, service_id: service.id, name: check) ||
@@ -148,7 +115,7 @@ defmodule Dokkit.Found do
           name: check,
           type: type,
           config: config,
-          fail_after: if(type == :job, do: 1, else: 3)
+          fail_after: 3
         })
 
       Repo.delete!(f)
@@ -156,9 +123,6 @@ defmodule Dokkit.Found do
 
     Dokkit.Issues.changed(false)
   end
-
-  defp schedule(nil), do: %{}
-  defp schedule(line), do: %{"schedule" => line}
 
   defp slug(name) do
     name |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-") |> String.trim("-")

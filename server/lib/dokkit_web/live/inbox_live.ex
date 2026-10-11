@@ -424,7 +424,6 @@ defmodule DokkitWeb.InboxLive do
   end
 
   defp how("port"), do: "Listening port"
-  defp how("task"), do: "Scheduled task"
   defp how(_), do: "Running service"
 
   # An alert is sent once per issue, so there is no count; its update time is when it went.

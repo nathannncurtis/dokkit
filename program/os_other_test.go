@@ -9,14 +9,6 @@ import (
 	"testing"
 )
 
-func TestAFolderOthersCanWriteIsRefusedForRoot(t *testing.T) {
-	dir := t.TempDir()
-	os.Chmod(dir, 0o777)
-	if rootProblem(dir, nil) == nil {
-		t.Fatal("a folder others can write is refused")
-	}
-}
-
 func TestTheServiceReadsFoldersOnlyFromAFileOnlyRootCanWrite(t *testing.T) {
 	if listsPath() != "" {
 		t.Skip("a service is installed here")

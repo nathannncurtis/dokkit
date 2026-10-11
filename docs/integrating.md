@@ -30,4 +30,3 @@ curl -fsS https://<dokkit address>/api/v1/in/<app key>/job/nightly-backup/ok
 
 - No secrets in it. Name the environment variable that holds one.
 - The service `id` never changes once it is in use.
-- A task in the file is only a proposal until it is accepted in the interface.

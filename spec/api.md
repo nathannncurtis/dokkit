@@ -1,6 +1,6 @@
 # The Dokkit API (v1)
 
-This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom`, `beat`, `metric`, `stats`, `deploy` and `log` lines, `GET /services/<id>/series`, versions in `inventory`, `POST /deploys`, `POST /errors`, the ping URLs, `GET /ping`, `PUT /declare`, `POST /proposals`, `GET /checks`, taking work, and the read and act calls for issues (with notes and bulk actions), machines, services, versions, jobs, logs, errors, deploys, rules, proposals and tasks,, and for a service its routing, watching, interface-added checks, held version and restart. The `admin` calls are `GET`, `POST` and `DELETE` on `/keys` and `/users`, the rule calls, `PUT /services/<id>/checks` and `PUT /services/<id>/restart`: a new key is shown once, in the answer that made it, and the last owner cannot be removed. A token with `act` can accept or dismiss a found thing; accepting a task needs `admin`, because it lets the server ask a machine to run a command. Alert settings, jobs, job timing, error text, the program update, archived logs and alert suggestions have calls too. A full-control token (with `admin`) is made only in Settings, and signing in, the password and the theme belong to the browser.
+This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom`, `beat`, `metric`, `stats`, `deploy` and `log` lines, `GET /services/<id>/series`, versions in `inventory`, `POST /deploys`, `POST /errors`, the ping URLs, `GET /ping`, `PUT /declare`, `POST /proposals`, `GET /checks`, taking work, and the read and act calls for issues (with notes and bulk actions), machines, services, versions, jobs, logs, errors, deploys, rules and proposals, and for a service its routing, watching, interface-added checks, held version and restart. The `admin` calls are `GET`, `POST` and `DELETE` on `/keys` and `/users`, the rule calls, `PUT /services/<id>/checks` and `PUT /services/<id>/restart`: a new key is shown once, in the answer that made it, and the last owner cannot be removed. A token with `act` can accept or dismiss a found thing; Alert settings, jobs, job timing, error text, the program update, archived logs and alert suggestions have calls too. A full-control token (with `admin`) is made only in Settings, and signing in, the password and the theme belong to the browser.
 
 ## One rule
 
@@ -18,8 +18,7 @@ There is one HTTP API on the server. `dokkit`, the CLI, the libraries, the MCP a
 | **Job run** | One run of a job: start, finish, exit code, duration, progress, last lines of output. |
 | **Deploy** | Version X of service S went onto machine M at time T. |
 | **Rule** | A condition, a channel (`page`, `push`, `email`, `imessage`, `sms`, `digest`, `webhook`) and who receives it. |
-| **Proposal** | Something found or offered that is not active until accepted in the interface: scan results and tasks. |
-| **Task** | A named piece of work defined on a machine. A task run is one execution. |
+| **Proposal** | Something found that is not active until accepted in the interface: scan results. |
 | **Environment** | `production` by default. Anything reported under another environment, such as `dev`, is shown and never alerts. |
 
 ### Check types
@@ -140,11 +139,11 @@ A POST body, if there is one, is kept as the last lines of output. `?run=<id>` t
 
 ### `PUT /declare`
 
-The contents of a `dokkit.toml`, sent as JSON with the same structure. Sending the same file twice changes nothing. Checks, jobs, logs and stats become active. Tasks become proposals. See `dokkit-toml.md`.
+The contents of a `dokkit.toml`, sent as JSON with the same structure. Sending the same file twice changes nothing. Checks, jobs, logs and stats become active. See `dokkit-toml.md`.
 
 ### `POST /proposals`
 
-What a scan found: the file `dokkit scan` wrote, as it is. Nothing in a proposal is active until it is accepted in the interface. So far the server keeps the running Windows services and the listening ports, and leaves out what is already watched or was dismissed. Tasks are offered through `PUT /declare`.
+What a scan found: the file `dokkit scan` wrote, as it is. Nothing in a proposal is active until it is accepted in the interface. So far the server keeps the running Windows services and the listening ports, and leaves out what is already watched or was dismissed.
 
 ### `GET /checks`
 
@@ -168,15 +167,13 @@ GET /work?wait=50
 `dokkit` asks for work and the server holds the request for up to 50 seconds. `204` means nothing to do; ask again. Otherwise:
 
 ```json
-{"run": "<id>", "task": "security-scan", "command_sha256": "<hex>"}
+{"run": "<id>", "task": "dokkit:update"}
 ```
 
-`command_sha256` is the pin of the task that was accepted: a SHA-256 that `dokkit` computes over the command, the absolute path of the `dokkit.toml` that declares it (links resolved) and the contents of every word of the command (quotes removed) that is a regular file inside the task's folder, links resolved. A file outside the folder is not hashed. A task also carries the path of its file, shown beside the command. `dokkit` sends the pin with each task it declares and runs the task only when its own pin is the same one. A task accepted before pins existed has none and must be accepted again; a task declared with no pin by an older `dokkit` waits with the note that it needs a newer one and is never run.
-
-A task has a name and nothing else. There are no arguments in v1, so the server cannot shape what runs. The one exception is the built-in `dokkit:imessage`, offered only to the Mac chosen for iMessage, with an empty `command_sha256` and two more fields:
+The server asks for two things and nothing else. `dokkit:update` asks the program to fetch the newer copy the server holds. There are no arguments, so the server cannot shape what the program does. `dokkit:imessage` is offered only to the Mac chosen for iMessage and carries two more fields:
 
 ```json
-{"run": "<id>", "task": "dokkit:imessage", "as": "ordinary", "command_sha256": "", "to": ["+15555550100", "someone@example.com"], "text": "Upload portal is down (web-01, DOK-12)"}
+{"run": "<id>", "task": "dokkit:imessage", "to": ["+15555550100", "someone@example.com"], "text": "Upload portal is down (web-01, DOK-12)"}
 ```
 
 The program posts one output line for each recipient (`sent to X` or `not sent to X: why`) and a result with `exit_code` 0 when all were sent, 1 otherwise, or `{"refused": "why"}`.
@@ -186,7 +183,7 @@ POST /work/<run>/output     a chunk of output
 POST /work/<run>/result     {"exit_code": 0, "duration_ms": 81234}
 ```
 
-`dokkit` only runs a task that is defined on its machine and has been accepted. Anything else is answered with a refusal result.
+A name the program does not know is answered with a refusal result.
 
 ### Updates
 
@@ -217,7 +214,7 @@ POST /api/<project>/envelope/       reports from Sentry's open-source SDKs
 
 ## Read
 
-A login session, or a user token with `read`. Log contents need `read-logs`: without it, job output, task output, error messages and the notes on issues, services and checks are left out of every answer.
+A login session, or a user token with `read`. Log contents need `read-logs`: without it, job output, error messages and the notes on issues, services and checks are left out of every answer.
 
 | Call | Gives |
 |---|---|
@@ -236,13 +233,12 @@ A login session, or a user token with `read`. Log contents need `read-logs`: wit
 | `GET /alerts` | The alert settings: who is told by default, the limits, the night and the mail settings. Addresses (ntfy, webhook, heartbeat), the mail user name and secrets are never returned, only `set` or `not set`. |
 | `GET /alerts/suggestions` | Issues that keep opening and are snoozed, which the daily digest could take instead. |
 | `GET /logs/archives` (`read-logs`) | The archived months of logs that can be loaded back. |
-| `GET /proposals` | Things waiting to be accepted. A task comes with the `command` and `pin` to send back to accept or dismiss it. |
-| `GET /tasks`, `GET /task-runs` | Accepted tasks and their runs. |
+| `GET /proposals` | Things waiting to be accepted. |
 | `GET /releases` | The releases the server holds, newest first: `version`, `files` and `complete`, which is true when both `SHA256SUMS` and `SHA256SUMS.sig` are held. |
 
 ## Act
 
-A login session, or a user token with `act`. Keys, people, rules, alert settings, checks, restart, making a job, accepting a task, updating the program and loading logs back need `admin`. The interface holds the same line: what needs `admin` here is done by an owner there, and a member sees a line that says so.
+A login session, or a user token with `act`. Keys, people, rules, alert settings, checks, restart, making a job, updating the program and loading logs back need `admin`. The interface holds the same line: what needs `admin` here is done by an owner there, and a member sees a line that says so.
 
 | Call | Does |
 |---|---|
@@ -266,8 +262,6 @@ A login session, or a user token with `act`. Keys, people, rules, alert settings
 | `POST /alerts/test` (`admin`) | `{"channel": "webhook"}` sends a test alert by that channel. The answer is `{"ok": true}` or `422` with one reason: for SMS Twilio's own message, for iMessage the Mac's answer (waited for up to a minute), for the others a fixed reason, never anything the far end said. `422` with code `slow_down` after four tests at once, then one every 25 seconds, for each token. |
 | `POST /alerts/suggestions/<id>/accept`, `/dismiss` (`admin`) | Send that service's issues to the daily digest from now on, or drop the suggestion. |
 | `POST /logs/archives/<name>/restore` (`admin`) | Load an archived month back for a week. Answers with the number of `lines` loaded. |
-| `POST /tasks/<id>/accept`, `/dismiss` (`admin`) | Accept or dismiss a task that is waiting. Send the `command` and `pin` that `GET /proposals` shows; if either has changed since, the answer is `422` and nothing is accepted. `accept` takes `system: true` to run the task as the system account. Accepting lets the server ask a machine to run a command, so it needs `admin`. |
-| `POST /tasks/<id>/run` | Run an accepted task on its machine. Answers with the run id. |
 | `POST /machines/<id>/update` (`admin`) | `{"version": "v1.2.3"}` sets the machine's wanted version, for its updater to act on, and only to a release the server holds completely: `422` with code `not_held` otherwise, `bad_version` when it is not `v` and three numbers. Answers `{"ok": true, "version": "v1.2.3"}`. Without a body, it asks an enrolled machine to fetch the newer `dokkit` program, which a person finishes on the machine; `422` when the server holds no program. |
 | `POST /update-all` (`admin`) | The same body, for every machine that has an updater. Answers `{"ok": true, "version": "v1.2.3", "machines": 3}`. |
 | `PUT /releases/<version>/<file>` (`admin`) | The body is the file, as is, up to 200 MB (`413` over that), written to disk as it arrives. Replaces a file of that name. The server does not check it; the updater does. A version or file name of anything but letters, digits, dots, dashes and underscores, or one that starts with a dot, answers `422` with code `bad_name`. |

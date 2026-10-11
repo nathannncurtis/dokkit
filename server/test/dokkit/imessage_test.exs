@@ -2,7 +2,7 @@ defmodule Dokkit.ImessageTest do
   use DokkitWeb.ConnCase, async: false
   import Ecto.Query
   import Phoenix.LiveViewTest
-  alias Dokkit.{Alert, Alerts, Intake, Issues, Keys, Machine, Repo, Service, Task, TaskRun, Tasks}
+  alias Dokkit.{Alert, Alerts, Intake, Issues, Keys, Machine, Repo, Service, WorkRun}
 
   setup do
     mac = Repo.insert!(%Machine{name: "mac-mini", kind: :enrolled, os: "darwin"})
@@ -70,30 +70,17 @@ defmodule Dokkit.ImessageTest do
     assert %{
              "run" => run,
              "task" => "dokkit:imessage",
-             "as" => "ordinary",
-             "command_sha256" => "",
              "to" => ["+15555550100", "someone@example.com"],
              "text" => "Nightly backup failed (vault, DOK-" <> _ = text
            } = body = json_response(work(ctx.mac_key), 200)
 
-    assert Map.keys(body) |> Enum.sort() == ~w(as command_sha256 run task text to)
+    assert Map.keys(body) |> Enum.sort() == ~w(run task text to)
     assert text =~ ")"
     assert response(work(ctx.mac_key), 204)
 
     output(ctx.mac_key, run, "sent to +15555550100\nsent to someone@example.com\n")
     result(ctx.mac_key, run, %{exit_code: 0, duration_ms: 900})
     assert %{status: :sent, error: nil} = status(alert)
-  end
-
-  test "the built-in run is not a task a person can see, run or accept", ctx do
-    open_alert(ctx.app)
-    task = Repo.get_by!(Task, name: "dokkit:imessage")
-
-    assert Tasks.waiting() == []
-    assert Tasks.accepted() == []
-    assert Tasks.runs() == []
-    assert Tasks.accepted_for(ctx.mac.id) == []
-    assert Tasks.run(task.id, "someone") == nil
   end
 
   test "an answer of exit code 1 fails the alert with the program's lines", ctx do
@@ -136,11 +123,11 @@ defmodule Dokkit.ImessageTest do
 
   test "five minutes without an answer fails it, and a late success still marks it sent", ctx do
     alert = open_alert(ctx.app)
-    Repo.update_all(TaskRun, set: [inserted_at: ago(4)])
+    Repo.update_all(WorkRun, set: [inserted_at: ago(4)])
     assert Alerts.settle() == 0
     assert %{status: :sending} = status(alert)
 
-    Repo.update_all(TaskRun, set: [inserted_at: ago(6)])
+    Repo.update_all(WorkRun, set: [inserted_at: ago(6)])
     assert Alerts.settle() == 1
 
     assert %{
@@ -152,14 +139,14 @@ defmodule Dokkit.ImessageTest do
     # The retry waits on the same run: no second message is queued.
     retry()
     assert %{status: :failed} = status(alert)
-    assert Repo.aggregate(TaskRun, :count) == 1
+    assert Repo.aggregate(WorkRun, :count) == 1
 
     # The Mac wakes up, takes the one run and answers.
     assert %{"run" => run} = json_response(work(ctx.mac_key), 200)
     assert response(work(ctx.mac_key), 204)
     result(ctx.mac_key, run, %{exit_code: 0})
     assert %{status: :sent, error: nil} = status(alert)
-    assert Repo.aggregate(TaskRun, :count) == 1
+    assert Repo.aggregate(WorkRun, :count) == 1
   end
 
   test "a close sends nothing", ctx do
@@ -170,7 +157,7 @@ defmodule Dokkit.ImessageTest do
     Alerts.deliver_pending()
     assert response(work(ctx.mac_key), 204)
     assert %{status: :closed} = status(alert)
-    assert Repo.aggregate(TaskRun, :count) == 1
+    assert Repo.aggregate(WorkRun, :count) == 1
   end
 
   test "with no Mac chosen it fails and says why", ctx do

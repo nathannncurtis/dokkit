@@ -474,7 +474,7 @@ defmodule DokkitWeb.SettingsLive do
             /> <label><input type="checkbox" name="token[read]" value="true" checked /> Read</label>
             <label><input type="checkbox" name="token[read-logs]" value="true" /> Read logs</label>
             <label><input type="checkbox" name="token[act]" value="true" />
-            Act: snooze, acknowledge, watch, route, run tasks</label>
+            Act: snooze, acknowledge, watch, route</label>
             <span :if={@new_token}>Shown only now.</span>
             <span class="end"><button class="btn primary" type="submit">Make a token</button></span>
           </form>

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const imessageTask = "dokkit:imessage"
+const imessageWork = "dokkit:imessage"
 
 // Tests replace these.
 var (

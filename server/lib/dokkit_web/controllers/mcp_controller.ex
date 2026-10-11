@@ -61,11 +61,6 @@ defmodule DokkitWeb.McpController do
     {"since_deploy", "read",
      "The latest deploy of one service, and the issues and errors first seen after it. Takes the id from find.",
      %{"id" => @text}, ["id"]},
-    {"tasks", "read", "The accepted tasks, each with its machine, command and latest run.", %{},
-     []},
-    {"run_task", "act",
-     "Run an accepted task on its machine. Takes the task's id from tasks. The task runs its accepted command and takes no arguments.",
-     %{"id" => @text}, ["id"]},
     {"machines", "read", "Every machine with its state and what it runs.", %{}, []},
     {"machine", "read", "One machine. Takes the id from machines.", %{"id" => @text}, ["id"]},
     {"issues", "read", "Every issue that is open or snoozed, newest first.", %{}, []},
@@ -75,9 +70,7 @@ defmodule DokkitWeb.McpController do
     {"versions", "read", "The versions of the apps Dokkit watches, and the apps.", %{}, []},
     {"rules", "read", "The alert rules, first match first.", %{}, []},
     {"proposals", "read",
-     "Things Dokkit found that a person may accept or dismiss: services and ports, and tasks.",
-     %{}, []},
-    {"task_runs", "read", "The recent runs of every task.", %{}, []},
+     "Things Dokkit found that a person may accept or dismiss: services and ports.", %{}, []},
     {"series", "read",
      "Numbers over time for one service. Without metric, lists the metric names. from and to are RFC 3339 and default to the last day.",
      %{
@@ -114,8 +107,7 @@ defmodule DokkitWeb.McpController do
     {"hold", "act",
      "Hold a service at a version, so a newer one is not offered. An empty or missing version lets it go.",
      %{"id" => @text, "version" => @text}, ["id"]},
-    {"accept_proposal", "act",
-     "Accept a found service or port. Takes the id from proposals. A task there is accepted with accept_task.",
+    {"accept_proposal", "act", "Accept a found service or port. Takes the id from proposals.",
      %{"id" => @text}, ["id"]},
     {"dismiss_proposal", "act", "Dismiss a proposal. Takes the id from proposals.",
      %{"id" => @text}, ["id"]},
@@ -183,13 +175,6 @@ defmodule DokkitWeb.McpController do
     {"set_job_timing", "act",
      "Set when a job counts as late (grace) and as run too long (max_runtime), such as 30m or 2h. A field left out stays as it was; an empty one clears it. A job from a dokkit.toml is changed in the file.",
      %{"id" => @text, "grace" => @text, "max_runtime" => @text}, ["id"]},
-    {"accept_task", "admin",
-     "Accept a task that is waiting, so its machine may run the command. Takes the id, command and pin from proposals. system true runs it as the system account.",
-     %{"id" => @text, "command" => @text, "pin" => @text, "system" => @bool},
-     ["id", "command", "pin"]},
-    {"dismiss_task", "admin",
-     "Dismiss a task that is waiting. Takes the id, command and pin from proposals.",
-     %{"id" => @text, "command" => @text, "pin" => @text}, ["id", "command", "pin"]},
     {"update_program", "admin",
      "Ask an enrolled machine to fetch the newer dokkit program. A person finishes the update on the machine. Takes the id from machines.",
      %{"id" => @text}, ["id"]},
@@ -366,15 +351,6 @@ defmodule DokkitWeb.McpController do
 
   defp tool("errors", %{"id" => id}), do: Read.error(id) || {:error, "No error with that id."}
   defp tool("errors", _), do: Read.errors()
-  defp tool("tasks", _), do: Read.tasks()
-
-  defp tool("run_task", %{"id" => id}) do
-    case Dokkit.Tasks.run(id, "an AI tool") do
-      nil -> {:error, "No accepted task with that id."}
-      run -> %{run: run.id}
-    end
-  end
-
   defp tool("machines", _), do: Read.machines()
   defp tool("machine", %{"id" => id}), do: seen(Read.machine(id))
   defp tool("issues", _), do: Read.issues()
@@ -386,7 +362,6 @@ defmodule DokkitWeb.McpController do
 
   defp tool("rules", _), do: Read.rules()
   defp tool("proposals", _), do: Read.proposals()
-  defp tool("task_runs", _), do: Read.task_runs()
 
   defp tool("series", %{"id" => id} = args),
     do: seen(Read.series(id, Map.update(args, "points", nil, &to_string(trunc(&1)))))
@@ -416,8 +391,6 @@ defmodule DokkitWeb.McpController do
   defp tool("archives", _), do: Read.archives()
   defp tool("keep_messages", %{"id" => id} = args), do: Api.set_keep(id, args["keep"]) |> r()
   defp tool("set_job_timing", %{"id" => _} = args), do: Api.job_timing(args) |> r()
-  defp tool("accept_task", %{"id" => _} = args), do: Api.decide_task(args, :accepted) |> r()
-  defp tool("dismiss_task", %{"id" => _} = args), do: Api.decide_task(args, :dismissed) |> r()
   defp tool("update_program", %{"id" => id}), do: Api.fetch_program(id, "an AI tool") |> r()
   defp tool("releases", _), do: %{items: Dokkit.Releases.list()}
 

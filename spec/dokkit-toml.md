@@ -32,11 +32,6 @@ schedule = "0 1 * * *"
 grace = "30m"
 max_runtime = "1h"
 
-[[task]]
-id = "security-scan"
-run = "scripts/zap.ps1"
-timeout = "2h"                  # the server ends a run still going after 12 hours
-
 [alert]
 down = "page"                   # a suggested default only
 degraded = "push"
@@ -52,7 +47,6 @@ degraded = "push"
 | `[stats]` | Where the stats document is and which environment variable holds its key. |
 | `[logs]` | Files to read. Paths are relative to the file and must stay inside its folder. Lines follow `log-lines.md`. |
 | `[[job]]` | A scheduled job: when it should run, how late it may be, and how long it may take. `schedule` is a five-field cron line read as UTC, and `@reboot` is refused. |
-| `[[task]]` | A named piece of work the server may be allowed to ask for. |
 | `[alert]` | A starting suggestion for who is told. |
 
 ## Rules
@@ -61,9 +55,7 @@ degraded = "push"
 
 **Secrets never go in the file.** A field ending in `_env` names an environment variable that holds one.
 
-**A declared check is active straight away. A declared task is not.** A task is a command that the server could later ask a machine to run. It arrives as a proposal, is accepted in the interface, and is pinned to what was accepted: the exact command, the absolute path of the declaring file and the contents of every word of the command that is a regular file inside the task's folder. If any of them changes, it is proposed again and the old one stops being runnable. A task runs under an ordinary account unless it was accepted to run otherwise. Without this, anyone able to edit a file in a repo could get a command run by a privileged service.
-
-**Tasks take no arguments.** The server can ask for a task by name and nothing else.
+**A declared check is active straight away.**
 
 ## How the file reaches Dokkit
 

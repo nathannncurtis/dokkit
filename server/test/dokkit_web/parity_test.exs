@@ -72,12 +72,9 @@ defmodule DokkitWeb.ParityTest do
       "full_typed" => @view,
       "full_token" => @session
     },
-    "TasksLive" => %{
-      "accepted" => {:owner, ["POST /api/v1/tasks/:id/accept"]},
-      "dismissed" => {:owner, ["POST /api/v1/tasks/:id/dismiss"]},
+    "FoundLive" => %{
       "sweep" =>
-        {:member, ["POST /api/v1/proposals/:id/accept", "POST /api/v1/proposals/:id/dismiss"]},
-      "run" => {:member, ["POST /api/v1/tasks/:id/run"]}
+        {:member, ["POST /api/v1/proposals/:id/accept", "POST /api/v1/proposals/:id/dismiss"]}
     }
   }
 

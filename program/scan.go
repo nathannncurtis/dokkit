@@ -13,12 +13,9 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -33,7 +30,6 @@ var scanParts = []struct {
 }{
 	{"services", findServices},
 	{"ports", findPorts},
-	{"tasks", findScheduled},
 	{"containers", findContainers},
 	{"sites", findSites},
 	{"disks", findDisks},
@@ -62,7 +58,7 @@ func scan(args []string, folders []string) int {
 		fmt.Fprintln(os.Stderr, "dokkit:", err)
 		return 1
 	}
-	for _, name := range []string{"declarations", "services", "ports", "tasks", "containers", "sites", "disks"} {
+	for _, name := range []string{"declarations", "services", "ports", "containers", "sites", "disks"} {
 		if !skip[name] {
 			fmt.Printf("%-13s %d\n", name, len(all[name]))
 		}
@@ -162,24 +158,6 @@ func findPorts() (all []found) {
 	return
 }
 
-func findScheduled() (all []found) {
-	if runtime.GOOS != "windows" {
-		for _, l := range output("systemctl", "list-timers", "--all", "--no-legend", "--plain") {
-			if f := strings.Fields(l); len(f) >= 2 {
-				all = append(all, found{"name": f[len(f)-2]})
-			}
-		}
-		return
-	}
-	// Columns keep their order in every language: name, next run, state, mode, last run, result, author, what runs.
-	for _, row := range table(output("schtasks", "/query", "/fo", "csv", "/v", "/nh")) {
-		if len(row) > 8 && !strings.HasPrefix(row[1], `\Microsoft\`) {
-			all = append(all, found{"name": row[1], "last_run": row[5], "runs": row[8]})
-		}
-	}
-	return
-}
-
 func findContainers() (all []found) {
 	for _, l := range output("docker", "ps", "--format", "{{.Names}}\t{{.Image}}") {
 		if name, image, ok := strings.Cut(l, "\t"); ok {
@@ -222,266 +200,11 @@ func declarations(folders []string) (all []string) {
 	return
 }
 
-type task struct {
-	ID, Run, Timeout string
-	dir, file        string
-}
-
-// declaringFile is the absolute path of the file that declares the task, links resolved.
-func (t task) declaringFile() string {
-	file := t.file
-	if abs, err := filepath.Abs(file); err == nil {
-		file = abs
-	}
-	if real, err := filepath.EvalSymlinks(file); err == nil {
-		file = real
-	}
-	return file
-}
-
-// words splits a command at spaces, keeping quoted text together and dropping the quotes.
-func words(command string) (out []string) {
-	var cur strings.Builder
-	var quote rune
-	started := false
-	flush := func() {
-		if started {
-			out = append(out, cur.String())
-			cur.Reset()
-			started = false
-		}
-	}
-	for _, r := range command {
-		switch {
-		case quote != 0:
-			if r == quote {
-				quote = 0
-			} else {
-				cur.WriteRune(r)
-			}
-		case r == '"' || r == '\'':
-			quote, started = r, true
-		case r == ' ' || r == '\t':
-			flush()
-		default:
-			cur.WriteRune(r)
-			started = true
-		}
-	}
-	flush()
-	return
-}
-
-// scripts lists the regular files inside the task's folder that its command names, links
-// resolved. A file outside the folder is not one of them.
-func (t task) scripts() (files []string) {
-	for _, w := range words(t.Run) {
-		p := filepath.FromSlash(strings.ReplaceAll(w, `\`, "/"))
-		if !filepath.IsAbs(p) {
-			p = filepath.Join(t.dir, p)
-		}
-		if !within(t.dir, p) {
-			continue
-		}
-		real, err := filepath.EvalSymlinks(p)
-		if err != nil {
-			continue
-		}
-		if info, err := os.Stat(real); err == nil && info.Mode().IsRegular() && !slices.Contains(files, real) {
-			files = append(files, real)
-		}
-	}
-	return
-}
-
-// pin is what a person accepts: the command, the file that declares it, and the contents of
-// every file inside its folder that the command names. Any of them changing makes the task
-// need accepting again.
-func (t task) pin() string {
-	h := sha256.New()
-	h.Write([]byte(t.Run))
-	h.Write([]byte{0})
-	h.Write([]byte(t.declaringFile()))
-	h.Write([]byte{0})
-	for _, f := range t.scripts() {
-		if b, err := os.ReadFile(f); err == nil {
-			sum := sha256.Sum256(b)
-			h.Write(sum[:])
-		}
-	}
-	return hex.EncodeToString(h.Sum(nil))
-}
-
-// tasks reads the tasks these dokkit.toml files define. A name that two files both
-// declare belongs to neither: a file dropped in another folder cannot take over a task.
-func tasks(files []string) map[string]task {
-	all, clash := map[string]task{}, map[string]bool{}
-	var read []os.FileInfo
-	for _, p := range files {
-		if abs, err := filepath.Abs(p); err == nil {
-			p = abs
-		}
-		if info, err := os.Stat(p); err == nil {
-			if slices.ContainsFunc(read, func(o os.FileInfo) bool { return os.SameFile(o, info) }) {
-				continue
-			}
-			read = append(read, info)
-		}
-		if d, err := readDeclaration(p); err == nil {
-			for _, t := range d.Task {
-				if _, taken := all[t.ID]; taken {
-					clash[t.ID] = true
-				}
-				t.dir, t.file = filepath.Dir(p), p
-				all[t.ID] = t
-			}
-		}
-	}
-	for id := range clash {
-		delete(all, id)
-	}
-	return all
-}
-
-// accepted asks the server which pins were accepted for this machine, by task.
-// ok is false when the machine is not enrolled or the server did not answer.
-func accepted(c *client) (bySha map[string]string, ok bool) {
-	var a struct {
-		Items []struct {
-			Task string
-			Sha  string `json:"command_sha256"`
-		}
-	}
-	if c == nil {
-		return nil, false
-	}
-	if status, err := c.call("GET", "/api/v1/tasks/accepted", "", nil, &a); err != nil || status != 200 {
-		return nil, false
-	}
-	bySha = map[string]string{}
-	for _, item := range a.Items {
-		bySha[item.Task] = item.Sha
-	}
-	return bySha, true
-}
-
-// standing says whether the server would be allowed to ask for this task as it is written now.
-func standing(t task, acceptedSha string, known bool) string {
-	switch {
-	case !known:
-		return "not accepted yet"
-	case acceptedSha == t.pin():
-		return "accepted"
-	}
-	return "changed since it was accepted"
-}
-
-func taskCommand(args []string, folders []string, c *client) int {
-	all := tasks(append([]string{"dokkit.toml"}, declarations(folders)...))
-	if len(args) == 1 && args[0] == "list" {
-		shas, asked := accepted(c)
-		for id, t := range all {
-			state := ""
-			if asked {
-				sha, known := shas[id]
-				state = "   " + standing(t, sha, known)
-			}
-			fmt.Printf("%-24s %s   in %s%s\n", id, t.Run, t.dir, state)
-		}
-		if len(all) == 0 {
-			fmt.Println("No tasks are defined here or in the folders this machine reads.")
-			return 0
-		}
-		if !asked {
-			fmt.Println("The server was not asked which are accepted: this machine is not enrolled, or it did not answer.")
-		}
-		if u, err := user.Current(); err == nil {
-			fmt.Println("A task runs as whoever runs dokkit watch. Here that is " + u.Username + ".")
-		}
-		return 0
-	}
-	if len(args) != 2 || args[0] != "run" {
-		fmt.Fprintln(os.Stderr, usage)
-		return 2
-	}
-	t, ok := all[args[1]]
-	if !ok {
-		fmt.Fprintln(os.Stderr, "dokkit: no task called", args[1])
-		return 1
-	}
-	return t.run(os.Stdout, os.Stderr, nil)
-}
-
-// run runs a task where its file is and exits as it did. prepare, when there is one,
-// sets the account it runs as, and the task does not run if that cannot be done.
-func (t task) run(stdout, stderr io.Writer, prepare func(*exec.Cmd) (func(), error)) int {
-	run := t.Run
-	limit, err := time.ParseDuration(t.Timeout)
-	if err != nil || limit <= 0 {
-		limit = time.Hour
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), limit)
-	defer cancel()
-	shell := []string{"sh", "-c", run}
-	if runtime.GOOS == "windows" {
-		// A bare name that is a file in the task's folder is run from there on purpose.
-		if first, _, _ := strings.Cut(run, " "); !strings.ContainsAny(first, `\/:"`) {
-			if _, err := os.Stat(filepath.Join(t.dir, first)); err == nil {
-				run = `.\` + run
-			}
-		}
-		shell = []string{"cmd", "/c", run}
-		if first, _, _ := strings.Cut(run, " "); strings.HasSuffix(strings.ToLower(first), ".ps1") {
-			shell = append([]string{"powershell", "-NoProfile", "-File"}, strings.Fields(run)...)
-		}
-	}
-	// The time limit stops the shell; what the shell started may outlive it, so waiting for its output ends too.
-	cmd := exec.CommandContext(ctx, shell[0], shell[1:]...)
-	cmd.Dir, cmd.Stdout, cmd.Stderr = t.dir, stdout, stderr
-	cmd.WaitDelay = killWait
-	cmd.Env = append(os.Environ(), "NoDefaultCurrentDirectoryInExePath=1")
-	if prepare != nil {
-		after, err := prepare(cmd)
-		if err != nil {
-			fmt.Fprintln(stderr, "dokkit: not run, because an ordinary account could not be used:", err)
-			return 126
-		}
-		defer after()
-	}
-	err = cmd.Run()
-	var exit *exec.ExitError
-	switch {
-	case ctx.Err() != nil:
-		fmt.Fprintln(stderr, "dokkit: stopped after", limit)
-		return 124
-	case errors.Is(err, exec.ErrWaitDelay):
-		fmt.Fprintln(stderr, "dokkit: the task ended, and its output was cut off while something it started kept running")
-		return 0
-	case errors.As(err, &exit):
-		return exit.ExitCode()
-	case err != nil:
-		fmt.Fprintln(stderr, "dokkit:", err)
-		return 127
-	}
-	return 0
-}
-
 var resultWait = 2 * time.Second
 
-// killWait is how long a stopped task's output is waited for.
-var killWait = 5 * time.Second
+const updateWork = "dokkit:update"
 
-// ordinary makes a command run under an ordinary account instead of this program's own.
-// A program that is root sets it. Otherwise it is nil and a task runs as the program's own
-// account: the person signed in, or the account the service was given.
-var ordinary func(*exec.Cmd) (func(), error)
-
-// notSystem is why a task accepted for the system account cannot run here, or "".
-var notSystem string
-
-const updateTask = "dokkit:update"
-
-// update is the one built-in task. It fetches the newer copy the server holds and leaves
+// update is a built-in run. It fetches the newer copy the server holds and leaves
 // it beside the spool. It replaces nothing: a person finishes the update on the machine.
 func (c *client) update(run string) {
 	said, code := "", 0
@@ -551,14 +274,14 @@ func (c *client) fetchUpdate() (string, string, error) {
 	return path, sum, os.Rename(path+".part", path)
 }
 
-// work asks the server for task runs, holding each request open, and runs them one at a time.
+// work asks the server for runs, holding each request open, and does them one at a time.
 func (c *client) work() {
 	for {
 		var job struct {
-			Run, Task, As string
-			Sha           string `json:"command_sha256"`
-			To            []string
-			Text          string
+			Run  string
+			Name string `json:"task"`
+			To   []string
+			Text string
 		}
 		status, err := c.call("GET", "/api/v1/work?wait=50", "", nil, &job)
 		if status == 204 {
@@ -568,65 +291,14 @@ func (c *client) work() {
 			time.Sleep(15 * time.Second)
 			continue
 		}
-		if job.Task == updateTask {
+		switch job.Name {
+		case updateWork:
 			c.update(job.Run)
-			continue
-		}
-		if job.Task == imessageTask {
+		case imessageWork:
 			c.imessage(job.Run, job.To, job.Text)
-			continue
+		default:
+			c.postResult("/api/v1/work/"+job.Run+"/result", []byte(`{"refused":"This program does not run that."}`))
 		}
-		result := "/api/v1/work/" + job.Run + "/result"
-		t, defined := tasks(declarations(c.foldersNow()))[job.Task]
-		// Only the task a person accepted runs. A command, file or script changed since then is refused.
-		if !defined || t.pin() != job.Sha {
-			c.postResult(result, []byte(`{"refused":"This machine has no task with that name, that command, that file and that script."}`))
-			continue
-		}
-		if err := taskFolderProblem(t.dir, t.scripts()); err != nil {
-			body, _ := json.Marshal(map[string]string{"refused": err.Error()})
-			c.postResult(result, body)
-			continue
-		}
-		if job.As == "system" && notSystem != "" {
-			body, _ := json.Marshal(map[string]string{"refused": notSystem})
-			c.postResult(result, body)
-			continue
-		}
-		if job.As == "system" && !c.system {
-			c.postResult(result, []byte(`{"refused":"This task was accepted for the system account, and this machine's own configuration does not allow that. Set system_tasks to true in its config file (config.json in dokkit's configuration folder)."}`))
-			continue
-		}
-		fmt.Printf("%s  running task %s\n", time.Now().Format("15:04:05"), job.Task)
-		out, done, sent := &chunks{}, make(chan bool), make(chan bool)
-		send := func() {
-			if b := out.take(); len(b) > 0 {
-				c.call("POST", "/api/v1/work/"+job.Run+"/output", "text/plain", b, nil)
-			}
-		}
-		go func() {
-			for {
-				select {
-				case <-done:
-					send()
-					close(sent)
-					return
-				case <-time.After(3 * time.Second):
-					send()
-				}
-			}
-		}()
-		started := time.Now()
-		// A task runs as the system account only when it was accepted to.
-		var account func(*exec.Cmd) (func(), error)
-		if job.As != "system" {
-			account = ordinary
-		}
-		code := t.run(out, out, account)
-		close(done)
-		<-sent
-		body, _ := json.Marshal(map[string]any{"exit_code": code, "duration_ms": time.Since(started).Milliseconds()})
-		c.postResult(result, body)
 	}
 }
 
@@ -654,25 +326,4 @@ func (c *client) call(method, path, kind string, body []byte, into any) (int, er
 		json.NewDecoder(res.Body).Decode(into)
 	}
 	return res.StatusCode, nil
-}
-
-// chunks holds a task's output until it is next sent.
-type chunks struct {
-	sync.Mutex
-	b []byte
-}
-
-func (c *chunks) Write(p []byte) (int, error) {
-	c.Lock()
-	defer c.Unlock()
-	c.b = append(c.b, p...)
-	return len(p), nil
-}
-
-func (c *chunks) take() []byte {
-	c.Lock()
-	defer c.Unlock()
-	b := c.b
-	c.b = nil
-	return b
 }

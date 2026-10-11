@@ -60,7 +60,7 @@ defmodule Dokkit.FoundTest do
     assert html =~ "Print Spooler"
   end
 
-  test "tasks and, on Linux, systemd units are kept and watched", %{conn: _} do
+  test "on Linux, systemd units are kept and watched", %{conn: _} do
     machine = Repo.insert!(%Machine{name: "found-linux", kind: :enrolled})
     {key, _} = Keys.mint(:machine, %{machine_id: machine.id})
     as = put_req_header(build_conn(), "authorization", "Bearer " <> key)
@@ -69,23 +69,15 @@ defmodule Dokkit.FoundTest do
       os: "linux",
       found: %{
         services: [%{name: "nginx", state: "running"}],
-        tasks: [
-          %{name: "backup.timer"},
-          %{name: "\Nightly", runs: "C:\run.bat", schedule: "0 1 * * *"},
-          %{name: "\Odd", schedule: "@reboot"}
-        ]
+        tasks: [%{name: "backup.timer"}]
       }
     }
 
-    assert json_response(post(as, "/api/v1/proposals", proposal), 200) == %{"waiting" => 4}
+    assert json_response(post(as, "/api/v1/proposals", proposal), 200) == %{"waiting" => 1}
     found = Enum.filter(Found.list(), &(&1.machine_id == machine.id))
     Found.watch(Enum.map(found, & &1.id))
 
     assert %{config: %{"name" => "nginx"}, type: :systemd} = check(machine, "nginx")
-    assert %{config: %{"schedule" => "0 1 * * *", "waiting" => true}, type: :job} = check(machine, "nightly")
-    assert %{config: config, type: :job} = check(machine, "odd")
-    assert config == %{"waiting" => true}
-    assert %{type: :job} = check(machine, "backup-timer")
 
     assert %{"items" => [%{"type" => "systemd", "name" => "systemd"}]} =
              json_response(get(as, "/api/v1/checks"), 200)

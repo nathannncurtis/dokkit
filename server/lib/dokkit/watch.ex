@@ -36,7 +36,7 @@ defmodule Dokkit.Watch do
         [
           fn -> if Dokkit.Alerts.release(now) > 0, do: Dokkit.Alerts.flush() end,
           fn -> Dokkit.Alerts.settle(now) end,
-          fn -> Dokkit.Tasks.expire() end,
+          fn -> Dokkit.Work.expire() end,
           fn -> if now.minute in [0, 30], do: Dokkit.Numbers.forecast(now) end,
           fn -> prune(now) end,
           fn -> Dokkit.Digest.tick(now, Dokkit.Alerts.config()) end,

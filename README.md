@@ -20,8 +20,7 @@ Working, with tests:
 - **Alerts.** A page through PagerDuty, a quiet push through ntfy, Pushover or PagerDuty, an email, an iMessage through a Mac, an SMS through Twilio, a daily digest, or a webhook. Rules send one kind of issue somewhere else. Once per issue, resolved when it closes. Email, iMessage and SMS go to several addresses. An issue that keeps being snoozed is offered the daily digest. Each machine's disks and memory are watched against two limits without anything declared.
 - **Logs.** Lines in Dokkit's format or CLEF, kept in monthly partitions, searched on the Logs page. `dokkit watch` reads the log files a `dokkit.toml` names.
 - **Found.** `dokkit scan` writes what is on a machine to a file and `dokkit propose` sends it. Running Windows services and listening ports wait on the Found page, and watching one adds a check that `dokkit watch` runs on that machine.
-- **Tasks.** A `dokkit.toml` offers a named command. The owner accepts it on the Found page, it is run from the Tasks page, and `dokkit watch` on its machine carries it out and sends back the output. A command that changes has to be accepted again.
-- **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Errors, Deploys, Found, Tasks, Alerts and Settings. People sign in; the first one claims the server with a setup code. A service page stops and starts watching, holds a version, keeps error messages or not, takes notes on its open issue, and lets the installed program start a stopped Windows service again. Versions lists desktop apps by how many PCs are on each version.
+- **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Errors, Deploys, Found, Alerts and Settings. People sign in; the first one claims the server with a setup code. A service page stops and starts watching, holds a version, keeps error messages or not, takes notes on its open issue, and lets the installed program start a stopped Windows service again. Versions lists desktop apps by how many PCs are on each version.
 - **Libraries.** For Python, .NET, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift, one file each: beats, job progress, an app's own checks, errors, logs.
 - **The API and the MCP**, for user tokens made in Settings. Every read and act call in `spec/api.md` is there, and a token with the `admin` scope manages keys, people, rules, checks and restart.
 
@@ -43,7 +42,7 @@ go build -o dokkit.exe .
 | Piece | What it is | Built with |
 |---|---|---|
 | **The server** | Takes everything in, stores it, alerts, and serves the web interface. | Phoenix on Postgres |
-| **The `dokkit` program** | Runs on each machine. Watches what is on it, reports to the server, and can run named tasks. It is also the command-line tool. | Go, one file |
+| **The `dokkit` program** | Runs on each machine. Watches what is on it, and reports to the server. It is also the command-line tool. | Go, one file |
 | **Libraries** | For things only an app knows about itself: that it is alive inside, job progress, its own checks, errors. | Python, C#, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell, Swift |
 | **MCP** | Lets an AI tool ask Dokkit questions and take a few everyday actions. | Part of the server |
 
@@ -83,7 +82,6 @@ go build -o dokkit.exe .
 ### The `dokkit` program, on each machine
 
 - **No open network port on a privileged process.** It only makes outbound requests and receives work over one it holds open. Everything it has to send goes to a folder on disk first, so nothing is lost when the server is unreachable. It listens on nothing, not even localhost.
-- **The server can only ask for a named task defined on that machine.** Never an arbitrary command. A security scan or a report is a named task.
 - **Scanning is an option, never a requirement.** Three levels, each a choice:
 
   | Level | Needs | What it does |
@@ -103,7 +101,7 @@ The server, the `dokkit` program, the libraries and the MCP meet at one HTTP API
 
 - **Intake**: a machine enrols, state and logs and job runs come in as batches, a `dokkit.toml` is declared, a scan is proposed, deploys are marked, errors arrive, and `dokkit` asks for work.
 - **Read**: everything the interface shows.
-- **Act**: snooze, acknowledge, watch, route, accept, run a task.
+- **Act**: snooze, acknowledge, watch, route, accept.
 
 Four kinds of key: one to enrol a machine, one per machine, one per app that can only write, and one per person with scopes.
 
@@ -111,7 +109,6 @@ Four kinds of key: one to enrol a machine, one per machine, one per app that can
 
 - It declares itself in a `dokkit.toml` in its own repo: what it is, how to check it, its jobs, its log files. No code change.
 - It adds the library only for what it alone knows.
-- A task in that file is only a proposal until it is accepted in the interface, and the server can ask for a task by name and nothing else.
 - Steps are in `docs/integrating.md`.
 
 ### Errors

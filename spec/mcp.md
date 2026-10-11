@@ -23,8 +23,6 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `jobs` | `read` | Lists jobs with their schedule and last runs. |
 | `job_runs` | `read` | Lists the recent runs of one job. |
 | `errors` | `read` | Lists error groups, or shows one with its stack. |
-| `tasks` | `read` | Lists the accepted tasks. |
-| `task_runs` | `read` | Lists the recent runs of every task. |
 | `machines` | `read` | Lists machines. |
 | `machine` | `read` | Shows one machine. |
 | `issues` | `read` | Lists issues. |
@@ -48,9 +46,8 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `unwatch` | `act` | Stops watching a service. |
 | `routing` | `act` | Sets where a service's issues go. A field that is not given stays as it was. |
 | `hold` | `act` | Holds a service at a version. |
-| `accept_proposal` | `act` | Accepts a found service or port. A task is accepted with `accept_task`. |
+| `accept_proposal` | `act` | Accepts a found service or port. |
 | `dismiss_proposal` | `act` | Dismisses a proposal. |
-| `run_task` | `act` | Runs an accepted task. |
 | `keep_messages` | `act` | Keeps or stops keeping the text of a service's errors. |
 | `set_job_timing` | `act` | Sets when a job counts as late and as run too long. A field left out stays as it was; an empty one clears it. |
 | `add_rule` | `admin` | Adds an alert rule. |
@@ -64,8 +61,6 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `people` | `admin` | Lists the people who can sign in. |
 | `add_person` | `admin` | Adds a person. |
 | `remove_person` | `admin` | Removes a person. |
-| `accept_task` | `admin` | Accepts a waiting task, so its machine may run the command. Takes the command and pin that `proposals` shows. |
-| `dismiss_task` | `admin` | Dismisses a waiting task. |
 | `update_program` | `admin` | Asks an enrolled machine to fetch the newer `dokkit` program. |
 | `add_job` | `admin` | Adds a job to watch. Its key and addresses are returned once. |
 | `set_alert_settings` | `admin` | Changes alert settings. A setting left out stays as it was; an empty secret clears it. If the address a secret goes to changes (`ntfy_url`, `smtp_host`), send the secret again in the same call or it is cleared, and the answer says so. |
