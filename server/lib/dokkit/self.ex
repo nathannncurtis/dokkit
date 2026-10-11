@@ -1,6 +1,6 @@
 defmodule Dokkit.Self do
   @moduledoc """
-  Dokkit watching itself. It calls an outside address each minute, so something else can
+  Dokkit watching itself. Its row pages when it stops taking reports or cannot reach its database, and pushes for lesser trouble; the two channels are settings on the Alerts page. It calls an outside address each minute, so something else can
   notice when the calls stop, and it keeps a row for itself like any other service.
   """
   import Ecto.Query, only: [from: 2]
@@ -11,7 +11,7 @@ defmodule Dokkit.Self do
     url = config["heartbeat_url"]
     # A database that does not answer cannot record it, so the outside call stops instead.
     if url not in [nil, ""] and match?({:ok, _}, Repo.query("SELECT 1")), do: beat(url)
-    row(now, booted)
+    row(now, booted, config)
   end
 
   defp beat(url) do
@@ -31,9 +31,11 @@ defmodule Dokkit.Self do
   end
 
   # The database answering and its size. A full disk shows here before it stops intake.
-  defp row(now, booted) do
+  defp row(now, booted, config) do
     machine =
       Repo.get_by(Machine, name: "Dokkit") || Repo.insert!(%Machine{name: "Dokkit", kind: :group})
+
+    {down, degraded} = Dokkit.Alerts.self_routes(config)
 
     service =
       Repo.get_by(Service, machine_id: machine.id, slug: "dokkit") ||
@@ -41,10 +43,14 @@ defmodule Dokkit.Self do
           machine_id: machine.id,
           slug: "dokkit",
           name: "Dokkit",
-          version: to_string(Application.spec(:dokkit, :vsn)),
-          route_down: "push",
-          route_degraded: "push"
+          version: to_string(Application.spec(:dokkit, :vsn))
         })
+
+    service =
+      if {service.route_down, service.route_degraded} == {down, degraded},
+        do: service,
+        else:
+          Repo.update!(Ecto.Changeset.change(service, route_down: down, route_degraded: degraded))
 
     case Repo.query("SELECT pg_database_size(current_database())") do
       {:ok, %{rows: [[bytes]]}} ->
@@ -111,7 +117,7 @@ defmodule Dokkit.Self do
 
     if quiet && quiet >= @quiet_minutes,
       do:
-        Issues.record(check(service, "reports"), :degraded,
+        Issues.record(check(service, "reports"), :down,
           at: now,
           value: quiet,
           note: "No machine has reported for #{round(quiet)} minutes."
@@ -129,7 +135,7 @@ defmodule Dokkit.Self do
           Issues.record(check(service, "archive"), :ok, at: now)
 
         {:error, _} ->
-          Issues.record(check(service, "archive"), :down,
+          Issues.record(check(service, "archive"), :degraded,
             at: now,
             note: "The archive folder cannot be written to."
           )
