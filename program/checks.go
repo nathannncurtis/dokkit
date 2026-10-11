@@ -48,6 +48,7 @@ type check struct {
 	Every, Timeout, Slow  string
 	DateFrom              string `toml:"date_from"`
 	CommandHas            string `toml:"command_has"`
+	AtLeast               int    `toml:"at_least"`
 	name, dir             string
 	next                  time.Time
 	restart               bool
@@ -183,6 +184,9 @@ func (c *check) problem() (runs bool, err error) {
 				return false, fmt.Errorf("%q is not a time such as 30s or 5m", d)
 			}
 		}
+	}
+	if c.AtLeast != 0 && (c.Type != "process" || c.AtLeast < 1) {
+		return false, errors.New("at_least is a number of processes, 1 or more, and only for a process check")
 	}
 	if c.Slow != "" {
 		slow, _ := time.ParseDuration(c.Slow)
@@ -365,7 +369,10 @@ func (c *check) run() result {
 			return expiryResult(until, time.Now())
 		}
 	case "process":
-		err = processRunning(c.Name, c.CommandHas)
+		var n int
+		if n, err = processCount(c.Name, c.CommandHas); err == nil {
+			return processResult(n, c.AtLeast)
+		}
 	case "windows-service", "systemd":
 		if c.Type == "systemd" {
 			err = systemdActive(c.Name)
@@ -441,24 +448,40 @@ func short(err error) string {
 	return s
 }
 
-func processRunning(name, has string) error {
+// processResult is ok with the count as its value, or degraded when fewer than at_least are running.
+func processResult(n, atLeast int) result {
+	if n < atLeast {
+		return result{state: "degraded", value: float64(n), note: fmt.Sprintf("%d running, at least %d wanted", n, atLeast)}
+	}
+	return result{ok: true, value: float64(n)}
+}
+
+// processCount is how many processes match, and an error when none do.
+func processCount(name, has string) (int, error) {
 	if has != "" {
 		return processWithText(name, has)
 	}
 	if runtime.GOOS == "windows" {
 		out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq "+name, "/NH", "/FO", "CSV").Output()
 		if err != nil {
-			return cannotTell{"this account may not list processes"}
+			return 0, cannotTell{"this account may not list processes"}
 		}
-		if !strings.Contains(strings.ToLower(string(out)), strings.ToLower(`"`+name+`"`)) {
-			return errors.New("not running")
+		n := 0
+		for _, l := range strings.Split(strings.ToLower(string(out)), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(l), strings.ToLower(`"`+name+`"`)) {
+				n++
+			}
 		}
-		return nil
+		if n == 0 {
+			return 0, errors.New("not running")
+		}
+		return n, nil
 	}
-	if err := exec.Command("pgrep", "-x", name).Run(); err != nil {
-		return errors.New("not running")
+	out, err := exec.Command("pgrep", "-x", name).Output()
+	if n := len(strings.Fields(string(out))); err == nil && n > 0 {
+		return n, nil
 	}
-	return nil
+	return 0, errors.New("not running")
 }
 
 func serviceRunning(name string) error {
