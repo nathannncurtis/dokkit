@@ -147,6 +147,8 @@ A POST body, if there is one, is kept as the last lines of output. `?run=<id>` t
 
 The contents of a `dokkit.toml`, sent as JSON with the same structure. Sending the same file twice changes nothing. Checks, jobs, logs and stats become active. See `dokkit-toml.md`.
 
+A machine key declares any service on its machine. An app key declares the one service it belongs to: `service.id` must be that service's slug, or the answer is `422`. The service keeps its machine and kind, and the file may set its name and environment. Only `schema`, `service`, `check` and `job` are read. Checks of type `beat` or `custom`, which only wait for reports, are accepted and any other check type is refused. A job keeps `id`, `schedule`, `grace` and `max_runtime`. At most 100 checks and jobs. An app key counts against its rate limit.
+
 ### `POST /proposals`
 
 What a scan found: the file `dokkit scan` wrote, as it is. Nothing in a proposal is active until it is accepted in the interface. So far the server keeps the running Windows services and the listening ports, and leaves out what is already watched or was dismissed.

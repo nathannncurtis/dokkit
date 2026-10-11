@@ -718,7 +718,7 @@
         "tags": [
           "Intake"
         ],
-        "description": "The contents of a `dokkit.toml`, sent as JSON with the same structure. Sending the same file twice changes nothing. Checks, jobs, logs and stats become active. The file owns the service and its checks, so checks it no longer lists are removed. Only a machine key may declare; an app key answers 403. Takes a machine key (`dkm_`).",
+        "description": "The contents of a `dokkit.toml`, sent as JSON with the same structure. Sending the same file twice changes nothing. Checks, jobs, logs and stats become active. The file owns the service and its checks, so checks it no longer lists are removed. A machine key may declare any service on its machine. An app key may declare only the service it belongs to: `service.id` must be its slug (else 422), the machine and kind stay, checks may be of type `beat` or `custom` only, jobs keep `id`, `schedule`, `grace` and `max_runtime`, and the other sections are dropped. Takes a machine key (`dkm_`) or an app key (`dka_`).",
         "requestBody": {
           "required": true,
           "content": {
