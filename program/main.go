@@ -49,6 +49,7 @@ dokkit updater install|uninstall|run|status
 dokkit version
 dokkit scan [--no-services] [--no-ports] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]
 dokkit propose
+dokkit import seq --from <seq address> [--seq-key <key>] [--to <address>] [--key <app key>] [--default-service <id>] [--map <file>] [--service-property <names>] [--app-pattern <regex>] [--state <file>] [--since <time>] [--until <time>] [--rate <lines a second>] [--filter <expression>] [--dry-run]
 
 Reads DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key),
 or the address and machine key that dokkit enrol saved. DOKKIT_SPOOL_MB caps the spool (500).
@@ -102,6 +103,9 @@ func cli(args []string) int {
 	}
 	if args[0] == "folder" {
 		return folderCommand(args[1:])
+	}
+	if args[0] == "import" {
+		return importCommand(args[1:])
 	}
 	if args[0] == "imessage" {
 		return imessageCommand(args[1:])
