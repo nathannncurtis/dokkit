@@ -48,7 +48,7 @@ Every key has a recognisable prefix and a built-in checksum, so a leaked one can
 | App key | `dka_` | A library, or a script inside an app | Write-only, for one service. It can read nothing, is rate-limited and can be revoked, so it is safe inside a desktop or phone app. |
 | User token | `dku_` | Scripts and the MCP | Scopes: `read`, `read-logs`, `act`, `admin`. |
 
-The web interface uses a login session, not a token. A session lasts 14 days, and signing out or changing the password ends every session of that person. Every sign-in or password change is counted before the password is checked: after 10 from one name and address together, or 30 from one address, in ten minutes, the answer is `429` with `Retry-After` until the window passes. Many attempts on one name from different addresses are slowed, not refused. Behind a proxy the address is the last `X-Forwarded-For` entry. A person can turn on two-step sign-in at `/two-step`: signing in then asks for the password and after it a six-digit code from an authenticator app (TOTP, 30 seconds, SHA-1). Each code works once, and wrong codes are counted the same way as wrong passwords. Tokens are not affected. Someone who lost their phone is let back in from the server itself with `bin/dokkit rpc 'Dokkit.Accounts.totp_reset("name")'`. A user token made by a person stops working when that person is removed; user tokens made before that was recorded are not tied to anyone and have to be revoked and made again.
+The web interface uses a login session, not a token. A session lasts 14 days, and signing out or changing the password ends every session of that person. Every sign-in or password change is counted before the password is checked: after 10 from one name and address together, or 30 from one address, in ten minutes, the answer is `429` with `Retry-After` until the window passes. Many attempts on one name from different addresses are slowed, not refused. Behind a proxy the address is the last `X-Forwarded-For` entry. A person can turn on two-step sign-in at `/two-step`: signing in then asks for the password and after it a six-digit code from an authenticator app (TOTP, 30 seconds, SHA-1). Each code works once, and wrong codes are counted the same way as wrong passwords. Turning it on shows ten recovery codes once (two groups of six characters); they are stored only as hashes. At the code step a recovery code can be typed in place of an authenticator code and works once; signing in with one lands on `/two-step`, which says so and how many are left. `/two-step` can make a new set with a current authenticator code, which ends the old set. Turning two-step off, or `totp_reset`, deletes the codes. Tokens are not affected. Someone who lost their phone is let back in from the server itself with `bin/dokkit rpc 'Dokkit.Accounts.totp_reset("name")'`. A user token made by a person stops working when that person is removed; user tokens made before that was recorded are not tied to anyone and have to be revoked and made again.
 
 Roles for people: `owner`, `member`, and `viewer`. A viewer sees everything except secrets and keys.
 
@@ -59,8 +59,8 @@ Roles for people: `owner`, `member`, and `viewer`. A viewer sees everything exce
 - Keys travel as `Authorization: Bearer <key>`.
 - `POST /report`, `POST /errors` and the ping URLs answer `OPTIONS` and send `Access-Control-Allow-Origin: *`, so a browser page can use an app key.
 - Times are RFC 3339 in UTC.
-- Lists use cursors. A list answer is `{"items": [...], "next": "<cursor or null>"}` and the next page is asked for with `?cursor=`.
-- Lists take `q` (search), `machine`, `service`, `environment`, `from` and `to` wherever those make sense.
+- Lists use cursors. A list answer is `{"items": [...], "next": "<cursor or null>"}` and the next page is asked for with `?cursor=`. A cursor is opaque and marks a place in the list, not a page number, so items added or removed between two calls leave no gap and no repeat. `?limit=` is 1 to 500 and defaults to 100 (500 for `/logs`). A cursor that is not one answers `422` with the code `bad_cursor`. Lists drawn from deploys and error groups reach back to the newest 1,000.
+- Lists take `q` (search), `machine` (id or name), `service` (id), `environment`, `from` and `to` (RFC 3339; a bad time answers `422` with `bad_time`) wherever those make sense: `/issues` all of them (`from` and `to` on when the issue opened), `/machines` `q` and `machine`, `/services` and `/jobs` `q`, `machine`, `service` and `environment`, `/deploys` and `/errors` all of them, `/jobs/<id>/runs` `from`, `to` and `result`, `/proposals` `q`, `machine` and `kind`, `/keys` `q`, `kind`, `machine`, `from` and `to`, `/users`, `/rules` and `/releases` `q`. `/services` also takes `kind` and `/jobs` `state`.
 - An error answer is `{"error": {"code": "...", "message": "..."}}`.
 - `401` for a missing or bad key, `403` for a key without the scope, `404` for something that does not exist or that the key may not know exists, `413` for too large, `422` for a body that does not fit this contract (a body that is not valid gzip answers `422` with the code `bad_gzip`), `429` with `Retry-After` when the server is busy or a key has used up its request bucket.
 
@@ -83,7 +83,7 @@ The server stamps every item with its own receive time and a log line keeps both
 - One log line: 64 KB. Longer lines are cut and marked as cut.
 - The last lines of a job's output: 16 KB.
 
-**Read and act, built so far:** `GET /inbox`, `/issues`, `/machines`, `/services`, `/services/<id>`, `/jobs`, `/jobs/<id>/runs` and `/logs`, and `POST /issues/<id>/snooze`, `/unsnooze` and `/acknowledge`, all with a user token made in Settings. Lists answer with `next` always null for now.
+**Read and act, built so far:** `GET /inbox`, `/issues`, `/machines`, `/services`, `/services/<id>`, `/jobs`, `/jobs/<id>/runs` and `/logs`, and `POST /issues/<id>/snooze`, `/unsnooze` and `/acknowledge`, all with a user token made in Settings.
 
 ## Intake
 
@@ -125,6 +125,16 @@ Every line has `type` and `at`. With a machine key the machine is known. With an
 
 An app key may not send `state` or `inventory`.
 
+Any line, and the bodies of `POST /errors` and `POST /deploys`, may carry `environment`. Which service it lands on:
+
+- A service with a `dokkit.toml` declaration keeps the environment the file gives it, whatever a line says.
+- Otherwise `production`, no environment, or a value that is not lower-case letters, digits, dots, dashes and underscores (32 at most) leaves the line on the key's own service.
+- Any other value is stored on a sibling service of the same machine with the slug `<slug>~<environment>`, the name `<name> (<environment>)` and that environment. It never alerts and the production service is not changed by it. A service takes at most 5 such siblings; a line for a sixth is refused with `too_many_environments`.
+
+### `POST /api/events/raw`
+
+The door for apps that log to Seq, at the address Seq clients post to (`POST /ingest/clef` takes the same body, where newer clients post CLEF). An app moves by changing its server address and API key. The body is CLEF, one JSON event a line (`Content-Type: application/vnd.serilog.clef`, or `?clef`), or Seq's older JSON form, `{"Events": [{"Timestamp", "Level", "MessageTemplate", "Properties", "Exception", "RenderedMessage"}]}`. The key is an app key, in `X-Seq-ApiKey` or `?apiKey=`. Each event becomes a `log` line of the key's service through the same path as `POST /report`, with the same limits, bucket and storage; see `log-lines.md`. The answer is Seq's: `201` with `{"MinimumLevelAccepted": null}`, or `{"Error": "..."}` with `400` (not CLEF or Seq JSON, or no event stored), `401`, `413` (more than 10,000 events or 5 MB) or `429` with `Retry-After`.
+
 ### Ping URLs
 
 For anything that can only make a web request, such as a cron job on a storage box.
@@ -141,9 +151,15 @@ A POST body, if there is one, is kept as the last lines of output. `?run=<id>` t
 
 The contents of a `dokkit.toml`, sent as JSON with the same structure. Sending the same file twice changes nothing. Checks, jobs, logs and stats become active. See `dokkit-toml.md`.
 
+A machine key declares any service on its machine. An app key declares the one service it belongs to: `service.id` must be that service's slug, or the answer is `422`. The service keeps its machine and kind, and the file may set its name and environment. Only `schema`, `service`, `check` and `job` are read. Checks of type `beat` or `custom`, which only wait for reports, are accepted and any other check type is refused. A job keeps `id`, `schedule`, `grace` and `max_runtime`. At most 100 checks and jobs. An app key counts against its rate limit.
+
 ### `POST /proposals`
 
-What a scan found: the file `dokkit scan` wrote, as it is. Nothing in a proposal is active until it is accepted in the interface. So far the server keeps the running Windows services and the listening ports, and leaves out what is already watched or was dismissed.
+What a scan found: the file `dokkit scan` wrote, as it is. Nothing in a proposal is active until it is accepted in the interface. The server keeps the running Windows and systemd services, the listening ports, scheduled jobs (`found.jobs`, with `notes` saying what the scan could not see), containers that publish a TCP port and sites that have an address, and leaves out what is already watched or was dismissed. A job is accepted as a job that waits for its first report; a container becomes a service with a `tcp` check and a site a service with an `http` check.
+
+### `GET /records`
+
+The accepted found jobs on this machine whose runs the program reads from the system's own record: `{"items": [{"service": "nightly-export", "name": "nightly-export", "source": "task-scheduler", "unit": "\\Nightly export"}]}`. `source` is `task-scheduler` or `systemd-timer`.
 
 ### `GET /checks`
 
@@ -222,12 +238,12 @@ A login session, or a user token with `read`. Log contents need `read-logs`: wit
 | `GET /day` | The last 24 hours in 48 half hours: `from`, `to`, `machines` (each with `cells`, 48 states of `down`, `degraded`, `quiet` or `none` for no signal) and `events` (the issues that opened, oldest first, with `sent` and `closed_at`; `sent` says what was done to tell someone and stays after the issue closes). The last cell is the half hour that holds `to`. Takes `to` (RFC 3339), default now. An issue counts in its last state. Soon issues and other environments colour nothing. |
 | `GET /machines`, `GET /machines/<id>` | Machines, their vitals and thresholds. One machine also has `metrics`: the latest reading of each of its own numbers (`name`, `value`, `at`), however old. |
 | `GET /machines/<id>/series` | Chart data for a machine's own numbers (`disk.used_percent.<mount>`, `memory.used_percent`, `cpu.percent`), the same as a service's: without `metric` the names, with it the points. Takes `metric`, `from`, `to` and `points`. Machine numbers are kept for 30 days. |
-| `GET /services`, `GET /services/<id>` | Services. One service includes its checks, facts, routing, version on each machine, recent deploys and open issues. |
+| `GET /services`, `GET /services/<id>` | Services. One service includes its `checks`, `facts` (the `[service]` table of its description file, empty when it has none), `routing`, `versions` (the version on each machine: for an app each host that reported it, for anything else each machine that has a service of the same id), the ten latest `deploys`, `stats` and its `open_issue`. |
 | `GET /services/<id>/series` | Chart data. Takes `metric`, `from`, `to` and `points`. |
-| `GET /issues`, `GET /issues/<id>` | Issues and their history. |
-| `GET /jobs`, `GET /jobs/<id>/runs` | Jobs with schedule, last run, last good run and next expected run; then the runs. |
+| `GET /issues`, `GET /issues/<id>` | Issues, newest first. `state` is `open` (not snoozed), `snoozed`, `closed` or `all`; left out, the open and snoozed ones. One issue has `history`, oldest first: `opened`, each `note` (with `by` and `note`), `acknowledged`, `snoozed` and `closed`. Dokkit keeps only the current snooze, so `snoozed` has `until` and no `at`. |
+| `GET /jobs`, `GET /jobs/<id>/runs` | Jobs with schedule, last run, last good run and next expected run; then the runs, newest first. A run has `done` and `total` while it reports progress, which the Jobs page and the service page show as a bar and "4,000 of 9,000" for a run in progress. |
 | `GET /logs` | Log search. Takes `q`, `level`, `machine` (id or name), `service`, `from` and `to` (RFC 3339). An unknown machine or service, or a time that is not one, answers `404`. |
-| `GET /errors`, `GET /errors/<id>` | Errors grouped by type and place; then the individual reports. |
+| `GET /errors`, `GET /errors/<id>` | Errors grouped by type and place; then one group with its latest stack and `reports`, its individual reports newest first as `{"items", "next"}`, paged by `cursor` and `limit`. |
 | `GET /deploys` | Deploy history. |
 | `GET /versions` | Which version of each service is on which machine, under `apps` each app that runs on many hosts with the hosts on each version, and under `program` the version this server gives machines to fetch and what each machine runs. |
 | `GET /rules` | Alert rules. |
@@ -253,9 +269,11 @@ A login session, or a user token with `act`. Keys, people, rules, alert settings
 | `PUT /services/<id>/routing` | Who is told, by which channel, for `down` and for `degraded`. A field that is not sent stays as it was. `night: false` holds this service's alerts during the night until it ends; `night: true` sends what is held. |
 | `PUT /services/<id>/hold` | Mark a version on a machine as held on purpose. |
 | `PUT /services/<id>/restart` (`admin`) | Allow or stop automatic restart. |
-| `POST /proposals/<id>/accept`, `/dismiss` | Accept all or some of a proposal, or dismiss it. |
+| `POST /proposals/<id>/accept`, `/dismiss` | Accept or dismiss one proposal. |
+| `POST /proposals/accept`, `/dismiss` | Accept or dismiss some proposals, `{"ids": [...]}`, or every one waiting, `{"all": true}`. Answers `{"ok": true, "done": [ids acted on]}`; ids not waiting are left out of `done`, and `404` when none of the `ids` is waiting. |
 | `PUT /services/<id>/messages` | `{"keep": true}` keeps the text of the service's errors from now on; `false` stops. |
 | `POST /apps` (`admin`) | Add an app that runs on many machines, such as a desktop program: `name`. Answers with its `id`, `slug` and `key`, shown once. The app belongs to no one machine; each PC it reports from is listed as it is seen. |
+| `POST /dependencies` (`admin`) | Add something outside that is depended on: `name`, and optionally `machine` and `check`, which is `{"type": "http", "url": "https://..."}` or `{"type": "tcp", "address": "host:port"}`. Dokkit has no way to run a check from the server, so a check is run by the program on `machine`, which must be enrolled; the program reaches only hosts its own configuration allows. Without a check the dependency belongs to the group machine Outside. Answers as `GET /services/<id>` does. A certificate expiry check is not offered through this call yet: the program is only handed `http`, `tcp`, `process`, `windows-service` and `systemd` checks by the server. |
 | `POST /jobs` (`admin`) | Add a job: `name` and `machine`, and optionally `schedule` (cron, UTC), `grace` and `max_runtime` (such as `30m`). Answers with the job's `key` and the `ping` addresses, shown once. A new machine name adds the machine. |
 | `PUT /jobs/<id>/timing` | Set `grace` and `max_runtime` of a job added in the interface. A field left out stays as it was; an empty one clears it. A job from a `dokkit.toml` answers `422`: change the file. |
 | `POST /rules`, `PUT /rules/<id>`, `DELETE /rules/<id>` (`admin`) | Alert rules. `PUT` changes only the fields sent; an empty one clears it. A `kind`, `state` or `channel` that is not one of its choices, `null`, or a `machine` that is not text answers `422`. |
@@ -267,6 +285,7 @@ A login session, or a user token with `act`. Keys, people, rules, alert settings
 | `POST /alerts/suggestions/<id>/accept`, `/dismiss` (`admin`) | Send that service's issues to the daily digest from now on, or drop the suggestion. |
 | `POST /logs/archives/<name>/restore` (`admin`) | Load an archived month back for a week. Answers with the number of `lines` loaded. |
 | `POST /machines/<id>/update` (`admin`) | `{"version": "v1.2.3"}` sets the machine's wanted version, for its updater to act on, and only to a release the server holds completely: `422` with code `not_held` otherwise, `bad_version` when it is not `v` and three numbers. Answers `{"ok": true, "version": "v1.2.3"}`. Without a body, it asks an enrolled machine to fetch the newer `dokkit` program, which a person finishes on the machine; `422` when the server holds no program. |
+| `POST /machines/<id>/scan` (`act`) | Asks an enrolled machine to look itself over again and send what it finds to proposals: the built-in work `dokkit:scan`, which takes no parameters. Answers `{"run": "<id>"}`; `404` for a machine that is not enrolled. A program too old to know it refuses the run. |
 | `POST /update-all` (`admin`) | The same body, for every machine that has an updater. Answers `{"ok": true, "version": "v1.2.3", "machines": 3}`. |
 | `PUT /releases/<version>/<file>` (`admin`) | The body is the file, as is, up to 200 MB (`413` over that), written to disk as it arrives. Replaces a file of that name. The server does not check it; the updater does. A version or file name of anything but letters, digits, dots, dashes and underscores, or one that starts with a dot, answers `422` with code `bad_name`. |
 | `DELETE /releases/<version>` (`admin`) | Removes that version's files. |

@@ -158,7 +158,7 @@ defmodule DokkitTest do
 
   test "the queue is bounded by bytes" do
     Dokkit.start(url: "http://127.0.0.1:1", key: "dka_test")
-    for _ <- 1..12, do: Dokkit.log("info", String.duplicate("x", 900 * 1024))
+    for _ <- 1..200, do: Dokkit.log("info", String.duplicate("x", 60 * 1024))
     state = :sys.get_state(Dokkit)
     assert state.bytes <= 8 * 1024 * 1024 and state.dropped > 0
   end
@@ -182,21 +182,36 @@ defmodule DokkitTest do
     assert for({"/api/v1/errors", _} <- got, do: 1) == []
   end
 
-  test "a refused batch is counted at once and an error post is never sent twice" do
+  # Answers every request with the status chosen for its path, and hands it to the test.
+  defp status_server(statuses) do
     {:ok, listen} = :gen_tcp.listen(0, [:binary, packet: :http_bin, active: false, reuseaddr: true])
     {:ok, port} = :inet.port(listen)
+    test = self()
+    spawn_link(fn -> serve_status(listen, test, statuses) end)
+    "http://127.0.0.1:#{port}"
+  end
 
-    spawn_link(fn ->
-      {:ok, socket} = :gen_tcp.accept(listen)
-      {:ok, {:http_request, _, _, _}} = :gen_tcp.recv(socket, 0)
-      headers = headers(socket, %{})
-      :inet.setopts(socket, packet: :raw)
-      {:ok, _} = :gen_tcp.recv(socket, String.to_integer(headers["content-length"]))
-      :gen_tcp.send(socket, "HTTP/1.1 401 Unauthorized\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
-      :gen_tcp.close(socket)
-    end)
+  defp serve_status(listen, test, statuses) do
+    {:ok, socket} = :gen_tcp.accept(listen)
+    {:ok, {:http_request, _, {:abs_path, path}, _}} = :gen_tcp.recv(socket, 0)
+    headers = headers(socket, %{})
+    :inet.setopts(socket, packet: :raw)
+    {:ok, body} = :gen_tcp.recv(socket, String.to_integer(headers["content-length"]))
+    body = if headers["content-encoding"] == "gzip", do: :zlib.gunzip(body), else: body
+    send(test, {:got, path, headers["authorization"], body})
+    status = Agent.get(statuses, & &1[path])
+    :gen_tcp.send(socket, "HTTP/1.1 #{status} Status\r\ncontent-length: 2\r\nconnection: close\r\n\r\n{}")
+    :gen_tcp.close(socket)
+    serve_status(listen, test, statuses)
+  end
 
-    Dokkit.start(url: "http://127.0.0.1:#{port}", key: "dka_test")
+  defp statuses(map), do: elem(Agent.start_link(fn -> map end), 1)
+
+  defp error_posts(got), do: for({"/api/v1/errors", _} <- got, do: 1)
+
+  test "a refused batch or error post is counted at once" do
+    statuses = statuses(%{"/api/v1/report" => 401, "/api/v1/errors" => 400})
+    Dokkit.start(url: status_server(statuses), key: "dka_test")
     Dokkit.beat("worker")
     Dokkit.flush()
     assert Dokkit.dropped() == 1
@@ -204,6 +219,81 @@ defmodule DokkitTest do
     Dokkit.capture(%RuntimeError{}, [])
     Dokkit.flush()
     assert Dokkit.dropped() == 2
+    assert length(error_posts(received([]))) == 1
+  end
+
+  test "a failed error post is kept and tried again, and never stops the log lines" do
+    for status <- [500, 429] do
+      stop()
+      statuses = statuses(%{"/api/v1/report" => 200, "/api/v1/errors" => status})
+      Dokkit.start(url: status_server(statuses), key: "dka_test")
+      Dokkit.capture(%RuntimeError{}, [])
+      Dokkit.log("info", "beside the error")
+      Dokkit.flush()
+      got = received([])
+      assert Enum.any?(got, fn {path, body} -> path == "/api/v1/report" and body =~ "beside the error" end)
+      assert length(error_posts(got)) == 1
+      assert Dokkit.dropped() == 0
+
+      Agent.update(statuses, &Map.put(&1, "/api/v1/errors", 200))
+      Dokkit.flush()
+      assert length(error_posts(received([]))) == 1
+      assert Dokkit.dropped() == 0
+    end
+  end
+
+  test "an error post that fails twice is counted as dropped" do
+    Dokkit.start(url: "http://127.0.0.1:1", key: "dka_test")
+    Dokkit.capture(%RuntimeError{}, [])
+    Dokkit.flush()
+    assert Dokkit.dropped() == 0
+    Dokkit.flush()
+    assert Dokkit.dropped() == 1
+  end
+
+  test "a log line over 64 KB is cut with a marker" do
+    Dokkit.start(url: "http://127.0.0.1:1", key: "dka_test")
+    Dokkit.log("info", String.duplicate("é", 40_000))
+    Dokkit.log("info", "x")
+    [cut, small] = :sys.get_state(Dokkit).lines |> :queue.to_list()
+    assert byte_size(cut) <= 65_536
+    assert JSON.decode!(cut)["msg"] |> String.ends_with?(" [cut]")
+    assert JSON.decode!(small)["msg"] == "x"
+  end
+
+  test "a start with announce_version false sends no deploy line" do
+    Dokkit.start(version: "2.3.0", announce_version: false, url: "http://127.0.0.1:1", key: "dka_test")
+    assert :sys.get_state(Dokkit).count == 0
+  end
+
+  test "an environment other than production is on every line" do
+    for {env, want} <- [{"dev", "dev"}, {"production", nil}] do
+      stop()
+      Dokkit.start(url: mock(), key: "dka_test", environment: env)
+      Dokkit.beat("b")
+      Dokkit.log("info", "l")
+      Dokkit.job("j", fn _ -> 1 end)
+      Dokkit.flush()
+      lines = for {"/api/v1/report", body} <- received([]), l <- String.split(body, "\n"), do: JSON.decode!(l)
+      assert length(lines) == 4
+      assert Enum.all?(lines, &(&1["environment"] == want))
+    end
+  end
+
+  test "a stack path is relative to the app folder, and a file outside it is only a name" do
+    Dokkit.start(url: "http://127.0.0.1:1", key: "dka_test")
+    root = File.cwd!()
+
+    Dokkit.capture(%RuntimeError{}, [
+      {A, :a, 0, [file: String.to_charlist(Path.join(root, "lib/a.ex")), line: 1]},
+      {B, :b, 0, [file: ~c"/opt/otp/lib/gen_server.erl", line: 2]},
+      {C, :c, 0, [file: ~c"/home/u/app/deps/plug/lib/plug.ex", line: 3]},
+      {D, :d, 0, [file: ~c"lib/d.ex", line: 4]}
+    ])
+
+    [report] = :sys.get_state(Dokkit).errors
+    files = JSON.decode!(report)["frames"] |> Enum.map(& &1["file"]) |> Enum.reverse()
+    assert files == ["lib/a.ex", "gen_server.erl", "deps/plug/lib/plug.ex", "lib/d.ex"]
   end
 
   test "a frame is the app's own unless it belongs to another app" do

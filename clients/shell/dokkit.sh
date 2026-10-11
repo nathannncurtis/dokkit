@@ -8,7 +8,7 @@
 #     dokkit_log error "Upload failed"
 #     dokkit_capture UploadError "Upload failed"
 #
-# Each call sends one line and waits at most five seconds, twice if the first try fails (an error report is sent once). A line
+# Each call sends one line and waits at most five seconds, twice if the first try fails (an error report is tried again only if curl could not connect). A line
 # that cannot be sent is dropped and the script carries on. A machine with the dokkit program on
 # it can use `dokkit run` instead, which also keeps the last lines of output.
 
@@ -34,20 +34,78 @@ _dokkit_on() {
 }
 
 # The key and the body go to curl on its standard input, so ps never shows them.
+# _dokkit_post <line> <batch id> _ <path> <content type> [line sent ahead of it]; report bodies of 1 KB or more are gzipped if gzip exists
 _dokkit_post() {
-  printf 'url = "%s%s"\nheader = "Authorization: Bearer %s"\nheader = "Content-Type: %s"\nheader = "Dokkit-Batch: %s"\ndata-binary = "%s"\n' \
-    "$(_dokkit_text "${DOKKIT_URL%/}")" "${4:-/api/v1/report}" "$(_dokkit_text "$DOKKIT_KEY")" "${5:-application/x-ndjson}" "$2" "$(_dokkit_text "$1")" |
+  local body=$1 data tmp= code
+  [ -z "${6:-}" ] || body="$6
+$1"
+  data="data-binary = \"$(_dokkit_text "$1")\""
+  [ -z "${6:-}" ] || data="data-binary = \"$(_dokkit_text "$6")\\n$(_dokkit_text "$1")\""
+  if [ "${4:-/api/v1/report}" = /api/v1/report ] && [ "${#body}" -ge 1024 ] && command -v gzip >/dev/null 2>&1 && tmp=$(mktemp 2>/dev/null); then
+    if printf '%s' "$body" | gzip -c >"$tmp" 2>/dev/null; then
+      data=$tmp
+      ! command -v cygpath >/dev/null 2>&1 || data=$(cygpath -m "$tmp")
+      data="header = \"Content-Encoding: gzip\"
+data-binary = \"@$(_dokkit_text "$data")\""
+    else
+      rm -f "$tmp"
+      tmp=
+    fi
+  fi
+  printf 'url = "%s%s"\nheader = "Authorization: Bearer %s"\nheader = "Content-Type: %s"\nheader = "Dokkit-Batch: %s"\n%s\n' \
+    "$(_dokkit_text "${DOKKIT_URL%/}")" "${4:-/api/v1/report}" "$(_dokkit_text "$DOKKIT_KEY")" "${5:-application/x-ndjson}" "$2" "$data" |
     curl -s -f -o /dev/null --max-time 5 -K -
+  code=$?
+  [ -z "$tmp" ] || rm -f "$tmp"
+  return "$code"
+}
+
+# _dokkit_fit <escaped text> <bytes the rest of the line takes>
+_dokkit_fit() {
+  local text=$1 room tail
+  [ "${#text}" -gt 16000 ] || { printf '%s' "$text"; return 0; }
+  room=$((65536 - $2 - 6))
+  [ "$(printf '%s' "$text" | wc -c)" -le "$((room + 6))" ] && { printf '%s' "$text"; return 0; }
+  # cut -b may leave half a character at the end; the sed drops it, and a lead byte with it
+  text=$(printf '%s' "$text" | LC_ALL=C cut -b "1-$room" | LC_ALL=C sed -e "s/[$(printf '\300')-$(printf '\377')][$(printf '\200')-$(printf '\277')]*\$//")
+  tail=${text##*[!\\]}
+  [ $((${#tail} % 2)) -eq 0 ] || text=${text%?}
+  printf '%s [cut]' "$text"
 }
 
 # _dokkit_send <fields> [path] [content type]
 _dokkit_send() {
   _dokkit_on || return 0
-  _dokkit_line="{$1,\"host\":\"$(_dokkit_text "$(hostname)")\"}"
-  _dokkit_id=$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' | sed 's/^\(........\)\(....\)\(....\)\(....\)\(............\)$/\1-\2-\3-\4-\5/')
-  _dokkit_post "$_dokkit_line" "$_dokkit_id" "" "${2:-}" "${3:-}" && return 0
-  # An error report has no id the server can match, so a second try could count it twice.
-  [ "${2:-}" = /api/v1/errors ] || _dokkit_post "$_dokkit_line" "$_dokkit_id" "" "${2:-}" "${3:-}" || true
+  local line id ahead= env= code
+  case ${DOKKIT_ENV:-production} in production) ;; *) env=",\"environment\":\"$(_dokkit_text "$DOKKIT_ENV")\"" ;; esac
+  line="{$1,\"host\":\"$(_dokkit_text "$(hostname)")\"$([ "${2:-}" = /api/v1/errors ] || printf '%s' "$env")}"
+  id=$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' | sed 's/^\(........\)\(....\)\(....\)\(....\)\(............\)$/\1-\2-\3-\4-\5/')
+  if [ -n "${DOKKIT_VERSION:-}" ] && [ "${DOKKIT_ANNOUNCE_VERSION:-1}" != 0 ] && [ -z "${_dokkit_announced:-}" ] && [ -z "${2:-}" ]; then
+    _dokkit_announced=1
+    ahead="{\"type\":\"deploy\",\"version\":\"$(_dokkit_text "$DOKKIT_VERSION")\",\"host\":\"$(_dokkit_text "$(hostname)")\"$env}"
+  fi
+  _dokkit_post "$line" "$id" "" "${2:-}" "${3:-}" "$ahead" && return 0
+  code=$?
+  # An error report is repeated only if curl never connected (6, 7); a timeout or 5xx may have been stored, and the server cannot tell a repeat
+    [ "${2:-}" != /api/v1/errors ] || case $code in 6 | 7) ;; *) return 0 ;; esac
+  _dokkit_post "$line" "$id" "" "${2:-}" "${3:-}" "$ahead" || true
+}
+
+# dokkit_deploy <version>   Sends a deploy line now. The server records it only when the version changed.
+dokkit_deploy() {
+  [ -n "${1:-}" ] || return 0
+  _dokkit_announced=1
+  _dokkit_send "\"type\":\"deploy\",\"version\":\"$(_dokkit_text "$1")\""
+}
+
+# dokkit_stats <file or JSON object>   Sends a stats document.
+dokkit_stats() {
+  local doc=$1
+  [ ! -f "$1" ] || doc=$(cat "$1") || return 0
+  doc=$(printf '%s' "$doc" | tr '\n\t' '  ' | tr -d '\000-\010\013-\037')
+  doc=${doc#"${doc%%[! ]*}"}
+  doc=${doc%"${doc##*[! ]}"}
+  case $doc in '{'*'}') _dokkit_send "\"type\":\"stats\",\"document\":$doc" ;; esac
 }
 
 # dokkit_beat <name> [every seconds]
@@ -70,7 +128,11 @@ dokkit_metric() {
 }
 
 # dokkit_log <level> <message>
-dokkit_log() { _dokkit_send "\"type\":\"log\",\"level\":\"$(_dokkit_text "$1")\",\"msg\":\"$(_dokkit_text "${2:-}")\""; }
+dokkit_log() {
+  local level
+  level=$(_dokkit_text "$1")
+  _dokkit_send "\"type\":\"log\",\"level\":\"$level\",\"msg\":\"$(_dokkit_fit "$(_dokkit_text "${2:-}")" $((${#level} + 600)))\""
+}
 
 # dokkit_capture <type> <message>   Sends an error. The type is its name, such as UploadError.
 # The message is not sent; a shell script has no stack, so the report carries none.

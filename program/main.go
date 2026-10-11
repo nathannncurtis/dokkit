@@ -49,6 +49,7 @@ dokkit updater install|uninstall|run|status
 dokkit version
 dokkit scan [--no-services] [--no-ports] [--no-containers] [--no-sites] [--no-disks] [--no-declarations]
 dokkit propose
+dokkit import seq --from <seq address> [--seq-key <key>] [--to <address>] [--key <app key>] [--default-service <id>] [--map <file>] [--service-property <names>] [--app-pattern <regex>] [--state <file>] [--since <time>] [--until <time>] [--rate <lines a second>] [--filter <expression>] [--dry-run]
 
 Reads DOKKIT_URL (the server's address) and DOKKIT_KEY (an app key),
 or the address and machine key that dokkit enrol saved. DOKKIT_SPOOL_MB caps the spool (500).
@@ -102,6 +103,9 @@ func cli(args []string) int {
 	}
 	if args[0] == "folder" {
 		return folderCommand(args[1:])
+	}
+	if args[0] == "import" {
+		return importCommand(args[1:])
 	}
 	if args[0] == "imessage" {
 		return imessageCommand(args[1:])
@@ -218,7 +222,7 @@ func pinTo(pin string) {
 					return nil
 				}
 			}
-			return errors.New("the server's certificate is not the one this machine enrolled with")
+			return errPinMismatch
 		},
 	}
 	toServer = t
@@ -238,10 +242,11 @@ type client struct {
 	stuck           map[string]*stuck
 }
 
-// stuck counts the times one thing drew a server error.
+// stuck counts the times one thing drew a server error, and when it may be tried again.
 type stuck struct {
 	n     int
 	since time.Time
+	until time.Time
 }
 
 // takeService removes --service <slug> from the arguments before any "--".
@@ -252,21 +257,6 @@ func takeService(args []string) ([]string, string) {
 		}
 	}
 	return args, ""
-}
-
-// giveUp is true for something that keeps drawing a server error while the server
-// has taken other things since it first did.
-func (c *client) giveUp(key string) bool {
-	if c.stuck == nil {
-		c.stuck = map[string]*stuck{}
-	}
-	s := c.stuck[key]
-	if s == nil {
-		s = &stuck{since: time.Now()}
-		c.stuck[key] = s
-	}
-	s.n++
-	return s.n >= 5 && c.lastOK.After(s.since)
 }
 
 // writeFile replaces a file whole, so a reader never sees half of it.
@@ -605,20 +595,37 @@ func (c *client) flush(wait time.Duration) (int, error) {
 		}
 		name := filepath.Base(f)
 		batch := strings.TrimSuffix(name[21:], ".ndjson")
-		status, answer, err := c.post(batch, body)
+		var es []entry
+		for _, l := range bytes.Split(body, []byte("\n")) {
+			if len(bytes.TrimSpace(l)) > 0 {
+				es = append(es, entry{line: l, raw: l})
+			}
+		}
+		id := func(sub []entry, all bool) string {
+			if all {
+				return batch
+			}
+			h := sha256.New()
+			h.Write([]byte(name))
+			for _, e := range sub {
+				h.Write([]byte("\n"))
+				h.Write(e.raw)
+			}
+			return uuid(h.Sum(nil)[:16])
+		}
+		done, lost, stop := c.deliver(es, id)
+		c.noteLoss(name, lost)
+		var status httpStatus
 		switch {
-		case err != nil:
-			return held + len(files) - i, err
-		case status/100 == 2:
-			refused(answer)
+		case stop == nil:
 			os.Remove(f)
 			delete(counts, name)
-		case status == 413 || status == 422:
-			fmt.Fprintf(os.Stderr, "dokkit: the server will never take this batch (%d), dropping it\n", status)
-			os.Remove(f)
-			delete(counts, name)
+		case !errors.As(stop, &status):
+			c.keepRest(f, es[done:])
+			return held + len(files) - i, stop
 		default:
-			last = fmt.Errorf("the server answered %d", status)
+			c.keepRest(f, es[done:])
+			last = stop
 			held++
 			if counts[name]++; counts[name] >= 5 {
 				doomed = append(doomed, f)
@@ -637,6 +644,20 @@ func (c *client) flush(wait time.Duration) (int, error) {
 		last = nil
 	}
 	return held, last
+}
+
+// keepRest rewrites a spooled batch to the lines still to send, when some were delivered or set aside.
+func (c *client) keepRest(f string, rest []entry) {
+	var b bytes.Buffer
+	for _, e := range rest {
+		if !e.gone {
+			b.Write(e.line)
+			b.WriteByte('\n')
+		}
+	}
+	if b.Len() > 0 {
+		writeFile(f, b.Bytes())
+	}
 }
 
 // failures reads how many times each spooled batch has drawn a server error.
@@ -724,25 +745,30 @@ func (c *client) doctor() int {
 	sent := time.Now()
 	res, err := c.http.Do(req)
 	if err != nil {
-		fmt.Println("Cannot reach the server:", err)
+		what, todo := explainReach(err, c.url)
+		fmt.Println(what)
+		fmt.Println("To fix:", todo)
 		return 1
 	}
 	defer res.Body.Close()
 	var a struct{ Time time.Time }
 	json.NewDecoder(res.Body).Decode(&a)
-	switch {
-	case res.StatusCode == 401:
-		fmt.Println("The server is there, but it does not know this key.")
-		return 1
-	case res.StatusCode != 200:
-		fmt.Println("The server answered", res.StatusCode)
+	if res.StatusCode != 200 {
+		what, todo := explainStatus(res.StatusCode)
+		fmt.Println(what)
+		fmt.Println("To fix:", todo)
 		return 1
 	}
 	fmt.Println("The server is reachable and knows this key.")
 	if off := a.Time.Sub(sent).Round(time.Second); off > 30*time.Second || off < -30*time.Second {
 		fmt.Printf("This machine's clock is %s away from the server's.\n", off)
-	} else {
-		fmt.Println("The clock agrees with the server's, within 30 seconds.")
+		fmt.Println("To fix:", clockAdvice)
+		return 1
+	}
+	fmt.Println("The clock agrees with the server's, within 30 seconds.")
+	if hint := c.macBlockedHint(); hint != "" {
+		fmt.Println(hint)
+		return 1
 	}
 	if left, _ := c.flush(10 * time.Second); left > 0 {
 		fmt.Println(left, "report(s) are still waiting in", c.spool)

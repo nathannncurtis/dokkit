@@ -28,6 +28,7 @@ Two doors. Dokkit's own is the front door. The second exists so that an app in a
 | `type` | The error's class or type name. |
 | `frames` | The stack, innermost last. `own` says whether the frame is the app's own code. |
 | `release` | The deployed version. Ties an error to a deploy. |
+| `environment` | `production` when left out. Another value files the error under that environment's own service, which never alerts. The rule is in `api.md`, under `POST /report`. For Sentry's SDKs it is the event's `environment`. |
 | `handled` | Whether the app caught it. |
 | `tags` | A few short labels. Never free text from a request. |
 | `message` | Optional, and off by default. The library does not send message text unless told to, because messages are where personal data ends up. |

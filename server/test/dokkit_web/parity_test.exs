@@ -29,6 +29,8 @@ defmodule DokkitWeb.ParityTest do
       "who" => {:owner, ["PUT /api/v1/alerts/who"]}
     },
     "EverythingLive" => %{
+      "dep_open" => @view,
+      "dependency" => {:owner, ["POST /api/v1/dependencies"]},
       "update" => {:owner, ["POST /api/v1/machines/:id/update"]},
       "update_all" => {:owner, ["POST /api/v1/update-all"]}
     },
@@ -79,7 +81,14 @@ defmodule DokkitWeb.ParityTest do
     },
     "FoundLive" => %{
       "sweep" =>
-        {:member, ["POST /api/v1/proposals/:id/accept", "POST /api/v1/proposals/:id/dismiss"]}
+        {:member,
+         [
+           "POST /api/v1/proposals/:id/accept",
+           "POST /api/v1/proposals/:id/dismiss",
+           "POST /api/v1/proposals/accept",
+           "POST /api/v1/proposals/dismiss"
+         ]},
+      "scan" => {:member, ["POST /api/v1/machines/:id/scan"]}
     }
   }
 
@@ -103,6 +112,7 @@ defmodule DokkitWeb.ParityTest do
     DokkitWeb.ApiController,
     DokkitWeb.McpController,
     DokkitWeb.IntakeController,
+    DokkitWeb.SeqController,
     DokkitWeb.ReleaseController
   ]
   @live Path.expand("../../lib/dokkit_web/live", __DIR__)

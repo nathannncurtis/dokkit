@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 type got struct {
@@ -144,8 +145,8 @@ func TestHttpToAnotherMachineStaysOffUnlessAllowed(t *testing.T) {
 func TestQueueIsBoundedByBytes(t *testing.T) {
 	reset()
 	StartWith("", "http://127.0.0.1:1", "dka_test")
-	big := strings.Repeat("x", 900<<10)
-	for i := 0; i < 12; i++ {
+	big := strings.Repeat("x", 60<<10)
+	for i := 0; i < 200; i++ {
 		Log("info", big, nil)
 	}
 	mu.Lock()
@@ -186,17 +187,122 @@ func TestRefusedBatchIsCountedAndNotRetried(t *testing.T) {
 	}
 }
 
-func TestErrorPostIsNotRetried(t *testing.T) {
+// fake answers each path with the status set for it, 200 otherwise. Asking for the paths it took ends the statuses.
+func fake(t *testing.T, status map[string]int) (*httptest.Server, func() []string) {
+	var lock sync.Mutex
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lock.Lock()
+		defer lock.Unlock()
+		if code := status[r.URL.Path]; code != 0 {
+			w.WriteHeader(code)
+			return
+		}
+		paths = append(paths, r.URL.Path)
+	}))
+	t.Cleanup(server.Close)
+	return server, func() []string {
+		lock.Lock()
+		defer lock.Unlock()
+		status = nil
+		return append([]string{}, paths...)
+	}
+}
+
+func TestErrorReportThatFailsIsKeptAndTheLinesStillGo(t *testing.T) {
 	reset()
-	hits := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits++; w.WriteHeader(503) }))
-	defer server.Close()
+	server, paths := fake(t, map[string]int{"/api/v1/errors": 503})
+	StartWith("", server.URL, "dka_test")
+	Capture(errors.New("bad"))
+	Beat("w", 1)
+	Flush()
+	mu.Lock()
+	kept := len(errs)
+	mu.Unlock()
+	if got := strings.Join(paths(), " "); got != "/api/v1/report" || kept != 1 || Dropped() != 0 {
+		t.Fatalf("paths=%q kept=%d dropped=%d", got, kept, Dropped())
+	}
+	Flush()
+	if got := strings.Join(paths(), " "); got != "/api/v1/report /api/v1/errors" {
+		t.Fatalf("paths=%q", got)
+	}
+}
+
+func TestLinesThatFailDoNotStopTheErrorReports(t *testing.T) {
+	reset()
+	server, paths := fake(t, map[string]int{"/api/v1/report": 503})
+	StartWith("", server.URL, "dka_test")
+	Beat("w", 1)
+	Capture(errors.New("bad"))
+	Flush()
+	if got := strings.Join(paths(), " "); got != "/api/v1/errors" {
+		t.Fatalf("paths=%q", got)
+	}
+}
+
+func TestLinesAreSentBeforeErrorReports(t *testing.T) {
+	reset()
+	server, paths := fake(t, nil)
+	StartWith("", server.URL, "dka_test")
+	flushing.Lock()
+	Log("error", "the line before the crash", nil)
+	Capture(errors.New("bad"))
+	flushing.Unlock()
+	Flush()
+	if got := strings.Join(paths(), " "); got != "/api/v1/report /api/v1/errors" {
+		t.Fatalf("paths=%q", got)
+	}
+}
+
+func TestRefusedErrorReportIsDroppedAndCounted(t *testing.T) {
+	reset()
+	server, _ := fake(t, map[string]int{"/api/v1/errors": 401})
 	StartWith("", server.URL, "dka_test")
 	Capture(errors.New("bad"))
 	Flush()
+	mu.Lock()
+	kept := len(errs)
+	mu.Unlock()
+	if kept != 0 || Dropped() != 1 {
+		t.Fatalf("kept=%d dropped=%d", kept, Dropped())
+	}
+}
+
+func TestKeptErrorReportsAreBounded(t *testing.T) {
+	reset()
+	server, _ := fake(t, map[string]int{"/api/v1/errors": 503})
+	StartWith("", server.URL, "dka_test")
+	for i := 0; i < 130; i++ {
+		Capture(errors.New("bad"))
+	}
 	Flush()
-	if hits != 1 || Dropped() != 1 {
-		t.Fatalf("hits=%d dropped=%d", hits, Dropped())
+	mu.Lock()
+	kept := len(errs)
+	mu.Unlock()
+	if kept != 100 || Dropped() != 30 {
+		t.Fatalf("kept=%d dropped=%d", kept, Dropped())
+	}
+}
+
+func TestBlankAddressOrKeyStaysOffWhateverTheEnvironmentHolds(t *testing.T) {
+	reset()
+	server, _ := fake(t, nil)
+	t.Setenv("DOKKIT_URL", server.URL)
+	t.Setenv("DOKKIT_KEY", "dka_env")
+	StartWith("1.0", "", "")
+	StartWith("1.0", server.URL, "")
+	StartWith("1.0", "", "dka_given")
+	mu.Lock()
+	live := on
+	mu.Unlock()
+	if live {
+		t.Fatal("on")
+	}
+	Start("1.0")
+	mu.Lock()
+	defer mu.Unlock()
+	if !on || key != "dka_env" {
+		t.Fatal("Start reads the environment")
 	}
 }
 
@@ -216,3 +322,107 @@ func TestCapturedFramesHaveNoAbsolutePath(t *testing.T) {
 		}
 	}
 }
+
+func TestFlushGivesUpAfterItsTimeLimit(t *testing.T) {
+	reset()
+	hold := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-hold }))
+	defer server.Close()
+	defer func(d time.Duration) { FlushTimeout = d }(FlushTimeout)
+	FlushTimeout = 200 * time.Millisecond
+	StartWith("", server.URL, "dka_test")
+	Beat("w", 1)
+	began := time.Now()
+	Flush()
+	func() {
+		defer func() { recover() }()
+		defer Recover()
+		panic("boom")
+	}()
+	if took := time.Since(began); took > 3*time.Second {
+		t.Fatalf("took %v", took)
+	}
+	close(hold)
+	flush()
+}
+
+func TestLineOver64KBIsCutAtACharacter(t *testing.T) {
+	reset()
+	StartWith("", "http://127.0.0.1:1", "dka_test")
+	Log("info", strings.Repeat("é", 100000), map[string]any{"a": 1})
+	mu.Lock()
+	defer mu.Unlock()
+	var d struct {
+		Msg    string
+		Fields map[string]any
+	}
+	if len(lines) != 1 || len(lines[0]) > 65536 || dropped != 0 {
+		t.Fatalf("lines=%d dropped=%d", len(lines), dropped)
+	}
+	json.Unmarshal(lines[0], &d)
+	if !strings.HasSuffix(d.Msg, " [cut]") || strings.ContainsRune(d.Msg, '�') || d.Fields != nil {
+		t.Fatalf("%.40q %v", d.Msg, d.Fields)
+	}
+}
+
+func TestAnnounceVersionOffSendsNoDeployLine(t *testing.T) {
+	reset()
+	defer func() { AnnounceVersion = true }()
+	AnnounceVersion = false
+	StartWith("1.0", "http://127.0.0.1:1", "dka_test")
+	Beat("w", 1)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(lines) != 1 || strings.Contains(string(lines[0]), "deploy") {
+		t.Fatalf("%s", lines)
+	}
+}
+
+func TestNonProductionEnvironmentIsOnEveryLine(t *testing.T) {
+	for env, want := range map[string]bool{"dev": true, "production": false} {
+		reset()
+		t.Setenv("DOKKIT_ENV", env)
+		StartWith("1.0", "http://127.0.0.1:1", "dka_test")
+		Log("info", "m", nil)
+		Beat("b", 1)
+		Job("j", func(*Run) error { return nil })
+		mu.Lock()
+		if len(lines) < 5 {
+			t.Fatalf("%d lines", len(lines))
+		}
+		for _, l := range lines {
+			if strings.Contains(string(l), `"environment":"`+env+`"`) != want {
+				t.Fatalf("%s: %s", env, l)
+			}
+		}
+		mu.Unlock()
+	}
+}
+
+func TestSelfFeedGuard(t *testing.T) {
+	reset()
+	StartWith("", "http://127.0.0.1:1", "dka_test")
+	sending.Store(gid(), true)
+	slog.New(Handler(slog.LevelInfo)).Info("from the sender")
+	sending.Delete(gid())
+	slog.New(Handler(slog.LevelInfo)).Info("from the app")
+	mu.Lock()
+	defer mu.Unlock()
+	if len(lines) != 1 || !strings.Contains(string(lines[0]), "from the app") {
+		t.Fatalf("%s", lines)
+	}
+}
+
+func TestTooManyRequestsErrorReportIsKept(t *testing.T) {
+	reset()
+	server, _ := fake(t, map[string]int{"/api/v1/errors": 429})
+	StartWith("", server.URL, "dka_test")
+	Capture(errors.New("bad"))
+	Flush()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(errs) != 1 || dropped != 0 {
+		t.Fatalf("kept=%d dropped=%d", len(errs), dropped)
+	}
+}
+

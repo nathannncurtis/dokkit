@@ -366,7 +366,7 @@ func TestScanWritesAFileAndADeclaredTaskSectionIsIgnored(t *testing.T) {
 	t.Setenv("DOKKIT_URL", "")
 	os.WriteFile("dokkit.toml", []byte("schema = 1\n[service]\nid = \"portal\"\n[[task]]\nid = \"mark\"\nrun = \"echo done > marked.txt\"\n[[task]]\nid = \"bad\"\nrun = \"exit 4\"\n"), 0o600)
 
-	if code := cli([]string{"scan", "--no-services", "--no-ports", "--no-containers", "--no-sites"}); code != 0 {
+	if code := cli([]string{"scan", "--no-services", "--no-ports", "--no-containers", "--no-sites", "--no-jobs", "--no-jobs"}); code != 0 {
 		t.Fatal(code)
 	}
 	var p struct{ Found map[string][]found }
@@ -433,8 +433,11 @@ func TestStatsVitalsAndExpiry(t *testing.T) {
 	w := &watcher{files: map[string]*declaration{file: d}}
 
 	lines := w.stats()
-	if len(lines) != 1 || lines[0].(map[string]any)["state"] != "down" {
-		t.Fatalf("without the key the fetch fails: %v", lines)
+	if got := lines[0].(map[string]any); len(lines) != 1 || got["type"] != "log" || got["level"] != "warn" || !strings.Contains(got["msg"].(string), "DOKKIT_STATS_TEST is not set") {
+		t.Fatalf("without the key nothing is fetched and the key is named, not the service down: %v", lines)
+	}
+	if again := w.stats(); len(again) != 0 {
+		t.Fatalf("the missing key is said once: %v", again)
 	}
 	t.Setenv("DOKKIT_STATS_TEST", "s3cret")
 	lines = w.stats()

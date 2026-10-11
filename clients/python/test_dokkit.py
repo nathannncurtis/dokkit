@@ -3,8 +3,13 @@ import http.server
 import json
 import logging
 import os
+import subprocess
+import sys
+import tempfile
 import threading
+import time
 import unittest
+from unittest import mock
 
 import dokkit
 
@@ -12,13 +17,21 @@ got = []
 
 
 class Server(http.server.BaseHTTPRequestHandler):
+    got = got
+    status = {}
+    hold = None
+
     def do_POST(self):
         body = self.rfile.read(int(self.headers["Content-Length"]))
         if self.headers.get("Content-Encoding") == "gzip":
             body = gzip.decompress(body)
-        for line in body.decode().split("\n"):
-            got.append((self.path, self.headers["Authorization"], json.loads(line)))
-        self.send_response(200)
+        if self.hold:
+            self.hold.wait(30)
+        code = self.status.get(self.path, 200)
+        if code == 200:
+            for line in body.decode().split("\n"):
+                self.got.append((self.path, self.headers["Authorization"], json.loads(line)))
+        self.send_response(code)
         self.end_headers()
         self.wfile.write(b"{}")
 
@@ -72,14 +85,125 @@ class Library(unittest.TestCase):
     def tearDown(self):
         dokkit._state = self.old
 
-    def test_a_line_that_cannot_be_serialized_is_dropped_alone(self):
-        dokkit.beat("a")
+    def test_a_value_json_cannot_write_is_sent_as_its_repr(self):
         circular = {}
         circular["self"] = circular
-        dokkit.stats(circular)
-        dokkit.stats({(1, 2): "tuple key"})
+        dokkit.log("info", "a", {"loop": circular, (1, 2): "tuple key", "nan": float("nan"), "n": 3})
+        [line] = [json.loads(l) for l in dokkit._state.lines]
+        self.assertEqual(line["msg"], "a")
+        self.assertEqual(line["fields"]["n"], 3)
+        self.assertEqual(line["fields"]["(1, 2)"], "tuple key")
+        self.assertEqual(line["fields"]["nan"], "nan")
+        self.assertIn("...", json.dumps(line["fields"]["loop"]))
+        self.assertEqual(dokkit.dropped(), 0)
+
+    def test_a_line_that_cannot_be_written_at_all_is_dropped_alone_and_counted(self):
+        class Bad:
+            def __repr__(self):
+                raise ValueError("no")
+
+            __str__ = __repr__
+
+        dokkit.beat("a")
+        dokkit.stats({"x": Bad()})
         dokkit.beat("b")
         self.assertEqual(len(dokkit._state.lines), 2)
+        self.assertEqual(dokkit.dropped(), 1)
+
+    def test_the_handler_sends_what_was_passed_as_extra(self):
+        log = logging.getLogger("fields")
+        log.propagate = False
+        log.addHandler(dokkit.handler())
+        log.warning("Upload failed", extra={"order": 4411, "path": os})
+        line = json.loads(dokkit._state.lines[-1])
+        self.assertEqual(line["fields"]["logger"], "fields")
+        self.assertEqual(line["fields"]["order"], 4411)
+        self.assertEqual(line["fields"]["path"], str(os))
+        self.assertNotIn("levelname", line["fields"])
+
+    def test_the_handler_sends_the_exception_type_and_stack_never_the_message(self):
+        log = logging.getLogger("stack")
+        log.propagate = False
+        log.addHandler(dokkit.handler())
+        try:
+            raise KeyError("patient 4411")
+        except KeyError:
+            log.exception("Upload failed")
+        line = json.loads(dokkit._state.lines[-1])
+        self.assertEqual(line["fields"]["exception"], "KeyError")
+        self.assertEqual(line["fields"]["logger"], "stack")
+        first = line["fields"]["stack"].split("\n")[-1]
+        self.assertRegex(first, r"^test_dokkit\.py:\d+ test_the_handler_sends_the_exception_type_and_stack_never_the_message$")
+        self.assertNotIn("4411", json.dumps(line))
+
+    def test_stack_paths_are_relative_to_the_apps_folder(self):
+        with tempfile.TemporaryDirectory() as app:
+            dokkit._state.root = os.path.realpath(app)
+            inside = os.path.join(dokkit._state.root, "pkg", "main.py")
+            outside = os.path.join(os.path.dirname(dokkit._state.root), "other", "util.py")
+            self.assertEqual(dokkit._path(inside), os.path.join("pkg", "main.py"))
+            self.assertEqual(dokkit._path(outside), "util.py")
+            self.assertTrue(dokkit._own(inside))
+            self.assertFalse(dokkit._own(outside))
+
+    def test_a_line_over_64_kb_is_cut_and_never_sent_whole(self):
+        dokkit.log("info", "é" * 100_000, {"n": 1})
+        dokkit.log("info", "x" * 100_000, {"big": "y" * 100_000})
+        dokkit.log("info", "short")
+        first, second, third = (json.loads(l) for l in dokkit._state.lines)
+        for text in dokkit._state.lines:
+            self.assertLessEqual(len(text.encode()), 65536)
+        self.assertTrue(first["msg"].endswith(" [cut]"))
+        self.assertEqual(first["fields"], {"n": 1})
+        self.assertTrue(second["msg"].endswith(" [cut]"))
+        self.assertIsNone(second["fields"])
+        self.assertEqual(third["msg"], "short")
+        self.assertEqual(dokkit.dropped(), 0)
+
+    def test_a_non_production_environment_is_on_every_line(self):
+        state = dokkit._state
+        state.environment = "dev"
+        dokkit.log("info", "a")
+        dokkit.beat("w")
+        with dokkit.job("j"):
+            pass
+        lines = [json.loads(l) for l in state.lines]
+        self.assertEqual(len(lines), 4)
+        self.assertTrue(all(l["environment"] == "dev" for l in lines))
+        state.lines.clear()
+        state.environment = "production"
+        dokkit.log("info", "a")
+        self.assertNotIn("environment", json.loads(state.lines[0]))
+
+    def test_enabled_and_announce_version(self):
+        self.assertTrue(dokkit.enabled())
+        dokkit._state = None
+        self.assertFalse(dokkit.enabled())
+        dokkit.start(version="1", url="http://127.0.0.1:9", key="k", announce_version=False)
+        self.assertTrue(dokkit.enabled())
+        self.assertEqual(len(dokkit._state.lines), 0)
+        dokkit._state = None
+        dokkit.start(version="1", url="http://127.0.0.1:9", key="k")
+        self.assertEqual([json.loads(l)["type"] for l in dokkit._state.lines], ["deploy"])
+
+    def test_the_apps_folder_is_the_programs_not_the_working_directory(self):
+        with tempfile.TemporaryDirectory() as app, tempfile.TemporaryDirectory() as elsewhere:
+            app, before = os.path.realpath(app), os.getcwd()
+            os.chdir(elsewhere)
+            try:
+                with mock.patch.object(sys.modules["__main__"], "__file__", os.path.join(app, "main.py"), create=True):
+                    self.assertEqual(dokkit._root(), app)
+                with mock.patch.object(sys, "frozen", True, create=True), mock.patch.object(sys, "executable", os.path.join(app, "app.exe")):
+                    self.assertEqual(dokkit._root(), app)
+                    dokkit._state.root = dokkit._root()
+                    self.assertTrue(dokkit._own(os.path.join(app, "_internal", "app", "main.py")))
+                    self.assertFalse(dokkit._own(os.path.join(elsewhere, "main.py")))
+                runner = os.path.join(sys.base_prefix, "Lib", "unittest", "__main__.py")
+                with mock.patch.object(sys.modules["__main__"], "__file__", runner, create=True):
+                    self.assertEqual(os.path.realpath(dokkit._root()), os.path.realpath(elsewhere))
+                self.assertEqual(dokkit._State("http://127.0.0.1:9", "k", None, None, root=app).root, app)
+            finally:
+                os.chdir(before)
 
     def test_log_sends_a_line(self):
         dokkit.log("warn", "slow query")
@@ -129,7 +253,16 @@ class Library(unittest.TestCase):
         self.assertEqual(state.retry[2], 1)
         state.flush()
         self.assertIsNone(state.retry)
-        self.assertEqual(state.dropped, 3)
+        self.assertEqual(state.dropped, 4)
+
+    def test_dropped_is_counted_under_the_lock_and_can_be_read(self):
+        state = dokkit._state
+        threads = [threading.Thread(target=lambda: [state._count(1) for _ in range(2000)]) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(dokkit.dropped(), 16000)
 
     @unittest.skipUnless(hasattr(os, "fork"), "needs fork")
     def test_the_sender_thread_is_back_after_a_fork(self):
@@ -139,6 +272,140 @@ class Library(unittest.TestCase):
         if pid == 0:
             os._exit(0 if any(t.name == "dokkit" for t in threading.enumerate()) and not dokkit._state.lines else 1)
         self.assertEqual(os.waitpid(pid, 0)[1], 0)
+
+
+class Sending(unittest.TestCase):
+    def setUp(self):
+        self.fake = type("Fake", (Server,), {"got": [], "status": {}})
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), self.fake)
+        self.server.daemon_threads = True
+        self.server.handle_error = lambda *args: None
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.url = "http://127.0.0.1:%d" % self.server.server_port
+        self.old = dokkit._state
+        dokkit._state = dokkit._State(self.url, "k", None, None)
+
+    def tearDown(self):
+        if self.fake.hold:
+            self.fake.hold.set()
+        dokkit._state = self.old
+        self.server.shutdown()
+        self.server.server_close()
+
+    def paths(self):
+        return [path for path, _, _ in self.fake.got]
+
+    def test_an_error_report_that_fails_is_kept_and_the_lines_still_go(self):
+        self.fake.status["/api/v1/errors"] = 503
+        dokkit.capture(ValueError("x"))
+        dokkit.beat("worker")
+        dokkit.flush()
+        self.assertEqual(self.paths(), ["/api/v1/report"])
+        self.assertEqual(len(dokkit._state.errors), 1)
+        self.assertEqual(dokkit.dropped(), 0)
+        self.fake.status.clear()
+        dokkit.flush()
+        self.assertEqual(self.paths(), ["/api/v1/report", "/api/v1/errors"])
+        self.assertEqual(len(dokkit._state.errors), 0)
+
+    def test_a_failing_error_post_skips_no_lines_and_is_retried(self):
+        self.fake.status["/api/v1/errors"] = 429
+        dokkit.capture(ValueError("x"))
+        for n in range(900):
+            dokkit.beat("b%d" % n)
+        dokkit.flush()
+        self.assertEqual(self.paths().count("/api/v1/report"), 900)
+        self.assertEqual(len(dokkit._state.errors), 1)
+        self.fake.status.clear()
+        dokkit.flush()
+        self.assertEqual(self.paths()[-1], "/api/v1/errors")
+        self.assertEqual(len(dokkit._state.errors), 0)
+
+    def test_the_dropped_count_is_sent_as_a_metric_once_per_change(self):
+        dokkit._state.errors.extend([b"{}"] * 100)
+        dokkit.capture(ValueError("x"))
+        dokkit.flush()
+        metrics = [l for p, _, l in self.fake.got if l.get("name") == "dokkit_dropped"]
+        self.assertEqual([m["value"] for m in metrics], [1])
+        dokkit.flush()
+        self.assertEqual(len([1 for p, _, l in self.fake.got if l.get("name") == "dokkit_dropped"]), 1)
+        dokkit._state.dropped += 4
+        dokkit.flush()
+        self.assertEqual([l["value"] for p, _, l in self.fake.got if l.get("name") == "dokkit_dropped"], [1, 5])
+
+    def test_lines_that_fail_do_not_stop_the_error_reports(self):
+        self.fake.status["/api/v1/report"] = 503
+        dokkit.beat("worker")
+        dokkit.capture(ValueError("x"))
+        dokkit.flush()
+        self.assertEqual(self.paths(), ["/api/v1/errors"])
+
+    def test_an_error_report_the_server_refuses_is_dropped_and_counted(self):
+        self.fake.status["/api/v1/errors"] = 400
+        dokkit.capture(ValueError("x"))
+        dokkit.flush()
+        self.assertEqual(len(dokkit._state.errors), 0)
+        self.assertEqual(dokkit.dropped(), 1)
+
+    def test_kept_error_reports_are_bounded_to_the_newest_hundred(self):
+        self.fake.status["/api/v1/errors"] = 503
+        for n in range(130):
+            dokkit.capture(ValueError("x"), tags={"n": n})
+        dokkit.flush()
+        self.assertEqual(len(dokkit._state.errors), 100)
+        self.assertEqual(json.loads(dokkit._state.errors[-1])["tags"]["n"], "129")
+        self.assertEqual(dokkit.dropped(), 30)
+
+    def test_lines_are_sent_before_error_reports(self):
+        dokkit.log("error", "the line before the crash")
+        dokkit.capture(ValueError("x"))
+        dokkit.flush()
+        self.assertEqual(self.paths(), ["/api/v1/report", "/api/v1/errors"])
+
+    def test_flush_gives_up_after_its_time_limit(self):
+        self.fake.hold = threading.Event()
+        dokkit.beat("worker")
+        began = time.monotonic()
+        dokkit.flush(timeout=0.3)
+        self.assertLess(time.monotonic() - began, 2)
+        with mock.patch.object(dokkit, "FLUSH_SECONDS", 0.3):
+            began = time.monotonic()
+            dokkit.flush()
+            self.assertLess(time.monotonic() - began, 2)
+        self.assertEqual(self.paths(), [])
+
+    def run_app(self, *lines):
+        with tempfile.TemporaryDirectory() as app, tempfile.TemporaryDirectory() as elsewhere:
+            script = os.path.join(app, "main.py")
+            with open(script, "w") as f:
+                f.write("\n".join(("import sys, dokkit", "dokkit.start(url=sys.argv[1], key='k')") + lines))
+            env = dict(os.environ, PYTHONPATH=os.path.dirname(os.path.abspath(dokkit.__file__)))
+            began = time.monotonic()
+            subprocess.run([sys.executable, script, self.url], cwd=elsewhere, env=env, check=True, timeout=60)
+            return time.monotonic() - began
+
+    def test_at_exit_what_waits_is_sent_and_a_script_started_from_elsewhere_owns_its_frames(self):
+        self.run_app("dokkit.log('info', 'last line')", "try:", "    1 / 0", "except Exception:", "    dokkit.capture()")
+        self.assertEqual(self.paths(), ["/api/v1/report", "/api/v1/errors"])
+        frame = self.fake.got[-1][2]["frames"][-1]
+        self.assertEqual((frame["file"], frame["own"]), ("main.py", True))
+
+    def test_a_server_that_does_not_answer_holds_the_exit_only_for_the_time_limit(self):
+        self.fake.hold = threading.Event()
+        self.assertLess(self.run_app("dokkit.FLUSH_SECONDS = 0.5", "dokkit.beat('worker')"), 6)
+
+    def test_a_blank_address_or_key_is_off_and_only_none_reads_the_environment(self):
+        dokkit._state = None
+        with mock.patch.dict(os.environ, {"DOKKIT_URL": self.url, "DOKKIT_KEY": "dka_env"}):
+            dokkit.start(url="", key="")
+            self.assertIsNone(dokkit._state)
+            dokkit.start(url=self.url, key="")
+            self.assertIsNone(dokkit._state)
+            dokkit.start(url="", key="dka_given")
+            self.assertIsNone(dokkit._state)
+            dokkit.start(root=os.sep + "app")
+            self.assertEqual((dokkit._state.url, dokkit._state.key), (self.url, "dka_env"))
+            self.assertEqual(dokkit._state.root, os.path.abspath(os.sep + "app"))
 
 
 if __name__ == "__main__":

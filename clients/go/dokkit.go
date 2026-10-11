@@ -8,7 +8,8 @@
 //	slog.SetDefault(slog.New(dokkit.Handler(slog.LevelInfo)))
 //
 // Nothing here panics into the app or waits on the network. Lines wait in a queue of fixed
-// size and a goroutine sends them. Error message text is never sent.
+// size and a goroutine sends them. An error report carries the error's type and stack, never
+// its message. A log line carries the text and fields the app logs.
 package dokkit
 
 import (
@@ -26,19 +27,27 @@ import (
 	"path"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
 	queue    = 1000
 	maxBytes = 8 << 20 // queued bytes
-	maxLine  = 1 << 20
+	maxLine  = 64 << 10
 	maxBatch = 4 << 20 // the server refuses an unzipped batch over 5 MB
 )
 
 type line = map[string]any
+
+// AnnounceVersion is whether Start sends a deploy line with the version. The server records a deploy only when the version changes.
+var AnnounceVersion = true
+
+// FlushTimeout is the longest Flush, and so Recover, waits for the server.
+var FlushTimeout = 5 * time.Second
 
 // batch is what one request carries. One that fails is kept for a second try.
 type batch struct {
@@ -85,10 +94,10 @@ func StartWith(release, addr, appKey string) {
 			case <-wake:
 			case <-time.After(2 * time.Second):
 			}
-			Flush()
+			flush()
 		}
 	}()
-	if release != "" {
+	if release != "" && AnnounceVersion {
 		add(line{"type": "deploy", "version": release})
 	}
 }
@@ -110,7 +119,7 @@ func secure(addr string) bool {
 	return false
 }
 
-// Dropped is how many lines were dropped: the queue was full, or they could not be sent.
+// Dropped is how many lines and error reports were dropped: the queue was full, or they could not be sent.
 func Dropped() int {
 	mu.Lock()
 	defer mu.Unlock()
@@ -139,18 +148,46 @@ func encode(l line) (b []byte) {
 	return b
 }
 
+// fit cuts a line over maxLine bytes: its fields go, then its msg is cut at a character boundary and ends in " [cut]".
+func fit(l line, b []byte) []byte {
+	msg, ok := l["msg"].(string)
+	if len(b) <= maxLine || !ok {
+		return b
+	}
+	delete(l, "fields")
+	keep := len(msg)
+	for keep > 0 {
+		if over := len(encode(l)) - maxLine; over > 0 {
+			keep -= over + 16
+		} else {
+			break
+		}
+		if keep < 0 {
+			keep = 0
+		}
+		for keep > 0 && keep < len(msg) && !utf8.RuneStart(msg[keep]) {
+			keep--
+		}
+		l["msg"] = msg[:keep] + " [cut]"
+	}
+	return encode(l)
+}
+
 func add(l line) {
 	mu.Lock()
-	h, live := host, on
+	h, env, live := host, environment, on
 	mu.Unlock()
 	if !live {
 		return
+	}
+	if env != "" && env != "production" {
+		l["environment"] = env
 	}
 	if l["at"] == nil {
 		l["at"] = now()
 	}
 	l["host"] = h
-	b := encode(l)
+	b := fit(l, encode(l))
 	mu.Lock()
 	defer mu.Unlock()
 	if len(b) == 0 || len(b) > maxLine {
@@ -271,6 +308,9 @@ func relative(file, function string) string {
 }
 
 func capture(kind string, handled bool, tags map[string]string, skip int) {
+	mu.Lock()
+	module := module
+	mu.Unlock()
 	pcs := make([]uintptr, 64)
 	walk := runtime.CallersFrames(pcs[:runtime.Callers(skip+1, pcs)])
 	frames := []line{}
@@ -290,7 +330,11 @@ func capture(kind string, handled bool, tags map[string]string, skip int) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if !on || len(errs) >= 100 {
+	if !on {
+		return
+	}
+	if len(errs) >= 100 {
+		dropped++
 		return
 	}
 	b := encode(line{
@@ -311,50 +355,89 @@ func nudge() {
 	}
 }
 
-// Flush sends what is waiting. Call it before the app exits.
+// Flush sends what is waiting and returns after at most FlushTimeout. Call it before the app exits.
 func Flush() {
+	done := make(chan struct{})
+	go func() {
+		flush()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(FlushTimeout):
+	}
+}
+
+// flush sends the lines first: all of them fit in a few requests, and an error report is one
+// request each. Neither stops the other when it fails.
+func flush() {
 	flushing.Lock()
 	defer flushing.Unlock()
-	for {
-		mu.Lock()
-		b := held
-		held = nil
-		if b == nil {
-			if len(errs) > 0 {
-				b = &batch{path: "/api/v1/errors", items: errs[:1:1], id: id()}
-				errs = errs[1:]
-			} else if len(lines) > 0 {
-				n, size := 0, 0
-				for n < len(lines) && n < 500 && (n == 0 || size+len(lines[n]) <= maxBatch) {
-					size += len(lines[n])
-					n++
-				}
-				b = &batch{path: "/api/v1/report", items: lines[:n:n], id: id()}
-				lines = lines[n:]
-				queued -= size
-			}
-		}
-		mu.Unlock()
-		if b == nil {
-			return
-		}
-		switch send(b) {
-		case refused:
-			mu.Lock()
-			dropped += len(b.items)
-			mu.Unlock()
-		case failed:
-			mu.Lock()
-			if b.tried || b.path == "/api/v1/errors" {
-				dropped += len(b.items)
-			} else {
-				b.tried = true
-				held = b
-			}
-			mu.Unlock()
-			return
-		}
+	for sendLines() {
 	}
+	for sendError() {
+	}
+}
+
+// sendLines sends the held batch or the next one, and says whether to go on.
+func sendLines() bool {
+	mu.Lock()
+	b := held
+	held = nil
+	if b == nil && len(lines) > 0 {
+		n, size := 0, 0
+		for n < len(lines) && n < 500 && (n == 0 || size+len(lines[n]) <= maxBatch) {
+			size += len(lines[n])
+			n++
+		}
+		b = &batch{path: "/api/v1/report", items: lines[:n:n], id: id()}
+		lines = lines[n:]
+		queued -= size
+	}
+	mu.Unlock()
+	if b == nil {
+		return false
+	}
+	result := send(b)
+	mu.Lock()
+	defer mu.Unlock()
+	switch {
+	case result == sent:
+		return true
+	case result == failed && !b.tried:
+		b.tried = true
+		held = b
+		return false
+	}
+	dropped += len(b.items)
+	return result == refused
+}
+
+// sendError sends the oldest error report, and says whether to go on. One the server did not
+// answer for stays for the next pass; the hundred that capture keeps is the bound.
+func sendError() bool {
+	mu.Lock()
+	var report []byte
+	if len(errs) > 0 {
+		report = errs[0]
+	}
+	mu.Unlock()
+	if report == nil {
+		return false
+	}
+	result := send(&batch{path: "/api/v1/errors", items: [][]byte{report}})
+	if result == failed {
+		return false
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(errs) > 0 && &errs[0][0] == &report[0] {
+		errs = errs[1:]
+	}
+	if result == refused {
+		dropped++
+	}
+	return true
 }
 
 const (
@@ -364,7 +447,6 @@ const (
 )
 
 // send tells whether the batch was taken, refused (not tried again) or not delivered.
-// An error post has no batch id on the server, so it is never sent twice.
 func send(b *batch) int {
 	body, kind, zipped := b.items[0], "application/json", false
 	if b.path == "/api/v1/report" {
@@ -384,13 +466,16 @@ func send(b *batch) int {
 		req.Header.Set("Content-Encoding", "gzip")
 		req.Header.Set("Dokkit-Batch", b.id)
 	}
+	g := gid()
+	sending.Store(g, true)
 	res, err := client.Do(req)
+	sending.Delete(g)
 	if err != nil {
 		return failed
 	}
 	res.Body.Close()
 	switch {
-	case res.StatusCode >= 500:
+	case res.StatusCode >= 500 || res.StatusCode == 429:
 		return failed
 	case res.StatusCode >= 400:
 		return refused
@@ -412,7 +497,20 @@ func (h *handler) WithAttrs(a []slog.Attr) slog.Handler {
 	return &handler{h.level, append(h.attrs[:len(h.attrs):len(h.attrs)], a...)}
 }
 
+// sending holds the goroutines that are inside the library's own request, so what the HTTP stack logs there is not queued.
+var sending sync.Map
+
+func gid() int {
+	var b [32]byte
+	f := strings.Fields(string(b[:runtime.Stack(b[:], false)]))
+	n, _ := strconv.Atoi(f[1])
+	return n
+}
+
 func (h *handler) Handle(_ context.Context, r slog.Record) error {
+	if _, own := sending.Load(gid()); own {
+		return nil
+	}
 	level := "debug"
 	switch {
 	case r.Level >= slog.LevelError:

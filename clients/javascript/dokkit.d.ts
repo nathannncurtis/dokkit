@@ -9,6 +9,8 @@ export function start(options?: {
   key?: string;
   host?: string;
   insecure?: boolean;
+  /** Send a deploy line with the version at start. On by default; the server records a deploy only when the version changes. */
+  announceVersion?: boolean;
 }): void;
 
 export function beat(name: string, everySeconds?: number): void;

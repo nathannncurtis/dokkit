@@ -511,17 +511,72 @@ defmodule Dokkit.Intake do
       else: clean(text)
   end
 
-  defp service(%Key{kind: :app, service_id: id}, _), do: {:ok, Repo.get!(Service, id)}
+  defp service(%Key{kind: :app, service_id: id}, line),
+    do: environment(Repo.get!(Service, id), line["environment"])
 
-  defp service(%Key{kind: :machine, machine_id: machine}, %{"service" => slug})
+  defp service(%Key{kind: :machine, machine_id: machine}, %{"service" => slug} = line)
        when is_binary(slug) do
     case Repo.get_by(Service, machine_id: machine, slug: slug) do
       nil -> {:error, "unknown_service", "No service #{inspect(slug)} on this machine."}
-      service -> {:ok, service}
+      service -> environment(service, line["environment"])
     end
   end
 
   defp service(_, _), do: {:error, "bad_line", "Needs a service."}
+
+  @max_variants 5
+
+  # A service with a declaration keeps its own environment. Otherwise a line from another
+  # environment goes to a sibling row of the same machine, so production is never changed by it.
+  defp environment(%Service{declared: nil} = base, env) when is_binary(env) do
+    env = env |> String.trim() |> String.downcase()
+
+    if env == "production" or not (env =~ ~r/^[a-z0-9][a-z0-9._-]{0,31}$/),
+      do: {:ok, base},
+      else: variant(base, env)
+  end
+
+  defp environment(base, _), do: {:ok, base}
+
+  defp variant(base, env) do
+    slug = "#{base.slug}~#{env}"
+    prefix = base.slug <> "~"
+
+    siblings =
+      Repo.aggregate(
+        from(s in Service,
+          where:
+            s.machine_id == ^base.machine_id and
+              fragment("left(?, ?) = ?", s.slug, ^String.length(prefix), ^prefix)
+        ),
+        :count
+      )
+
+    case Repo.get_by(Service, machine_id: base.machine_id, slug: slug) do
+      nil when siblings >= @max_variants ->
+        {:error, "too_many_environments",
+         "A service takes lines from at most #{@max_variants} other environments."}
+
+      nil ->
+        Repo.insert!(
+          %Service{
+            machine_id: base.machine_id,
+            slug: slug,
+            name: "#{base.name} (#{env})",
+            kind: base.kind,
+            environment: env,
+            watched: base.watched
+          },
+          on_conflict: :nothing,
+          conflict_target: [:machine_id, :slug]
+        )
+
+        {:ok, Repo.get_by!(Service, machine_id: base.machine_id, slug: slug)}
+
+      service ->
+        {:ok, service}
+    end
+  end
 
   # A machine may log without naming a service.
   defp log_service(%Key{kind: :machine}, line) when not is_map_key(line, "service"),

@@ -62,10 +62,10 @@ func TestTheRunningTestProgramIsFoundByAPieceOfItsPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	name, piece := filepath.Base(exe), filepath.Base(filepath.Dir(exe))
-	if err := processWithText(name, piece); err != nil {
+	if _, err := processWithText(name, piece); err != nil {
 		t.Fatalf("%s with %q: %v", name, piece, err)
 	}
-	if err := processWithText(name, strings.Repeat("no-such-piece", 3)); err == nil {
+	if _, err := processWithText(name, strings.Repeat("no-such-piece", 3)); err == nil {
 		t.Fatal("a piece that is nowhere in the path matched")
 	}
 }

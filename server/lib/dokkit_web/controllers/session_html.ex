@@ -5,6 +5,7 @@ defmodule DokkitWeb.SessionHTML do
   attr :error, :string, default: nil
   attr :action, :string, required: true
   attr :button, :string, required: true
+  attr :value, :string, default: nil
   slot :lead
   slot :inner_block, required: true
 
@@ -20,7 +21,10 @@ defmodule DokkitWeb.SessionHTML do
         <p :if={@error} class="bad" role="alert">
           <i class="ph ph-warning" aria-hidden="true"></i>{@error}
         </p>
-        {render_slot(@inner_block)} <button class="btn primary" type="submit">{@button}</button>
+        {render_slot(@inner_block)}
+        <button class="btn primary" type="submit" name={@value && "do"} value={@value}>
+          {@button}
+        </button>
       </form>
     </main>
     """
@@ -65,18 +69,46 @@ defmodule DokkitWeb.SessionHTML do
   def code(assigns) do
     ~H"""
     <.door title="Enter your code" error={@error} action={~p"/login/code"} button="Sign in">
-      <.code_field /> <a href={~p"/login"}>Start again</a>
+      <label>
+        Code from your authenticator app<input
+          class="inp mono"
+          name="code"
+          autocomplete="one-time-code"
+          autocapitalize="characters"
+          spellcheck="false"
+          required
+          autofocus
+        /> <small class="mute">Or one of your recovery codes.</small>
+      </label>
+      <a href={~p"/login"}>Start again</a>
     </.door>
     """
   end
 
   def two_step(%{on: true} = assigns) do
     ~H"""
-    <.door title="Two-step sign-in is on" error={@error} action={~p"/two-step"} button="Turn it off">
+    <.door
+      title="Two-step sign-in is on"
+      error={@error}
+      action={~p"/two-step"}
+      button="Turn it off"
+      value="off"
+    >
       <:lead>
-        Signing in now asks for your password and then a code from your authenticator app. Nothing more to do here. To turn it off, enter a code.
+        Signing in now asks for your password and then a code from your authenticator app. Nothing more to do here.
       </:lead>
-      <.code_field /> <a href={~p"/settings"}>Back to settings</a>
+
+      <p :if={@used} class="notice" role="status">
+        <i class="ph ph-key" aria-hidden="true"></i>You signed in with a recovery code.
+      </p>
+
+      <p id="recovery-left">{recovery_left(@left)}</p>
+      <.code_field />
+      <small class="mute">
+        Enter a current code to turn two-step sign-in off, or to make a new set of recovery codes. A new set ends the old one.
+      </small>
+      <button class="btn" type="submit" name="do" value="codes">Make new recovery codes</button>
+      <a href={~p"/settings"}>Back to settings</a>
     </.door>
     """
   end
@@ -85,10 +117,48 @@ defmodule DokkitWeb.SessionHTML do
     ~H"""
     <.door title="Turn on two-step sign-in" error={@error} action={~p"/two-step"} button="Turn on">
       <:lead>Scan this with your authenticator app, then enter the code it shows.</:lead>
+
       <div class="qr">{Phoenix.HTML.raw(@qr)}</div>
       <small class="mute">Or type this key into the app: <code class="mono">{@secret}</code></small>
-      <.code_field /> <a href={~p"/settings"}>Back to settings</a>
+      <input type="hidden" name="do" value="on" /> <.code_field />
+      <a href={~p"/settings"}>Back to settings</a>
     </.door>
+    """
+  end
+
+  defp recovery_left(0), do: "You have no recovery codes left. Make a new set."
+  defp recovery_left(1), do: "You have 1 recovery code left."
+  defp recovery_left(n), do: "You have #{n} recovery codes left."
+
+  defp codes_href(codes) do
+    "data:text/plain;charset=utf-8," <>
+      URI.encode(Enum.join(codes, "\n") <> "\n", &URI.char_unreserved?/1)
+  end
+
+  def codes(assigns) do
+    ~H"""
+    <main class="door">
+      <section class="card">
+        <h1><Layouts.mark />Save your recovery codes</h1>
+
+        <p class="mute">
+          Two-step sign-in is on. If you lose your authenticator app, each of these codes signs you in once, in place of its code. They are shown only now and cannot be shown again. Keep them somewhere safe.
+        </p>
+        <pre class="codes mono" id="recovery-codes">{Enum.join(@codes, "\n")}</pre>
+        <div class="row">
+          <button class="btn" type="button" data-copy="#recovery-codes">Copy</button>
+          <a
+            class="btn"
+            id="recovery-download"
+            download="dokkit-recovery-codes.txt"
+            href={codes_href(@codes)}
+          >
+            Download
+          </a>
+        </div>
+        <a class="btn primary" href={~p"/two-step"}>I have saved them</a>
+      </section>
+    </main>
     """
   end
 

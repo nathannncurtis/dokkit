@@ -17,7 +17,7 @@ defmodule Dokkit do
 
   @queue 1000
   @max_bytes 8 * 1024 * 1024
-  @max_line 1024 * 1024
+  @max_line 65_536
   @max_batch 4 * 1024 * 1024
 
   @doc "Turns the library on. With no address or key it stays off and every call does nothing."
@@ -38,6 +38,7 @@ defmodule Dokkit do
           app: opts[:app] || own_app(),
           environment: opts[:environment] || System.get_env("DOKKIT_ENV"),
           host: to_string(host),
+          root: File.cwd!(),
           lines: :queue.new(),
           count: 0,
           bytes: 0,
@@ -50,7 +51,8 @@ defmodule Dokkit do
         name: __MODULE__
       )
 
-      if opts[:version], do: add(%{type: "deploy", version: to_string(opts[:version])})
+      if opts[:version] && opts[:announce_version] != false,
+        do: add(%{type: "deploy", version: to_string(opts[:version])})
     end
 
     :ok
@@ -197,7 +199,8 @@ defmodule Dokkit do
 
   # The time, in milliseconds on the monotonic clock, until which a send counts as running.
   defp window(ms) do
-    if ref = :persistent_term.get({__MODULE__, :window}, nil), do: :atomics.put(ref, 1, System.monotonic_time(:millisecond) + ms)
+    if ref = :persistent_term.get({__MODULE__, :window}, nil),
+      do: :atomics.put(ref, 1, System.monotonic_time(:millisecond) + ms)
   end
 
   defp sending_now? do
@@ -231,8 +234,11 @@ defmodule Dokkit do
   def handle_cast({:line, line}, s) do
     line = line |> Map.put(:host, s.host) |> Map.reject(fn {_, v} -> is_nil(v) end)
 
-    case encode(line) do
-      body when is_binary(body) and byte_size(body) <= @max_line -> {:noreply, enqueue(s, body)}
+    line =
+      if s.environment in [nil, "", "production"], do: line, else: Map.put(line, :environment, s.environment)
+
+    case fit(line) do
+      body when is_binary(body) -> {:noreply, enqueue(s, body)}
       _ -> {:noreply, %{s | dropped: s.dropped + 1}}
     end
   end
@@ -242,7 +248,7 @@ defmodule Dokkit do
     frames =
       for {module, function, arity, where} <- Enum.reverse(stacktrace) do
         %{
-          file: to_string(where[:file] || inspect(module)),
+          file: relative(to_string(where[:file] || inspect(module)), s.root),
           function: "#{inspect(module)}.#{function}/#{if is_list(arity), do: length(arity), else: arity}",
           line: where[:line],
           own: Application.get_application(module) in [nil, s.app]
@@ -302,12 +308,67 @@ defmodule Dokkit do
 
   def handle_info(_, s), do: {:noreply, s}
 
+  defp relative(file, root) do
+    prefix = String.replace(root, "\\", "/") |> String.trim_trailing("/")
+    path = String.replace(file, "\\", "/")
+
+    cond do
+      Path.type(file) == :relative ->
+        file
+
+      String.starts_with?(path, prefix <> "/") ->
+        binary_part(path, byte_size(prefix) + 1, byte_size(path) - byte_size(prefix) - 1)
+
+      true ->
+        path |> String.split("/deps/") |> tl_or_name(path)
+    end
+  end
+
+  defp tl_or_name([_, rest], _), do: "deps/" <> rest
+  defp tl_or_name(_, path), do: Path.basename(path)
+
   # A batch that failed is kept for one more try, then counted as dropped.
-  # A refusal is counted at once, and so is an error post, which the server would count twice.
+  # A refusal is counted at once.
   defp retry_or_drop({:refused, batch}, s), do: %{s | dropped: s.dropped + batch.n}
   defp retry_or_drop({_, %{tried: true} = batch}, s), do: %{s | dropped: s.dropped + batch.n}
-  defp retry_or_drop({_, %{path: "/api/v1/errors"} = batch}, s), do: %{s | dropped: s.dropped + batch.n}
   defp retry_or_drop({_, batch}, s), do: %{s | held: s.held ++ [%{batch | tried: true}]}
+
+  # A line over the size limit has its msg cut, then its fields dropped; one that still does not fit is dropped.
+  defp fit(line) do
+    body = encode(line)
+
+    cond do
+      body == nil ->
+        nil
+
+      byte_size(body) <= @max_line ->
+        body
+
+      is_binary(line[:msg]) ->
+        shrink(line, line.msg, byte_size(line.msg)) ||
+          shrink(Map.delete(line, :fields), line.msg, byte_size(line.msg))
+
+      true ->
+        nil
+    end
+  end
+
+  defp shrink(line, msg, keep) do
+    head = binary_part(msg, 0, keep) |> valid_head()
+    body = encode(%{line | msg: head <> " [cut]"})
+    over = if body, do: byte_size(body) - @max_line, else: 1
+
+    cond do
+      body && over <= 0 -> body
+      keep == 0 -> nil
+      true -> shrink(line, msg, max(0, keep - max(over, 1)))
+    end
+  end
+
+  defp valid_head(""), do: ""
+
+  defp valid_head(head),
+    do: if(String.valid?(head), do: head, else: valid_head(binary_part(head, 0, byte_size(head) - 1)))
 
   # One that cannot be encoded is dropped.
   defp encode(term) do
@@ -398,7 +459,7 @@ defmodule Dokkit do
 
     case :httpc.request(:post, request, [timeout: 10_000] ++ ssl_options(conf.url), []) do
       {:ok, {{_, status, _}, _, _}} when status < 400 -> :ok
-      {:ok, {{_, status, _}, _, _}} when status < 500 -> :refused
+      {:ok, {{_, status, _}, _, _}} when status < 500 and status != 429 -> :refused
       _ -> :failed
     end
   catch

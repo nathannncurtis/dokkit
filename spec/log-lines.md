@@ -34,6 +34,14 @@ Dokkit also reads the Compact Log Event Format, the open line format written by 
 | `@x` | `fields.exception` |
 | Everything else | `fields` |
 
+### Through Seq's address
+
+`POST /api/events/raw` (and `POST /ingest/clef`) takes what Seq clients send, so an app moves by changing its server URL and API key to Dokkit's and an app key. The key is read from `X-Seq-ApiKey` or `?apiKey=`. Both body forms are read: CLEF lines, and the older `{"Events": [...]}` form, whose `Timestamp`, `Level`, `MessageTemplate`, `RenderedMessage`, `Exception` and `Properties` are read as `@t`, `@l`, `@mt`, `@m`, `@x` and the properties of a CLEF line. The service is the app key's service. Level names are read without regard to case and in their short forms: `Verbose`, `Trace`, `Silly` (trace), `Debug` (debug), `Information`, `Info` (info), `Warning`, `Warn` (warn), `Error` (error), `Fatal`, `Critical` (fatal). A template is rendered with the properties, so `Saved {File}` is stored as `Saved a.pdf`; a property the template does not name stays in `fields`. A property called `service`, `at` or `type` is kept as `service_name`, `seq_at` or `seq_type`. The limits are those of `POST /report`.
+
+## Limits
+
+A message is kept to 64 KiB, and so are a line's `fields` taken together (over that they are dropped); the stored line is marked as cut. `dokkit` applies the same limit to a line the server will not take whole, and adds `[dokkit cut N bytes]` to the end of a cut message. A batch is at most 10,000 lines and 5 MB compressed; `dokkit` halves a batch the server answers `413` for. Lines the server refuses one by one (the `refused` list of the report answer) are kept by `dokkit` in the spool as `.rejected` with the reason, and counted in a warning log line.
+
 ## Storage
 
 Postgres, one partition per month. Twelve months are kept live. Each older month is archived as one compressed file and can be loaded back.

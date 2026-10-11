@@ -29,15 +29,49 @@ defmodule Dokkit.Estate do
     )
   end
 
-  def runs(%Service{id: id}, limit \\ 30) do
-    Repo.all(
+  def runs(%Service{id: id}, limit \\ 30, opts \\ []) do
+    query =
       from r in JobRun,
         join: c in assoc(r, :check),
         where: c.service_id == ^id,
-        order_by: [desc: coalesce(r.started_at, r.finished_at)],
+        order_by: [desc: coalesce(r.started_at, r.finished_at), desc: r.id],
         limit: ^limit,
         preload: [check: c]
-    )
+
+    query =
+      if opts[:from],
+        do: where(query, [r], coalesce(r.started_at, r.finished_at) >= ^opts[:from]),
+        else: query
+
+    query =
+      if opts[:to],
+        do: where(query, [r], coalesce(r.started_at, r.finished_at) <= ^opts[:to]),
+        else: query
+
+    query =
+      case opts[:result] do
+        result when result in ~w(running ok fail) ->
+          where(query, [r], r.result == ^String.to_existing_atom(result))
+
+        _ ->
+          query
+      end
+
+    query =
+      case opts[:after] do
+        {at, rid} ->
+          where(
+            query,
+            [r],
+            coalesce(r.started_at, r.finished_at) < ^at or
+              (coalesce(r.started_at, r.finished_at) == ^at and r.id < ^rid)
+          )
+
+        _ ->
+          query
+      end
+
+    Repo.all(query)
   end
 
   @doc "Every job with its newest run and the time of its last good one."
@@ -176,6 +210,91 @@ defmodule Dokkit.Estate do
     end
   end
 
+  @app_checks 100
+  @doc """
+  Adds something outside that is depended on. Nothing here can reach it, so its check is
+  assigned to an enrolled machine and run by that machine's program; without a check it
+  belongs to the group machine Outside.
+  """
+  def add_dependency(params) do
+    name = String.trim(params["name"] || "")
+    slug = name |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-") |> String.trim("-")
+    machine = String.trim(params["machine"] || "")
+
+    with true <- slug != "" or {:error, "A dependency needs a name."},
+         {:ok, check} <- dependency_check(params["check"]),
+         {:ok, home} <- dependency_home(machine, check) do
+      Repo.transaction(fn ->
+        if Repo.get_by(Service, machine_id: home.id, slug: slug),
+          do: Repo.rollback("#{home.name} already has something called #{name}.")
+
+        service =
+          Repo.insert!(%Service{machine_id: home.id, slug: slug, name: name, kind: :dependency})
+
+        with true <- check != nil,
+             {:error, why} <- set_checks(service, [check]) do
+          Repo.rollback(why)
+        end
+
+        service.id
+      end)
+    end
+  end
+
+  defp dependency_check(nil), do: {:ok, nil}
+
+  defp dependency_check(%{"type" => "http", "url" => url} = c) when is_binary(url) do
+    if url =~ ~r{^https?://[^\s/]+}i,
+      do: {:ok, %{"name" => c["name"] || "http", "type" => "http", "config" => %{"url" => url}}},
+      else: {:error, "An http check needs a url that starts with http:// or https://."}
+  end
+
+  defp dependency_check(%{"type" => "tcp", "address" => address} = c) when is_binary(address) do
+    case Regex.run(~r/^(\S+):(\d{1,5})$/, address) do
+      [_, host, port] when port != "0" ->
+        {:ok,
+         %{
+           "name" => c["name"] || "tcp",
+           "type" => "tcp",
+           "config" => %{"host" => host, "port" => String.to_integer(port)}
+         }}
+
+      _ ->
+        {:error, "A tcp check needs an address as host:port."}
+    end
+  end
+
+  defp dependency_check(_),
+    do: {:error, "check is an http check with a url, or a tcp check with an address (host:port)."}
+
+  defp dependency_home("", nil) do
+    {:ok,
+     Repo.get_by(Machine, name: "Outside") ||
+       Repo.insert!(%Machine{name: "Outside", kind: :group})}
+  end
+
+  defp dependency_home("", _), do: {:error, "A check runs on a machine: say which with machine."}
+
+  defp dependency_home(name, check) do
+    machine =
+      Repo.get_by(Machine, name: name) ||
+        case Ecto.UUID.cast(name) do
+          {:ok, id} -> Repo.get(Machine, id)
+          _ -> nil
+        end
+
+    cond do
+      machine == nil ->
+        {:error, "There is no machine called #{name}."}
+
+      check && machine.kind != :enrolled ->
+        {:error, "#{machine.name} runs no dokkit to run the check."}
+
+      true ->
+        {:ok, machine}
+    end
+  end
+
   @kinds ~w(service job dependency app)
   @types ~w(http tcp process windows-service systemd beat stats threshold expiry custom)
 
@@ -183,7 +302,8 @@ defmodule Dokkit.Estate do
   Takes the contents of a dokkit.toml for a machine. The file owns the service and its
   checks, so checks it no longer lists are removed. Sending the same file twice changes nothing.
   """
-  def declare(machine_id, %{"service" => %{"id" => slug} = about} = doc) when is_binary(slug) do
+  def declare(machine_id, %{"service" => %{"id" => slug} = about} = doc)
+      when is_binary(machine_id) and is_binary(slug) do
     checks = named(List.wrap(doc["check"]))
     jobs = List.wrap(doc["job"])
 
@@ -284,6 +404,45 @@ defmodule Dokkit.Estate do
 
           service
         end)
+    end
+  end
+
+  @app_check_types ~w(beat custom)
+  @app_job_fields ~w(id schedule grace max_runtime)
+
+  @doc """
+  An app key declares only the service it belongs to. It keeps its machine and kind, may set a
+  name and environment, and may list jobs (schedule, grace, max_runtime) and checks of type beat
+  or custom, which only wait for reports. Any other check type is refused; other sections are dropped.
+  """
+  def declare(%Service{} = own, %{"service" => %{"id" => slug} = about} = doc) do
+    checks = List.wrap(doc["check"])
+    jobs = List.wrap(doc["job"])
+
+    cond do
+      slug != own.slug ->
+        {:error, "This key belongs to #{inspect(own.slug)}, so service.id must be that."}
+
+      bad = Enum.find(checks, &(not is_map(&1) or &1["type"] not in @app_check_types)) ->
+        {:error,
+         "An app key may declare checks of type #{Enum.join(@app_check_types, " or ")} only, not #{inspect(is_map(bad) && bad["type"])}."}
+
+      length(checks) + length(jobs) > @app_checks ->
+        {:error, "A service takes at most #{@app_checks} checks from an app key."}
+
+      Enum.any?(jobs, &(not is_map(&1))) ->
+        {:error, "Every job needs an id."}
+
+      true ->
+        about =
+          Map.merge(about, %{"kind" => to_string(own.kind), "name" => about["name"] || own.name})
+
+        declare(own.machine_id, %{
+          "schema" => doc["schema"],
+          "service" => about,
+          "check" => checks,
+          "job" => Enum.map(jobs, &Map.take(&1, @app_job_fields))
+        })
     end
   end
 

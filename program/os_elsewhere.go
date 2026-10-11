@@ -1,4 +1,4 @@
-//go:build !windows && !linux
+//go:build !windows && !linux && !darwin
 
 package main
 
@@ -8,7 +8,7 @@ import (
 )
 
 func serviceCommand(string) int {
-	fmt.Fprintln(os.Stderr, "dokkit: installing as a service is built for Windows and Linux so far, not macOS. On macOS, run dokkit watch from a launchd job.")
+	fmt.Fprintln(os.Stderr, "dokkit: installing as a service is built for Windows and Linux so far, not here.")
 	return 1
 }
 

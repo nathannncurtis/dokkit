@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -23,7 +24,8 @@ const proposalFile = "dokkit-proposal.json"
 
 type found = map[string]string
 
-// What a scan looks at. Each part asks the machine's own tools and reads no file contents.
+// What a scan looks at. Each part asks the machine's own tools and reads no file contents,
+// except the crontabs that cron itself reads.
 var scanParts = []struct {
 	name string
 	find func() []found
@@ -35,12 +37,18 @@ var scanParts = []struct {
 	{"disks", findDisks},
 }
 
-// scan writes what it finds to a file for a person to read. It sends nothing.
-func scan(args []string, folders []string) int {
+var scanNames = []string{"declarations", "services", "ports", "containers", "sites", "disks", "jobs"}
+
+func skipped(args []string) map[string]bool {
 	skip := map[string]bool{}
 	for _, a := range args {
 		skip[strings.TrimPrefix(a, "--no-")] = strings.HasPrefix(a, "--no-")
 	}
+	return skip
+}
+
+// look runs the scan and returns the proposal document and how many it found of each kind.
+func look(skip map[string]bool, folders []string) ([]byte, map[string]int) {
 	host, _ := os.Hostname()
 	all := map[string][]found{}
 	if !skip["declarations"] {
@@ -53,18 +61,72 @@ func scan(args []string, folders []string) int {
 			all[part.name] = part.find()
 		}
 	}
-	b, _ := json.MarshalIndent(map[string]any{"machine": host, "os": runtime.GOOS, "at": now(), "found": all}, "", "  ")
+	doc := map[string]any{"machine": host, "os": runtime.GOOS, "at": now(), "found": all}
+	if !skip["jobs"] {
+		jobs, notes := findJobs()
+		all["jobs"], doc["notes"] = jobs, notes
+	}
+	counts := map[string]int{}
+	for name, list := range all {
+		counts[name] = len(list)
+	}
+	b, _ := json.MarshalIndent(doc, "", "  ")
+	return b, counts
+}
+
+// scan writes what it finds to a file for a person to read. It sends nothing.
+func scan(args []string, folders []string) int {
+	skip := skipped(args)
+	b, counts := look(skip, folders)
 	if err := os.WriteFile(proposalFile, b, 0o600); err != nil {
 		fmt.Fprintln(os.Stderr, "dokkit:", err)
 		return 1
 	}
-	for _, name := range []string{"declarations", "services", "ports", "containers", "sites", "disks"} {
+	for _, name := range scanNames {
 		if !skip[name] {
-			fmt.Printf("%-13s %d\n", name, len(all[name]))
+			fmt.Printf("%-13s %d\n", name, counts[name])
 		}
 	}
 	fmt.Printf("Wrote %s. Nothing was sent.\n", proposalFile)
 	return 0
+}
+
+var (
+	scanFirst = 2 * time.Minute
+	scanEvery = 24 * time.Hour
+)
+
+const scanWork = "dokkit:scan"
+
+// scanAndSend looks the machine over and sends the proposal, as dokkit scan then dokkit propose do.
+func (c *client) scanAndSend() (string, error) {
+	b, counts := look(map[string]bool{}, c.foldersNow())
+	var a struct{ Waiting int }
+	status, err := c.call("POST", "/api/v1/proposals", "application/json", b, &a)
+	if err != nil || status != 200 {
+		return "", fmt.Errorf("the server did not take the proposal (%d) %v", status, err)
+	}
+	said := ""
+	for _, name := range scanNames {
+		if n, ok := counts[name]; ok {
+			said += fmt.Sprintf("%-13s %d\n", name, n)
+		}
+	}
+	return said + fmt.Sprintf("Sent. %d thing(s) are waiting on the Found page.\n", a.Waiting), nil
+}
+
+// lookAgain is a built-in run: the same read-only scan, sent as a proposal. It takes no parameters.
+func (c *client) lookAgain(run string) {
+	said, code := "", 0
+	out, err := c.scanAndSend()
+	if err != nil {
+		said, code = "Not sent: "+err.Error()+"\n", 1
+	} else {
+		said = out
+	}
+	c.call("POST", "/api/v1/work/"+run+"/output", "text/plain", []byte(said), nil)
+	body, _ := json.Marshal(map[string]any{"exit_code": code, "duration_ms": 0})
+	c.postResult("/api/v1/work/"+run+"/result", body)
 }
 
 // propose sends the file a scan wrote, to be decided about in the interface.
@@ -159,19 +221,33 @@ func findPorts() (all []found) {
 }
 
 func findContainers() (all []found) {
-	for _, l := range output("docker", "ps", "--format", "{{.Names}}\t{{.Image}}") {
-		if name, image, ok := strings.Cut(l, "\t"); ok {
-			all = append(all, found{"name": name, "image": image})
+	for _, l := range output("docker", "ps", "--format", "{{.Names}}\t{{.Image}}\t{{.Ports}}") {
+		if f := strings.Split(l, "\t"); len(f) >= 2 {
+			one := found{"name": f[0], "image": f[1]}
+			if len(f) > 2 {
+				one["port"] = publishedPort(f[2])
+			}
+			all = append(all, one)
 		}
 	}
 	return
 }
 
+var published = regexp.MustCompile(`:(\d+)->\d+/tcp`)
+
+// publishedPort is the first TCP port a container offers on this machine, from docker's "0.0.0.0:8080->80/tcp".
+func publishedPort(ports string) string {
+	if m := published.FindStringSubmatch(ports); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
 func findSites() (all []found) {
 	if runtime.GOOS == "windows" {
-		for _, l := range output(filepath.Join(os.Getenv("windir"), "system32", "inetsrv", "appcmd.exe"), "list", "site", "/text:name") {
-			if l != "" {
-				all = append(all, found{"name": l, "server": "iis"})
+		for _, l := range output(filepath.Join(os.Getenv("windir"), "system32", "inetsrv", "appcmd.exe"), "list", "site") {
+			if site, ok := parseIISSite(l); ok {
+				all = append(all, site)
 			}
 		}
 		return
@@ -185,8 +261,40 @@ func findSites() (all []found) {
 	return
 }
 
+var iisSite = regexp.MustCompile(`^SITE "(.+)" \(id:\d+,bindings:([^,]*(?:,[^,]*)*),state:(\w+)\)`)
+
+// parseIISSite reads a line of appcmd list site: SITE "name" (id:1,bindings:http/*:80:,state:Started).
+// The address is the first http or https binding, on this machine.
+func parseIISSite(l string) (found, bool) {
+	m := iisSite.FindStringSubmatch(strings.TrimSpace(l))
+	if m == nil {
+		return nil, false
+	}
+	site := found{"name": m[1], "server": "iis", "state": strings.ToLower(m[3])}
+	for _, b := range strings.Split(m[2], ",") {
+		scheme, rest, _ := strings.Cut(b, "/")
+		parts := strings.Split(rest, ":")
+		if (scheme != "http" && scheme != "https") || len(parts) != 3 {
+			continue
+		}
+		host := "localhost"
+		if parts[2] != "" {
+			host = parts[2]
+		}
+		site["url"] = scheme + "://" + host
+		if parts[1] != "" && !(scheme == "http" && parts[1] == "80") && !(scheme == "https" && parts[1] == "443") {
+			site["url"] += ":" + parts[1]
+		}
+		site["url"] += "/"
+		break
+	}
+	return site, true
+}
+
 func table(lines []string) [][]string {
-	rows, _ := csv.NewReader(strings.NewReader(strings.Join(lines, "\n"))).ReadAll()
+	r := csv.NewReader(strings.NewReader(strings.Join(lines, "\n")))
+	r.LazyQuotes, r.FieldsPerRecord = true, -1
+	rows, _ := r.ReadAll()
 	return rows
 }
 
@@ -276,6 +384,8 @@ func (c *client) fetchUpdate() (string, string, error) {
 
 // work asks the server for runs, holding each request open, and does them one at a time.
 func (c *client) work() {
+	go c.autoScan()
+	go c.records()
 	for {
 		var job struct {
 			Run  string
@@ -296,6 +406,8 @@ func (c *client) work() {
 			c.update(job.Run)
 		case imessageWork:
 			c.imessage(job.Run, job.To, job.Text)
+		case scanWork:
+			c.lookAgain(job.Run)
 		default:
 			c.postResult("/api/v1/work/"+job.Run+"/result", []byte(`{"refused":"This program does not run that."}`))
 		}

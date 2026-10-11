@@ -95,4 +95,65 @@ defmodule Dokkit.DeclareTest do
     {app, _} = Keys.mint(:app, %{})
     assert json_response(put_doc(app, @doc_one), 403)
   end
+
+  describe "an app key" do
+    setup do
+      home = Repo.insert!(%Machine{name: "Apps", kind: :group})
+
+      service =
+        Repo.insert!(%Service{machine_id: home.id, slug: "scanner", name: "Scanner", kind: :app})
+
+      {app, _} = Keys.mint(:app, %{service_id: service.id})
+      %{app: app, service: service}
+    end
+
+    defp mine(extra \\ %{}),
+      do: Map.merge(%{schema: 1, service: %{id: "scanner", environment: "staging"}}, extra)
+
+    test "declares its own service, and nothing else changes", %{app: app, service: service} do
+      doc =
+        mine(%{
+          job: [%{id: "sync", schedule: "0 1 * * *", grace: "30m", command: "rm -rf /"}],
+          check: [%{type: "beat", name: "tick"}],
+          alert: %{down: "page"},
+          logs: %{path: "x"}
+        })
+
+      assert %{"service" => id} = json_response(put_doc(app, doc), 200)
+      assert id == service.id
+
+      assert %{
+               environment: "staging",
+               name: "Scanner",
+               kind: :app,
+               machine_id: machine,
+               route_down: nil,
+               declared: declared
+             } = Repo.get!(Service, id)
+
+      assert machine == service.machine_id
+      assert Repo.aggregate(Service, :count) == 1
+      assert Map.keys(declared) |> Enum.sort() == ~w(check job schema service)
+
+      assert [%{name: "sync", config: config}, %{name: "tick"}] =
+               Repo.all(from c in Check, where: c.service_id == ^id, order_by: c.name)
+
+      assert config == %{"schedule" => "0 1 * * *", "grace" => "30m"}
+    end
+
+    test "cannot declare another service or checks that run something", %{app: app} do
+      assert json_response(put_doc(app, %{mine() | service: %{id: "other"}}), 422)["error"][
+               "message"
+             ] =~ "scanner"
+
+      for type <- ~w(http tcp process windows-service systemd stats threshold expiry) do
+        assert json_response(put_doc(app, mine(%{check: [%{type: type, port: 1}]})), 422)[
+                 "error"
+               ]["message"] =~ "beat or custom"
+      end
+
+      assert Repo.aggregate(Service, :count) == 1
+      assert Repo.aggregate(Check, :count) == 0
+    end
+  end
 end

@@ -18,6 +18,14 @@ func TestExpiryCountsWholeDaysAndASelfSignedCertificateIsRead(t *testing.T) {
 	if r := expiryResult(at.Add(10*time.Hour), at); r.state != "degraded" || r.value != 1 {
 		t.Fatalf("ten hours left is degraded and shows 1 day: %+v", r)
 	}
+	for _, left := range []time.Duration{30 * 24 * time.Hour, 29*24*time.Hour + 12*time.Hour, 30*24*time.Hour - time.Minute} {
+		if r := expiryResult(at.Add(left), at); r.state != "degraded" {
+			t.Fatalf("%s left is within 30 days: %+v", left, r)
+		}
+	}
+	if r := expiryResult(at.Add(30*24*time.Hour+time.Minute), at); !r.ok || r.value != 31 {
+		t.Fatalf("just over 30 days is fine: %+v", r)
+	}
 	if r := expiryResult(at.Add(40*24*time.Hour), at); !r.ok {
 		t.Fatalf("forty days is fine: %+v", r)
 	}
@@ -65,7 +73,7 @@ func TestFilesAndKeysStayWhereTheFileAllows(t *testing.T) {
 	if err != nil {
 		t.Fatal("the file is kept; only the key is refused:", err)
 	}
-	if line := fetchStats(d).(map[string]any); line["state"] != "down" || !strings.Contains(line["note"].(string), statsKeyPrefix) {
+	if line := fetchStats(d).(map[string]any); line["type"] != "log" || line["level"] != "warn" || !strings.Contains(line["msg"].(string), statsKeyPrefix) {
 		t.Fatalf("key_env outside the stats prefix is reported: %v", line)
 	}
 	day := filepath.Join(dir, "when")

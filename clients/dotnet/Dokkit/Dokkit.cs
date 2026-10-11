@@ -26,7 +26,7 @@ namespace Dokkit
 {
     public static class Client
     {
-        const int QueueSize = 1000, QueueBytes = 4 << 20;
+        const int QueueSize = 1000, QueueBytes = 4 << 20, MaxLine = 65536;
         static readonly object Sending = new object();
         static int lineBytes;
         static Batch retry;
@@ -35,6 +35,7 @@ namespace Dokkit
         // Reports are built on the sender thread, so reading symbols never slows the app.
         static readonly Queue<Func<Dictionary<string, object>>> Errors = new Queue<Func<Dictionary<string, object>>>();
         static readonly AutoResetEvent Wake = new AutoResetEvent(false);
+        static readonly AsyncLocal<bool> InSend = new AsyncLocal<bool>();
         static HttpClient http;
         static string url, version, environment, host, own;
 
@@ -42,8 +43,9 @@ namespace Dokkit
         public static int Dropped { get; private set; }
 
         /// <summary>Turns the library on. With no address or key it stays off and every call does nothing.
-        /// Frames of assemblies named <paramref name="own"/> or <paramref name="own"/>.* are the app's own; by default, the entry assembly's first name segment.</summary>
-        public static void Start(string version = null, string environment = null, string url = null, string key = null, string own = null)
+        /// Frames of assemblies named <paramref name="own"/> or <paramref name="own"/>.* are the app's own; by default, the entry assembly's first name segment.
+        /// The version is announced once as a deploy line unless <paramref name="announceVersion"/> is false; the server records a deploy only when the version changes.</summary>
+        public static void Start(string version = null, string environment = null, string url = null, string key = null, string own = null, bool announceVersion = true)
         {
             try
             {
@@ -65,7 +67,7 @@ namespace Dokkit
                 http = client;
                 new Thread(Run) { IsBackground = true, Name = "dokkit" }.Start();
                 AppDomain.CurrentDomain.ProcessExit += (s, e) => Flush();
-                if (version != null) Add(Line("deploy", "version", version));
+                if (version != null && announceVersion) Add(Line("deploy", "version", version));
             }
             catch { http = null; }
         }
@@ -100,7 +102,7 @@ namespace Dokkit
         {
             try
             {
-                if (http == null || error == null) return;
+                if (http == null || error == null || InSend.Value) return;
                 var at = Now();
                 var copy = (tags ?? new Dictionary<string, string>()).ToDictionary(t => t.Key, t => (object)t.Value);
                 lock (Gate) { if (Errors.Count < 100) Errors.Enqueue(() => Report(error, handled, copy, at)); }
@@ -152,24 +154,47 @@ namespace Dokkit
         {
             lock (Sending)
             {
+                try { SendLines(); } catch { /* What could not be sent is dropped. The app is never told. */ }
+                try { SendErrors(); } catch { }
+            }
+        }
+
+        static void SendLines()
+        {
+            while (http != null)
+            {
+                var batch = retry ?? NextLines();
+                retry = null;
+                if (batch == null) return;
+                int status;
+                try { status = Post(batch); } catch { status = 599; }
+                if (status < 400) continue;
+                // A failed batch gets one more try; what is lost then is counted.
+                var again = status >= 500 || status == 429;
+                if (again && ++batch.Tries < 2) retry = batch;
+                else lock (Gate) Dropped += batch.Count;
+                if (again) return;
+            }
+        }
+
+        static void SendErrors()
+        {
+            while (http != null)
+            {
+                Func<Dictionary<string, object>> error;
+                lock (Gate) error = Errors.Count > 0 ? Errors.Peek() : null;
+                if (error == null) return;
+                byte[] body = null;
+                var status = 599;
                 try
                 {
-                    while (http != null)
-                    {
-                        var batch = retry ?? Next();
-                        retry = null;
-                        if (batch == null) return;
-                        int status;
-                        try { status = Post(batch); } catch { status = 599; }
-                        if (status < 400) continue;
-                        // A failed batch gets one more try; what is lost then is counted.
-                        var again = status >= 500 || status == 429;
-                        if (again && ++batch.Tries < 2) retry = batch;
-                        else lock (Gate) Dropped += batch.Count;
-                        if (again) return;
-                    }
+                    body = Encoding.UTF8.GetBytes(Json(error()));
+                    status = Post(new Batch { Path = "/api/v1/errors", Body = body, Kind = "application/json" });
                 }
-                catch { /* What could not be sent is dropped. The app is never told. */ }
+                catch { }
+                // A report the server did not answer for stays for the next pass; one it refuses is dropped.
+                if (body != null && (status >= 500 || status == 429)) return;
+                lock (Gate) { Errors.Dequeue(); if (body == null || status >= 400) Dropped++; }
             }
         }
 
@@ -182,22 +207,18 @@ namespace Dokkit
             public readonly string Id = Guid.NewGuid().ToString();
         }
 
-        static Batch Next()
+        static Batch NextLines()
         {
-            Func<Dictionary<string, object>> error = null;
             var batch = new List<string>();
             lock (Gate)
             {
-                if (Errors.Count > 0) error = Errors.Dequeue();
-                else while (Lines.Count > 0 && batch.Count < 500)
+                while (Lines.Count > 0 && batch.Count < 500)
                 {
                     var line = Lines.Dequeue();
                     lineBytes -= line.Length;
                     batch.Add(line);
                 }
             }
-            if (error != null)
-                return new Batch { Path = "/api/v1/errors", Body = Encoding.UTF8.GetBytes(Json(error())), Kind = "application/json", Count = 1 };
             if (batch.Count == 0) return null;
             return new Batch { Path = "/api/v1/report", Body = Gzip(string.Join("\n", batch)), Kind = "application/x-ndjson", Gzip = true, Count = batch.Count };
         }
@@ -216,7 +237,9 @@ namespace Dokkit
                 content.Headers.TryAddWithoutValidation("Content-Encoding", "gzip");
                 content.Headers.TryAddWithoutValidation("Dokkit-Batch", batch.Id);
             }
-            using (var response = http.PostAsync(url + batch.Path, content).GetAwaiter().GetResult()) return (int)response.StatusCode;
+            InSend.Value = true;
+            try { using (var response = http.PostAsync(url + batch.Path, content).GetAwaiter().GetResult()) return (int)response.StatusCode; }
+            finally { InSend.Value = false; }
         }
 
         static byte[] Gzip(string text)
@@ -244,9 +267,11 @@ namespace Dokkit
 
         internal static void Add(Dictionary<string, object> line)
         {
-            if (http == null) return;
+            if (http == null || InSend.Value) return;
             line["host"] = host;
-            var text = Json(line);
+            if (!string.IsNullOrEmpty(environment) && environment != "production") line["environment"] = environment;
+            var text = Fit(line);
+            if (text == null) { lock (Gate) Dropped++; return; }
             lock (Gate)
             {
                 if (text.Length > QueueBytes) { Dropped++; return; }
@@ -258,6 +283,26 @@ namespace Dokkit
                 Lines.Enqueue(text);
                 lineBytes += text.Length;
             }
+        }
+
+        static int Size(string text) => Encoding.UTF8.GetByteCount(text);
+
+        static string Fit(Dictionary<string, object> line)
+        {
+            var text = Json(line);
+            var over = Size(text) - MaxLine;
+            if (over <= 0) return text;
+            if (!(line.TryGetValue("msg", out var m) && m is string msg)) return null;
+            var n = msg.Length;
+            while (over > 0 && n > 0)
+            {
+                n = Math.Max(0, n - over - 6);
+                if (n > 0 && char.IsHighSurrogate(msg[n - 1])) n--;
+                line["msg"] = msg.Substring(0, n) + " [cut]";
+                text = Json(line);
+                over = Size(text) - MaxLine;
+            }
+            return over > 0 ? null : text;
         }
 
         internal static void Nudge() => Wake.Set();

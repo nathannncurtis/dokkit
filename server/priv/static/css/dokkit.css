@@ -242,7 +242,7 @@ a.li:hover, .li.hov:hover { background: var(--raise); }
 .empty { padding: 44px 16px; text-align: center; color: var(--mute); }
 .empty i { font-size: 30px; display: block; margin-bottom: 8px; }
 .empty .ph-check-circle { color: var(--ok); }
-.cols-jobs { grid-template-columns: minmax(0, 1.5fr) 110px 150px 130px 132px 190px 16px; }
+.cols-jobs { grid-template-columns: minmax(0, 1.5fr) 110px 150px 130px 168px 190px 16px; }
 .cols-found { grid-template-columns: 18px minmax(0, 1fr) 250px minmax(0, 1.2fr) 28px; }
 label.li { cursor: pointer; }
 .card > h2 .end { display: flex; align-items: center; gap: 8px; }
@@ -585,6 +585,13 @@ input, select { accent-color: var(--brand); caret-color: var(--brand); }
 .door p { text-wrap: pretty; }
 .door .bad { display: flex; gap: 8px; color: var(--bad); }
 .door .bad i { line-height: 20px; }
+.door .notice { display: flex; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--raise); border: 1px solid var(--line); }
+.door .notice i { line-height: 20px; color: var(--ok); }
+.door .codes { margin: 0; padding: 14px 16px; border-radius: 8px; background: var(--raise); border: 1px solid var(--line); columns: 2; column-gap: 24px; font-size: 15px; line-height: 28px; user-select: all; }
+.door .row { display: flex; gap: 8px; }
+.door .row .btn { flex: 1; }
+.door a.btn { text-decoration: none; color: inherit; }
+.door a.btn.primary { color: var(--brand-ink); }
 .me form { margin-left: auto; }
 .me .btn { color: var(--side-mute); }
 

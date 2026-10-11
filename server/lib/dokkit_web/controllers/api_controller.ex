@@ -18,16 +18,16 @@ defmodule DokkitWeb.ApiController do
 
   def the_day(_), do: Read.day()
 
-  def issues(conn, _), do: list(conn, Read.issues())
-  def machines(conn, _), do: list(conn, Read.machines())
-  def services(conn, params), do: list(conn, Read.services(params))
-  def jobs(conn, _), do: list(conn, Read.jobs())
-  def deploys(conn, _), do: list(conn, Read.deploys())
-  def errors(conn, _), do: list(conn, Read.errors())
-  def rules(conn, _), do: list(conn, Read.rules())
+  def issues(conn, params), do: list(conn, Read.list(:issues, params))
+  def machines(conn, params), do: list(conn, Read.list(:machines, params))
+  def services(conn, params), do: list(conn, Read.list(:services, params))
+  def jobs(conn, params), do: list(conn, Read.list(:jobs, params))
+  def deploys(conn, params), do: list(conn, Read.list(:deploys, params))
+  def errors(conn, params), do: list(conn, Read.list(:errors, params))
+  def rules(conn, params), do: list(conn, Read.list(:rules, params))
 
-  def keys(conn, _), do: list(conn, Read.keys())
-  def users(conn, _), do: list(conn, Read.users())
+  def keys(conn, params), do: list(conn, Read.list(:keys, params))
+  def users(conn, params), do: list(conn, Read.list(:users, params))
 
   @scopes ~w(read read-logs act admin)
 
@@ -107,7 +107,7 @@ defmodule DokkitWeb.ApiController do
     do:
       json(conn, %{items: Read.versions(), apps: Read.apps(), program: Read.program(), next: nil})
 
-  def proposals(conn, _), do: list(conn, Read.proposals())
+  def proposals(conn, params), do: list(conn, Read.list(:proposals, params))
   def machine(conn, %{"id" => id}), do: one(conn, Read.machine(id))
   def issue(conn, %{"id" => id}), do: one(conn, Read.one_issue(id))
 
@@ -186,17 +186,28 @@ defmodule DokkitWeb.ApiController do
 
   def checks(conn, params), do: reply(conn, set_service_checks(params))
 
-  def accept(conn, %{"id" => id}), do: reply(conn, found(id, &Dokkit.Found.watch/1))
-  def dismiss(conn, %{"id" => id}), do: reply(conn, found(id, &Dokkit.Found.dismiss/1))
+  def accept(conn, params), do: reply(conn, found(params, &Dokkit.Found.watch/1))
+  def dismiss(conn, params), do: reply(conn, found(params, &Dokkit.Found.dismiss/1))
 
-  def found(id, act) do
-    if Enum.any?(Dokkit.Found.list(), &(&1.id == id)) do
-      act.([id])
-      %{ok: true}
-    else
+  @doc "Acts on one proposal (id), some (ids) or every one waiting (all true)."
+  def found(%{"id" => id}, act), do: found(%{"ids" => [id], "single" => true}, act)
+
+  def found(%{"ids" => ids} = params, act) when is_list(ids) do
+    waiting = MapSet.new(Dokkit.Found.list(), & &1.id)
+    known = Enum.filter(Enum.uniq(ids), &(&1 in waiting))
+
+    if known == [] and !params["all"] do
       not_found()
+    else
+      act.(known)
+      if params["single"], do: %{ok: true}, else: %{ok: true, done: known}
     end
   end
+
+  def found(%{"all" => true}, act),
+    do: found(%{"ids" => Enum.map(Dokkit.Found.list(), & &1.id), "all" => true}, act)
+
+  def found(_, _), do: {:error, "bad_proposals", "Needs an id, ids, or all true."}
 
   def new_rule(params) do
     case Dokkit.Alerts.rule_error(params) do
@@ -260,6 +271,18 @@ defmodule DokkitWeb.ApiController do
 
   def add_app(conn, params), do: reply(conn, new_app(params))
 
+  def new_dependency(params) do
+    with true <- texts?(params, ~w(name machine)),
+         {:ok, id} <- Dokkit.Estate.add_dependency(params) do
+      Read.service(id)
+    else
+      false -> {:error, "bad_dependency", "name and machine are text."}
+      {:error, why} -> {:error, "bad_dependency", why}
+    end
+  end
+
+  def add_dependency(conn, params), do: reply(conn, new_dependency(params))
+
   def job_timing(%{"id" => id} = params) do
     with true <- texts?(params, ~w(grace max_runtime)),
          %{} = service <- Dokkit.Estate.service(id),
@@ -289,7 +312,7 @@ defmodule DokkitWeb.ApiController do
 
   def set_alert_settings(conn, params), do: reply(conn, save_alerts(params))
 
-  def alert_people(conn, _), do: list(conn, Dokkit.People.view())
+  def alert_people(conn, _), do: list(conn, %{items: Dokkit.People.view(), next: nil})
 
   def save_person(%{"id" => id} = params) do
     case Dokkit.People.update(id, params) do
@@ -301,7 +324,7 @@ defmodule DokkitWeb.ApiController do
 
   def set_alert_person(conn, params), do: reply(conn, save_person(params))
 
-  def alert_who(conn, _), do: list(conn, Dokkit.People.who_list())
+  def alert_who(conn, _), do: list(conn, %{items: Dokkit.People.who_list(), next: nil})
 
   def save_who(params) do
     id =
@@ -347,7 +370,7 @@ defmodule DokkitWeb.ApiController do
 
   def test_alert(conn, params), do: reply(conn, try_alert(params, conn.assigns.key.id))
 
-  def suggestions(conn, _), do: list(conn, Read.suggestions())
+  def suggestions(conn, _), do: json(conn, %{items: Read.suggestions(), next: nil})
 
   def suggestion(id, act), do: if(act.(id), do: %{ok: true}, else: not_found())
 
@@ -371,6 +394,17 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
+  @doc "Asks an enrolled machine to look itself over again and send what it finds."
+  def look_again(id, who) do
+    case Read.machine(id) do
+      %{kind: :enrolled} -> %{run: Dokkit.Work.scan(id, who).id}
+      _ -> not_found()
+    end
+  end
+
+  def scan_machine(conn, %{"id" => id}),
+    do: reply(conn, look_again(id, "token " <> (conn.assigns.key.label || "")))
+
   @doc "Approves a release for one machine, or for every machine that has an updater."
   def approve_update(version, id) do
     case Dokkit.Releases.approve(version, id) do
@@ -391,7 +425,7 @@ defmodule DokkitWeb.ApiController do
   def update_program(conn, %{"id" => id}),
     do: reply(conn, fetch_program(id, "token " <> (conn.assigns.key.label || "")))
 
-  def releases(conn, _), do: list(conn, Dokkit.Releases.list())
+  def releases(conn, params), do: list(conn, Read.list(:releases, params))
 
   def update_all(conn, params), do: reply(conn, approve_update(params["version"], :all))
 
@@ -437,7 +471,7 @@ defmodule DokkitWeb.ApiController do
   def put_certificate(conn, params), do: certificates(conn, new_certificate(params))
   def delete_certificate(conn, _), do: certificates(conn, drop_certificate())
 
-  def archives(conn, _), do: list(conn, Read.archives())
+  def archives(conn, _), do: json(conn, %{items: Read.archives(), next: nil})
 
   def restore_month(name) do
     case Dokkit.Logs.restore_named(name) do
@@ -449,9 +483,10 @@ defmodule DokkitWeb.ApiController do
   def restore_archive(conn, %{"name" => name}), do: reply(conn, restore_month(name))
 
   defp one(conn, nil), do: missing(conn)
+  defp one(conn, {:error, _, _} = error), do: reply(conn, error)
   defp one(conn, thing), do: json(conn, clean(conn, thing))
 
-  def error(conn, %{"id" => id}), do: one(conn, Read.error(id))
+  def error(conn, %{"id" => id} = params), do: one(conn, Read.error(id, params))
 
   def service(conn, %{"id" => id}), do: one(conn, Read.service(id))
 
@@ -460,8 +495,8 @@ defmodule DokkitWeb.ApiController do
   def machine_series(conn, %{"id" => id} = params),
     do: one(conn, Read.machine_series(id, params))
 
-  def runs(conn, %{"id" => id}), do: list(conn, Read.runs(id))
-  def logs(conn, params), do: list(conn, Read.logs(params))
+  def runs(conn, %{"id" => id} = params), do: list(conn, Read.list({:runs, id}, params))
+  def logs(conn, params), do: list(conn, Read.list(:logs, params))
 
   def snooze(conn, %{"id" => id, "until" => until}) do
     case seconds_until(until) do
@@ -493,7 +528,10 @@ defmodule DokkitWeb.ApiController do
   end
 
   defp list(conn, nil), do: missing(conn)
-  defp list(conn, items), do: json(conn, %{items: clean(conn, items), next: nil})
+  defp list(conn, {:error, _, _} = error), do: reply(conn, error)
+
+  defp list(conn, %{items: items, next: next}),
+    do: json(conn, %{items: clean(conn, items), next: next})
 
   defp clean(conn, data),
     do: if("read-logs" in conn.assigns.key.scopes, do: data, else: Read.without_logs(data))
@@ -521,7 +559,7 @@ defmodule DokkitWeb.ApiController do
       {"GET", "logs", _} -> "read-logs"
       {"GET", _, _} -> "read"
       {_, area, _} when area in ["rules", "alerts", "releases", "certificate"] -> "admin"
-      {"POST", area, area} when area in ["jobs", "apps"] -> "admin"
+      {"POST", area, area} when area in ["jobs", "apps", "dependencies"] -> "admin"
       {_, _, last} -> if last in ~w(checks restart update restore), do: "admin", else: "act"
     end
   end

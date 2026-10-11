@@ -295,7 +295,8 @@ defmodule DokkitWeb.ServiceLive do
                 <span class="mono">{at(r.started_at || r.finished_at)}</span>
                 <DokkitWeb.JobsLive.result run={r} />
                 <span class="mono r">{took(r.duration_ms || between(r))}</span>
-                <span class="mono r">{r.exit_code}</span> <span></span> <.ic name="caret-down" />
+                <span class="mono r">{r.exit_code}</span>
+                <span><DokkitWeb.JobsLive.progress run={r} /></span> <.ic name="caret-down" />
               </summary>
                <pre class="logbox">{r.tail || "No output was sent with this run."}</pre>
             </details>
@@ -313,7 +314,6 @@ defmodule DokkitWeb.ServiceLive do
                   c.source == :file
                 }> · from dokkit.toml</span>
               </span>
-              
               <span style="grid-column: 1 / -1">
                 <WhoPick.pick
                   scope="check"
@@ -509,48 +509,49 @@ defmodule DokkitWeb.ServiceLive do
           
           <div class="card">
             <h2>Who hears about it</h2>
-            
+
             <form phx-change="route" id="route-form">
-              <dl class="kv">
-                <dt>{if @job, do: "If a run fails", else: "If it stops"}</dt>
-                
-                <dd>
-                  <.route
-                    name="down"
-                    value={@service.route_down}
-                    routes={@routes}
-                    default={@defaults["down"]}
-                  />
-                </dd>
-                
-                <dt :if={!@job}>If it degrades</dt>
-                
-                <dd :if={!@job}>
-                  <.route
-                    name="degraded"
-                    value={@service.route_degraded}
-                    routes={@routes}
-                    default={@defaults["degraded"]}
-                  />
-                </dd>
-                
-                <dt>At night</dt>
-                
-                <dd>
-                  <input type="hidden" name="route[night]" value="false" />
-                  <label>
-                    <input type="checkbox" name="route[night]" value="true" checked={@service.night} />
-                    Wake me at night for this
-                  </label>
-                  
-                  <span class="hint">Off holds its alerts until the night ends, if the issue is still open.</span>
-                </dd>
-              </dl>
-            </form>
             
             <dl class="kv">
-              <dt>Told</dt>
+              <dt>{if @job, do: "If a run fails", else: "If it stops"}</dt>
               
+              <dd>
+                <.route
+                  name="down"
+                  value={@service.route_down}
+                  routes={@routes}
+                  default={@defaults["down"]}
+                />
+              </dd>
+              
+              <dt :if={!@job}>If it degrades</dt>
+              
+              <dd :if={!@job}>
+                <.route
+                  name="degraded"
+                  value={@service.route_degraded}
+                  routes={@routes}
+                  default={@defaults["degraded"]}
+                />
+              </dd>
+              
+              <dt>At night</dt>
+              
+              <dd>
+                <input type="hidden" name="route[night]" value="false" />
+                <label>
+                  <input type="checkbox" name="route[night]" value="true" checked={@service.night} />
+                  Wake me at night for this
+                </label>
+                
+                <span class="hint">Off holds its alerts until the night ends, if the issue is still open.</span>
+              </dd>
+            </dl>
+            </form>
+
+            <dl class="kv">
+              <dt>Told</dt>
+
               <dd>
                 <WhoPick.pick
                   scope="service"
@@ -559,7 +560,8 @@ defmodule DokkitWeb.ServiceLive do
                   who={@who}
                   above="Told as the rule or the default says."
                   disabled={@current_user.role != :owner}
-                /> <span :if={@current_user.role != :owner} class="hint">An owner changes this.</span>
+                />
+                <span :if={@current_user.role != :owner} class="hint">An owner changes this.</span>
               </dd>
             </dl>
           </div>

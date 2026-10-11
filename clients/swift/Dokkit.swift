@@ -21,6 +21,7 @@ public enum Dokkit {
     private static var errors: [[String: Any]] = []
     private static var retry: [Batch] = []
     private static let queueBytes = 4 << 20
+    private static let lineLimit = 65536
     private static let stamp = ISO8601DateFormatter()
 
     private struct Batch {
@@ -36,7 +37,8 @@ public enum Dokkit {
 
     /// Turns the library on. With no address or key it stays off and every call does nothing.
     /// `host` names this machine; without it the system's host name is used, and a generic name on phones and tablets.
-    public static func start(version: String? = nil, environment: String? = nil, url: String? = nil, key: String? = nil, host: String? = nil) {
+    /// `announceVersion: false` keeps `start` from sending the one deploy line for `version`.
+    public static func start(version: String? = nil, environment: String? = nil, url: String? = nil, key: String? = nil, host: String? = nil, announceVersion: Bool = true) {
         let env = ProcessInfo.processInfo.environment
         guard let url = url ?? env["DOKKIT_URL"], let key = key ?? env["DOKKIT_KEY"], !url.isEmpty, !key.isEmpty else { return }
         if url.lowercased().hasPrefix("http://") && env["DOKKIT_INSECURE"] != "1" {
@@ -63,7 +65,7 @@ public enum Dokkit {
                 t.setEventHandler { send() }
                 t.resume()
                 timer = t
-                if let version = version { add(["type": "deploy", "version": version]) }
+                if announceVersion, let version = version { add(["type": "deploy", "version": version]) }
             }
         }
     }
@@ -152,9 +154,8 @@ public enum Dokkit {
             var line = clean(line)
             line["at"] = now()
             line["host"] = on.host
-            guard JSONSerialization.isValidJSONObject(line), let data = try? JSONSerialization.data(withJSONObject: line),
-                  let text = String(data: data, encoding: .utf8) else { return }
-            if text.utf8.count > queueBytes {
+            if let environment = on.environment, !environment.isEmpty, environment.lowercased() != "production" { line["environment"] = environment }
+            guard let text = fit(line) else {
                 droppedCount += 1
                 return
             }
@@ -167,6 +168,34 @@ public enum Dokkit {
         }
     }
 
+    private static func encode(_ line: [String: Any]) -> String? {
+        guard JSONSerialization.isValidJSONObject(line), let data = try? JSONSerialization.data(withJSONObject: line) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    // A line over 64 KB goes with its message cut; one with no message to cut is dropped.
+    private static func fit(_ line: [String: Any]) -> String? {
+        var line = line
+        guard var text = encode(line) else { return nil }
+        if text.utf8.count <= lineLimit { return text }
+        guard let msg = line["msg"] as? String else { return nil }
+        var budget = msg.utf8.count
+        while text.utf8.count > lineLimit {
+            line["fields"] = nil
+            budget -= text.utf8.count - lineLimit + 6
+            guard budget > 0 else { return nil }
+            var cut = ""
+            for scalar in msg.unicodeScalars {
+                if cut.utf8.count + String(scalar).utf8.count > budget { break }
+                cut.unicodeScalars.append(scalar)
+            }
+            line["msg"] = cut + " [cut]"
+            guard let next = encode(line) else { return nil }
+            text = next
+        }
+        return text
+    }
+
     // Nil values are left out of a line.
     private static func clean(_ line: [String: Any?]) -> [String: Any] {
         line.compactMapValues { $0 }
@@ -174,7 +203,22 @@ public enum Dokkit {
 
     private static func now() -> String { stamp.string(from: Date()) }
 
-    // Runs on the queue. A failed batch gets one more try; what is lost then is counted. The app is never told.
+    internal static var started: Bool { queue.sync { on != nil } }
+
+    internal static func reset() {
+        queue.sync {
+            timer?.cancel()
+            timer = nil
+            on = nil
+            lines = []
+            lineBytes = 0
+            errors = []
+            retry = []
+            droppedCount = 0
+        }
+    }
+
+    // Runs on the queue. A failed log batch gets one more try; a failed error report is kept, up to 100. What is lost is counted. The app is never told.
     private static func send(wait: Bool = false) {
         guard let on = on else { return }
         let done = DispatchGroup()
@@ -195,7 +239,8 @@ public enum Dokkit {
                 if status >= 400 {
                     queue.async {
                         var batch = batch
-                        if (status >= 500 || status == 429) && batch.tries == 0 && batch.path == "/api/v1/report" {
+                        let kept = batch.path == "/api/v1/report" ? batch.tries == 0 : retry.filter { $0.path == batch.path }.count < 100
+                        if (status >= 500 || status == 429) && kept {
                             batch.tries = 1
                             retry.append(batch)
                         } else {

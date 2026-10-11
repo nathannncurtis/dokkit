@@ -65,6 +65,11 @@ defmodule DokkitWeb.Router do
     get "/", McpController, :other
   end
 
+  scope "/", DokkitWeb do
+    post "/api/events/raw", SeqController, :raw
+    post "/ingest/clef", SeqController, :raw
+  end
+
   scope "/api", DokkitWeb do
     pipe_through [:api, :cors]
 
@@ -94,6 +99,7 @@ defmodule DokkitWeb.Router do
     post "/proposals", IntakeController, :propose
     post "/deploys", IntakeController, :deploy
     get "/checks", IntakeController, :checks
+    get "/records", IntakeController, :records
     get "/program/:target", IntakeController, :program
     get "/update", IntakeController, :update
     post "/update/result", IntakeController, :update_result
@@ -136,6 +142,8 @@ defmodule DokkitWeb.Router do
     get "/machines/:id", ApiController, :machine
     get "/versions", ApiController, :versions
     get "/proposals", ApiController, :proposals
+    post "/proposals/accept", ApiController, :accept
+    post "/proposals/dismiss", ApiController, :dismiss
     post "/proposals/:id/accept", ApiController, :accept
     post "/proposals/:id/dismiss", ApiController, :dismiss
     post "/rules", ApiController, :add_rule
@@ -156,8 +164,10 @@ defmodule DokkitWeb.Router do
     put "/services/:id/messages", ApiController, :keep_messages
     post "/jobs", ApiController, :add_job
     post "/apps", ApiController, :add_app
+    post "/dependencies", ApiController, :add_dependency
     put "/jobs/:id/timing", ApiController, :set_job_timing
     post "/machines/:id/update", ApiController, :update_program
+    post "/machines/:id/scan", ApiController, :scan_machine
     get "/alerts", ApiController, :alert_settings
     put "/alerts", ApiController, :set_alert_settings
     post "/alerts/test", ApiController, :test_alert
