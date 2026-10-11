@@ -7,6 +7,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -236,6 +237,14 @@ func restartArgv(c upConfig) []string {
 		return []string{"launchctl", "kickstart", "-k", fmt.Sprintf("gui/%d/%s", c.UID, c.Unit)}
 	}
 	return nil
+}
+
+// restartLimit: launchd holds a kickstart of a job that started within its throttle interval until it ends.
+func restartLimit(c upConfig, limit time.Duration) time.Duration {
+	if c.Method == methodLaunchAgent {
+		return max(limit, 2*time.Minute)
+	}
+	return limit
 }
 
 // activeArgv asks whether that unit or job is running.

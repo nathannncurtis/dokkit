@@ -5,7 +5,17 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestLaunchdRestartMayWaitOutTheThrottle(t *testing.T) {
+	if got := restartLimit(upConfig{Method: methodLaunchAgent}, 30*time.Second); got < time.Minute+30*time.Second {
+		t.Errorf("a kickstart held by launchd's throttle needs more than %v", got)
+	}
+	if got := restartLimit(upConfig{Method: methodSystemUnit}, 30*time.Second); got != 30*time.Second {
+		t.Errorf("%v", got)
+	}
+}
 
 func TestUpConfigRoundTrip(t *testing.T) {
 	in := buildConfig("linux", watchProc{Pid: 7, UID: 1001, User: "rweb", Exe: "/home/rweb/dokkit", Env: map[string]string{"DOKKIT_CONFIG": "/srv/c.json", "DOKKIT_SPOOL": "/srv/spool", "DOKKIT_KEY": "secret", "FOO": "x"}}, "/home/rweb", 1001)

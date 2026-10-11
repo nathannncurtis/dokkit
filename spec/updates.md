@@ -93,9 +93,10 @@ A file it has fetched lives in a folder only administrators and the system accou
 - **The program is restarted** the way it is kept, and the update is done when it is running and still running five seconds later:
   - system unit: `systemctl restart`;
   - user unit: `systemctl --user restart`, run through `runuser` as that account with its `XDG_RUNTIME_DIR` and bus address;
-  - LaunchAgent: `launchctl kickstart -k gui/<uid>/<label>`;
+  - LaunchAgent: `launchctl kickstart -k gui/<uid>/<label>`, given up to two minutes because launchd holds it until the job's throttle interval since its last start has passed;
   - plain process: the process number in `status.json` in the program's spool is stopped (`SIGTERM`, then `SIGKILL` after twenty seconds) only when that process is alive and is running the program's file (`/proc/<pid>/exe`, or `ps` on macOS); the program's file is never found by name. It is then started as the owning account with `dokkit watch --background`, with `HOME`, `USER`, `PATH` and the recorded variables, and it is done when `status.json` shows a new process running that file.
 - If it does not run, the old file is put back and restarted the same way, and the failure is reported.
+- **A program path that is a link, or anything but a plain file, is refused** before anything is copied or replaced.
 - **The program's file is never run with root's rights.** Reading its version for the check runs it as the account that owns it.
 - The server is not hosted by this updater on these systems; `server` is left out of the question, and the updater itself is replaced last, as on Windows.
 

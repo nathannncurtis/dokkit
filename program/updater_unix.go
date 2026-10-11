@@ -172,7 +172,11 @@ func restartProgram(c upConfig) error {
 		return restartProcess(c)
 	}
 	argv := restartArgv(c)
-	if out, err := runCmd(argv[0], argv[1:]...); err != nil {
+	limit := cmdLimit
+	cmdLimit = restartLimit(c, limit)
+	out, err := runCmd(argv[0], argv[1:]...)
+	cmdLimit = limit
+	if err != nil {
 		return fmt.Errorf("%s: %v %s", argv[0], err, tail(string(out), 300))
 	}
 	argv = activeArgv(c)
