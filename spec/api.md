@@ -131,6 +131,10 @@ Any line, and the bodies of `POST /errors` and `POST /deploys`, may carry `envir
 - Otherwise `production`, no environment, or a value that is not lower-case letters, digits, dots, dashes and underscores (32 at most) leaves the line on the key's own service.
 - Any other value is stored on a sibling service of the same machine with the slug `<slug>~<environment>`, the name `<name> (<environment>)` and that environment. It never alerts and the production service is not changed by it. A service takes at most 5 such siblings; a line for a sixth is refused with `too_many_environments`.
 
+### `POST /api/events/raw`
+
+The door for apps that log to Seq, at the address Seq clients post to (`POST /ingest/clef` takes the same body, where newer clients post CLEF). An app moves by changing its server address and API key. The body is CLEF, one JSON event a line (`Content-Type: application/vnd.serilog.clef`, or `?clef`), or Seq's older JSON form, `{"Events": [{"Timestamp", "Level", "MessageTemplate", "Properties", "Exception", "RenderedMessage"}]}`. The key is an app key, in `X-Seq-ApiKey` or `?apiKey=`. Each event becomes a `log` line of the key's service through the same path as `POST /report`, with the same limits, bucket and storage; see `log-lines.md`. The answer is Seq's: `201` with `{"MinimumLevelAccepted": null}`, or `{"Error": "..."}` with `400` (not CLEF or Seq JSON, or no event stored), `401`, `413` (more than 10,000 events or 5 MB) or `429` with `Retry-After`.
+
 ### Ping URLs
 
 For anything that can only make a web request, such as a cron job on a storage box.

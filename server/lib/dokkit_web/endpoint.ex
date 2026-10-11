@@ -57,6 +57,10 @@ defmodule DokkitWeb.Endpoint do
   defp parse(%{path_info: ["api", "v1", "in" | _]} = conn, _),
     do: Plug.Conn.fetch_query_params(conn)
 
+  defp parse(%{path_info: ["api", "events", "raw"]} = conn, _), do: Plug.Conn.fetch_query_params(conn)
+
+  defp parse(%{path_info: ["ingest", "clef"]} = conn, _), do: Plug.Conn.fetch_query_params(conn)
+
   # A release file is up to 200 MB; the controller reads it in chunks to disk.
   defp parse(%{method: "PUT", path_info: ["api", "v1", "releases" | _]} = conn, _),
     do: Plug.Conn.fetch_query_params(conn)

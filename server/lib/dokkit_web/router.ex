@@ -65,6 +65,11 @@ defmodule DokkitWeb.Router do
     get "/", McpController, :other
   end
 
+  scope "/", DokkitWeb do
+    post "/api/events/raw", SeqController, :raw
+    post "/ingest/clef", SeqController, :raw
+  end
+
   scope "/api", DokkitWeb do
     pipe_through [:api, :cors]
 

@@ -108,6 +108,7 @@ defmodule DokkitWeb.ParityTest do
     DokkitWeb.ApiController,
     DokkitWeb.McpController,
     DokkitWeb.IntakeController,
+    DokkitWeb.SeqController,
     DokkitWeb.ReleaseController
   ]
   @live Path.expand("../../lib/dokkit_web/live", __DIR__)

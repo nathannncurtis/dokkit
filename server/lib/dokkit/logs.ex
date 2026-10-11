@@ -4,14 +4,17 @@ defmodule Dokkit.Logs do
   alias Dokkit.{Log, Repo}
 
   @levels ~w(trace debug info warn error fatal)
-  @clef %{
-    "verbose" => "trace",
-    "debug" => "debug",
-    "information" => "info",
-    "warning" => "warn",
-    "error" => "error",
-    "fatal" => "fatal"
-  }
+  @clef (for {names, level} <- [
+              {~w(verbose vrb v silly trace trc), "trace"},
+              {~w(debug dbg d), "debug"},
+              {~w(information info inf i), "info"},
+              {~w(warning warn wrn w), "warn"},
+              {~w(error err e), "error"},
+              {~w(fatal ftl f critical crit), "fatal"}
+            ],
+            name <- names,
+            into: %{},
+            do: {name, level})
   @max_msg 64 * 1024
 
   def levels, do: @levels
