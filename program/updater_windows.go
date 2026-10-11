@@ -146,10 +146,9 @@ func updaterCommand(args []string) int {
 	return 2
 }
 
-func needAdmin(what string) int {
-	fmt.Fprintf(os.Stderr, "dokkit: updater %s needs an administrator prompt. Nothing was changed. Run it %s\n", what, elevated("updater", what))
-	return 1
-}
+func keepOwner(tmp, ref string) error { return nil }
+
+func syncDir(string) {}
 
 // updaterSteps is the icacls arguments that close the data folder to everyone but
 // administrators and the system account. The folder is set once, without /T, and what is

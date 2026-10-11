@@ -57,7 +57,7 @@ It uses the program's own address, machine key and certificate pin, from the pro
 3. Checks the first line names the version it was told, and that the version is not older than anything installed. It never goes backwards.
 4. For each part this machine has, fetches the file for its system, checks its SHA-256 against the list, and installs it:
    - **the server**, on the machine that runs it: `dokkit-windows-x64.zip`. It is unpacked into the updater's own folder and its `install.ps1` is run with no arguments, which upgrades in place. It is done when the server answers again.
-   - **the program**: `dokkit-<os>-<arch>` (with `.exe` on Windows). The service is stopped, the file replaced, the service started, and it is done when the service is running. If it does not start, the old file is put back and started.
+   - **the program**: `dokkit-<os>-<arch>` (with `.exe` on Windows). The service is stopped, the file replaced, the service started, and it is done when the service is running. If it does not start, the old file is put back and started. On Linux and macOS the file is replaced first and the program restarted (see below).
    - **the updater itself**, last: the same program file, copied over the updater's own copy.
 5. Reports the result. A result that cannot be sent, because the server it just restarted is not answering yet, is kept and sent on the next run.
 
@@ -74,7 +74,32 @@ A file it has fetched lives in a folder only administrators and the system accou
 
 `dokkit updater status` prints the installed versions, the last check and the last result. `dokkit updater run` is what the task runs; from an administrator prompt it does one check now. `dokkit updater uninstall` removes the task and the copied file.
 
-Linux and macOS are not built yet.
+## On Linux and macOS
+
+`dokkit updater install`, as root (`sudo`), once. The program keeps running as whatever account runs it; only the updater has root.
+
+- It finds the running `dokkit watch` and how that is kept, and records it. The ways are: a systemd system unit (the one `dokkit service install` writes, or any other), a systemd user unit, a LaunchAgent in a person's session, or a plain background process started with `dokkit watch --background`. A unit is told apart by being the main process of a service; a LaunchAgent by the label `launchctl list` gives that process's account. A program started by cron or a script is a plain process. If more than one program is running it picks the one run by a system unit, then the one run by the account that ran `sudo`, and otherwise stops and names them. If none is running it uses the installed system unit if there is one, and otherwise stops.
+- It checks the program's configuration (`DOKKIT_CONFIG` of the running process, else the account's own) holds an address and key. The updater reads that file, as root, each run; it keeps no copy of the key.
+- It copies the program to a folder only root can change, `/usr/local/lib/dokkit-updater/dokkit` on Linux and `/Library/Application Support/DokkitUpdater/dokkit` on macOS, and writes `config.json` beside it: the program's file, the account that runs it, how it is kept (`system-unit`, `user-unit`, `launch-agent` or `process`), the unit or label, its configuration and spool, and any of `DOKKIT_CONFIG`, `DOKKIT_SPOOL`, `DOKKIT_SPOOL_MB`, `DOKKIT_FOLDERS`, `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` that process had (read from the process on Linux only; on macOS the account own folders are assumed). That file is writable by root only and holds no key. The updater's state, log and fetched files are in `/var/lib/dokkit-updater` (Linux) or `/var/db/dokkit-updater` (macOS), mode 0700. It refuses a folder of those names that root does not own, that others can write, or that holds anything the updater did not put there.
+- It sets up a timer that runs `updater run` as root every five minutes, and says which and where:
+  - where systemd is running: `dokkit-updater.service` (one-shot) and `dokkit-updater.timer` in `/etc/systemd/system`, started a minute after boot and five minutes after each run ends;
+  - on macOS: the LaunchDaemon `com.dokkit.updater` in `/Library/LaunchDaemons`, `StartInterval` 300;
+  - otherwise: a line ending `# dokkit-updater` in root's crontab. Where `/etc/config/crontab` exists (QNAP), that file is edited, loaded with `crontab /etc/config/crontab`, and `crond` restarted.
+- It runs one check and prints what it found.
+
+`updater run` does what the contract above says, with these differences:
+
+- **The program** is replaced by writing the new file beside the old one under a name nobody else can have made (it refuses a name that already exists, including a link), flushing it, giving it the old file's owner and mode, and renaming it over the old one. The old file is kept as `.previous`, with the same owner and mode. Nothing is signed, unpacked or marked again: the file is the signed release's bytes, which is what keeps a macOS code signature valid and leaves no quarantine attribute on it.
+- **The program is restarted** the way it is kept, and the update is done when it is running and still running five seconds later:
+  - system unit: `systemctl restart`;
+  - user unit: `systemctl --user restart`, run through `runuser` as that account with its `XDG_RUNTIME_DIR` and bus address;
+  - LaunchAgent: `launchctl kickstart -k gui/<uid>/<label>`;
+  - plain process: the process number in `status.json` in the program's spool is stopped (`SIGTERM`, then `SIGKILL` after twenty seconds) only when that process is alive and is running the program's file (`/proc/<pid>/exe`, or `ps` on macOS); the program's file is never found by name. It is then started as the owning account with `dokkit watch --background`, with `HOME`, `USER`, `PATH` and the recorded variables, and it is done when `status.json` shows a new process running that file.
+- If it does not run, the old file is put back and restarted the same way, and the failure is reported.
+- **The program's file is never run with root's rights.** Reading its version for the check runs it as the account that owns it.
+- The server is not hosted by this updater on these systems; `server` is left out of the question, and the updater itself is replaced last, as on Windows.
+
+`dokkit updater status` prints the versions, what the updater looks after and how, the last check and the last result (the last two to root only). `dokkit updater uninstall`, as root, removes the timer (the units, the plist or the crontab line), the updater's copy of the program and `config.json`. Its state and log are left. `dokkit updater rehearse <folder>` does one real check into a folder of its own, restarts nothing and sends no result; it needs no root.
 
 ## What a takeover can do
 

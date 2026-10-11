@@ -52,9 +52,9 @@ type outcome struct {
 }
 
 type state struct {
-	Server  string  `json:"server,omitempty"` // the installed server's version
-	Checked string  `json:"checked,omitempty"`
-	LastAt  string  `json:"last_at,omitempty"`
+	Server  string   `json:"server,omitempty"` // the installed server's version
+	Checked string   `json:"checked,omitempty"`
+	LastAt  string   `json:"last_at,omitempty"`
 	Last    *outcome `json:"last,omitempty"`
 	Unsent  *outcome `json:"unsent,omitempty"` // a result the server has not taken yet
 }
@@ -102,7 +102,7 @@ func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
 func updaterRun() int {
 	if !ops.admin() {
-		fmt.Fprintln(os.Stderr, "dokkit: updater run needs an administrator prompt: it is the system account's job, and the updater's folder is closed to everyone else.")
+		fmt.Fprintln(os.Stderr, "dokkit: updater run needs an administrator prompt (root on Linux and macOS): it is the system account's job, and the updater's folder is closed to everyone else.")
 		return 1
 	}
 	if !exists(where.data) {
@@ -134,6 +134,14 @@ func (st state) serverVersion() string {
 }
 
 func newer(a, b string) bool { c, _ := compareVersions(a, b); return c > 0 }
+
+// statusExtra prints what a system adds to updater status.
+var statusExtra = func() {}
+
+func needAdmin(what string) int {
+	fmt.Fprintf(os.Stderr, "dokkit: updater %s needs an administrator prompt. Nothing was changed. Run it %s\n", what, elevated("updater", what))
+	return 1
+}
 
 // sendResults is false in a rehearsal.
 var sendResults = true
@@ -446,11 +454,15 @@ func copyPlain(from, to string) error {
 		return err
 	}
 	defer in.Close()
-	out, err := os.Create(to)
+	out, err := os.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
 	}
 	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	if err := out.Sync(); err != nil {
 		out.Close()
 		return err
 	}
@@ -460,12 +472,20 @@ func copyPlain(from, to string) error {
 // putFile writes the file beside its place, then renames it in, retrying while the place is in use.
 func putFile(from, to string) error {
 	tmp := to + ".new"
+	os.Remove(tmp)
 	if err := copyPlain(from, tmp); err != nil {
+		return err
+	}
+	if err := keepOwner(tmp, to); err != nil {
+		os.Remove(tmp)
 		return err
 	}
 	deadline := time.Now().Add(retryFor)
 	for {
 		err := os.Rename(tmp, to)
+		if err == nil {
+			syncDir(filepath.Dir(to))
+		}
 		if err == nil || time.Now().After(deadline) {
 			return err
 		}
@@ -485,6 +505,7 @@ func installProgram(newFile string) error {
 		ops.startService(programService)
 		return fmt.Errorf("could not keep the old file as %s: %w", prev, err)
 	}
+	keepOwner(prev, to)
 	if err := putFile(newFile, to); err != nil {
 		putFile(prev, to)
 		ops.startService(programService)
@@ -531,6 +552,7 @@ func updaterStatus() int {
 	}
 	fmt.Println("Program:", ops.versionOf(where.programExe))
 	fmt.Println("Updater:", ops.versionOf(where.updaterExe))
+	statusExtra()
 	st, err := readState()
 	if errors.Is(err, fs.ErrPermission) {
 		fmt.Println("The rest is kept where only administrators can read it. To see it, " + elevated("updater", "status"))
@@ -564,4 +586,3 @@ func updaterStatus() int {
 	}
 	return 0
 }
-

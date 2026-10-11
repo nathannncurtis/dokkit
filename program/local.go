@@ -207,7 +207,7 @@ func openLog(path string) (*os.File, error) {
 // background starts watch as an ordinary program that keeps running after this one ends.
 func (c *client) background() int {
 	var s status
-	if b, err := os.ReadFile(filepath.Join(c.spool, "status.json")); err == nil && json.Unmarshal(b, &s) == nil && time.Since(s.At) < 90*time.Second {
+	if b, err := os.ReadFile(filepath.Join(c.spool, "status.json")); err == nil && json.Unmarshal(b, &s) == nil && time.Since(s.At) < 90*time.Second && pidAlive(s.Pid) {
 		fmt.Println("dokkit watch is already running as process", s.Pid)
 		return 0
 	}
