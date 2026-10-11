@@ -47,6 +47,11 @@ defmodule DokkitWeb.PagesLiveTest do
     assert html =~ "1 needs a look"
     assert html =~ "rsync: no route to host"
 
+    {:ok, view, _} = live(conn, "/all")
+
+    assert has_element?(view, ~s|[role=group][aria-labelledby^=mh-] > .grp + .foot ~ .kid|) or
+             has_element?(view, ~s|[role=group][aria-labelledby^=mh-] > .grp ~ a.kid|)
+
     [%{services: [service]}] = Estate.machines()
     {:ok, view, html} = live(conn, "/s/#{service.id}")
     assert html =~ "Nightly backup failed"

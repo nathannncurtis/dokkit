@@ -67,23 +67,27 @@ defmodule DokkitWeb.FoundLive do
           </div>
           
           <%= for {machine, items} <- @found do %>
-            <div class="grp">
-              {machine.name}<span class="end"><span class="tag">{length(items)} found</span></span>
-            </div>
-            
-            <label :for={f <- items} class="li slim hov cols-found">
-              <input
-                class="chk"
-                type="checkbox"
-                name="ids[]"
-                value={f.id}
-                aria-label={"Select " <> f.detail["label"]}
-              />
-              <div class="ti"><span>{f.detail["label"]}</span></div>
+            <div class="mg" role="group" aria-labelledby={"fh-#{machine.id}"}>
+              <div class="grp">
+                <span id={"fh-#{machine.id}"}>{machine.name}</span><span class="end"><span class="tag">{length(
+                  items
+                )} found</span></span>
+              </div>
               
-              <span class="how">{if f.kind == "port", do: "Listening port", else: "Running service"}</span>
-              <span class="mute">{f.detail["saw"]}</span> <span></span>
-            </label>
+              <label :for={f <- items} class="li slim kid hov cols-found">
+                <input
+                  class="chk"
+                  type="checkbox"
+                  name="ids[]"
+                  value={f.id}
+                  aria-label={"Select " <> f.detail["label"]}
+                />
+                <div class="ti"><span>{f.detail["label"]}</span></div>
+                
+                <span class="how">{if f.kind == "port", do: "Listening port", else: "Running service"}</span>
+                <span class="mute">{f.detail["saw"]}</span> <span></span>
+              </label>
+            </div>
           <% end %>
           
           <div :if={@found != %{}} class="foot">
