@@ -121,6 +121,71 @@ class Library(unittest.TestCase):
         self.assertEqual(line["fields"]["path"], str(os))
         self.assertNotIn("levelname", line["fields"])
 
+    def test_the_handler_sends_the_exception_type_and_stack_never_the_message(self):
+        log = logging.getLogger("stack")
+        log.propagate = False
+        log.addHandler(dokkit.handler())
+        try:
+            raise KeyError("patient 4411")
+        except KeyError:
+            log.exception("Upload failed")
+        line = json.loads(dokkit._state.lines[-1])
+        self.assertEqual(line["fields"]["exception"], "KeyError")
+        self.assertEqual(line["fields"]["logger"], "stack")
+        first = line["fields"]["stack"].split("\n")[-1]
+        self.assertRegex(first, r"^test_dokkit\.py:\d+ test_the_handler_sends_the_exception_type_and_stack_never_the_message$")
+        self.assertNotIn("4411", json.dumps(line))
+
+    def test_stack_paths_are_relative_to_the_apps_folder(self):
+        with tempfile.TemporaryDirectory() as app:
+            dokkit._state.root = os.path.realpath(app)
+            inside = os.path.join(dokkit._state.root, "pkg", "main.py")
+            outside = os.path.join(os.path.dirname(dokkit._state.root), "other", "util.py")
+            self.assertEqual(dokkit._path(inside), os.path.join("pkg", "main.py"))
+            self.assertEqual(dokkit._path(outside), "util.py")
+            self.assertTrue(dokkit._own(inside))
+            self.assertFalse(dokkit._own(outside))
+
+    def test_a_line_over_64_kb_is_cut_and_never_sent_whole(self):
+        dokkit.log("info", "é" * 100_000, {"n": 1})
+        dokkit.log("info", "x" * 100_000, {"big": "y" * 100_000})
+        dokkit.log("info", "short")
+        first, second, third = (json.loads(l) for l in dokkit._state.lines)
+        for text in dokkit._state.lines:
+            self.assertLessEqual(len(text.encode()), 65536)
+        self.assertTrue(first["msg"].endswith(" [cut]"))
+        self.assertEqual(first["fields"], {"n": 1})
+        self.assertTrue(second["msg"].endswith(" [cut]"))
+        self.assertIsNone(second["fields"])
+        self.assertEqual(third["msg"], "short")
+        self.assertEqual(dokkit.dropped(), 0)
+
+    def test_a_non_production_environment_is_on_every_line(self):
+        state = dokkit._state
+        state.environment = "dev"
+        dokkit.log("info", "a")
+        dokkit.beat("w")
+        with dokkit.job("j"):
+            pass
+        lines = [json.loads(l) for l in state.lines]
+        self.assertEqual(len(lines), 4)
+        self.assertTrue(all(l["environment"] == "dev" for l in lines))
+        state.lines.clear()
+        state.environment = "production"
+        dokkit.log("info", "a")
+        self.assertNotIn("environment", json.loads(state.lines[0]))
+
+    def test_enabled_and_announce_version(self):
+        self.assertTrue(dokkit.enabled())
+        dokkit._state = None
+        self.assertFalse(dokkit.enabled())
+        dokkit.start(version="1", url="http://127.0.0.1:9", key="k", announce_version=False)
+        self.assertTrue(dokkit.enabled())
+        self.assertEqual(len(dokkit._state.lines), 0)
+        dokkit._state = None
+        dokkit.start(version="1", url="http://127.0.0.1:9", key="k")
+        self.assertEqual([json.loads(l)["type"] for l in dokkit._state.lines], ["deploy"])
+
     def test_the_apps_folder_is_the_programs_not_the_working_directory(self):
         with tempfile.TemporaryDirectory() as app, tempfile.TemporaryDirectory() as elsewhere:
             app, before = os.path.realpath(app), os.getcwd()
@@ -188,7 +253,7 @@ class Library(unittest.TestCase):
         self.assertEqual(state.retry[2], 1)
         state.flush()
         self.assertIsNone(state.retry)
-        self.assertEqual(state.dropped, 3)
+        self.assertEqual(state.dropped, 4)
 
     def test_dropped_is_counted_under_the_lock_and_can_be_read(self):
         state = dokkit._state
@@ -242,6 +307,31 @@ class Sending(unittest.TestCase):
         dokkit.flush()
         self.assertEqual(self.paths(), ["/api/v1/report", "/api/v1/errors"])
         self.assertEqual(len(dokkit._state.errors), 0)
+
+    def test_a_failing_error_post_skips_no_lines_and_is_retried(self):
+        self.fake.status["/api/v1/errors"] = 429
+        dokkit.capture(ValueError("x"))
+        for n in range(900):
+            dokkit.beat("b%d" % n)
+        dokkit.flush()
+        self.assertEqual(self.paths().count("/api/v1/report"), 900)
+        self.assertEqual(len(dokkit._state.errors), 1)
+        self.fake.status.clear()
+        dokkit.flush()
+        self.assertEqual(self.paths()[-1], "/api/v1/errors")
+        self.assertEqual(len(dokkit._state.errors), 0)
+
+    def test_the_dropped_count_is_sent_as_a_metric_once_per_change(self):
+        dokkit._state.errors.extend([b"{}"] * 100)
+        dokkit.capture(ValueError("x"))
+        dokkit.flush()
+        metrics = [l for p, _, l in self.fake.got if l.get("name") == "dokkit_dropped"]
+        self.assertEqual([m["value"] for m in metrics], [1])
+        dokkit.flush()
+        self.assertEqual(len([1 for p, _, l in self.fake.got if l.get("name") == "dokkit_dropped"]), 1)
+        dokkit._state.dropped += 4
+        dokkit.flush()
+        self.assertEqual([l["value"] for p, _, l in self.fake.got if l.get("name") == "dokkit_dropped"], [1, 5])
 
     def test_lines_that_fail_do_not_stop_the_error_reports(self):
         self.fake.status["/api/v1/report"] = 503

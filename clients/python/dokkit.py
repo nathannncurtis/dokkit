@@ -34,6 +34,7 @@ import uuid
 
 QUEUE = 1000
 MAX_BYTES = 4_000_000
+MAX_LINE = 65536
 FLUSH_SECONDS = 5
 _state = None
 _sending = threading.local()
@@ -48,6 +49,7 @@ class _State:
         self.size = 0
         self.errors = collections.deque(maxlen=100)
         self.dropped = 0
+        self.reported = 0
         self.retry = None
         self.root = os.path.abspath(root or _root())
         self.restart()
@@ -68,6 +70,8 @@ class _State:
     def add(self, line):
         line.setdefault("at", _now())
         line["host"] = self.host
+        if self.environment and self.environment != "production":
+            line["environment"] = self.environment
         try:
             try:
                 text = json.dumps(line, default=str, allow_nan=False)
@@ -75,7 +79,9 @@ class _State:
                 text = json.dumps(_safe(line))
         except Exception:
             return self._count(1)
-        if len(text) > MAX_BYTES:
+        if len(text) > MAX_LINE and "msg" in line:
+            text = _cut(line)
+        if not text or len(text) > MAX_BYTES:
             return self._count(1)
         with self.lock:
             while self.lines and (len(self.lines) >= QUEUE or self.size + len(text) > MAX_BYTES):
@@ -107,6 +113,11 @@ class _State:
         done.wait(FLUSH_SECONDS if timeout is None else timeout)
 
     def _flush(self):
+        with self.lock:
+            more = self.dropped != self.reported
+            self.reported = count = self.dropped
+        if more:
+            self.add({"type": "metric", "name": "dokkit_dropped", "value": count})
         # Lines go first: all of them fit in a few requests, and an error report is one request each.
         for send in (self._lines, self._errors):
             try:
@@ -142,7 +153,7 @@ class _State:
                 self._post("/api/v1/errors", report, "application/json")
             except Exception as error:
                 # A report the server refuses is dropped; one it did not answer for waits for the next pass.
-                if not 400 <= getattr(error, "code", 0) < 500:
+                if getattr(error, "code", 0) == 429 or not 400 <= getattr(error, "code", 0) < 500:
                     return
                 self._count(1)
             with self.lock:
@@ -166,11 +177,12 @@ def _now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
-def start(version=None, environment=None, url=None, key=None, root=None):
+def start(version=None, environment=None, url=None, key=None, root=None, announce_version=True):
     """Turns the library on. With no address or key it stays off and every call does nothing.
 
     url and key left out are read from DOKKIT_URL and DOKKIT_KEY. Given, even blank, they are
     used as they are. root is the folder of the app's own code, when that is not the program's.
+    announce_version=False leaves out the deploy line that start sends for version.
     """
     global _state
     url = os.environ.get("DOKKIT_URL", "") if url is None else url
@@ -183,7 +195,7 @@ def start(version=None, environment=None, url=None, key=None, root=None):
     try:
         _state = _State(url, key, version, environment or os.environ.get("DOKKIT_ENV"), root)
         atexit.register(flush)
-        if version:
+        if version and announce_version:
             _state.add({"type": "deploy", "version": str(version)})
     except Exception:
         _state = None
@@ -213,9 +225,29 @@ def flush(timeout=None):
         _state.flush(timeout)
 
 
+def enabled():
+    """True when started with an address and key."""
+    return _state is not None
+
+
 def dropped():
     """How many lines and error reports were dropped: the queue was full, or they could not be sent."""
     return _state.dropped if _state else 0
+
+
+def _cut(line):
+    """The line with its msg shortened to fit MAX_LINE, fields dropped if that is not enough; "" if nothing fits."""
+    msg = str(line["msg"])
+    for fields in (line.get("fields"), None):
+        cut = msg[:MAX_LINE]
+        while True:
+            text = json.dumps(_safe({**line, "msg": cut + " [cut]", "fields": fields}))
+            if len(text) <= MAX_LINE:
+                return text
+            if not cut:
+                break
+            cut = cut[: len(cut) // 2]
+    return ""
 
 
 def _safe(value, depth=0):
@@ -307,15 +339,7 @@ def capture(error=None, handled=True, tags=None):
         error = error or sys.exc_info()[1]
         if error is None:
             return
-        frames = [
-            {
-                "file": _path(f.filename),
-                "function": f.name,
-                "line": f.lineno,
-                "own": _own(f.filename),
-            }
-            for f in traceback.extract_tb(error.__traceback__)
-        ]
+        frames = _frames(error.__traceback__)
         report = json.dumps(
             {
                 "at": _now(),
@@ -336,6 +360,13 @@ def capture(error=None, handled=True, tags=None):
         _state.wake.set()
     except Exception:
         pass
+
+
+def _frames(trace):
+    return [
+        {"file": _path(f.filename), "function": f.name, "line": f.lineno, "own": _own(f.filename)}
+        for f in traceback.extract_tb(trace)
+    ]
 
 
 def _root():
@@ -387,6 +418,9 @@ class _Handler(logging.Handler):
             level = self.LEVELS.get(record.levelno // 10 * 10, "info")
             fields = {k: v for k, v in vars(record).items() if k not in self.STANDARD}
             fields["logger"] = record.name
+            if record.exc_info and record.exc_info[0] and _state:
+                fields["exception"] = record.exc_info[0].__name__
+                fields["stack"] = "\n".join("%s:%s %s" % (f["file"], f["line"], f["function"]) for f in _frames(record.exc_info[2]))
             _add({"type": "log", "t": _now(), "level": level, "msg": record.getMessage(), "fields": fields})
         except Exception:
             pass
