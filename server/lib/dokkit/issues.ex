@@ -13,10 +13,20 @@ defmodule Dokkit.Issues do
   alert is held for the night. Only tests pass `now`.
   """
   def record(%Check{} = check, state, opts \\ []) when state in [:ok, :degraded, :down] do
-    # A service nobody is watching keeps no state and opens nothing.
-    if Repo.exists?(from s in Service, where: s.id == ^check.service_id and not s.watched),
-      do: check,
-      else: recorded(check, state, opts)
+    service = Repo.get!(Service, check.service_id)
+
+    cond do
+      # A service nobody is watching keeps no state and opens nothing.
+      not service.watched ->
+        check
+
+      # In planned downtime a bad result is only noted as seen, so it counts toward nothing.
+      state != :ok and Dokkit.Quiet.quiet?(service.machine_id) ->
+        Repo.update!(Ecto.Changeset.change(check, checked_at: opts[:at] || DateTime.utc_now()))
+
+      true ->
+        recorded(check, state, opts)
+    end
   end
 
   defp recorded(check, state, opts) do
@@ -177,14 +187,22 @@ defmodule Dokkit.Issues do
   @doc "Opens an issue for each enrolled machine that has gone quiet, and closes it when the machine is back."
   def machines_sweep(now) do
     quiet = DateTime.add(now, -@silent_seconds)
+    Dokkit.Quiet.tick(now)
 
     down =
       from i in Issue, where: i.kind == "machine" and is_nil(i.closed_at), select: i.machine_id
 
+    planned =
+      from w in Dokkit.QuietWindow,
+        where: is_nil(w.ended_at) and w.until > ^now,
+        select: w.machine_id
+
     gone =
       Repo.all(
         from m in Dokkit.Machine,
-          where: m.kind == :enrolled and m.last_seen_at < ^quiet and m.id not in subquery(down)
+          where:
+            m.kind == :enrolled and m.last_seen_at < ^quiet and m.id not in subquery(down) and
+              m.id not in subquery(planned)
       )
 
     for m <- gone do
@@ -194,7 +212,8 @@ defmodule Dokkit.Issues do
           kind: "machine",
           state: :down,
           title: "#{m.name} stopped reporting",
-          since: m.last_seen_at
+          since: m.last_seen_at,
+          notes: planned_note(m, now)
         })
 
       Dokkit.Alerts.plan(issue, nil)
@@ -232,6 +251,26 @@ defmodule Dokkit.Issues do
     length(gone) + length(back)
   end
 
+  defp planned_note(m, now) do
+    case Dokkit.Quiet.covering(m.id, m.last_seen_at) do
+      nil ->
+        []
+
+      w ->
+        end_text = Calendar.strftime(Dokkit.Quiet.over_at(w), "%H:%M")
+        why = if w.reason, do: " (#{w.reason})", else: ""
+
+        [
+          %{
+            "at" => now,
+            "by" => "dokkit",
+            "text" =>
+              "Planned downtime ended at #{end_text} UTC#{why}. The machine has not reported since #{Calendar.strftime(m.last_seen_at, "%H:%M")} UTC."
+          }
+        ]
+    end
+  end
+
   def machine_down?(machine_id) do
     Repo.exists?(
       from i in Issue,
@@ -264,24 +303,28 @@ defmodule Dokkit.Issues do
     Repo.all(
       from m in Dokkit.Machine,
         left_join: s in assoc(m, :services),
-        group_by: m.id,
+        left_join: w in Dokkit.QuietWindow,
+        on: w.machine_id == m.id and is_nil(w.ended_at) and w.until > ^now,
+        group_by: [m.id, w.id],
         order_by: m.name,
         # A PC that only an app reported from has nothing of its own to list.
-        having: m.kind != :seen or count(s.id) > 0,
+        having: m.kind != :seen or count(s.id, :distinct) > 0,
         select: %{
+          planned: %{started_at: w.started_at, until: w.until, reason: w.reason, by: w.by},
           id: m.id,
           name: m.name,
           kind: m.kind,
           os: m.os,
           last_seen_at: m.last_seen_at,
-          services: count(s.id),
-          bad: count(s.id) |> filter(s.state in [:degraded, :down])
+          services: count(s.id, :distinct),
+          bad: count(s.id, :distinct) |> filter(s.state in [:degraded, :down])
         }
     )
     |> Enum.map(fn m ->
       {gone, n, soon} = counts[m.id] || {false, 0, 0}
 
       Map.merge(m, %{
+        planned: if(m.planned.until, do: struct(Dokkit.QuietWindow, m.planned)),
         down: gone,
         attention: n,
         soon: soon,

@@ -31,6 +31,8 @@ defmodule DokkitWeb.ParityTest do
     "EverythingLive" => %{
       "dep_open" => @view,
       "dependency" => {:owner, ["POST /api/v1/dependencies"]},
+      "quiet_start" => {:member, ["POST /api/v1/machines/:id/quiet"]},
+      "quiet_end" => {:member, ["DELETE /api/v1/machines/:id/quiet"]},
       "update" => {:owner, ["POST /api/v1/machines/:id/update"]},
       "update_all" => {:owner, ["POST /api/v1/update-all"]}
     },
@@ -55,6 +57,8 @@ defmodule DokkitWeb.ParityTest do
     "ServiceLive" => %{
       "range" =>
         {:viewer, ["GET /api/v1/services/:id/series", "GET /api/v1/machines/:id/series"]},
+      "quiet_start" => {:member, ["POST /api/v1/machines/:id/quiet"]},
+      "quiet_end" => {:member, ["DELETE /api/v1/machines/:id/quiet"]},
       "timing_typed" => @view,
       "timing" => {:member, ["PUT /api/v1/jobs/:id/timing"]},
       "route" => {:member, ["PUT /api/v1/services/:id/routing"]},

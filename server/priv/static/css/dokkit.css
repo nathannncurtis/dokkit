@@ -604,6 +604,7 @@ input, select { accent-color: var(--brand); caret-color: var(--brand); }
 .lane { display: grid; grid-template-columns: repeat(48, minmax(0, 1fr)); gap: 1px; align-items: end; height: 22px; }
 .lane i { height: 10px; border-radius: 2px; background: var(--chip); } .lane .warn { height: 16px; background: var(--warn); } .lane .bad { height: 22px; background: var(--bad); }
 .lane .none { background: none; border: 1px dashed var(--mute); }
+.lane .plan { height: 16px; background: color-mix(in srgb, var(--brand) 30%, var(--panel)); border: 1px solid var(--brand); }
 .evs { display: grid; gap: 4px; font-size: 13px; } .evs b { margin-right: 6px; }
 @media (max-width: 760px) { .ticks span:nth-child(even) { display: none; } }
 

@@ -150,7 +150,7 @@ A listener on localhost. Earlier notes had `dokkit` listening on localhost so ap
 
 ## Built so far
 
-In `program/`: `dokkit init`, `run`, `ping`, `check`, `apply`, `enrol`, `watch`, `folder`, `status`, `doctor`, `service`, `scan`, `propose`, `import seq`, `imessage`, `startup`, `updater` and `version`. With `DOKKIT_URL` and `DOKKIT_KEY` set they use that key; otherwise they use the address and machine key that `dokkit enrol` saved in the user's configuration folder.
+In `program/`: `dokkit init`, `run`, `ping`, `check`, `apply`, `enrol`, `watch`, `folder`, `status`, `doctor`, `quiet`, `service`, `scan`, `propose`, `import seq`, `imessage`, `startup`, `updater` and `version`. With `DOKKIT_URL` and `DOKKIT_KEY` set they use that key; otherwise they use the address and machine key that `dokkit enrol` saved in the user's configuration folder.
 
 `dokkit watch` reads `dokkit.toml` files from the folders in `DOKKIT_FOLDERS` or in the saved configuration, and from the folders directly inside them. It declares each file, runs its `http`, `tcp`, `process` (by name, and with `command_has` by a piece of the executable path on Windows, asked of the system by process number, so Local Service sees other accounts' processes, in the form \Device\HarddiskVolumeN\..., matched after the drive; by a piece of the command line on Linux, from `/proc`, and macOS, from `ps`; a process whose path or command line cannot be read is not a match), `windows-service` and `systemd` checks on their own timing, sends the log files it names, says the machine is alive once a minute, and re-reads a file when it changes. `dokkit status` shows what `watch` last wrote down: the files it reads, when the spool was last emptied, and how much is waiting.
 
@@ -173,6 +173,14 @@ An `http` check with `slow` set reports `degraded`, with the time in millisecond
 `dokkit watch` holds a request open to the server and does the work it is given, one run at a time. A name it does not know is answered with a refusal. A result that cannot be delivered is sent again for several minutes. The server ends a run still running after 12 hours, or still queued after a day.
 
 `dokkit enrol` takes the server certificate's fingerprint as a third argument, saves it, and from then on trusts the certificate with that fingerprint and no other. The enrol page shows the fingerprint when the server is started with `DOKKIT_CERT` and `DOKKIT_CERT_KEY` and so serves TLS itself.
+
+`dokkit quiet <length> [reason]` tells the server this machine is going down on purpose, for a script that restarts the machine (`alerts.md`, Planned downtime). It sends what is waiting in the spool first, so the server's last view of the machine is current, then calls `POST /api/v1/quiet` with this machine's key, waits for the answer and prints `Told the server this machine is down on purpose until 03:20 UTC.` and exits 0. When the server cannot be reached, or does not accept it (a length over 4 hours, a key it does not know), it prints why on stderr and exits 1, so the script can decide whether to go ahead. `dokkit quiet end` ends the window and prints `Told the server this machine's planned downtime is over.` It finds the address and key the way `ping` and `run` do: `DOKKIT_URL` and `DOKKIT_KEY`, else the configuration that `dokkit enrol` saved, in `DOKKIT_CONFIG` if that is set; so it works whether the program runs as the installed service, as `dokkit watch --background` or not at all. A script that cannot run the program can make the same call with `curl` and the machine's key; there is no other address for it:
+
+```
+curl -fsS -X POST -H "Authorization: Bearer $DOKKIT_KEY" -H "Content-Type: application/json" -d '{"for":"20m","reason":"nightly update"}' "$DOKKIT_URL/api/v1/quiet"
+```
+
+The ping addresses for jobs (`/in/<app key>/...`) take an app key, which belongs to one service and has no say over the machine, so they have no form for this.
 
 `dokkit propose` sends the file a scan wrote. Each minute `dokkit watch` asks the server for the checks added in the interface for its machine and runs them beside the ones in files.
 

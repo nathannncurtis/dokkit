@@ -325,6 +325,21 @@ defmodule Dokkit.Setting do
   end
 end
 
+defmodule Dokkit.QuietWindow do
+  use Dokkit.Schema
+
+  schema "quiet_windows" do
+    field :started_at, :utc_datetime_usec
+    field :until, :utc_datetime_usec
+    field :ended_at, :utc_datetime_usec
+    field :silent_at, :utc_datetime_usec
+    field :reason, :string
+    field :by, :string
+    field :ended_by, :string
+    belongs_to :machine, Dokkit.Machine
+  end
+end
+
 defmodule Dokkit.Batch do
   use Dokkit.Schema
 

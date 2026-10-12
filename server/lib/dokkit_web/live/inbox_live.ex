@@ -73,6 +73,7 @@ defmodule DokkitWeb.InboxLive do
       snoozed: Issues.snoozed_list(),
       fine: Issues.fine(),
       night: Dokkit.Alerts.night_ends(),
+      planned: Enum.filter(socket.assigns.shell.machines, & &1.planned),
       day: Dokkit.Read.day(),
       linked: Enum.map(socket.assigns.shell.machines, & &1.id),
       picked: MapSet.intersection(socket.assigns.picked, MapSet.new(now ++ soon, & &1.id))
@@ -111,6 +112,11 @@ defmodule DokkitWeb.InboxLive do
         <div class="end">
           <.link class="btn primary" navigate={~p"/jobs/new"}><.ic name="plus" />New job</.link>
         </div>
+      </div>
+
+      <div :if={@planned != []} class="filters" id="planned-downtime">
+        <span class="tag"><.ic name="moon" />{planned_count(@planned)}</span>
+        <span class="st">{planned_names(@planned)}</span>
       </div>
 
       <div :if={@tab in [:now, :soon] and @rows != []} class="filters">
@@ -411,6 +417,7 @@ defmodule DokkitWeb.InboxLive do
   defp cell_class("down"), do: "bad"
   defp cell_class("degraded"), do: "warn"
   defp cell_class("none"), do: "none"
+  defp cell_class("planned"), do: "plan"
   defp cell_class(_), do: nil
 
   defp cell_title(name, from, n, cell) do
@@ -419,6 +426,7 @@ defmodule DokkitWeb.InboxLive do
         "down" => "something was down",
         "degraded" => "something needed a look",
         "quiet" => "all quiet",
+        "planned" => "planned downtime",
         "none" => "no signal"
       }[cell]
 
@@ -464,6 +472,13 @@ defmodule DokkitWeb.InboxLive do
   defp issue_kind(%Issue{check: %{type: type}}), do: Map.get(@check_kinds, type, "Check")
   defp issue_kind(_), do: "Check"
 
+  defp planned_count([_]), do: "1 machine in planned downtime"
+  defp planned_count(list), do: "#{length(list)} machines in planned downtime"
+
+  defp planned_names(list),
+    do: Enum.map_join(list, ", ", &"#{&1.name} until #{hm(&1.planned.until)} UTC")
+
+  defp estate(%{planned: %{until: until}, attention: 0}), do: "planned downtime until #{hm(until)} UTC"
   defp estate(%{attention: 1}), do: "1 needs a look"
   defp estate(%{attention: n}) when n > 1, do: "#{n} need a look"
   defp estate(%{soon: n}) when n > 0, do: "#{n} soon"

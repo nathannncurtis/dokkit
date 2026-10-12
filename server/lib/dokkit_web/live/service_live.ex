@@ -106,6 +106,16 @@ defmodule DokkitWeb.ServiceLive do
     {:noreply, load(socket)}
   end
 
+  def handle_event("quiet_start", %{"quiet" => p}, socket) do
+    DokkitWeb.QuietBand.start(socket, Map.put(p, "machine", socket.assigns.service.machine_id))
+    {:noreply, load(socket)}
+  end
+
+  def handle_event("quiet_end", _, socket) do
+    DokkitWeb.QuietBand.stop(socket, socket.assigns.service.machine_id)
+    {:noreply, load(socket)}
+  end
+
   def handle_event("note", %{"text" => text}, socket) do
     issue = socket.assigns.issue
 
@@ -155,6 +165,7 @@ defmodule DokkitWeb.ServiceLive do
     assign(socket,
       service: service,
       job: job,
+      planned: Enum.find(Dokkit.Quiet.active(now), &(&1.machine_id == service.machine_id)),
       checks: Enum.reject(service.checks, &(&1.type == :job)),
       issue: Estate.open_issue(service),
       runs: Estate.runs(service),
@@ -244,6 +255,15 @@ defmodule DokkitWeb.ServiceLive do
       
       <div class="body rail">
         <div class="col">
+          <div :if={@planned || @service.slug == "machine"} class="card" id="downtime">
+            <DokkitWeb.QuietBand.band
+              machine={@service.machine_id}
+              planned={@planned}
+              control={@service.slug == "machine"}
+              disabled={@current_user.role == :viewer}
+            />
+          </div>
+
           <div :if={@history} class="card" id="history">
             <h2>
               History

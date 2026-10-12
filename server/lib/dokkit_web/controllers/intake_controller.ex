@@ -196,6 +196,19 @@ defmodule DokkitWeb.IntakeController do
     end
   end
 
+  @doc "A machine says it is going down on purpose for a while, or that the wait is over."
+  def quiet(conn, params) do
+    with {:ok, machine} <- machine(conn) do
+      case Dokkit.Quiet.start(machine, params, "machine") do
+        {:ok, window} ->
+          json(conn, %{ok: true, until: window && window.until})
+
+        {:error, code, message} ->
+          fail(conn, 422, code, message)
+      end
+    end
+  end
+
   @doc "The checks added in the interface, for the program on that machine to run."
   def checks(conn, _params) do
     with {:ok, machine} <- machine(conn), do: json(conn, %{items: Dokkit.Found.checks(machine)})
