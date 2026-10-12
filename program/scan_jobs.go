@@ -114,6 +114,8 @@ func parseSchtasks(lines []string, offset int) (jobs []found) {
 			j["user"] = who
 		}
 		j["schedule"], j["schedule_note"] = windowsSchedule(get("Schedule Type"), get("Start Time"), get("Days"), get("Months"), get("Repeat: Every"), offset)
+		o, w := winTaskOrigin(name, get("Task To Run"), get("Author"))
+		mark(j, o, w)
 		j["last_run"], j["last_result"] = windowsLast(get("Last Run Time"), get("Last Result"))
 		jobs = append(jobs, j)
 	}
@@ -526,6 +528,7 @@ func findCron() (jobs []found) {
 			}
 		}
 	}
+	cronOrigins(jobs)
 	return jobs
 }
 
@@ -699,9 +702,11 @@ func findTimers() (jobs []found) {
 	for _, s := range showBlocks(output("systemctl", append(append([]string{"show"}, sp...), services...)...)) {
 		byID[s["Id"]] = s
 	}
+	origins := linuxOrigins(names)
 	for _, t := range timers {
 		if j, ok := timerJob(t, byID[t["Unit"]], zoneMinutes()); ok {
-			jobs = append(jobs, j)
+			o := origins[t["Id"]]
+			jobs = append(jobs, mark(j, o[0], o[1]))
 		}
 	}
 	return jobs
@@ -711,6 +716,7 @@ func findTimers() (jobs []found) {
 
 // parseLaunchd reads a launchd property list that plutil -convert json wrote.
 func parseLaunchd(plist map[string]any, file string, offset int) (found, bool) {
+	home, _ := os.UserHomeDir()
 	label, _ := plist["Label"].(string)
 	if label == "" || strings.HasPrefix(label, "com.apple.") {
 		return nil, false
@@ -724,9 +730,13 @@ func parseLaunchd(plist map[string]any, file string, offset int) (found, bool) {
 	} else if p, ok := plist["Program"].(string); ok {
 		argv = []string{p}
 	}
+	program := ""
 	if len(argv) > 0 {
 		j["command"] = shown(strings.Join(argv, " "))
+		program = argv[0]
 	}
+	o, w := macOrigin(label, file, program, home)
+	mark(j, o, w)
 	number := func(m map[string]any, k string) (string, bool) {
 		v, ok := m[k].(float64)
 		return strconv.Itoa(int(v)), ok

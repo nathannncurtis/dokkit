@@ -67,9 +67,9 @@ Each is a choice. None is a requirement for the next.
 
 Each part can be switched off with a flag. The proposal file shows everything found before anything is sent.
 
-A scan never reads file contents, credentials, browser data, or another program's memory. The one exception is the files cron itself reads (the account's crontab, `/etc/crontab`, `/etc/cron.d`, and for root `/var/spool/cron`), which are the schedule. A command line shown for a job has anything after `password`, `secret`, `token` or `api_key` replaced by `***` and is cut at 300 characters.
+A scan never reads file contents, credentials, browser data, or another program's memory. The one exception is the files cron itself reads (the account's crontab, `/etc/crontab`, `/etc/cron.d`, and for root `/var/spool/cron`), which are the schedule, and the control group of a listening process on Linux (`/proc/<pid>/cgroup`, which names its service). A command line shown for a job has anything after `password`, `secret`, `token` or `api_key` replaced by `***` and is cut at 300 characters.
 
-**What a scan costs.** It runs a handful of the machine's own listing commands (on Windows `sc`, `netstat`, `tasklist`, `schtasks`, and `docker` and `appcmd` where they are installed; on Linux `systemctl`, `ss`, `crontab` and `docker`), which together take a few seconds, reads the files named above, changes nothing, and sends one document of at most 2000 findings.
+**What a scan costs.** It runs a handful of the machine's own listing commands (on Windows `sc`, `netstat`, `tasklist`, `schtasks`, and `docker` and `appcmd` where they are installed; on Linux `systemctl`, `ss`, `crontab`, `docker`, and `dpkg-query`, `apt-mark` or `rpm` to ask which package owns a unit file), reads the registry values named under Origin on Windows,, which together take a few seconds, reads the files named above, changes nothing, and sends one document of at most 2000 findings.
 
 ### Jobs
 
@@ -89,6 +89,38 @@ An accepted job waits for its first report and is not judged late until it has h
 - Cron entries and launchd jobs need the wrapper: the Found page shows the line to use, `dokkit run --job <name> -- <command>`, or `dokkit ping <name> ok` (and `fail`) at the end of the script.
 
 Containers are proposed only when they publish a TCP port on the machine, as a service with a `tcp` check on that port; no check type looks inside a container, so one with no published port is not listed. IIS sites are proposed with an `http` check on the address of their first http or https binding. Sites of nginx and Apache are found by name only (their configuration files are not read), so they are not proposed. Disks are watched as the machine's own readings and are not proposed.
+
+### Origin
+
+Every service, port, job, container and site a scan sends carries `origin` and `why`. `why` is one short line naming the fact the decision came from. The scan still sends everything; the server uses `origin` to hide the first kind by default.
+
+| `origin` | Means |
+|---|---|
+| `system` | Ships with the operating system: its own services, the ports they listen on, its own scheduled jobs. |
+| `software` | Installed by other software: an RMM agent, a vendor updater, a database, a driver utility, a Microsoft product that is not part of Windows (Office, Edge update, OneDrive, SQL Server). |
+| `yours` | Set up by a person: NSSM-wrapped services, runners, their own units, cron lines and scripts. Also anything whose owner the scan cannot tell: nothing unknown is ever `system`. |
+
+The decision is made from facts the machine gives the account the scan runs as, never from a list of names. Dokkit's own service, updater timer, task, daemon, cron line and start script are `software` with the reason "Dokkit itself".
+
+**Windows services.** The executable comes from the `ImagePath` value of `HKLM\SYSTEM\CurrentControlSet\Services\<name>`; below `Parameters`, `Application` is the real program of an NSSM-wrapped service and `ServiceDll` the library a service host (`svchost.exe`) loads. Local Service may read these keys (every service key grants read to Everyone, Users, Authenticated Users or the service group; a few `Parameters` keys do not, and then the host's own location decides). Executable under the Windows folder, a per-user service instance (name ending in `_` and hex digits) and the Windows Defender, Microsoft Defender and WSL folders are `system`; a vendor's executable in `Windows\System32\DriverStore` is `software` (a driver utility). `nssm.exe`, a GitHub Actions runner and an executable outside `Windows`, `Program Files`, `Program Files (x86)` and `ProgramData` are `yours`; an executable in a user's `AppData\Local` or `AppData\Roaming` folder inside a vendor folder (where installers put per-user programs) is `software`, unless it is a script engine; everything under `Program Files*` and `ProgramData` is `software`.
+
+**Windows ports.** The owning process id comes from `netstat`. If that process, or the process that started it (NSSM starts the real program), is a service from `tasklist /svc`, the port takes that service's origin (the least hidden one, if a host runs several). The System process is `system`. Otherwise the process's program file (`QueryFullProcessImageName`, readable for the processes this account may query) is judged by its place as above; if it cannot be read, a program that exists under `System32` by that name is `system`; anything else is `yours` with the reason "owner not known".
+
+**Windows scheduled tasks.** A task whose program is under `Program Files*` or `ProgramData` is `software`, also under `\Microsoft\`. Under `\Microsoft\` otherwise, or running a program from the Windows folder, is `system`. For a shell or script engine (`cmd`, `powershell`, `wscript`, `python`) the script it is given is judged instead. A task whose author is a company or vendor name (not an account such as `PC\someone`) and a task in a user's app data vendor folder are `software`; the rest are `yours`, as are tasks whose program cannot be read (a COM handler).
+
+**Linux services and timers.** `systemctl show -p FragmentPath` gives the unit file and its links are followed. A file under `/usr/lib/systemd/system` or `/lib/systemd/system` (also reached by a link from `/etc/systemd/system`) is `system` when no package owns it or when its package is part of the base system, otherwise `software` ("Unit shipped by package ..."). On Debian and Ubuntu `dpkg-query -S` gives the package, and a package is base when its `Priority` is `required`, `important` or `standard`, or when `apt-mark showauto` lists it (it came in as a dependency and nobody chose it by name); other packages are add-ons. With `rpm`, the owner is found with `rpm -qf` and every owned unit in the distribution's folder is `system`. A unit in `/etc/systemd/system` that is not a link into those folders is `software` when a package owns it and `yours` when none does; units under `/usr/local`, `/opt` and a home folder are `yours`; units systemd generates (`/run/systemd/generator`) are `system`.
+
+**Linux ports.** The listening process's service comes from its control group, which `ss -p` names only for processes the account may see; the port takes that unit's origin. A process in a login session is `yours`; an owner that cannot be told is `yours` with "owner not known".
+
+**Cron.** An account's own crontab is `yours`. Lines of `/etc/crontab` that run `run-parts` are `system`, other lines there are `yours`. A file in `/etc/cron.d` that a package owns follows the same package rule as units, and any other is `yours`.
+
+**QNAP.** On a QNAP NAS (`/etc/config/uLinux.conf` exists) the crontab is judged by the program of each line: add-ons (`.qpkg`, `/mnt/ext/opt`, or the `#_QSC_` and `#_SA_` tags the QNAP app center writes) are `software`; a program under `/share/`, `/home/`, `/root/` or `/tmp/` is `yours`; the rest of the file system is the firmware and is `system`.
+
+**macOS.** A `com.apple.*` label or a program under `/System`, `/usr/libexec` or `/Library/Apple` is `system`. A program under `/Applications` is `software`. A program under `/usr/local` or a home folder, or a job file in a home folder, is `yours`. Other jobs in `/Library/LaunchDaemons` and `/Library/LaunchAgents` are `software`.
+
+**Containers and sites** are `yours`.
+
+An older program sends no `origin`; the server keeps it as unknown, shows it and never hides it.
 
 ### When a scan runs
 

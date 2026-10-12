@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -159,10 +160,17 @@ func output(name string, args ...string) []string {
 
 func findServices() (all []found) {
 	if runtime.GOOS != "windows" {
+		var units []string
 		for _, l := range output("systemctl", "list-units", "--type=service", "--all", "--no-legend", "--plain") {
 			if f := strings.Fields(l); len(f) >= 4 {
 				all = append(all, found{"name": strings.TrimSuffix(f[0], ".service"), "state": f[3]})
+				units = append(units, f[0])
 			}
+		}
+		origins := linuxOrigins(units)
+		for _, s := range all {
+			o := origins[s["name"]+".service"]
+			mark(s, o[0], o[1])
 		}
 		return
 	}
@@ -182,18 +190,24 @@ func findServices() (all []found) {
 			}
 		}
 	}
+	for _, s := range all {
+		o, w := serviceOrigin(s["name"])
+		mark(s, o, w)
+	}
 	return
 }
 
 func findPorts() (all []found) {
 	seen := map[string]bool{}
-	add := func(port, program string) {
+	add := func(port, program string, owner func() (string, string)) {
 		if !seen[port+program] {
 			seen[port+program] = true
-			all = append(all, found{"port": port, "program": program})
+			o, w := owner()
+			all = append(all, mark(found{"port": port, "program": program}, o, w))
 		}
 	}
 	if runtime.GOOS != "windows" {
+		units := map[string][2]string{}
 		for _, l := range output("ss", "-ltnpH") {
 			f := strings.Fields(l)
 			if len(f) < 4 {
@@ -201,29 +215,55 @@ func findPorts() (all []found) {
 			}
 			_, program, _ := strings.Cut(l, `(("`)
 			program, _, _ = strings.Cut(program, `"`)
-			add(f[3][strings.LastIndex(f[3], ":")+1:], program)
+			add(f[3][strings.LastIndex(f[3], ":")+1:], program, func() (string, string) { return linuxPortOwner(l, units) })
 		}
 		return
 	}
-	programs := map[string]string{}
-	for _, row := range table(output("tasklist", "/fo", "csv", "/nh")) {
-		if len(row) > 1 {
-			programs[row[1]] = row[0]
-		}
-	}
+	programs, services := parseTasklist(table(output("tasklist", "/svc", "/fo", "csv", "/nh")))
+	parents := parentPids()
 	for _, l := range output("netstat", "-ano", "-p", "TCP") {
 		// A listening row is the one with nobody on the other end.
 		if f := strings.Fields(l); len(f) == 5 && f[0] == "TCP" && strings.HasSuffix(f[2], ":0") {
-			add(f[1][strings.LastIndex(f[1], ":")+1:], programs[f[4]])
+			add(f[1][strings.LastIndex(f[1], ":")+1:], programs[f[4]], func() (string, string) { return windowsPortOwner(f[4], programs, services, parents) })
 		}
 	}
 	return
 }
 
+// windowsPortOwner follows the process, then the processes that started it, to the first one that is a service.
+func windowsPortOwner(pid string, programs map[string]string, services map[string][]string, parents map[uint32]uint32) (string, string) {
+	n, _ := strconv.ParseUint(pid, 10, 32)
+	service, origin, why := "", "", ""
+	for cur, depth := uint32(n), 0; cur != 0 && depth < 6 && service == ""; cur, depth = parents[cur], depth+1 {
+		for _, name := range services[strconv.FormatUint(uint64(cur), 10)] {
+			o, w := serviceOrigin(name)
+			if service == "" || rank(o) < rank(origin) {
+				service, origin, why = name, o, w
+			}
+		}
+	}
+	_, system32 := os.Stat(filepath.Join(os.Getenv("windir"), "system32", programs[pid]))
+	return winPortOrigin(programs[pid], processPath(uint32(n)), service, origin, why, system32 == nil)
+}
+
+// linuxPortOwner finds the unit a listening process belongs to from its cgroup, which only a process this account may see has in ss.
+func linuxPortOwner(line string, units map[string][2]string) (string, string) {
+	var cgroup []byte
+	if _, rest, ok := strings.Cut(line, "pid="); ok {
+		pid, _, _ := strings.Cut(rest, ",")
+		cgroup, _ = os.ReadFile("/proc/" + pid + "/cgroup")
+	}
+	unit, session := cgroupUnit(string(cgroup))
+	if _, ok := units[unit]; !ok && unit != "" {
+		units[unit] = linuxOrigins([]string{unit})[unit]
+	}
+	return portUnitOrigin(unit, session, units[unit][0], units[unit][1])
+}
+
 func findContainers() (all []found) {
 	for _, l := range output("docker", "ps", "--format", "{{.Names}}\t{{.Image}}\t{{.Ports}}") {
 		if f := strings.Split(l, "\t"); len(f) >= 2 {
-			one := found{"name": f[0], "image": f[1]}
+			one := mark(found{"name": f[0], "image": f[1]}, originYours, "Docker container")
 			if len(f) > 2 {
 				one["port"] = publishedPort(f[2])
 			}
@@ -255,7 +295,7 @@ func findSites() (all []found) {
 	for _, server := range []string{"nginx", "apache2"} {
 		names, _ := filepath.Glob("/etc/" + server + "/sites-enabled/*")
 		for _, n := range names {
-			all = append(all, found{"name": filepath.Base(n), "server": server})
+			all = append(all, mark(found{"name": filepath.Base(n), "server": server}, originYours, "Site enabled in "+server))
 		}
 	}
 	return
@@ -270,7 +310,7 @@ func parseIISSite(l string) (found, bool) {
 	if m == nil {
 		return nil, false
 	}
-	site := found{"name": m[1], "server": "iis", "state": strings.ToLower(m[3])}
+	site := mark(found{"name": m[1], "server": "iis", "state": strings.ToLower(m[3])}, originYours, "Web site set up in IIS")
 	for _, b := range strings.Split(m[2], ",") {
 		scheme, rest, _ := strings.Cut(b, "/")
 		parts := strings.Split(rest, ":")
