@@ -93,7 +93,13 @@ defmodule DokkitWeb.ParityTest do
            "POST /api/v1/proposals/dismiss"
          ]},
       "scan" => {:member, ["POST /api/v1/machines/:id/scan"]},
-      "system" => @view
+      "system" => @view,
+      "pick" => @view,
+      "pick_group" => @view,
+      "clear" => @view,
+      "open" => @view,
+      "notes" => @view,
+      "more" => @view
     }
   }
 

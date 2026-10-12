@@ -620,3 +620,69 @@ input, select { accent-color: var(--brand); caret-color: var(--brand); }
   .lane .none { border-style: solid; border-color: var(--line); }
 }
 
+
+/* found: machine list beside the chosen machine's panel */
+.fnd { display: flex; flex-direction: column; }
+.fnd > .lead { padding: 8px 28px 0; }
+.fnd-grid { display: grid; grid-template-columns: 272px minmax(0, 1fr); gap: 18px; padding: 18px 28px; flex: 1; min-height: 0; }
+.fnd-grid > .card { min-height: 0; align-self: stretch; display: flex; flex-direction: column; overflow: hidden; }
+.fnd-sc { flex: 1; min-height: 0; overflow: auto; }
+.fnd-list > h2 { flex-wrap: wrap; }
+.fnd-panel { border-color: var(--brand); }
+.fnd-panel > h2 { flex-wrap: wrap; }
+.fnd-panel > h2 .nm { font-size: 15px; }
+.fnd-panel > h2 .sum { flex: 1 1 260px; min-width: 0; font-weight: 400; color: var(--mute); }
+.fnd-panel > h2 .end { margin-left: auto; flex-wrap: wrap; }
+.fnd .fnd-back { display: none; }
+.fnd-notes { border-bottom: 1px solid var(--line); background: var(--raise); }
+.fnd-notes .lead { padding: 10px 16px; font-size: 13px; }
+.fnd-says { padding: 8px 16px; font-size: 13px; color: var(--mute); border-bottom: 1px solid var(--line); }
+.fnd-panel .empty { padding: 14px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--mute); }
+.fnd-panel .empty i { display: inline; margin: 0; font-size: 18px; }
+.fnd-bar { z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.fnd-bar .sel { font: 500 13px/1 var(--mono); margin-right: auto; }
+
+.fnd-m { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; width: 100%; min-height: 56px; padding: 8px 16px 9px 14px; border-left: 2px solid transparent; border-bottom: 1px solid var(--line); color: inherit; }
+.fnd-m:hover { background: var(--raise); }
+.fnd-m[aria-current="true"] { background: var(--brand-bg); border-left-color: var(--brand); }
+.fnd-m .sub { grid-column: 1 / -1; display: flex; gap: 8px; min-width: 0; }
+.fnd-m .sub span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fnd-m .seg3 { grid-column: 1 / -1; }
+.fnd-m .seg3 i { transition: width 200ms var(--ease); }
+.fnd-m .cnt { justify-self: end; }
+.fnd-m[aria-current="true"] .cnt { background: var(--brand-bg); color: var(--brand); }
+
+.fnd-sec > .grp { flex-wrap: nowrap; }
+.fnd-sec > .grp .tg { color: var(--ink); font-weight: 600; padding-left: 4px; }
+.fnd-sec > .grp .caret { transition: transform 140ms var(--ease); }
+.fnd-sec.open > .grp .caret { transform: rotate(90deg); }
+.fnd-sec > .grp .brk { flex: 1 1 0; min-width: 0; font-weight: 400; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fnd-sec > .grp .end { margin-left: auto; flex-wrap: nowrap; gap: 6px; }
+.fnd-lab { grid-template-columns: 18px minmax(0, 1fr) auto; }
+.fnd-lab .cnt { background: none; padding: 0; }
+.fnd-row { grid-template-columns: 18px minmax(0, 1.3fr) minmax(0, .7fr) minmax(0, 1.5fr) 150px; }
+.fnd-row .det, .fnd-row .why { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fnd-row .sm-why { display: none; }
+.fnd-row .act { display: flex; justify-content: flex-end; gap: 6px; }
+.fnd-row .fnd-more-btn { width: 28px; padding: 0; flex: none; }
+.fnd-more { padding: 0 16px 12px 42px; border-bottom: 1px solid var(--line); }
+.fnd-panel > h2:focus-visible, .fnd-row:focus-visible { outline-offset: -2px; }
+@media (min-width: 761px) { .fnd { height: 100dvh; } }
+@media (max-width: 760px) {
+  .fnd-grid { grid-template-columns: minmax(0, 1fr); padding: 14px 16px; }
+  .fnd-grid > .card { display: block; overflow: visible; }
+  .fnd-sc { overflow: visible; }
+  .fnd-grid.picked .fnd-list, .fnd-grid:not(.picked) .fnd-panel { display: none; }
+  .fnd .fnd-back { display: inline-flex; }
+  .fnd-bar { position: sticky; top: 50px; }
+  .fnd-panel > h2 .end { margin-left: 0; }
+  .fnd-row { grid-template-columns: 18px minmax(0, 1fr) auto; }
+  .fnd-row .det, .fnd-row .why { display: none; }
+  .fnd-row .sm-why { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; padding-left: 18px; }
+  .fnd-row .bl { display: none; }
+  .fnd-row .act .btn:not(.primary) { width: 28px; padding: 0; }
+  .fnd-sec > .grp { flex-wrap: wrap; }
+  .fnd-sec > .grp .brk { display: none; }
+  .fnd-sec > .grp .end .btn { padding: 0 8px; }
+  .fnd .head, .fnd > .lead { padding-inline: 16px; }
+}

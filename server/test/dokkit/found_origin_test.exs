@@ -186,7 +186,7 @@ defmodule Dokkit.FoundOriginTest do
     conn: conn
   } do
     {:ok, view, html} = live(signed_in(conn), "/found")
-    assert html =~ "2 hidden"
+    assert html =~ "2 system hidden"
     assert html =~ "Show system services"
     assert html =~ "ContosoAgent" and html =~ "OrderSync"
     refute html =~ "Dnscache"
@@ -196,7 +196,7 @@ defmodule Dokkit.FoundOriginTest do
     html = view |> element("#system-form") |> render_change(%{"system" => "true"})
     assert_patched(view, "/found?system=true")
     assert html =~ "Dnscache" and html =~ "Port 135"
-    refute html =~ "2 hidden"
+    refute html =~ "system hidden"
 
     {:ok, _, html} = live(signed_in(conn), "/found?system=true")
     assert html =~ "Dnscache"
@@ -226,6 +226,6 @@ defmodule Dokkit.FoundOriginTest do
 
     {:ok, _, html} = live(signed_in(conn), "/found")
     assert html =~ "quiet-box"
-    assert html =~ "1 hidden"
+    assert html =~ "1 system hidden"
   end
 end

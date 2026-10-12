@@ -2,8 +2,33 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 
+const hooks = {
+  Look: {mounted() { dokkitLook() }},
+  Partial: {
+    mounted() { this.sync() },
+    updated() { this.sync() },
+    sync() { this.el.indeterminate = this.el.dataset.some === "true" }
+  },
+  MachineKeys: {
+    mounted() {
+      this.el.addEventListener("keydown", (e) => {
+        const items = [...this.el.querySelectorAll("[role=option]")]
+        let i = items.findIndex((x) => x.getAttribute("aria-current") === "true")
+        if (e.key === "ArrowDown") i = Math.min(items.length - 1, i + 1)
+        else if (e.key === "ArrowUp") i = Math.max(0, i - 1)
+        else if (e.key === "Home") i = 0
+        else if (e.key === "End") i = items.length - 1
+        else return
+        e.preventDefault()
+        items[i].click()
+        items[i].focus()
+      })
+    }
+  }
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
-new LiveSocket("/live", Socket, {longPollFallbackMs: 2500, params: {_csrf_token: csrfToken}, hooks: {Look: {mounted() { dokkitLook() }}}}).connect()
+new LiveSocket("/live", Socket, {longPollFallbackMs: 2500, params: {_csrf_token: csrfToken}, hooks}).connect()
 
 document.addEventListener("click", (e) => {
   const button = e.target.closest("[data-copy]")

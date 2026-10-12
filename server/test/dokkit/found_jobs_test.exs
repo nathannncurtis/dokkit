@@ -134,7 +134,14 @@ defmodule Dokkit.FoundJobsTest do
 
   test "the page says how each found job is watched, with the line to copy", %{conn: conn, as: as} do
     post(as, "/api/v1/proposals", proposal())
-    {:ok, _view, html} = live(signed_in(conn), "/found")
+    {:ok, view, _} = live(signed_in(conn), "/found")
+
+    for f <- Found.list(),
+        f.kind in ["job", "container"],
+        do: render_click(view, "more", %{"id" => f.id})
+
+    render_click(view, "notes")
+    html = render(view)
     assert html =~ "Watched from this machine&#39;s own record"
     assert html =~ "Needs the wrapper"
     assert html =~ "dokkit run --job backup -- /usr/local/bin/backup.sh"
@@ -143,8 +150,8 @@ defmodule Dokkit.FoundJobsTest do
     assert html =~ @note
     assert html =~ "Scheduled task"
     assert html =~ "Cron entry"
-    assert html =~ "Container"
-    assert html =~ "Web site"
+    assert html =~ "Containers"
+    assert html =~ "Sites"
   end
 
   test "Look again queues the built-in scan, and the page says what came of it", %{
