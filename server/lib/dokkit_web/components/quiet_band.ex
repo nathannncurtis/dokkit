@@ -3,7 +3,13 @@ defmodule DokkitWeb.QuietBand do
   use Phoenix.Component
   import DokkitWeb.Show, only: [ic: 1]
 
-  @lengths [{"15m", "15 minutes"}, {"30m", "30 minutes"}, {"1h", "1 hour"}, {"2h", "2 hours"}, {"4h", "4 hours"}]
+  @lengths [
+    {"15m", "15 minutes"},
+    {"30m", "30 minutes"},
+    {"1h", "1 hour"},
+    {"2h", "2 hours"},
+    {"4h", "4 hours"}
+  ]
 
   attr :machine, :string, required: true
   attr :planned, :any, default: nil
@@ -15,9 +21,9 @@ defmodule DokkitWeb.QuietBand do
 
     ~H"""
     <div :if={@planned} class="foot" id={"quiet-#{@machine}"} role="status">
-      <.ic name="moon" />
-      <span>
-        <b>Planned downtime until {Calendar.strftime(@planned.until, "%H:%M")} UTC</b>{@planned.reason && ": " <> @planned.reason}.
+      <span style="flex: 1 1 260px">
+        <.ic name="moon" /> <b>Planned downtime until {Calendar.strftime(@planned.until, "%H:%M")} UTC</b>{@planned.reason &&
+          ": " <> @planned.reason}.
         Alerts for this machine are off until then.
       </span>
       <span class="end">
@@ -45,9 +51,10 @@ defmodule DokkitWeb.QuietBand do
       </select>
       <input
         class="inp"
+        style="flex: 1 1 160px"
         name="quiet[reason]"
         maxlength="200"
-        placeholder="Why, such as nightly update"
+        placeholder="Why (optional)"
         aria-label="Why"
       />
       <button class="btn sm" type="submit" disabled={@disabled}>
@@ -60,7 +67,12 @@ defmodule DokkitWeb.QuietBand do
   @doc "Starts or ends a window for a person who may act."
   def start(socket, %{"machine" => id} = p) do
     if socket.assigns.current_user.role != :viewer,
-      do: Dokkit.Quiet.start(id, %{"for" => p["for"], "reason" => p["reason"]}, socket.assigns.current_user.name)
+      do:
+        Dokkit.Quiet.start(
+          id,
+          %{"for" => p["for"], "reason" => p["reason"]},
+          socket.assigns.current_user.name
+        )
   end
 
   def stop(socket, id) do
