@@ -65,6 +65,10 @@ type seqImport struct {
 	perMonth                             map[string]int
 	oldMonth                             map[string]int
 	names                                map[string]int
+	errOut                               io.Writer
+	wait                                 func(time.Duration)
+	patience                             time.Duration
+	noted                                time.Time
 }
 
 type importState struct {
@@ -93,7 +97,8 @@ func importCommand(args []string) int {
 func parseSeqImport(args []string, out io.Writer) (*seqImport, error) {
 	fs := flag.NewFlagSet("import seq", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	im := &seqImport{out: out, now: time.Now().UTC(), perService: map[string]int{}, perMonth: map[string]int{}, oldMonth: map[string]int{}, names: map[string]int{}}
+	im := &seqImport{out: out, now: time.Now().UTC(), perService: map[string]int{}, perMonth: map[string]int{}, oldMonth: map[string]int{}, names: map[string]int{},
+		errOut: os.Stderr, wait: time.Sleep, patience: 11 * time.Minute}
 	var props, mapFile, pattern, since, until string
 	fs.StringVar(&im.from, "from", "", "")
 	fs.StringVar(&im.seqKey, "seq-key", os.Getenv("SEQ_API_KEY"), "")
@@ -107,7 +112,7 @@ func parseSeqImport(args []string, out io.Writer) (*seqImport, error) {
 	fs.StringVar(&im.state, "state", "", "")
 	fs.StringVar(&since, "since", "2014-01-01T00:00:00Z", "")
 	fs.StringVar(&until, "until", "", "")
-	fs.Float64Var(&im.rate, "rate", 200, "")
+	fs.Float64Var(&im.rate, "rate", 0, "")
 	fs.BoolVar(&im.dry, "dry-run", false, "")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -215,22 +220,22 @@ func (im *seqImport) window(from, to time.Time) ([]seqEvent, bool, error) {
 		if im.filter != "" {
 			q.Set("filter", im.filter)
 		}
-		req, _ := http.NewRequest("GET", im.from+"/api/events?"+q.Encode(), nil)
-		if im.seqKey != "" {
-			req.Header.Set("X-Seq-ApiKey", im.seqKey)
-		}
-		res, err := im.seq.Do(req)
+		res, body, err := im.call(im.seq, "reading from Seq", func() *http.Request {
+			req, _ := http.NewRequest("GET", im.from+"/api/events?"+q.Encode(), nil)
+			if im.seqKey != "" {
+				req.Header.Set("X-Seq-ApiKey", im.seqKey)
+			}
+			return req
+		})
 		if err != nil {
 			return nil, false, err
 		}
-		body, _ := io.ReadAll(res.Body)
-		res.Body.Close()
 		if res.StatusCode != 200 {
-			return nil, false, fmt.Errorf("Seq answered %d to the read; it needs a key that may read (--seq-key)", res.StatusCode)
+			return nil, false, im.stopped("reading from Seq", fmt.Sprintf("Seq answered %d; it needs a key that may read (--seq-key)", res.StatusCode))
 		}
 		var page []seqEvent
 		if err := json.Unmarshal(body, &page); err != nil {
-			return nil, false, fmt.Errorf("Seq's answer is not a list of events: %v", err)
+			return nil, false, im.stopped("reading from Seq", fmt.Sprintf("the answer is not a list of events: %v", err))
 		}
 		fresh := 0
 		for _, e := range page {
@@ -291,6 +296,7 @@ func (im *seqImport) handle(events []seqEvent, last *importState) error {
 				return err
 			}
 		}
+		im.progress(tail.at)
 	}
 	return nil
 }
@@ -421,30 +427,23 @@ func (im *seqImport) post(key, firstID string, lines []map[string]any) error {
 		body.WriteByte('\n')
 	}
 	started := time.Now()
-	for attempt := 0; ; attempt++ {
-		req, _ := http.NewRequest("POST", im.to+"/api/v1/report", bytes.NewReader(body.Bytes()))
-		req.Header.Set("Authorization", "Bearer "+key)
-		req.Header.Set("Dokkit-Batch", batchID(im.from, key, firstID, len(lines)))
-		res, err := im.dokkit.Do(req)
+	for {
+		res, answer, err := im.call(im.dokkit, "sending to the Dokkit server", func() *http.Request {
+			req, _ := http.NewRequest("POST", im.to+"/api/v1/report", bytes.NewReader(body.Bytes()))
+			req.Header.Set("Authorization", "Bearer "+key)
+			req.Header.Set("Dokkit-Batch", batchID(im.from, key, firstID, len(lines)))
+			return req
+		})
 		if err != nil {
-			if attempt >= 5 {
-				return err
-			}
-			time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
-			continue
+			return err
 		}
-		answer, _ := io.ReadAll(res.Body)
-		res.Body.Close()
 		switch {
 		case res.StatusCode == 429:
 			wait, _ := strconv.Atoi(res.Header.Get("Retry-After"))
-			time.Sleep(time.Duration(max(wait, 1)) * time.Second)
-			continue
-		case res.StatusCode >= 500 && attempt < 5:
-			time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+			im.wait(time.Duration(max(wait, 1)) * time.Second)
 			continue
 		case res.StatusCode != 200:
-			return fmt.Errorf("the Dokkit server answered %d: %s", res.StatusCode, strings.TrimSpace(string(answer)))
+			return im.stopped("sending to the Dokkit server", fmt.Sprintf("answered %d: %s", res.StatusCode, strings.TrimSpace(string(answer))))
 		}
 		var a struct {
 			Refused []struct{ Message string } `json:"refused"`
@@ -456,10 +455,47 @@ func (im *seqImport) post(key, firstID string, lines []map[string]any) error {
 	if im.rate > 0 {
 		pause := time.Duration(float64(len(lines))/im.rate*float64(time.Second)) - time.Since(started)
 		if pause > 0 {
-			time.Sleep(pause)
+			im.wait(pause)
 		}
 	}
 	return nil
+}
+
+func (im *seqImport) call(c *http.Client, side string, build func() *http.Request) (*http.Response, []byte, error) {
+	var waited time.Duration
+	for wait := 2 * time.Second; ; wait = min(wait*2, 30*time.Second) {
+		res, err := c.Do(build())
+		var body []byte
+		var why string
+		if err != nil {
+			why = err.Error()
+		} else {
+			body, _ = io.ReadAll(res.Body)
+			res.Body.Close()
+			if res.StatusCode < 500 {
+				return res, body, nil
+			}
+			why = "answered " + strconv.Itoa(res.StatusCode)
+		}
+		if waited >= im.patience {
+			return nil, nil, im.stopped(side, why)
+		}
+		fmt.Fprintf(im.errOut, "dokkit: %s failed (%s); trying again in %s\n", side, why, wait)
+		im.wait(wait)
+		waited += wait
+	}
+}
+
+func (im *seqImport) stopped(side, why string) error {
+	return fmt.Errorf("%s failed: %s, with %d events sent; run the same command again to continue from the saved position in %s", side, why, im.sent, im.state)
+}
+
+func (im *seqImport) progress(at time.Time) {
+	if time.Since(im.noted) < time.Minute {
+		return
+	}
+	im.noted = time.Now()
+	fmt.Fprintf(im.out, "%d events sent, reached %s\n", im.sent, at.Format(time.RFC3339))
 }
 
 func batchID(from, key, first string, n int) string {

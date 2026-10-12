@@ -31,6 +31,7 @@ type fakeSeq struct {
 	events []fakeEvent
 	key    string
 	reads  int
+	down   int
 }
 
 func (f *fakeSeq) add(e fakeEvent) {
@@ -46,6 +47,11 @@ func (f *fakeSeq) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.down > 0 {
+		f.down--
+		w.WriteHeader(503)
+		return
+	}
 	f.reads++
 	q := r.URL.Query()
 	count, _ := strconv.Atoi(q.Get("count"))
@@ -95,11 +101,17 @@ type fakeDokkit struct {
 	batches []string
 	fail    int
 	slow    int
+	down    int
 }
 
 func (d *fakeDokkit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.down > 0 {
+		d.down--
+		w.WriteHeader(503)
+		return
+	}
 	if d.slow > 0 {
 		d.slow--
 		w.Header().Set("Retry-After", "1")
@@ -155,6 +167,7 @@ func runImport(t *testing.T, args []string, extra ...string) (string, error) {
 		t.Fatal(err)
 	}
 	im.now = seqNow
+	im.wait = func(time.Duration) {}
 	err = im.run()
 	return out.String(), err
 }
@@ -275,6 +288,67 @@ func TestSeqRefusalIsSaid(t *testing.T) {
 	seed(seq)
 	seq.key = "other"
 	if _, err := runImport(t, args); err == nil || !strings.Contains(err.Error(), "401") {
+		t.Fatalf("err %v", err)
+	}
+}
+
+func runQuiet(t *testing.T, args []string) (out, errs string, waited time.Duration, err error) {
+	var o, e bytes.Buffer
+	im, perr := parseSeqImport(args, &o)
+	if perr != nil {
+		t.Fatal(perr)
+	}
+	im.now = seqNow
+	im.errOut = &e
+	im.wait = func(d time.Duration) { waited += d }
+	err = im.run()
+	return o.String(), e.String(), waited, err
+}
+
+func TestServerRestartIsWaitedOut(t *testing.T) {
+	seq, dk, args := setup(t)
+	seed(seq)
+	dk.down = 4
+	out, errs, waited, err := runQuiet(t, args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if waited == 0 || !strings.Contains(errs, "sending to the Dokkit server failed (answered 503)") {
+		t.Errorf("waited %v, stderr %q", waited, errs)
+	}
+	if !strings.Contains(out, "Imported 6 events.") || !strings.Contains(out, "events sent, reached ") {
+		t.Errorf("output %q", out)
+	}
+}
+
+func TestSeqOutageIsWaitedOut(t *testing.T) {
+	seq, _, args := setup(t)
+	seed(seq)
+	seq.down = 3
+	_, errs, _, err := runQuiet(t, args)
+	if err != nil || !strings.Contains(errs, "reading from Seq failed (answered 503)") {
+		t.Fatalf("err %v, stderr %q", err, errs)
+	}
+}
+
+func TestGivingUpSaysWhichSideAndHowToContinue(t *testing.T) {
+	seq, dk, args := setup(t)
+	seed(seq)
+	dk.down = 1 << 30
+	_, _, waited, err := runQuiet(t, args)
+	if waited < 10*time.Minute {
+		t.Errorf("gave up after %v", waited)
+	}
+	for _, want := range []string{"sending to the Dokkit server failed", "503", "run the same command again"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("err %v lacks %q", err, want)
+		}
+	}
+
+	seq2, _, args2 := setup(t)
+	seed(seq2)
+	seq2.down = 1 << 30
+	if _, _, _, err := runQuiet(t, args2); err == nil || !strings.Contains(err.Error(), "reading from Seq failed") {
 		t.Fatalf("err %v", err)
 	}
 }
