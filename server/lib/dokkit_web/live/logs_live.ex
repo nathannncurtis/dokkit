@@ -2,7 +2,7 @@ defmodule DokkitWeb.LogsLive do
   use DokkitWeb, :live_view
   alias Dokkit.{Estate, Logs}
 
-  @cols "--cols:120px 64px 110px 150px minmax(0,1fr);--ncols:112px 52px 72px 124px minmax(140px,1fr);--minw:588px"
+  @cols "--cols:120px 64px 200px 150px minmax(0,1fr);--ncols:112px 52px 72px 124px minmax(140px,1fr);--minw:588px"
   @levels [
     {"Every level", ""},
     {"Info and worse", "info"},
@@ -96,7 +96,7 @@ defmodule DokkitWeb.LogsLive do
             <span class="mono">{at(l.at)}</span>
             <span class={["tag", l.level in ~w(error fatal) && "bad", l.level == "warn" && "warn"]}>{String.capitalize(
               l.level
-            )}</span> <span class="tag">{l.machine.name}</span>
+            )}</span> <span class="tag" title={l.machine.name}>{l.machine.name}</span>
             <.link :if={l.service} navigate={~p"/s/#{l.service_id}"}>{l.service.name}</.link>
             <span :if={!l.service} class="mute">The machine</span>
             <span>{l.msg}<span :if={l.cut} class="mute"> (cut)</span></span>

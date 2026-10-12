@@ -53,7 +53,8 @@ defmodule DokkitWeb.ErrorsLive do
             </div>
             <span></span>
             <div class="num">{g.count}<small>reports</small></div>
-            <span class="tag">{g.host || g.service.machine.name}</span>
+            <span class="tag" title={g.host || g.service.machine.name}>{g.host ||
+              g.service.machine.name}</span>
             <span class="mono">{at(g.last_seen)}</span> <.ic name="caret-right" />
           </.link>
         </div>

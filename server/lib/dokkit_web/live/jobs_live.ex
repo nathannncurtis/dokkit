@@ -169,7 +169,7 @@ defmodule DokkitWeb.JobsLive do
             <div class="ti">
               <.lvl state={j.check.state} /><span>{Dokkit.Intake.label(j.service, j.check.name)}</span>
             </div>
-             <span class="tag">{j.machine.name}</span>
+             <span class="tag" title={j.machine.name}>{j.machine.name}</span>
             <span class="mono mute">{j.check.config["schedule"]}</span>
             <span class="mono">{if j.last && j.last.result != :ok, do: at(j.good)}</span>
             <span><.progress :if={j.last} run={j.last} /></span>
