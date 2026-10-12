@@ -301,6 +301,9 @@ defmodule Dokkit.Estate do
   @doc """
   Takes the contents of a dokkit.toml for a machine. The file owns the service and its
   checks, so checks it no longer lists are removed. Sending the same file twice changes nothing.
+  An app key declares only the service it belongs to. It keeps its machine and kind, may set a
+  name and environment, and may list jobs (schedule, grace, max_runtime) and checks of type beat
+  or custom, which only wait for reports. Any other check type is refused; other sections are dropped.
   """
   def declare(machine_id, %{"service" => %{"id" => slug} = about} = doc)
       when is_binary(machine_id) and is_binary(slug) do
@@ -410,11 +413,6 @@ defmodule Dokkit.Estate do
   @app_check_types ~w(beat custom)
   @app_job_fields ~w(id schedule grace max_runtime)
 
-  @doc """
-  An app key declares only the service it belongs to. It keeps its machine and kind, may set a
-  name and environment, and may list jobs (schedule, grace, max_runtime) and checks of type beat
-  or custom, which only wait for reports. Any other check type is refused; other sections are dropped.
-  """
   def declare(%Service{} = own, %{"service" => %{"id" => slug} = about} = doc) do
     checks = List.wrap(doc["check"])
     jobs = List.wrap(doc["job"])
