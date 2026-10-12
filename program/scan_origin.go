@@ -15,6 +15,12 @@ const (
 	originSystem   = "system"
 	originSoftware = "software"
 	originYours    = "yours"
+	originDokkit   = "dokkit"
+)
+
+const (
+	dokkitWhy = "Dokkit itself"
+	ownTask   = "Dokkit updater"
 )
 
 func mark(f found, origin, why string) found {
@@ -32,13 +38,19 @@ func rank(origin string) int {
 	return 2
 }
 
-func isDokkit(parts ...string) bool {
-	for _, p := range parts {
-		if strings.Contains(strings.ToLower(p), "dokkit") {
-			return true
-		}
-	}
-	return false
+var (
+	ownWinFolder  = regexp.MustCompile(`(?i)\\(program files|programdata)\\dokkit(program|updater)?\\`)
+	ownWinService = regexp.MustCompile(`^(dokkit|dokkit_dokkit|dokkit-postgres|dokkit[0-9a-f]{16})$`)
+	ownUnits      = map[string]bool{unitName: true, timerName + ".service": true, timerName + ".timer": true}
+	ownLabels     = map[string]bool{macLabel: true, launchdLabel: true}
+)
+
+func ownWinPath(p string) bool { return ownWinFolder.MatchString(strings.ReplaceAll(p, "/", `\`)) }
+
+// ownContainer is a container of the server's compose project or made from its image.
+func ownContainer(image, project string) bool {
+	repo, _, _ := strings.Cut(image, ":")
+	return project == "dokkit" || path.Base(repo) == "dokkit"
 }
 
 // outputLoose keeps what a tool printed even when it exits with an error, as dpkg-query does for a path nobody owns.
@@ -139,6 +151,9 @@ func installedUnder(p string) string {
 }
 
 func winExeOrigin(p string) (string, string) {
+	if ownWinPath(p) {
+		return originDokkit, dokkitWhy
+	}
 	switch winKind(p) {
 	case "windows":
 		return originSystem, "Windows component (" + p + ")"
@@ -163,8 +178,8 @@ var userServiceInstance = regexp.MustCompile(`_[0-9a-fA-F]{4,}$`)
 func winServiceOrigin(name, image, real string) (string, string) {
 	exe, lower := programOf(image), strings.ToLower(name)
 	switch {
-	case strings.HasPrefix(lower, "dokkit") || isDokkit(exe):
-		return originSoftware, "Dokkit itself"
+	case ownWinService.MatchString(lower) || ownWinPath(exe):
+		return originDokkit, dokkitWhy
 	case exe != "" && winBase(exe) == "nssm.exe":
 		why := "Set up with NSSM (" + exe + ")"
 		if real != "" {
@@ -199,8 +214,8 @@ func taskTarget(command string) string {
 }
 
 func winTaskOrigin(task, command, author string) (string, string) {
-	if isDokkit(task, command) {
-		return originSoftware, "Dokkit itself"
+	if strings.EqualFold(strings.TrimLeft(task, `\`), ownTask) || ownWinPath(programOf(command)) {
+		return originDokkit, dokkitWhy
 	}
 	target := taskTarget(command)
 	kind := winKind(target)
@@ -279,8 +294,8 @@ func unitOrigin(unit string, f unitFacts) (string, string) {
 		loc = f.Path
 	}
 	switch {
-	case strings.HasPrefix(unit, "dokkit"):
-		return originSoftware, "Dokkit itself"
+	case ownUnits[unit]:
+		return originDokkit, dokkitWhy
 	case loc == "":
 		return originYours, "Unit file not known"
 	case under(loc, "/usr/lib/systemd/system/", "/lib/systemd/system/"):
@@ -437,8 +452,8 @@ func linuxOrigins(units []string) map[string][2]string {
 
 func cronOrigin(where, command, pkg, priority string, qnap bool) (string, string) {
 	switch {
-	case isDokkit(command):
-		return originSoftware, "Dokkit itself"
+	case strings.Contains(command, cronMarker):
+		return originDokkit, dokkitWhy
 	case qnap:
 		return qnapOrigin(command)
 	case where == "/etc/crontab":
@@ -517,8 +532,8 @@ func cronOrigins(jobs []found) {
 
 func macOrigin(label, file, program, home string) (string, string) {
 	switch {
-	case isDokkit(label):
-		return originSoftware, "Dokkit itself"
+	case ownLabels[label]:
+		return originDokkit, dokkitWhy
 	case strings.HasPrefix(label, "com.apple.") || under(program, "/System/", "/usr/libexec/", "/Library/Apple/"):
 		return originSystem, "macOS job (" + label + ")"
 	case under(program, "/Applications/"):

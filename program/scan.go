@@ -59,13 +59,13 @@ func look(skip map[string]bool, folders []string) ([]byte, map[string]int) {
 	}
 	for _, part := range scanParts {
 		if !skip[part.name] {
-			all[part.name] = part.find()
+			all[part.name] = withoutOwn(part.find())
 		}
 	}
 	doc := map[string]any{"machine": host, "os": runtime.GOOS, "at": now(), "found": all}
 	if !skip["jobs"] {
 		jobs, notes := findJobs()
-		all["jobs"], doc["notes"] = jobs, notes
+		all["jobs"], doc["notes"] = withoutOwn(jobs), notes
 	}
 	counts := map[string]int{}
 	for name, list := range all {
@@ -73,6 +73,16 @@ func look(skip map[string]bool, folders []string) ([]byte, map[string]int) {
 	}
 	b, _ := json.MarshalIndent(doc, "", "  ")
 	return b, counts
+}
+
+// withoutOwn drops what belongs to Dokkit: the scan never proposes watching Dokkit's own pieces.
+func withoutOwn(list []found) (kept []found) {
+	for _, f := range list {
+		if f["origin"] != originDokkit {
+			kept = append(kept, f)
+		}
+	}
+	return
 }
 
 // scan writes what it finds to a file for a person to read. It sends nothing.
@@ -261,9 +271,16 @@ func linuxPortOwner(line string, units map[string][2]string) (string, string) {
 }
 
 func findContainers() (all []found) {
-	for _, l := range output("docker", "ps", "--format", "{{.Names}}\t{{.Image}}\t{{.Ports}}") {
+	for _, l := range output("docker", "ps", "--format", "{{.Names}}\t{{.Image}}\t{{.Ports}}\t{{.Label \"com.docker.compose.project\"}}") {
 		if f := strings.Split(l, "\t"); len(f) >= 2 {
 			one := mark(found{"name": f[0], "image": f[1]}, originYours, "Docker container")
+			project := ""
+			if len(f) > 3 {
+				project = f[3]
+			}
+			if ownContainer(f[1], project) {
+				mark(one, originDokkit, dokkitWhy)
+			}
 			if len(f) > 2 {
 				one["port"] = publishedPort(f[2])
 			}

@@ -17,6 +17,7 @@ defmodule Dokkit.Application do
     with {:ok, pid} <-
            Supervisor.start_link(children, strategy: :one_for_one, name: Dokkit.Supervisor) do
       if watch, do: Dokkit.Accounts.announce()
+      if watch, do: Dokkit.Found.stop_watching_own()
       {:ok, pid}
     end
   end

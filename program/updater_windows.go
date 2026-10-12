@@ -17,7 +17,7 @@ import (
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
-const taskName = "Dokkit updater"
+const taskName = ownTask
 
 // Tests replace these.
 var runTool = func(name string, args ...string) (string, error) {
