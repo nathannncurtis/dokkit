@@ -16,7 +16,7 @@ var topics = []topic{
 		"Checks the file's schema, service id and each check's fields. Runs the http, tcp,\nprocess, windows-service, systemd and expiry checks that can run here, once, and\nprints exactly what would be sent. Checks the app reports itself are listed as\nnot run. A check aimed at another host does make its request. Needs no server and\nsends nothing to it. A slow answer shows as slow, not as a failure."},
 	{"In an app's repo", "apply", "dokkit apply [dokkit.toml]",
 		"Sends the file to the server.",
-		"Declares the file to the server, for a file dokkit watch does not read. It needs\nthis machine's key from dokkit enrol; the server refuses an app key. Sending the\nsame file twice changes nothing."},
+		"Declares the file to the server, for a file dokkit watch does not read. It sends\nDOKKIT_KEY when that is set, otherwise this machine's key from dokkit enrol. A machine\nkey may declare any service on its machine; an app key only its own service.\nSending the same file twice changes nothing."},
 	{"Jobs", "run", "dokkit run [--service <slug>] --job <name> -- <command> [arguments]",
 		"Runs a command and reports how it went.",
 		"Runs the command and reports its start, finish, exit code, duration and last\nlines of output. Exits with the command's own exit code. With this machine's key,\na job declared in a dokkit.toml in the folders of the saved configuration is\nfound by name, and --service says which service when it is not. With an app key,\n--service is ignored."},
