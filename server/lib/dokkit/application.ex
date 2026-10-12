@@ -11,7 +11,7 @@ defmodule Dokkit.Application do
 
     children =
       [Dokkit.Repo, Dokkit.RateLimit, {Phoenix.PubSub, name: Dokkit.PubSub}, DokkitWeb.Endpoint] ++
-        ipv6_listener() ++
+        ipv6_listener(Application.get_env(:dokkit, DokkitWeb.Endpoint, [])) ++
         if watch, do: [Dokkit.Alerts, Dokkit.Watch], else: []
 
     with {:ok, pid} <-
@@ -22,8 +22,8 @@ defmodule Dokkit.Application do
   end
 
   # An IPv6 socket on Windows takes no IPv4 and rejects ipv6_v6only: false, so IPv6 gets its own listener.
-  defp ipv6_listener do
-    config = Application.get_env(:dokkit, DokkitWeb.Endpoint, [])
+  @doc false
+  def ipv6_listener(config) do
     {scheme, opts} = if config[:https], do: {:https, config[:https]}, else: {:http, config[:http]}
 
     if is_list(opts) and opts[:ip] == {0, 0, 0, 0} do
