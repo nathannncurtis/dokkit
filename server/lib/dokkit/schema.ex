@@ -173,6 +173,8 @@ defmodule Dokkit.Finding do
     field :key, :string
     field :detail, :map, default: %{}
     field :dismissed, :boolean, default: false
+    field :origin, :string
+    field :why, :string
     belongs_to :machine, Dokkit.Machine
     timestamps()
   end

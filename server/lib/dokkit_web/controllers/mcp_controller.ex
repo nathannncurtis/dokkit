@@ -113,8 +113,11 @@ defmodule DokkitWeb.McpController do
     {"rules", "read", "The alert rules, first match first.", Map.merge(%{"q" => @text}, @paging),
      []},
     {"proposals", "read",
-     "Things Dokkit found that a person may accept or dismiss: services and ports.",
-     Map.merge(%{"q" => @text, "machine" => @text, "kind" => @text}, @paging), []},
+     "Things Dokkit found that a person may accept or dismiss: services, ports, jobs, containers and sites, each with an origin (system, software or yours; absent when the machine's program is too old to say) and the reason. The operating system's own things (origin system) are left out unless system is true, and counted in hidden, in total and for each machine. Answers items, next and hidden.",
+     Map.merge(
+       %{"q" => @text, "machine" => @text, "kind" => @text, "system" => @bool},
+       @paging
+     ), []},
     {"series", "read",
      "Numbers over time for one service, or for a machine's own disks, memory and processor when given machine instead of id. Without metric, lists the metric names. from and to are RFC 3339 and default to the last day.",
      %{
@@ -153,11 +156,21 @@ defmodule DokkitWeb.McpController do
      "Hold a service at a version, so a newer one is not offered. An empty or missing version lets it go.",
      %{"id" => @text, "version" => @text}, ["id"]},
     {"accept_proposal", "act",
-     "Accept found services and ports: one (id), some (ids) or every one waiting (all true). Takes the ids from proposals.",
-     %{"id" => @text, "ids" => %{"type" => "array", "items" => @text}, "all" => @bool}, []},
+     "Accept found services and ports: one (id), some (ids) or every one waiting and shown (all true; the operating system's own only with system true). Takes the ids from proposals; a hidden one can be accepted by id.",
+     %{
+       "id" => @text,
+       "ids" => %{"type" => "array", "items" => @text},
+       "all" => @bool,
+       "system" => @bool
+     }, []},
     {"dismiss_proposal", "act",
-     "Dismiss proposals: one (id), some (ids) or every one waiting (all true). Takes the ids from proposals.",
-     %{"id" => @text, "ids" => %{"type" => "array", "items" => @text}, "all" => @bool}, []},
+     "Dismiss proposals: one (id), some (ids) or every one waiting and shown (all true; the operating system's own only with system true). Takes the ids from proposals; a hidden one can be dismissed by id.",
+     %{
+       "id" => @text,
+       "ids" => %{"type" => "array", "items" => @text},
+       "all" => @bool,
+       "system" => @bool
+     }, []},
     {"add_rule", "admin",
      "Add an alert rule at the end of the list. kind is job, check, machine or empty for anything; state is down, degraded or empty for both.",
      @rule, []},
@@ -580,8 +593,9 @@ defmodule DokkitWeb.McpController do
       {:error, _, message} ->
         {:error, message}
 
-      %{items: items, next: nil}
-      when not (is_map_key(args, "cursor") or is_map_key(args, "limit")) ->
+      %{items: items, next: nil} = page
+      when not (is_map_key(args, "cursor") or is_map_key(args, "limit") or
+                    is_map_key(page, :hidden)) ->
         items
 
       page ->

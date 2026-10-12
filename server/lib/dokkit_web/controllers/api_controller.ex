@@ -194,11 +194,11 @@ defmodule DokkitWeb.ApiController do
   def accept(conn, params), do: reply(conn, found(params, &Dokkit.Found.watch/1))
   def dismiss(conn, params), do: reply(conn, found(params, &Dokkit.Found.dismiss/1))
 
-  @doc "Acts on one proposal (id), some (ids) or every one waiting (all true)."
+  @doc "Acts on one proposal (id), some (ids) or every one waiting and shown (all true; with system true, the operating system's own too)."
   def found(%{"id" => id}, act), do: found(%{"ids" => [id], "single" => true}, act)
 
   def found(%{"ids" => ids} = params, act) when is_list(ids) do
-    waiting = MapSet.new(Dokkit.Found.list(), & &1.id)
+    waiting = MapSet.new(Dokkit.Found.list(system: true), & &1.id)
     known = Enum.filter(Enum.uniq(ids), &(&1 in waiting))
 
     if known == [] and !params["all"] do
@@ -209,8 +209,10 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
-  def found(%{"all" => true}, act),
-    do: found(%{"ids" => Enum.map(Dokkit.Found.list(), & &1.id), "all" => true}, act)
+  def found(%{"all" => true} = params, act) do
+    all = Dokkit.Found.list(system: params["system"] in [true, "true"])
+    found(%{"ids" => Enum.map(all, & &1.id), "all" => true}, act)
+  end
 
   def found(_, _), do: {:error, "bad_proposals", "Needs an id, ids, or all true."}
 
@@ -535,8 +537,8 @@ defmodule DokkitWeb.ApiController do
   defp list(conn, nil), do: missing(conn)
   defp list(conn, {:error, _, _} = error), do: reply(conn, error)
 
-  defp list(conn, %{items: items, next: next}),
-    do: json(conn, %{items: clean(conn, items), next: next})
+  defp list(conn, %{items: items, next: next} = page),
+    do: json(conn, Map.merge(%{items: clean(conn, items), next: next}, Map.take(page, [:hidden])))
 
   defp clean(conn, data),
     do: if("read-logs" in conn.assigns.key.scopes, do: data, else: Read.without_logs(data))

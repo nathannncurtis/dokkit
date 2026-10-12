@@ -150,7 +150,7 @@ defmodule DokkitWeb.McpControllerTest do
     })
 
     {false, text} = call(all, "proposals")
-    assert [a, b] = Jason.decode!(text)
+    assert %{"items" => [a, b], "next" => nil, "hidden" => %{"total" => 0}} = Jason.decode!(text)
     assert {false, ~s({"ok":true})} = call(all, "accept_proposal", %{id: a["id"]})
     assert {false, ~s({"ok":true})} = call(all, "dismiss_proposal", %{id: b["id"]})
     assert {true, "No such thing."} = call(all, "dismiss_proposal", %{id: b["id"]})

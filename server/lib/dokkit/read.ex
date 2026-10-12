@@ -595,15 +595,28 @@ defmodule Dokkit.Read do
       |> ordered(params)
 
   def list(:proposals, params) do
-    for(
-      f <- Dokkit.Found.list(),
-      params["machine"] in [nil, f.machine.id, f.machine.name],
-      params["kind"] in [nil, f.kind],
-      like?(params, [f.key, f.machine.name, f.detail["label"], f.detail["saw"]]),
-      do: f
-    )
-    |> page(params, &(&1.kind <> "\0" <> down(&1.key) <> "\0" <> &1.id))
-    |> mapped(&found/1)
+    {hidden, shown} =
+      for(
+        f <- Dokkit.Found.list(system: true),
+        params["machine"] in [nil, f.machine.id, f.machine.name],
+        params["kind"] in [nil, f.kind],
+        like?(params, [f.key, f.machine.name, f.detail["label"], f.detail["saw"]]),
+        do: f
+      )
+      |> Enum.split_with(&(&1.origin == "system" and params["system"] not in [true, "true"]))
+
+    case shown
+         |> page(params, &(&1.kind <> "\0" <> down(&1.key) <> "\0" <> &1.id))
+         |> mapped(&found/1) do
+      %{items: _} = page ->
+        Map.put(page, :hidden, %{
+          total: length(hidden),
+          machines: Enum.frequencies_by(hidden, & &1.machine.name)
+        })
+
+      other ->
+        other
+    end
   end
 
   def list(:keys, params) do
@@ -828,7 +841,15 @@ defmodule Dokkit.Read do
   def rules, do: Dokkit.Alerts.rules()
 
   defp found(f),
-    do: %{id: f.id, kind: f.kind, name: f.key, detail: f.detail, machine: f.machine.name}
+    do: %{
+      id: f.id,
+      kind: f.kind,
+      name: f.key,
+      detail: f.detail,
+      machine: f.machine.name,
+      origin: f.origin,
+      why: f.why
+    }
 
   defp issue(%Issue{} = i) do
     %{

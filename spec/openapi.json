@@ -1004,7 +1004,7 @@
         "tags": [
           "Read"
         ],
-        "description": "Found things that wait for a person to accept them. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "description": "Found things that wait for a person to accept them, each with `origin` (`system`, `software` or `yours`; null when the machine's program did not say) and `why`. The operating system's own things (`origin` `system`) are left out unless `system` is true; the answer says how many in `hidden`. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
         "responses": {
           "200": {
             "description": "OK.",
@@ -1025,6 +1025,22 @@
                         "null"
                       ],
                       "description": "Always null for now. Lists are not paged yet."
+                    },
+                    "hidden": {
+                      "type": "object",
+                      "description": "What was left out because it is the operating system's own, under the same machine, kind and q filters. Zero with system true.",
+                      "properties": {
+                        "total": {
+                          "type": "integer"
+                        },
+                        "machines": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "integer"
+                          },
+                          "description": "The count for each machine name."
+                        }
+                      }
                     }
                   }
                 },
@@ -1038,10 +1054,18 @@
                         "label": "Print Spooler",
                         "saw": "Running"
                       },
-                      "machine": "db-01"
+                      "machine": "db-01",
+                      "origin": "software",
+                      "why": "Installed under C:\\Program Files\\Contoso"
                     }
                   ],
-                  "next": null
+                  "next": null,
+                  "hidden": {
+                    "total": 12,
+                    "machines": {
+                      "db-01": 12
+                    }
+                  }
                 }
               }
             }
@@ -1106,9 +1130,17 @@
           {
             "name": "kind",
             "in": "query",
-            "description": "service or port.",
+            "description": "service, port, job, container or site.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "system",
+            "in": "query",
+            "description": "true includes the operating system's own findings (origin system), which are left out otherwise.",
+            "schema": {
+              "type": "boolean"
             }
           },
           {
@@ -6796,7 +6828,7 @@
         "tags": [
           "Act"
         ],
-        "description": "Accepts a found service or port, so it is watched. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "description": "Accepts a found service or port, so it is watched. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, error messages and notes are left out of the answer. A hidden (system) proposal can be named by its id.",
         "parameters": [
           {
             "name": "id",
@@ -6887,7 +6919,7 @@
         "tags": [
           "Act"
         ],
-        "description": "Dismisses a found thing so it is not offered again. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "description": "Dismisses a found thing so it is not offered again. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, error messages and notes are left out of the answer. A hidden (system) proposal can be named by its id.",
         "parameters": [
           {
             "name": "id",
@@ -10567,7 +10599,7 @@
         "tags": [
           "Act"
         ],
-        "description": "Accepts some found services and ports (`ids`) or every one waiting (`all` true), so they are watched. Answers `done`, the ids acted on; `404` when none of them is waiting. Takes a user token (`dku_`) with the `act` scope.",
+        "description": "Accepts some found services and ports (`ids`) or every one waiting and shown (`all` true; the operating system's own only with `system` true), so they are watched. Answers `done`, the ids acted on; `404` when none of them is waiting. Takes a user token (`dku_`) with the `act` scope.",
         "requestBody": {
           "required": true,
           "content": {
@@ -10583,6 +10615,10 @@
                   },
                   "all": {
                     "type": "boolean"
+                  },
+                  "system": {
+                    "type": "boolean",
+                    "description": "With all, also act on the operating system's own findings, which all leaves alone otherwise."
                   }
                 }
               },
@@ -10615,7 +10651,7 @@
         "tags": [
           "Act"
         ],
-        "description": "Dismisses some proposals (`ids`) or every one waiting (`all` true). Answers `done`, the ids acted on; `404` when none of them is waiting. Takes a user token (`dku_`) with the `act` scope.",
+        "description": "Dismisses some proposals (`ids`) or every one waiting and shown (`all` true; the operating system's own only with `system` true). Answers `done`, the ids acted on; `404` when none of them is waiting. Takes a user token (`dku_`) with the `act` scope.",
         "requestBody": {
           "required": true,
           "content": {
@@ -10631,6 +10667,10 @@
                   },
                   "all": {
                     "type": "boolean"
+                  },
+                  "system": {
+                    "type": "boolean",
+                    "description": "With all, also act on the operating system's own findings, which all leaves alone otherwise."
                   }
                 }
               },
@@ -12221,7 +12261,7 @@
           },
           "kind": {
             "type": "string",
-            "description": "service or port."
+            "description": "service, port, job, container or site."
           },
           "name": {
             "type": "string"
@@ -12232,6 +12272,26 @@
           },
           "machine": {
             "type": "string"
+          },
+          "origin": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "system",
+              "software",
+              "yours",
+              null
+            ],
+            "description": "system ships with the operating system, software was installed by other software, yours was set up by a person. Null when the machine's program did not say; such a finding is shown and never hidden."
+          },
+          "why": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The fact the origin was decided from, in one line."
           }
         }
       },

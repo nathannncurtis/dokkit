@@ -30,7 +30,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `deploys` | `read` | Lists recent deploys. |
 | `versions` | `read` | Lists the versions of the apps Dokkit watches. |
 | `rules` | `read` | Lists the alert rules. |
-| `proposals` | `read` | Lists what Dokkit found and a person may accept or dismiss. |
+| `proposals` | `read` | Lists what Dokkit found and a person may accept or dismiss, each with `origin` and `why`. Leaves out the operating system's own things unless `system` is true. Always answers `{"items": [...], "next": ..., "hidden": {"total": n, "machines": {"<machine name>": n}}}`, where `hidden` counts what was left out. |
 | `series` | `read` | Shows numbers over time for a service (`id`), or for a machine's own disks, memory and processor (`machine`). |
 | `day` | `read` | Shows the last 24 hours in half hours: for each machine whether something was down, needed a look, or nothing happened, or it was not heard from, and the issues that opened. |
 | `releases` | `read` | Lists the program releases the server holds and whether each is complete. |
@@ -48,8 +48,8 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `unwatch` | `act` | Stops watching a service. |
 | `routing` | `act` | Sets where a service's issues go. A field that is not given stays as it was. |
 | `hold` | `act` | Holds a service at a version. |
-| `accept_proposal` | `act` | Accepts a found service or port. |
-| `dismiss_proposal` | `act` | Dismisses a proposal. |
+| `accept_proposal` | `act` | Accepts a found service or port. A hidden one can be named by id; `all` takes only what `proposals` shows unless `system` is true. |
+| `dismiss_proposal` | `act` | Dismisses a proposal, with the same rule for `all` and `system`. |
 | `keep_messages` | `act` | Keeps or stops keeping the text of a service's errors. |
 | `set_job_timing` | `act` | Sets when a job counts as late and as run too long. A field left out stays as it was; an empty one clears it. |
 | `scan_machine` | `act` | Asks an enrolled machine to look itself over again and send what it finds to proposals. Nothing found is watched until accepted. |
@@ -92,7 +92,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 - **Read tools are marked read-only**, so a client can run them without asking each time. `admin` tools are marked destructive.
 - **What comes back is data.** Names, titles, notes, error text, deploy fields and output were written by machines and apps. Every answer starts with a line that says so.
 - **Arguments are checked against the types the tool declares.** A wrong type is an `isError` answer, not a failure. A `null` argument is the same as one left out, and a whole number written as `5.0` is an integer. To clear a route, send an empty text.
-- **Lists page by cursor.** The list tools (`find`, `jobs`, `job_runs`, `logs`, `errors`, `machines`, `issues`, `deploys`, `rules`, `proposals`, `keys`, `people`, `releases`) take the filters of their API list, `cursor` and `limit` (1 to 500, default 100). A list that fits one page answers as an array, as before; a longer one, or any call with `cursor` or `limit`, answers `{"items": [...], "next": "<cursor or null>"}`. `issues` takes `state` (`open`, `snoozed`, `closed` or `all`). `errors` with an `id` pages the group's reports the same way. `accept_proposal` and `dismiss_proposal` take `ids` or `all`.
+- **Lists page by cursor.** The list tools (`find`, `jobs`, `job_runs`, `logs`, `errors`, `machines`, `issues`, `deploys`, `rules`, `proposals`, `keys`, `people`, `releases`) take the filters of their API list, `cursor` and `limit` (1 to 500, default 100). A list that fits one page answers as an array, as before; a longer one, or any call with `cursor` or `limit`, answers `{"items": [...], "next": "<cursor or null>"}`. `issues` takes `state` (`open`, `snoozed`, `closed` or `all`). `errors` with an `id` pages the group's reports the same way. `accept_proposal` and `dismiss_proposal` take `ids` or `all`. `proposals` is the one list that always answers an object, so that `hidden` has a place; it takes `system` (boolean) to include the operating system's own findings.
 - **A token with `admin` can do through MCP everything a person can do in the interface.** Making such a token asks for confirmation in Settings.
 
 ## Built so far

@@ -161,6 +161,8 @@ A machine key declares any service on its machine. An app key declares the one s
 
 What a scan found: the file `dokkit scan` wrote, as it is. Nothing in a proposal is active until it is accepted in the interface. The server keeps the running Windows and systemd services, the listening ports, scheduled jobs (`found.jobs`, with `notes` saying what the scan could not see), containers that publish a TCP port and sites that have an address, and leaves out what is already watched or was dismissed. A job is accepted as a job that waits for its first report; a container becomes a service with a `tcp` check and a site a service with an `http` check.
 
+Each service, port, job, container and site may carry `origin` (`system`, `software` or `yours`) and `why`, one line naming the fact the program decided from (`spec/program.md`, Origin). The server keeps both; anything else in `origin` is stored as unknown. A program that sends none is stored as unknown, which is shown and never hidden. When a machine sends a proposal again, the origin and why of its findings that nobody has decided about are brought up to date; a finding that was dismissed is left as it is, and a proposal without an origin never erases one already kept.
+
 ### `GET /records`
 
 The accepted found jobs on this machine whose runs the program reads from the system's own record: `{"items": [{"service": "nightly-export", "name": "nightly-export", "source": "task-scheduler", "unit": "\\Nightly export"}]}`. `source` is `task-scheduler` or `systemd-timer`.
@@ -258,7 +260,7 @@ A user token with `read`. Log contents need `read-logs`: without it, job output,
 | `GET /alerts` | The alert settings: who is told by default, the limits, the night and the mail settings. The ntfy, webhook and heartbeat addresses, the mail user name, the Twilio account SID and every secret are never returned, only `set` or `not set`. The answer is the same for every token with `read`. |
 | `GET /alerts/suggestions` | Issues that keep opening and are snoozed, which the daily digest could take instead. |
 | `GET /logs/archives` (`read-logs`) | The archived months of logs that can be loaded back. |
-| `GET /proposals` | Things waiting to be accepted. |
+| `GET /proposals` | Things waiting to be accepted, each with `origin` and `why` (null when the machine's program did not say). The operating system's own things (`origin` `system`) are left out unless `system=true`, and the answer carries `hidden`: `{"total": 409, "machines": {"<machine name>": 12}}`, the number left out under the same `machine`, `kind` and `q` filters, in total and for each machine (`{"total": 0, "machines": {}}` with `system=true`). The Found page hides the same things by default. |
 | `GET /releases` | The releases the server holds, newest first: `version`, `files` and `complete`, which is true when both `SHA256SUMS` and `SHA256SUMS.sig` are held. |
 
 ## Act
@@ -278,7 +280,7 @@ A user token with `act`. Keys, people, rules, alert settings, checks, restart, m
 | `PUT /services/<id>/hold` | Mark a version on a machine as held on purpose: `{"version": "..."}`. Answers as `GET /services/<id>` does. |
 | `PUT /services/<id>/restart` (`admin`) | Allow or stop automatic restart: `{"allow": true}`. Answers as `GET /services/<id>` does. |
 | `POST /proposals/<id>/accept`, `/dismiss` | Accept or dismiss one proposal. |
-| `POST /proposals/accept`, `/dismiss` | Accept or dismiss some proposals, `{"ids": [...]}`, or every one waiting, `{"all": true}`. Answers `{"ok": true, "done": [ids acted on]}`; ids not waiting are left out of `done`, and `404` when none of the `ids` is waiting. |
+| `POST /proposals/accept`, `/dismiss` | Accept or dismiss some proposals, `{"ids": [...]}`, or every one waiting and shown, `{"all": true}`; `all` leaves out the operating system's own things unless `"system": true` is sent too, while any proposal, hidden or not, can be named by id. Answers `{"ok": true, "done": [ids acted on]}`; ids not waiting are left out of `done`, and `404` when none of the `ids` is waiting. |
 | `PUT /services/<id>/messages` | `{"keep": true}` keeps the text of the service's errors from now on; `false` stops. |
 | `POST /apps` (`admin`) | Add an app that runs on many machines, such as a desktop program: `name`. Answers with its `id`, `slug` and `key`, shown once. The app belongs to no one machine; each PC it reports from is listed as it is seen. |
 | `POST /dependencies` (`admin`) | Add something outside that is depended on: `name`, and optionally `machine` and `check`, which is `{"type": "http", "url": "https://..."}` or `{"type": "tcp", "address": "host:port"}`. Dokkit has no way to run a check from the server, so a check is run by the program on `machine`, which must be enrolled; the program reaches only hosts its own configuration allows. Without a check the dependency belongs to the group machine Outside. Answers as `GET /services/<id>` does. A certificate expiry check is not offered through this call yet: the program is only handed `http`, `tcp`, `process`, `windows-service` and `systemd` checks by the server. |

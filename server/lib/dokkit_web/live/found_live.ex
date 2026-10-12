@@ -12,8 +12,8 @@ defmodule DokkitWeb.FoundLive do
 
   def mount(_params, _session, socket), do: {:ok, socket}
 
-  def handle_params(_params, _uri, socket),
-    do: {:noreply, load(assign(socket, page_title: "Found"))}
+  def handle_params(params, _uri, socket),
+    do: {:noreply, load(assign(socket, page_title: "Found", system: params["system"] == "true"))}
 
   def handle_info(:issues_changed, socket),
     do: {:noreply, DokkitWeb.Auth.debounce(socket, :page, &load/1)}
@@ -34,6 +34,13 @@ defmodule DokkitWeb.FoundLive do
     {:noreply, load(socket)}
   end
 
+  def handle_event("system", params, socket),
+    do:
+      {:noreply,
+       push_patch(socket,
+         to: if(params["system"] == "true", do: ~p"/found?system=true", else: ~p"/found")
+       )}
+
   def handle_event("scan", %{"id" => id}, socket) do
     if socket.assigns.current_user.role != :viewer,
       do: DokkitWeb.ApiController.look_again(id, "page")
@@ -42,8 +49,17 @@ defmodule DokkitWeb.FoundLive do
   end
 
   defp load(socket) do
+    {hidden, shown} =
+      Dokkit.Found.list(system: true)
+      |> Enum.split_with(&(&1.origin == "system" and !socket.assigns.system))
+
+    # A machine with only hidden findings still gets its group, to say how many.
+    empty = Map.new(hidden, &{&1.machine, []})
+
     assign(socket,
-      found: Enum.group_by(Dokkit.Found.list(), & &1.machine),
+      found: Map.merge(empty, Enum.group_by(shown, & &1.machine)),
+      hidden: length(hidden),
+      hidden_by: Enum.frequencies_by(hidden, & &1.machine_id),
       machines: Enum.filter(Dokkit.Read.machines(), &(&1.kind == :enrolled)),
       scans: Dokkit.Found.scans()
     )
@@ -86,6 +102,14 @@ defmodule DokkitWeb.FoundLive do
         <h1 tabindex="-1">
           {if @found != %{}, do: "Found, waiting for you", else: @page_title}
         </h1>
+        <form class="end" id="system-form" phx-change="system">
+          <span :if={@hidden > 0} class="mute">{@hidden} hidden</span>
+          <label class="mute" style="display: flex; align-items: center; gap: 8px">
+            <input type="hidden" name="system" value="false" />
+            <input type="checkbox" class="switch" name="system" value="true" checked={@system} />
+            Show system services
+          </label>
+        </form>
       </div>
 
       <div class="body">
@@ -119,7 +143,8 @@ defmodule DokkitWeb.FoundLive do
               <div class="grp">
                 <span id={"fh-#{machine.id}"}>{machine.name}</span><span class="end"><span class="tag">{length(
                   items
-                )} found</span></span>
+                )} found</span>
+                <span :if={@hidden_by[machine.id]} class="tag">{@hidden_by[machine.id]} hidden</span></span>
               </div>
 
               <%= for f <- items do %>
@@ -131,14 +156,22 @@ defmodule DokkitWeb.FoundLive do
                     value={f.id}
                     aria-label={"Select " <> f.detail["label"]}
                   />
-                  <div class="ti"><span>{f.detail["label"]}</span></div>
+                  <div class="ti">
+                    <span>{f.detail["label"]}</span>
+                    <span :if={f.origin} class="tag" style="flex: none" title={f.why}>{f.origin}</span>
+                  </div>
 
                   <span class="how">{if f.kind == "job", do: job_how(f.detail["source"]), else: how(f)}</span>
-                  <span class="mute">{f.detail["saw"]}</span> <span></span>
+                  <span class="mute">
+                    {f.detail["saw"]}
+                    <span :if={f.why} class="sub" style="display: block" title={f.why}>{f.why}</span>
+                  </span>
+                  <span></span>
                 </label>
                 <div :if={f.kind == "job"} class="lead" style="padding: 0 16px 12px 42px">
                   <div :if={f.detail["schedule"]}>
-                    Schedule <code>{f.detail["schedule"]}</code> (read as UTC). {f.detail["schedule_note"]}
+                    Schedule <code>{f.detail["schedule"]}</code>
+                    (read as UTC). {f.detail["schedule_note"]}
                   </div>
                   <div :if={!f.detail["schedule"]}>
                     No schedule Dokkit can read: {f.detail["schedule_note"]} A run that fails is noticed; a run that does not happen is not.

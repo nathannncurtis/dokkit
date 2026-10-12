@@ -10,6 +10,7 @@ defmodule Dokkit.Found do
   @max 2000
   @runs ~w(http tcp process windows-service systemd)a
   @from_record ~w(task-scheduler systemd-timer)
+  @origins ~w(system software yours)
 
   @doc "Takes a proposal file. Only what can be watched is kept: running services, listening ports, scheduled jobs, containers that publish a port and sites with an address."
   def propose(machine_id, %{"found" => %{} = found} = body) do
@@ -34,7 +35,7 @@ defmodule Dokkit.Found do
                "label" => text(s["display"]) || name,
                "saw" => "Running",
                "type" => to_string(type)
-             }}
+             }, s}
 
     ports =
       for %{"port" => port} = p <- List.wrap(found["ports"]),
@@ -43,7 +44,7 @@ defmodule Dokkit.Found do
           {:tcp, to_string(n)} not in watched,
           do:
             {"port", to_string(n),
-             %{"label" => "Port #{n}", "saw" => text(p["program"]) || "Listening"}}
+             %{"label" => "Port #{n}", "saw" => text(p["program"]) || "Listening"}, p}
 
     containers =
       for %{"name" => name, "port" => port} = c <- List.wrap(found["containers"]),
@@ -59,7 +60,7 @@ defmodule Dokkit.Found do
                "label" => text(name),
                "saw" => "Container " <> (text(c["image"]) || "") <> ", port #{n}",
                "port" => n
-             }}
+             }, c}
 
     sites =
       for %{"name" => name, "url" => url} = s <- List.wrap(found["sites"]),
@@ -75,7 +76,7 @@ defmodule Dokkit.Found do
                "label" => text(name),
                "saw" => "#{String.upcase(to_string(s["server"] || "web server"))} site at #{url}",
                "url" => url
-             }}
+             }, s}
 
     notes =
       for n <- List.wrap(body["notes"]), is_binary(n), do: String.slice(n, 0, 400)
@@ -85,15 +86,15 @@ defmodule Dokkit.Found do
           is_binary(name),
           slug(name) != "",
           slug(name) not in taken,
-          do: {"job", slug(name), job_detail(name, j, Enum.take(notes, 6))}
+          do: {"job", slug(name), job_detail(name, j, Enum.take(notes, 6)), j}
 
     now = DateTime.utc_now()
 
     # One row for each kind and key: a scan can list the same one twice.
     rows =
-      for {kind, key, detail} <-
+      for {kind, key, detail, src} <-
             (services ++ ports ++ containers ++ sites ++ jobs)
-            |> Enum.uniq_by(fn {kind, key, _} -> {kind, key} end)
+            |> Enum.uniq_by(fn {kind, key, _, _} -> {kind, key} end)
             |> Enum.take(@max) do
         %{
           id: Ecto.UUID.generate(),
@@ -101,18 +102,32 @@ defmodule Dokkit.Found do
           kind: kind,
           key: key,
           detail: detail,
+          origin: if(src["origin"] in @origins, do: src["origin"]),
+          why: text(src["why"]) || nil,
           inserted_at: now,
           updated_at: now
         }
       end
 
+    # A finding already decided about is left as it is; an undecided one takes the new look.
     Repo.insert_all(Finding, rows,
-      on_conflict: {:replace, [:detail, :updated_at]},
+      on_conflict:
+        from(f in Finding,
+          where: not f.dismissed,
+          update: [
+            set: [
+              detail: fragment("EXCLUDED.detail"),
+              origin: fragment("COALESCE(EXCLUDED.origin, ?)", f.origin),
+              why: fragment("COALESCE(EXCLUDED.why, ?)", f.why),
+              updated_at: fragment("EXCLUDED.updated_at")
+            ]
+          ]
+        ),
       conflict_target: [:machine_id, :kind, :key]
     )
 
     Dokkit.Issues.changed(false)
-    {:ok, Repo.aggregate(from(f in waiting(), where: f.machine_id == ^machine_id), :count)}
+    {:ok, Repo.aggregate(from(f in shown([]), where: f.machine_id == ^machine_id), :count)}
   end
 
   def propose(_, _), do: :error
@@ -172,10 +187,27 @@ defmodule Dokkit.Found do
 
   defp waiting, do: from(f in Finding, where: not f.dismissed)
 
-  def list,
-    do: Repo.all(from f in waiting(), order_by: [f.kind, f.key], preload: :machine)
+  # What a person would pick from: the operating system's own things are left out unless system: true.
+  defp shown(opts) do
+    if opts[:system],
+      do: waiting(),
+      else: from(f in waiting(), where: is_nil(f.origin) or f.origin != "system")
+  end
 
-  def count, do: Repo.aggregate(waiting(), :count)
+  @doc "The waiting findings, `yours` and unknown ones first, then `software`, then `system`; the last only with `system: true`."
+  def list(opts \\ []) do
+    Repo.all(
+      from f in shown(opts),
+        order_by: [
+          fragment("CASE ? WHEN 'software' THEN 1 WHEN 'system' THEN 2 ELSE 0 END", f.origin),
+          f.kind,
+          f.key
+        ],
+        preload: :machine
+    )
+  end
+
+  def count, do: Repo.aggregate(shown([]), :count)
 
   def dismiss(ids) do
     Repo.update_all(from(f in Finding, where: f.id in ^cast(ids)), set: [dismissed: true])
