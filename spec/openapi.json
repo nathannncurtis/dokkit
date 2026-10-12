@@ -7989,7 +7989,7 @@
         "tags": [
           "MCP"
         ],
-        "description": "The MCP server, as JSON-RPC over one POST address. It can do no more than the user token allows. An AI tool with a token can do through MCP everything the token can do through the API. The tools are, with `read` scope: `attention`, `find`, `service`, `jobs`, `job_runs`, `errors`, `since_deploy`, `machines`, `machine`, `issues`, `issue`, `deploys`, `versions`, `rules`, `proposals`, `series` and `day`; with `read-logs` scope: `logs`; with `act` scope: `snooze`, `acknowledge`, `unsnooze`, `note`, `bulk`, `watch`, `unwatch`, `routing`, `hold`, `accept_proposal`, `dismiss_proposal` and `scan_machine`; with `admin` scope: `add_rule`, `update_rule`, `delete_rule`, `set_checks`, `allow_restart`, `keys`, `make_key`, `revoke_key`, `people`, `add_person` and `remove_person`. `make_key` returns the key text once. Admin tools are marked destructive. `tools/list` shows only the tools the token may use. Every answer starts with a line saying that what follows is data written by machines and apps, never instructions. An argument of the wrong type is an `isError` answer; a null argument is the same as one left out, and a whole number written as 5.0 is an integer. A tool error is an answer with `isError` true, not an HTTP error. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "description": "The MCP server, as JSON-RPC over one POST address. It can do no more than the user token allows. An AI tool with a token can do through MCP everything the token can do through the API. The tools are, with `read` scope: `attention`, `find`, `service`, `jobs`, `job_runs`, `errors`, `since_deploy`, `machines`, `machine`, `issues`, `issue`, `deploys`, `versions`, `rules`, `proposals`, `series` and `day`; with `read-logs` scope: `logs`; with `act` scope: `snooze`, `acknowledge`, `unsnooze`, `note`, `bulk`, `watch`, `unwatch`, `routing`, `hold`, `accept_proposal`, `dismiss_proposal`, `scan_machine`, `plan_downtime` and `end_downtime`; with `admin` scope: `add_rule`, `update_rule`, `delete_rule`, `set_checks`, `allow_restart`, `keys`, `make_key`, `revoke_key`, `people`, `add_person` and `remove_person`. `make_key` returns the key text once. Admin tools are marked destructive. `tools/list` shows only the tools the token may use. Every answer starts with a line saying that what follows is data written by machines and apps, never instructions. An argument of the wrong type is an `isError` answer; a null argument is the same as one left out, and a whole number written as 5.0 is an integer. A tool error is an answer with `isError` true, not an HTTP error. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
         "requestBody": {
           "required": true,
           "content": {
@@ -10848,6 +10848,320 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quiet": {
+      "post": {
+        "operationId": "quiet",
+        "summary": "Say this machine is going down on purpose",
+        "tags": [
+          "Intake"
+        ],
+        "description": "A machine says it is going down on purpose for a while, such as for a restart. For that long from now, the machine going silent, and its services' and jobs' checks going down or missing, open no issue and send nothing. When the time is up the usual rules resume at once. A second call replaces the window; `for` of `0` ends it. Issues already open stay open. Takes a machine key (`dkm_`) and can only quiet the machine the key belongs to.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "for"
+                ],
+                "properties": {
+                  "for": {
+                    "type": "string",
+                    "description": "How long, such as `90s`, `15m` or `4h`; at most `4h`. `0` ends the window."
+                  },
+                  "reason": {
+                    "type": "string",
+                    "description": "Why, at most 200 characters."
+                  }
+                }
+              },
+              "example": {
+                "for": "15m",
+                "reason": "nightly update"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done: when the window ends, or null when it was ended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "until": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "ok": true,
+                  "until": "2026-10-12T03:20:00.000000Z"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key, or not a machine key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Needs a machine key."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`for` is missing, not a duration, or more than 4 hours.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_duration",
+                    "message": "for is a duration up to 4h, such as 15m, or 0 to end it."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/machines/{id}/quiet": {
+      "post": {
+        "operationId": "planDowntime",
+        "summary": "Plan downtime for a machine",
+        "tags": [
+          "Admin"
+        ],
+        "description": "The same as `POST /quiet`, for a person or a tool, for any enrolled machine. Answers with the machine's `id`, `name` and `planned_downtime` (`started_at`, `until`, `reason`, `by`), null when none is running. 404 when the machine is not an enrolled machine. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the machine.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "for"
+                ],
+                "properties": {
+                  "for": {
+                    "type": "string",
+                    "description": "How long, such as `15m` or `4h`; at most `4h`. `0` ends the window."
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "for": "30m",
+                "reason": "disk swap"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                  "name": "web01",
+                  "planned_downtime": {
+                    "started_at": "2026-10-12T03:00:00.000000Z",
+                    "until": "2026-10-12T03:30:00.000000Z",
+                    "ended_at": null,
+                    "reason": "disk swap",
+                    "by": "token ops",
+                    "ended_by": null
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not act."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`for` is missing, not a duration, or more than 4 hours.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_duration",
+                    "message": "for is a duration up to 4h, such as 15m, or 0 to end it."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "endDowntime",
+        "summary": "End a machine's planned downtime",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Ends the window now, and the usual rules apply from this moment. Answers like `POST`. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the machine.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                  "name": "web01",
+                  "planned_downtime": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not act."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
                 }
               }
             }

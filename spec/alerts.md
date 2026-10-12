@@ -21,6 +21,25 @@
 - A `soon` issue never pages and never follows a rule. If its route is `page` it is sent as a push; with no push destination set, the send fails, is shown as failed and is tried five times.
 - Paging again when a page is not acknowledged is left to the paging service's own escalation. Dokkit does not duplicate it.
 
+## Planned downtime
+
+A machine, a person or a tool can say a machine is going down on purpose (`POST /quiet`, `POST /machines/<id>/quiet`, `dokkit quiet`). A window is at most 4 hours. While a machine is in a window:
+
+- It is not called down for going silent, and no "stopped reporting" issue opens or alerts.
+- A check on it that reports `degraded` or `down` is recorded as seen and counts toward nothing: no failure is counted and no issue opens. A result that is `ok` is recorded as usual.
+- Its jobs and beats are not judged late or quiet. After the window ends they are judged only from the moment it ended, as after a server outage, so a run that was due during the window is not a missed run.
+- Issues that were open before the window stay open, and nothing about them changes.
+
+The window stops covering the machine at the first of these:
+
+1. Its time is up.
+2. A person, a tool or the machine ends it.
+3. The machine came back: the server saw it silent for at least 90 seconds after the window started, it has reported since then, and every check of a watched service on it that the program runs (web address, port, process, Windows service, systemd unit and custom checks) has reported at least once since the server saw it silent. Until then the window holds, so a service that takes a minute to start after boot does not alarm. A machine that restarts faster than the server's once-a-minute look is never seen silent, and its window runs until its time is up.
+
+From that moment the usual rules apply at once. If the machine is still silent when the window ends, the "stopped reporting" issue opens on the next sweep (within a minute, once the machine has been silent for 3 minutes) and carries a note: "Planned downtime ended at 03:20 UTC (reason). The machine has not reported since 03:02 UTC." A check that failed during the window is counted from the first result after it, so it opens an issue after its usual number of failures.
+
+Every start and end is kept in the machine's history with who asked: `machine` (its own key), a person's name, `token <label>` or `mcp`, and for an end also `machine back` or `replaced by <who>`. The first screen says how many machines are in a window, and the Everything page and the machine's own page show the window with an End now button.
+
 ## Night
 
 One night is set for the whole server on the Alerts page: a start hour, an end hour and a time zone (22 and 7 unless changed). The time zone is a name from the IANA database, such as `America/Los_Angeles`, so the night follows daylight saving. The Alerts page shows what time it is there and the night's hours beside the setting. While no time zone is set the night is read as UTC plus `night_offset`, whole hours (0 unless changed), and the Alerts page says so in a warning with the server's clock and the hour it takes for local time. An existing offset is never turned into a time zone by itself, because an offset does not name one. The time zone database is the `tz` package, compiled into the release with its data: nothing is fetched at run time and nothing updates it between releases.

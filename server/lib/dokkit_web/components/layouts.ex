@@ -38,7 +38,7 @@ defmodule DokkitWeb.Layouts do
           <span class={["dot", attention(m) > 0 && "warn"]}></span>{m.name}<span
             :if={attention(m) > 0}
             class="q"
-          >{attention(m)}</span><span :if={attention(m) == 0 and soon(m) > 0} class="q">{soon(m)} soon</span>
+          >{attention(m)}</span><span :if={attention(m) == 0 and soon(m) > 0} class="q">{soon(m)} soon</span><span :if={attention(m) == 0 and soon(m) == 0 and Map.get(m, :planned)} class="q">planned</span>
         </.link>
         <span class="grow"></span>
         <div class="me">

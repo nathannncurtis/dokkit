@@ -30,7 +30,7 @@ defmodule DokkitWeb.ApiControllerTest do
     body = json_response(call(:get, "/inbox", read), 200)
 
     assert Enum.sort(Map.keys(body)) ==
-             ~w(fine needs_you not_watched other_environments snoozed soon)
+             ~w(fine needs_you not_watched other_environments planned_downtime snoozed soon)
 
     assert %{"services" => _, "machines" => _} = body["fine"]
   end

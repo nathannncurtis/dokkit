@@ -11,6 +11,10 @@ defmodule Dokkit.Read do
       soon: Enum.map(soon, &issue/1),
       not_watched: for(f <- Dokkit.Found.list(), do: found(f)),
       snoozed: Enum.map(Issues.snoozed_list(), &issue/1),
+      planned_downtime:
+        for m <- Issues.machines(), m.planned do
+          Map.merge(%{machine: m.name, id: m.id}, Dokkit.Quiet.view(m.planned))
+        end,
       other_environments:
         for {env, list} <- Enum.group_by(other, & &1.service.environment) |> Enum.sort() do
           %{environment: env, issues: Enum.map(list, &issue/1)}
@@ -94,12 +98,24 @@ defmodule Dokkit.Read do
         end)
       end)
 
+    planned =
+      Repo.all(
+        from w in Dokkit.QuietWindow,
+          where: w.started_at < ^edge and coalesce(w.ended_at, w.until) > ^from,
+          select: {w.machine_id, w.started_at, coalesce(w.ended_at, w.until)}
+      )
+      |> Enum.flat_map(fn {id, first, last} ->
+        for n <- max(index.(first), 0)..min(index.(last), @cells - 1)//1, do: {id, n}
+      end)
+      |> MapSet.new()
+
     rows =
       for m <- machines do
         cells =
           for n <- 0..(@cells - 1) do
             cond do
               rank = worst[{m.id, n}] -> @states[rank]
+              {m.id, n} in planned -> "planned"
               {m.id, n} in heard -> "quiet"
               true -> "none"
             end
@@ -146,6 +162,7 @@ defmodule Dokkit.Read do
     for m <- Issues.machines() do
       m
       |> Map.take([:id, :name, :kind, :os, :last_seen_at, :down])
+      |> Map.put(:planned_downtime, Dokkit.Quiet.view(m.planned))
       |> Map.put(:needs_a_look, m.bad)
       |> Map.put(:vitals, Dokkit.Numbers.vitals()[m.id] || %{})
     end
@@ -187,6 +204,7 @@ defmodule Dokkit.Read do
 
       Map.merge(m, %{
         silent: silent(Dokkit.Estate.machine(id)),
+        downtime_history: Enum.map(Dokkit.Quiet.history(id), &Dokkit.Quiet.view/1),
         metrics: Dokkit.Numbers.machine_latest(id),
         services: services(%{"machine" => id}),
         thresholds: %{

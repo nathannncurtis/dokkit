@@ -97,11 +97,20 @@ defmodule Dokkit.Watch do
 
   @doc "Returns how many jobs and beats it flagged."
   def sweep(now \\ DateTime.utc_now(), booted \\ nil) do
+    quiet = MapSet.new(Dokkit.Quiet.active(now), & &1.machine_id)
+    over = Dokkit.Quiet.overs()
+
     Repo.all(
       from c in Check, where: c.type in [:job, :beat] and c.state != :down, preload: :service
     )
+    |> Enum.reject(&(&1.service.machine_id in quiet))
     |> Enum.count(fn check ->
-      case safe_verdict(check, now, booted) do
+      since =
+        [booted, over[check.service.machine_id]]
+        |> Enum.reject(&is_nil/1)
+        |> Enum.max(DateTime, fn -> nil end)
+
+      case safe_verdict(check, now, since) do
         nil -> false
         {title, note} -> Issues.record(check, :down, at: now, title: title, note: note)
       end

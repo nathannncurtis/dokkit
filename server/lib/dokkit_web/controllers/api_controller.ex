@@ -439,6 +439,27 @@ defmodule DokkitWeb.ApiController do
   def scan_machine(conn, %{"id" => id}),
     do: reply(conn, look_again(id, "token " <> (conn.assigns.key.label || "")))
 
+  @doc "Starts planned downtime for an enrolled machine, or ends it with `for` of 0."
+  def plan_downtime(id, params, who) do
+    case Dokkit.Quiet.start(id, params, who) do
+      {:ok, _} -> Read.machine(id) |> Map.take([:id, :name, :planned_downtime])
+      error -> error
+    end
+  end
+
+  def end_downtime(id, who) do
+    case Dokkit.Quiet.stop(id, who) do
+      {:ok, _} -> Read.machine(id) |> Map.take([:id, :name, :planned_downtime])
+      error -> error
+    end
+  end
+
+  def quiet_machine(conn, %{"id" => id} = params),
+    do: reply(conn, plan_downtime(id, params, "token " <> (conn.assigns.key.label || "")))
+
+  def end_quiet_machine(conn, %{"id" => id}),
+    do: reply(conn, end_downtime(id, "token " <> (conn.assigns.key.label || "")))
+
   @doc "Approves a release for one machine, or for every machine that has an updater."
   def approve_update(version, id) do
     case Dokkit.Releases.approve(version, id) do

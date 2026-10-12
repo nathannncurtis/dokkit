@@ -39,6 +39,8 @@ dokkit enrol <address> <token> [sha256:<certificate fingerprint>]
 dokkit watch [--background]
 dokkit startup on|off
 dokkit status
+dokkit quiet <length> [reason]
+dokkit quiet end
 dokkit folder add|remove <path>
 dokkit folder list
 dokkit imessage on|off|status
@@ -174,6 +176,8 @@ func cli(args []string) int {
 		return c.status()
 	case "propose":
 		return c.propose()
+	case "quiet":
+		return c.quiet(args[1:])
 	case "doctor":
 		return c.doctor()
 	}

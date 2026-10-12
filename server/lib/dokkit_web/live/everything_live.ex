@@ -46,6 +46,16 @@ defmodule DokkitWeb.EverythingLive do
   def handle_event("update_all", _, socket),
     do: owner(socket, fn held -> Dokkit.Releases.approve(held, :all) end)
 
+  def handle_event("quiet_start", %{"quiet" => p}, socket) do
+    DokkitWeb.QuietBand.start(socket, p)
+    {:noreply, load(socket)}
+  end
+
+  def handle_event("quiet_end", %{"machine" => id}, socket) do
+    DokkitWeb.QuietBand.stop(socket, id)
+    {:noreply, load(socket)}
+  end
+
   defp owner(socket, act) do
     held = Dokkit.Releases.newest()
     if socket.assigns.current_user.role == :owner and held, do: act.(held)
@@ -53,13 +63,15 @@ defmodule DokkitWeb.EverythingLive do
   end
 
   defp load(socket) do
-    down = for m <- Dokkit.Issues.machines(), m.down, do: m.id
+    listed = Dokkit.Issues.machines()
+    down = for m <- listed, m.down, do: m.id
     machines = Estate.machines()
     held = Dokkit.Releases.newest()
 
     assign(socket,
       machines: machines,
       down: down,
+      planned: for(m <- listed, m.planned, into: %{}, do: {m.id, m.planned}),
       vitals: Dokkit.Numbers.vitals(),
       held: held,
       movable: Enum.count(machines, &can_move?(&1, held))
@@ -196,11 +208,18 @@ defmodule DokkitWeb.EverythingLive do
           <%= for m <- @machines do %>
             <div class="mg" role="group" aria-labelledby={"mh-#{m.id}"}>
               <div class="grp" id={"m-#{m.id}"}>
-                <span id={"mh-#{m.id}"} style="display:flex; align-items:center; gap:8px"><.lvl state={
-                  if m.id in @down, do: :down, else: worst(m.services)
-                } />{m.name}</span>
+                <span id={"mh-#{m.id}"} style="display:flex; align-items:center; gap:8px"><span
+                    :if={@planned[m.id] && m.id not in @down}
+                    class="lvl away"
+                    role="img"
+                    aria-label="Planned downtime"
+                  ></span><.lvl
+                    :if={!@planned[m.id] || m.id in @down}
+                    state={if m.id in @down, do: :down, else: worst(m.services)}
+                  />{m.name}</span>
                 <span :if={m.os} class="mute" style="font-weight:400">{m.os}</span>
                 <span class="end">
+                  <span :if={@planned[m.id]} class="tag">Planned downtime until {Calendar.strftime(@planned[m.id].until, "%H:%M")} UTC</span>
                   <span :if={m.id in @down} class="tag warn">Stopped reporting {at(m.last_seen_at)} UTC</span>
                   <span :if={count(m.services, :bad) > 0} class="tag warn">{need(
                     count(m.services, :bad)
@@ -218,6 +237,12 @@ defmodule DokkitWeb.EverythingLive do
                 </span>
               </div>
               
+              <DokkitWeb.QuietBand.band
+                machine={m.id}
+                planned={@planned[m.id]}
+                disabled={@current_user.role == :viewer}
+              />
+
               <div :if={m.has_updater} class="foot" id={"upd-#{m.id}"}>
                 <span class="mono">
                   Program {m.program_version || "unknown"}{m.hosts_server &&
