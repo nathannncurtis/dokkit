@@ -1768,7 +1768,7 @@
         "tags": [
           "Read"
         ],
-        "description": "Error groups by type and place, newest first, at most 200. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "description": "Error groups by type and place, newest first, from the newest 1,000. Takes a user token (`dku_`) with the `read` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
         "responses": {
           "200": {
             "description": "OK.",

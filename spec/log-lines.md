@@ -8,11 +8,12 @@ One JSON object per line.
 
 | Field | Required | Holds |
 |---|---|---|
-| `t` | Yes | When it happened. RFC 3339. |
-| `level` | Yes | `trace`, `debug`, `info`, `warn`, `error` or `fatal`. |
+| `t` | No | When it happened. RFC 3339. A line without it, with one that cannot be read, dated in the future or a year or more back, is stamped with the time it arrived. |
+| `level` | No | `trace`, `debug`, `info`, `warn`, `error` or `fatal`, in lower case. A missing or unrecognised level is stored as `info`. |
 | `msg` | No | The line. A line without it is kept whole, as JSON, as its message. |
 | `service` | No | The service id. Filled in from `dokkit.toml` or the app key when absent. |
 | `fields` | No | Anything else, as a flat object. Searchable. |
+| `environment` | No | The environment of the run. `production` or absent leaves the line on the service; another value puts it on a sibling service that never alerts, unless the service has a `dokkit.toml` declaration (`api.md`, under `POST /report`). |
 
 A line that is not JSON is kept as `msg` with level `info` and the time it was read.
 
@@ -32,11 +33,12 @@ Dokkit also reads the Compact Log Event Format, the open line format written by 
 | `@l` | `level`. Absent means `info`. |
 | `@m`, or `@mt` rendered | `msg` |
 | `@x` | `fields.exception` |
+| `@i`, `@r` | Dropped. |
 | Everything else | `fields` |
 
 ### Through Seq's address
 
-`POST /api/events/raw` (and `POST /ingest/clef`) takes what Seq clients send, so an app moves by changing its server URL and API key to Dokkit's and an app key. The key is read from `X-Seq-ApiKey` or `?apiKey=`. Both body forms are read: CLEF lines, and the older `{"Events": [...]}` form, whose `Timestamp`, `Level`, `MessageTemplate`, `RenderedMessage`, `Exception` and `Properties` are read as `@t`, `@l`, `@mt`, `@m`, `@x` and the properties of a CLEF line. The service is the app key's service. Level names are read without regard to case and in their short forms: `Verbose`, `Trace`, `Silly` (trace), `Debug` (debug), `Information`, `Info` (info), `Warning`, `Warn` (warn), `Error` (error), `Fatal`, `Critical` (fatal). A template is rendered with the properties, so `Saved {File}` is stored as `Saved a.pdf`; a property the template does not name stays in `fields`. A property called `service`, `at` or `type` is kept as `service_name`, `seq_at` or `seq_type`. The limits are those of `POST /report`.
+`POST /api/events/raw` (and `POST /ingest/clef`) takes what Seq clients send, so an app moves by changing its server URL and API key to Dokkit's and an app key. The key is read from `X-Seq-ApiKey` or `?apiKey=`. Both body forms are read: CLEF lines, and the older `{"Events": [...]}` form, whose `Timestamp`, `Level`, `MessageTemplate`, `RenderedMessage`, `Exception` and `Properties` are read as `@t`, `@l`, `@mt`, `@m`, `@x` and the properties of a CLEF line. The service is the app key's service; a property called `environment` is read as on any report line. Level names are read without regard to case and in their short forms: `Verbose`, `Trace`, `Silly` (trace), `Debug` (debug), `Information`, `Info` (info), `Warning`, `Warn` (warn), `Error` (error), `Fatal`, `Critical` (fatal); the one-to-three-letter forms Serilog writes (`Vrb`, `Dbg`, `Inf`, `Wrn`, `Err`, `Ftl`) are read too, and an unknown name is stored as `info`. A template is rendered with the properties, so `Saved {File}` is stored as `Saved a.pdf`; a property the template does not name stays in `fields`. A property called `service`, `at` or `type` is kept as `service_name`, `seq_at` or `seq_type`. The limits are those of `POST /report`.
 
 ## Limits
 

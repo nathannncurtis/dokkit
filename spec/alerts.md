@@ -42,16 +42,17 @@ An issue closes itself after as many good results in a row as it takes to open: 
 | `sms` | A Twilio account: one request to Twilio for each recipient, sent from the Twilio number in the settings. |
 | `digest` | One email a day. |
 | `webhook` | A plain web request to an address. |
+| `none` | Nobody. Nothing is sent. It can be chosen wherever a channel is chosen. |
 
 ## Rules
 
-A rule is a condition, a channel, and who receives it. Each service also has its own routing for `down` and for `degraded`, which a `dokkit.toml` can suggest and the interface decides.
+A rule is a condition, a channel (`none` among them), and who receives it. Rules are kept in order and the first one that fits wins; a rule can be switched off. Each service also has its own routing for `down` and for `degraded`, which a `dokkit.toml` can suggest and the interface decides.
 
 ## The digest
 
-Sent once a day at a time that is a setting. It holds:
+Sent once a day at a time that is a setting (07:00 UTC unless changed). It holds:
 
-- errors from desktop apps, by machine and app
+- errors first seen in the last day, from any app, by machine and service
 - issues that opened without paging, and issues that closed without paging and had opened before the day began
 - anything about to cross a limit
 
@@ -69,11 +70,11 @@ An alert to named people is sent to each person's own destination for the channe
 
 ## Dokkit's own health
 
-Dokkit keeps a row for itself with checks for taking reports, its database, its archive folder and its certificate. When no machine has reported for 10 minutes, or the database does not answer, the row is down and takes the channel set on the Alerts page for that, which is the loudest channel that is set up (a page, then SMS, iMessage, push, email) unless one is chosen. An archive folder that cannot be written to and a certificate inside its warning window are degraded and push unless another channel is chosen. The row's two routes follow those two settings. The outside heartbeat is the way to hear of Dokkit being down altogether.
+Dokkit keeps a row for itself with checks for taking reports, its database, its archive folder and its certificate. When no machine has reported for 10 minutes, or the database does not answer, the row is down and takes the channel set on the Alerts page for that, which is the loudest channel that is set up (a page, then SMS, iMessage, push, email) unless one is chosen. An archive folder that cannot be written to and a certificate inside its warning window (21 days) are degraded and push unless another channel is chosen; a certificate that has run out is down. The row's two routes follow those two settings. The outside heartbeat is the way to hear of Dokkit being down altogether.
 
 ## Suggestions
 
-Dokkit notices patterns in how alerts are handled, for example an alert that fired six times and was snoozed every time, and offers a change. A suggestion is accepted or dismissed by a person. Dokkit never changes a rule itself.
+Dokkit notices patterns in how alerts are handled, for example an issue that has opened six or more times in a month and is snoozed, and offers the daily digest for its service. A suggestion is accepted or dismissed by a person. Dokkit never changes a rule itself.
 
 ## Not now
 

@@ -35,7 +35,9 @@ Two doors. Dokkit's own is the front door. The second exists so that an app in a
 
 Not accepted at all: request bodies, headers, cookies, local variables, user records.
 
-Errors are grouped by `type` and the app's own frames. A group is one row in the interface.
+Errors are grouped by `type` and the `file` and `function` of the app's own frames; the line number is not part of it, so an edit above the line does not split a group. A report with no own frame is grouped by all its frames. A group is one row in the interface.
+
+Limits: `type` is cut at 200 characters, `file`, `function`, `release` and `host` at 300, the last 100 frames are kept, and at most 20 tags, with names cut at 50 and values at 200. An `at` in the future, or one that is not a time, is replaced by the time the report arrived.
 
 ## Reports from Sentry's open-source SDKs
 

@@ -11,20 +11,21 @@ The server and the `dokkit` program are being built, against the contract in `sp
 Working, with tests:
 
 - **Jobs.** A job is added in the interface and reports with a plain web request or with `dokkit run`. A failed run opens an issue at once; a missed or overlong one within a minute.
-- **Checks.** A `dokkit.toml` declares a service and its checks. `dokkit watch` runs http, tcp, process and Windows-service checks, and three failures in a row open an issue.
+- **Checks.** A `dokkit.toml` declares a service and its checks. `dokkit watch` runs http, tcp, process, Windows-service and systemd checks, and three failures in a row open an issue.
 - **Beats.** An app sends a `beat` line from its main loop. When two are missed and a minute more passes, an issue opens: the app is up and stuck.
 - **Deploys.** A service's version changing is a deploy. `dokkit watch` reads the version from the file `version_from` names, or CI says it with one request. The Deploys page lists them, and the Versions page shows which version is on which machine.
 - **Errors.** An app posts an error with its type and stack. Reports are grouped by type and the app's own frames, and message text is not kept. The Errors page lists the groups. Dokkit also accepts reports from Sentry's open-source SDKs.
 - **Numbers.** `dokkit watch` sends each machine's processor, memory and disk use, fetches a service's stats document, and apps can send their own metrics. A threshold check opens an issue when a number is over its limit, and an expiry check warns 30 days before a certificate or a dated file runs out. Service pages chart the last 24 hours.
 - **Machines.** A machine enrols with a one-use token and says it is alive once a minute. Three minutes of silence opens one issue and quiets what runs on it.
-- **Alerts.** A page through PagerDuty, a quiet push through ntfy, Pushover or PagerDuty, an email, an iMessage through a Mac, an SMS through Twilio, a daily digest, or a webhook. Rules send one kind of issue somewhere else. Once per issue, resolved when it closes. Email, iMessage and SMS go to several addresses. An issue that keeps being snoozed is offered the daily digest. Each machine's disks and memory are watched against two limits without anything declared.
+- **Alerts.** A page through PagerDuty, a quiet push through ntfy, Pushover or PagerDuty, an email, an iMessage through a Mac, an SMS through Twilio, a daily digest, or a webhook. Rules send one kind of issue somewhere else. Once per issue, resolved when it closes. Each person has their own destinations, and a check, a service, a rule or the default names who is told. An issue that keeps being snoozed is offered the daily digest. Each machine's disks and memory are watched against two limits without anything declared.
 - **Logs.** Lines in Dokkit's format or CLEF, kept in monthly partitions, searched on the Logs page. `dokkit watch` reads the log files a `dokkit.toml` names.
-- **Found.** `dokkit scan` writes what is on a machine to a file and `dokkit propose` sends it. Running Windows services and listening ports wait on the Found page, and watching one adds a check that `dokkit watch` runs on that machine.
-- **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Errors, Deploys, Found, Alerts and Settings. People sign in; the first one claims the server with a setup code. A service page stops and starts watching, holds a version, keeps error messages or not, takes notes on its open issue, and lets the installed program start a stopped Windows service again. Versions lists desktop apps by how many PCs are on each version.
+- **Found.** `dokkit scan` writes what is on a machine to a file and `dokkit propose` sends it. Running services, listening ports, scheduled jobs, containers that publish a port and sites with an address wait on the Found page, and watching one adds a check or a job that `dokkit watch` runs or follows on that machine. A machine looks again once a day and when asked from the Found page.
+- **The interface.** Inbox with snooze, Everything, Jobs, service pages, Logs, Errors, Deploys, Found, Alerts and Settings. People sign in, with two-step codes if they turn them on; the first one claims the server with a setup code. Settings choose the theme, the dark base and the accent. A service page stops and starts watching, holds a version, keeps error messages or not, takes notes on its open issue, and lets the installed program start a stopped Windows service or systemd unit again. Versions lists desktop apps by how many PCs are on each version.
+- **Updates.** The server holds signed releases. A person approves a version for one machine or for all, and the updater on each machine, installed once by an administrator, installs it. It has been run on Windows, Linux, macOS and a QNAP NAS.
 - **Libraries.** For Python, .NET, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift, one file each: beats, job progress, an app's own checks, errors, logs.
 - **The API and the MCP**, for user tokens made in Settings. Every read and act call in `spec/api.md` is there, and a token with the `admin` scope manages keys, people, rules, checks and restart.
 
-Written and not yet run on a real machine: the Windows install script for the server, the Docker image, installing the program as a service, and sending mail through a real mail server.
+Not yet run on a real machine: the Docker image and the install script for a VPS, the program as a service on a Mac (it runs there as a launchd agent), and sending mail through a real mail server.
 
 To run it for development, with Postgres on localhost:
 
@@ -92,7 +93,7 @@ go build -o dokkit.exe .
 
 - A scan is a command. It writes a proposal, and nothing is watched until the proposal is accepted.
 - Every part of a scan can be switched off, and a scan never reads file contents, credentials, browser data or another program's memory.
-- It never updates itself and never replaces its own file. The interface says when a machine is behind and can ask it to fetch the newer copy; someone finishes the update on that machine, as an administrator.
+- It never updates itself and never replaces its own file. The interface says when a machine is behind. A separate updater, which an administrator installs once on the machine, installs a signed release that a person has approved in the interface.
 - Whoever builds it signs it with their own certificate; the project hands out no builds signed with anyone's. It must never require antivirus to be turned off.
 
 ### The API

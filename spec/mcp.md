@@ -52,6 +52,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `dismiss_proposal` | `act` | Dismisses a proposal. |
 | `keep_messages` | `act` | Keeps or stops keeping the text of a service's errors. |
 | `set_job_timing` | `act` | Sets when a job counts as late and as run too long. A field left out stays as it was; an empty one clears it. |
+| `scan_machine` | `act` | Asks an enrolled machine to look itself over again and send what it finds to proposals. Nothing found is watched until accepted. |
 | `add_rule` | `admin` | Adds an alert rule. |
 | `update_rule` | `admin` | Changes an alert rule. A field left out stays as it was; an empty one clears it. |
 | `delete_rule` | `admin` | Deletes an alert rule. |
@@ -96,4 +97,4 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 
 ## Built so far
 
-`POST /mcp` with a user token: every tool in the table, 63 in all (20 `read`, 2 `read-logs`, 13 `act`, 28 `admin`), one for each call of the API a token can make. Making a full-control token and the browser's own sign-in have no tool: they are Settings and the browser only. A tool the token may not use is not listed.
+`POST /mcp` with a user token: every tool in the table, 68 in all (23 `read`, 2 `read-logs`, 14 `act`, 29 `admin`), one for each call of the API a token can make. Making a full-control token and the browser's own sign-in have no tool: they are Settings and the browser only. A tool the token may not use is not listed.

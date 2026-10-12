@@ -1,6 +1,6 @@
 # The Dokkit API (v1)
 
-This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Built so far: `POST /report` for `job`, `state`, `custom`, `beat`, `metric`, `stats`, `deploy` and `log` lines, `GET /services/<id>/series`, versions in `inventory`, `POST /deploys`, `POST /errors`, the ping URLs, `GET /ping`, `PUT /declare`, `POST /proposals`, `GET /checks`, taking work, and the read and act calls for issues (with notes and bulk actions), machines, services, versions, jobs, logs, errors, deploys, rules and proposals, and for a service its routing, watching, interface-added checks, held version and restart. The `admin` calls are `GET`, `POST` and `DELETE` on `/keys` and `/users`, the rule calls, `PUT /services/<id>/checks` and `PUT /services/<id>/restart`: a new key is shown once, in the answer that made it, and the last owner cannot be removed. A token with `act` can accept or dismiss a found thing; Alert settings, jobs, job timing, error text, the program update, archived logs and alert suggestions have calls too. A full-control token (with `admin`) is made only in Settings, and signing in, the password and the theme belong to the browser.
+This is the contract. The server, `dokkit`, the CLI, the client libraries and the MCP are all tested against it. Every call described here is served. Signing in, the password, two-step sign-in and the theme belong to the browser and are not part of the API. A token with `admin` is made only in Settings.
 
 ## One rule
 
@@ -17,7 +17,7 @@ There is one HTTP API on the server. `dokkit`, the CLI, the libraries, the MCP a
 | **Issue** | Opens when a check goes bad and closes by itself when it recovers. Has a short id (`DOK-12`), a kind, a since-time and a count. Can be snoozed until a time or acknowledged. |
 | **Job run** | One run of a job: start, finish, exit code, duration, progress, last lines of output. |
 | **Deploy** | Version X of service S went onto machine M at time T. |
-| **Rule** | A condition, a channel (`page`, `push`, `email`, `imessage`, `sms`, `digest`, `webhook`) and who receives it. |
+| **Rule** | A condition, a channel (`page`, `push`, `email`, `imessage`, `sms`, `digest`, `webhook`, or `none`, shown as Nobody, which sends nothing) and who receives it. A rule made without a channel gets `none`. |
 | **Proposal** | Something found that is not active until accepted in the interface: scan results. |
 | **Environment** | `production` by default. Anything reported under another environment, such as `dev`, is shown and never alerts. |
 
@@ -46,9 +46,9 @@ Every key has a recognisable prefix and a built-in checksum, so a leaked one can
 | Enrolment token | `dke_` | Pasted once into `dokkit enrol` | One use, expires after 4 hours. Trades for a machine key. |
 | Machine key | `dkm_` | `dokkit` | Report for that machine, propose, take work. |
 | App key | `dka_` | A library, or a script inside an app | Write-only, for one service. It can read nothing, is rate-limited and can be revoked, so it is safe inside a desktop or phone app. |
-| User token | `dku_` | Scripts and the MCP | Scopes: `read`, `read-logs`, `act`, `admin`. |
+| User token | `dku_` | Scripts and the MCP | Scopes: `read`, `read-logs`, `act`, `admin`. Each call needs the one scope it names; `admin` does not include the others. |
 
-The web interface uses a login session, not a token. A session lasts 14 days, and signing out or changing the password ends every session of that person. Every sign-in or password change is counted before the password is checked: after 10 from one name and address together, or 30 from one address, in ten minutes, the answer is `429` with `Retry-After` until the window passes. Many attempts on one name from different addresses are slowed, not refused. Behind a proxy the address is the last `X-Forwarded-For` entry. A person can turn on two-step sign-in at `/two-step`: signing in then asks for the password and after it a six-digit code from an authenticator app (TOTP, 30 seconds, SHA-1). Each code works once, and wrong codes are counted the same way as wrong passwords. Turning it on shows ten recovery codes once (two groups of six characters); they are stored only as hashes. At the code step a recovery code can be typed in place of an authenticator code and works once; signing in with one lands on `/two-step`, which says so and how many are left. `/two-step` can make a new set with a current authenticator code, which ends the old set. Turning two-step off, or `totp_reset`, deletes the codes. Tokens are not affected. Someone who lost their phone is let back in from the server itself with `bin/dokkit rpc 'Dokkit.Accounts.totp_reset("name")'`. A user token made by a person stops working when that person is removed; user tokens made before that was recorded are not tied to anyone and have to be revoked and made again.
+The read and act calls take only a user token. The web interface uses a login session, not a token, and a session is not accepted on `/api/v1`. A session lasts 14 days, and signing out or changing the password ends every session of that person. Every sign-in or password change is counted before the password is checked: after 10 from one name and address together, or 30 from one address, in ten minutes, the answer is `429` with `Retry-After` until the window passes. Many attempts on one name from different addresses are slowed, not refused. Behind a proxy the address is the last `X-Forwarded-For` entry. A person can turn on two-step sign-in at `/two-step`: signing in then asks for the password and after it a six-digit code from an authenticator app (TOTP, 30 seconds, SHA-1). Each code works once, and wrong codes are counted the same way as wrong passwords. Turning it on shows ten recovery codes once (two groups of six characters); they are stored only as hashes. At the code step a recovery code can be typed in place of an authenticator code and works once; signing in with one lands on `/two-step`, which says so and how many are left. `/two-step` can make a new set with a current authenticator code, which ends the old set. Turning two-step off, or `totp_reset`, deletes the codes. Tokens are not affected. Someone who lost their phone is let back in from the server itself with `bin/dokkit rpc 'Dokkit.Accounts.totp_reset("name")'`. A user token made by a person stops working when that person is removed; user tokens made before that was recorded are not tied to anyone and have to be revoked and made again.
 
 Roles for people: `owner`, `member`, and `viewer`. A viewer sees everything except secrets and keys.
 
@@ -56,13 +56,13 @@ Roles for people: `owner`, `member`, and `viewer`. A viewer sees everything exce
 
 - Base path `/api/v1`. Within v1, changes only ever add. Unknown fields are ignored by both sides.
 - Requests and answers are JSON unless stated.
-- Keys travel as `Authorization: Bearer <key>`.
+- Keys travel as `Authorization: Bearer <key>`. The exceptions: the ping URLs carry the app key in the path, the Seq doors take it in `X-Seq-ApiKey` or `?apiKey=`, and the Sentry door takes it as `sentry_key` in `X-Sentry-Auth`, in the query or in the envelope's first line.
 - `POST /report`, `POST /errors` and the ping URLs answer `OPTIONS` and send `Access-Control-Allow-Origin: *`, so a browser page can use an app key.
 - Times are RFC 3339 in UTC.
 - Lists use cursors. A list answer is `{"items": [...], "next": "<cursor or null>"}` and the next page is asked for with `?cursor=`. A cursor is opaque and marks a place in the list, not a page number, so items added or removed between two calls leave no gap and no repeat. `?limit=` is 1 to 500 and defaults to 100 (500 for `/logs`). A cursor that is not one answers `422` with the code `bad_cursor`. Lists drawn from deploys and error groups reach back to the newest 1,000.
 - Lists take `q` (search), `machine` (id or name), `service` (id), `environment`, `from` and `to` (RFC 3339; a bad time answers `422` with `bad_time`) wherever those make sense: `/issues` all of them (`from` and `to` on when the issue opened), `/machines` `q` and `machine`, `/services` and `/jobs` `q`, `machine`, `service` and `environment`, `/deploys` and `/errors` all of them, `/jobs/<id>/runs` `from`, `to` and `result`, `/proposals` `q`, `machine` and `kind`, `/keys` `q`, `kind`, `machine`, `from` and `to`, `/users`, `/rules` and `/releases` `q`. `/services` also takes `kind` and `/jobs` `state`.
-- An error answer is `{"error": {"code": "...", "message": "..."}}`.
-- `401` for a missing or bad key, `403` for a key without the scope, `404` for something that does not exist or that the key may not know exists, `413` for too large, `422` for a body that does not fit this contract (a body that is not valid gzip answers `422` with the code `bad_gzip`), `429` with `Retry-After` when the server is busy or a key has used up its request bucket.
+- An error answer is `{"error": {"code": "...", "message": "..."}}`. Errors the web framework raises itself, such as a route that does not exist (`404`) or a body that is not valid JSON (`400`), answer `{"errors": {"detail": "Not Found"}}` instead, with the status's own words, when the request accepts JSON.
+- `401` for a missing or bad key (code `bad_key`), `403` for a key without the scope (code `no_scope`), `404` for something that does not exist or that the key may not know exists, `413` for too large, `422` for a body that does not fit this contract (a body that is not valid gzip answers `422` with the code `bad_gzip`), `429` with `Retry-After` when an app key has used up its request bucket (code `rate_limited`). The only other `429` is the sign-in throttle, which belongs to the browser.
 
 ### Encryption
 
@@ -82,12 +82,16 @@ The server stamps every item with its own receive time and a log line keeps both
 - A report batch: 5 MB compressed, 10,000 lines.
 - One log line: 64 KB. Longer lines are cut and marked as cut.
 - The last lines of a job's output: 16 KB.
-
-**Read and act, built so far:** `GET /inbox`, `/issues`, `/machines`, `/services`, `/services/<id>`, `/jobs`, `/jobs/<id>/runs` and `/logs`, and `POST /issues/<id>/snooze`, `/unsnooze` and `/acknowledge`, all with a user token made in Settings.
+- A gzip body that inflates to more than 100 MB is refused as too large.
+- An app key has one bucket of 10,000, refilling at 100 a second, for every call it makes. `POST /report` takes one for each line; every other call takes one.
 
 ## Intake
 
-Machine key or app key.
+Machine key or app key, except where a call says otherwise: `POST /enrol` takes an enrolment token in its body, the ping URLs and the Sentry door take an app key, and `POST /proposals`, `GET /records`, `GET /checks`, the work calls, the update calls and `GET /program/<os>-<arch>` take a machine key only (`401` for any other).
+
+### `GET /ping`
+
+`{"ok": true, "time": "<RFC 3339>"}`, for a machine to check its address, its key and its clock. Any machine key or app key.
 
 ### `POST /enrol`
 
@@ -107,7 +111,7 @@ The answer:
 {"accepted": 412, "refused": [{"line": 17, "code": "unknown_service", "message": "..."}]}
 ```
 
-A refused line does not fail the batch, including a line the database cannot store. An app key is limited to a bucket of 10,000 lines refilling at 100 a second and answers `429` with `Retry-After` when it is empty. It may make 100 checks per service.
+A refused line does not fail the batch, including a line the database cannot store. An app key is limited to a bucket (see Limits) and answers `429` with `Retry-After` when it is empty. It may make 100 checks per service; a line that would make a 101st is refused with `too_many_checks`.
 
 Every line has `type` and `at`. With a machine key the machine is known. With an app key the service is known, and the line may carry `host` so the machine can be recorded as seen.
 
@@ -228,9 +232,13 @@ POST /errors                        Dokkit's own format
 POST /api/<project>/envelope/       reports from Sentry's open-source SDKs
 ```
 
+### `POST /mcp`
+
+The MCP, as JSON-RPC over one address outside `/api/v1`. It takes a user token and does no more than that token's scopes allow; `GET /mcp` answers `405`. See `mcp.md`.
+
 ## Read
 
-A login session, or a user token with `read`. Log contents need `read-logs`: without it, job output, error messages and the notes on issues, services and checks are left out of every answer.
+A user token with `read`. Log contents need `read-logs`: without it, job output, error messages and the notes on issues, services and checks are left out of every answer.
 
 | Call | Gives |
 |---|---|
@@ -242,12 +250,12 @@ A login session, or a user token with `read`. Log contents need `read-logs`: wit
 | `GET /services/<id>/series` | Chart data. Takes `metric`, `from`, `to` and `points`. |
 | `GET /issues`, `GET /issues/<id>` | Issues, newest first. `state` is `open` (not snoozed), `snoozed`, `closed` or `all`; left out, the open and snoozed ones. One issue has `history`, oldest first: `opened`, each `note` (with `by` and `note`), `acknowledged`, `snoozed` and `closed`. Dokkit keeps only the current snooze, so `snoozed` has `until` and no `at`. |
 | `GET /jobs`, `GET /jobs/<id>/runs` | Jobs with schedule, last run, last good run and next expected run; then the runs, newest first. A run has `done` and `total` while it reports progress, which the Jobs page and the service page show as a bar and "4,000 of 9,000" for a run in progress. |
-| `GET /logs` | Log search. Takes `q`, `level`, `machine` (id or name), `service`, `from` and `to` (RFC 3339). An unknown machine or service, or a time that is not one, answers `404`. |
+| `GET /logs` (`read-logs`) | Log search. Takes `q`, `level`, `machine` (id or name), `service`, `from` and `to` (RFC 3339). An unknown machine or service, or a time that is not one, answers `404`. |
 | `GET /errors`, `GET /errors/<id>` | Errors grouped by type and place; then one group with its latest stack and `reports`, its individual reports newest first as `{"items", "next"}`, paged by `cursor` and `limit`. |
 | `GET /deploys` | Deploy history. |
 | `GET /versions` | Which version of each service is on which machine, under `apps` each app that runs on many hosts with the hosts on each version, and under `program` the version this server gives machines to fetch and what each machine runs. |
 | `GET /rules` | Alert rules. |
-| `GET /alerts` | The alert settings: who is told by default, the limits, the night and the mail settings. Addresses (ntfy, webhook, heartbeat), the mail user name and secrets are never returned, only `set` or `not set`. |
+| `GET /alerts` | The alert settings: who is told by default, the limits, the night and the mail settings. The ntfy, webhook and heartbeat addresses, the mail user name, the Twilio account SID and every secret are never returned, only `set` or `not set`. The answer is the same for every token with `read`. |
 | `GET /alerts/suggestions` | Issues that keep opening and are snoozed, which the daily digest could take instead. |
 | `GET /logs/archives` (`read-logs`) | The archived months of logs that can be loaded back. |
 | `GET /proposals` | Things waiting to be accepted. |
@@ -255,20 +263,20 @@ A login session, or a user token with `read`. Log contents need `read-logs`: wit
 
 ## Act
 
-A login session, or a user token with `act`. Keys, people, rules, alert settings, checks, restart, making a job, updating the program and loading logs back need `admin`. The interface holds the same line: what needs `admin` here is done by an owner there, and a member sees a line that says so.
+A user token with `act`. Keys, people, rules, alert settings, checks, restart, making an app, a dependency or a job, updating the program, releases, the uploaded certificate and loading logs back need `admin`. The `GET` calls in this table need only `read`, except `GET /certificate/settings`, which needs `admin`. The interface holds the same line: what needs `admin` here is done by an owner there, and a member sees a line that says so.
 
 | Call | Does |
 |---|---|
 | `POST /issues/<id>/snooze` | Snooze until a time. `{"until": "..."}`. An unknown issue answers `404`, here and for `unsnooze` and `acknowledge`. |
 | `POST /issues/<id>/unsnooze` | Bring it back. |
 | `POST /issues/<id>/acknowledge` | Mark as seen. |
-| `POST /issues/<id>/notes` | Add a note. |
-| `POST /issues/bulk` | Any of the above for a list of issues. |
+| `POST /issues/<id>/notes` | Add a note: `{"text": "..."}`, kept to 2,000 characters and recorded as written by the token. `404` for an unknown issue, `422` with `bad_note` without text. |
+| `POST /issues/bulk` | Snooze, unsnooze or acknowledge a list of issues: `{"ids": [...], "action": "snooze", "until": "..."}`, where `action` is `snooze` (with `until`), `unsnooze` or `acknowledge`. Answers `{"ok": true}`; ids that do not exist are skipped; anything else answers `422` with `bad_action`. |
 | `POST /services/<id>/watch`, `/unwatch` | Start or stop watching a found service. |
 | `PUT /services/<id>/checks` (`admin`) | Edit checks added in the interface. Checks that came from a file are changed in the file. |
-| `PUT /services/<id>/routing` | Who is told, by which channel, for `down` and for `degraded`. A field that is not sent stays as it was. `night: false` holds this service's alerts during the night until it ends; `night: true` sends what is held. |
-| `PUT /services/<id>/hold` | Mark a version on a machine as held on purpose. |
-| `PUT /services/<id>/restart` (`admin`) | Allow or stop automatic restart. |
+| `PUT /services/<id>/routing` | By which channel this service's alerts go, for `down` and for `degraded`: one of the channels of a rule, where `none` (Nobody) sends nothing for this service, and a value that is not a channel clears the setting so the rules decide. A field that is not sent stays as it was. Answers `{"down", "degraded", "night"}`. `night: false` holds this service's alerts during the night until it ends; `night: true` sends what is held. |
+| `PUT /services/<id>/hold` | Mark a version on a machine as held on purpose: `{"version": "..."}`. Answers as `GET /services/<id>` does. |
+| `PUT /services/<id>/restart` (`admin`) | Allow or stop automatic restart: `{"allow": true}`. Answers as `GET /services/<id>` does. |
 | `POST /proposals/<id>/accept`, `/dismiss` | Accept or dismiss one proposal. |
 | `POST /proposals/accept`, `/dismiss` | Accept or dismiss some proposals, `{"ids": [...]}`, or every one waiting, `{"all": true}`. Answers `{"ok": true, "done": [ids acted on]}`; ids not waiting are left out of `done`, and `404` when none of the `ids` is waiting. |
 | `PUT /services/<id>/messages` | `{"keep": true}` keeps the text of the service's errors from now on; `false` stops. |
@@ -277,8 +285,8 @@ A login session, or a user token with `act`. Keys, people, rules, alert settings
 | `POST /jobs` (`admin`) | Add a job: `name` and `machine`, and optionally `schedule` (cron, UTC), `grace` and `max_runtime` (such as `30m`). Answers with the job's `key` and the `ping` addresses, shown once. A new machine name adds the machine. |
 | `PUT /jobs/<id>/timing` | Set `grace` and `max_runtime` of a job added in the interface. A field left out stays as it was; an empty one clears it. A job from a `dokkit.toml` answers `422`: change the file. |
 | `POST /rules`, `PUT /rules/<id>`, `DELETE /rules/<id>` (`admin`) | Alert rules. `PUT` changes only the fields sent; an empty one clears it. A `kind`, `state` or `channel` that is not one of its choices, `null`, or a `machine` that is not text answers `422`. |
-| `PUT /alerts` (`admin`) | Change alert settings. A setting left out stays as it was; a secret sent as an empty string is cleared. A secret is sent to one host: if `ntfy_url` or `smtp_host` changes and its secret (`ntfy_token`, `smtp_password`) is not sent in the same call, the secret is cleared, and the answer carries a `note` that says so. Addresses may be on the server's own network but not this machine or a link-local address (see `alerts.md`); `smtp_port` is 25, 465, 587 or 2525. The night is whole hours, addresses must be `https`, `down`, `degraded` and `push_with` must be one of their choices: otherwise `422`. Answers with the settings as `GET /alerts` shows them. |
-| `POST /alerts/test` (`admin`) | `{"channel": "webhook"}` sends a test alert by that channel, or by that person's destination when `person` (a person id) is sent. The answer is `{"ok": true}` or `422` with one reason: for SMS Twilio's own message, for iMessage the Mac's answer (waited for up to a minute), for the others a fixed reason, never anything the far end said. `422` with code `slow_down` after four tests at once, then one every 25 seconds, for each token. |
+| `PUT /alerts` (`admin`) | Change alert settings. A setting left out stays as it was; a secret sent as an empty string is cleared. A secret is sent to one host: if `ntfy_url` or `smtp_host` changes and its secret (`ntfy_token`, `smtp_password`) is not sent in the same call, the secret is cleared, and the answer carries a `note` that says so. Addresses may be on the server's own network but not this machine or a link-local address (see `alerts.md`); `smtp_port` is 25, 465, 587 or 2525. The night is whole hours, addresses must be `https`, `down`, `degraded`, `self_down` and `self_degraded` must be a channel (`none` included) and `push_with` one of `ntfy`, `pushover` and `pagerduty`: otherwise `422`. Answers with the settings as `GET /alerts` shows them. |
+| `POST /alerts/test` (`admin`) | `{"channel": "webhook"}` sends a test alert by that channel, or by that person's destination when `person` (a person id) is sent. `none`, a channel that is not one and a `person` that is not on this server answer `422` with `bad_channel` or `bad_person`. Otherwise the answer is `{"ok": true}` or `422` with `send_failed` and one reason: for SMS Twilio's own message, for iMessage the Mac's answer (waited for up to a minute), for the others a fixed reason, never anything the far end said. `422` with code `slow_down` after four tests at once, then one every 25 seconds, for each token. |
 | `GET /alerts/people` | Each person with their own destinations (email, phone for SMS, iMessage address, ntfy address, Pushover user key, PagerDuty routing key). The ntfy address, Pushover key and routing key are only `set` or `not set`. |
 | `PUT /alerts/people/<id>` (`admin`) | Change a person's destinations. A field left out stays; an empty one clears it. A bad address answers `422`. |
 | `GET /alerts/who`, `PUT /alerts/who` (`admin`) | Who is told at each level. `PUT` takes `scope` (`default`, `rule`, `service` or `check`), `id` (not for `default`; for a check, `service` and `name` may be sent instead) and `to`, a list of person ids or `["everyone"]`; an empty list names nobody there so the level above decides. |
@@ -289,6 +297,8 @@ A login session, or a user token with `act`. Keys, people, rules, alert settings
 | `POST /update-all` (`admin`) | The same body, for every machine that has an updater. Answers `{"ok": true, "version": "v1.2.3", "machines": 3}`. |
 | `PUT /releases/<version>/<file>` (`admin`) | The body is the file, as is, up to 200 MB (`413` over that), written to disk as it arrives. Replaces a file of that name. The server does not check it; the updater does. A version or file name of anything but letters, digits, dots, dashes and underscores, or one that starts with a dot, answers `422` with code `bad_name`. |
 | `DELETE /releases/<version>` (`admin`) | Removes that version's files. |
+| `GET /keys`, `POST /keys`, `DELETE /keys/<id>` (`admin`) | The keys that still work, newest first (`id`, `kind`, `hint`, `label`, `scopes`, `used_at`, `expires_at`, `inserted_at`, `machine`, `service`); make one; revoke one. `POST` takes `{"kind": "user", "label": "...", "scopes": [...]}`, `{"kind": "app", "service": "<id>"}` or `{"kind": "enrol", "machine": "...", "hours": 4}` and answers `{"id", "key"}`, the key shown once. A user token made here needs a label and scopes, only holds scopes the calling token holds, and never has `admin`; anything else answers `422` with `bad_key`, and `hours` out of range `bad_hours`. An app key for an unknown service answers `404`. `DELETE` answers `{"ok": true}`. |
+| `GET /users`, `POST /users`, `DELETE /users/<id>` (`admin`) | The people (`id`, `name`, `role`); add one with `{"name", "role", "password"}`; remove one, which also revokes that person's user tokens. Both `POST` and `DELETE` answer `422` with `bad_person` and a sentence when the person cannot be added or removed, and the last owner cannot be removed. |
 | `GET /certificate` | The certificates the server serves itself: `installed` (the one it was installed with, which enrolled machines pin) and `uploaded`, each `null` when there is none, otherwise `names` (DNS names), `issuer`, `not_after`, `self_signed` and `sha256` (hex fingerprint of the leaf). Never a key. |
 | `PUT /certificate` (`admin`) | `{"cert": "<PEM, leaf then its chain>", "key": "<PEM private key>"}`. `422` with code `bad_certificate` and a sentence when a file cannot be read, the key is not the leaf's, the leaf is expired or not yet valid, or it names no DNS name; also when the server does not serve TLS itself. Otherwise saved and served at once to clients that ask for one of its names; any other name, and a client that connects by address, still gets the installed certificate. Answers as `GET` does. |
 | `DELETE /certificate` (`admin`) | Removes the uploaded certificate. Answers as `GET` does. |
