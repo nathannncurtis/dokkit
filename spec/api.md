@@ -45,7 +45,7 @@ Every key has a recognisable prefix and a built-in checksum, so a leaked one can
 |---|---|---|---|
 | Enrolment token | `dke_` | Pasted once into `dokkit enrol` | One use, expires after 4 hours. Trades for a machine key. |
 | Machine key | `dkm_` | `dokkit` | Report for that machine, propose, take work. |
-| App key | `dka_` | A library, or a script inside an app | Write-only, for one service. It can read nothing, is rate-limited and can be revoked, so it is safe inside a desktop or phone app. |
+| App key | `dka_` | A library, or a script inside an app | Write-only, for one service. It can read nothing and can be revoked, so it is safe inside a desktop or phone app. |
 | User token | `dku_` | Scripts and the MCP | Scopes: `read`, `read-logs`, `act`, `admin`. Each call needs the one scope it names; `admin` does not include the others. |
 
 The read and act calls take only a user token. The web interface uses a login session, not a token, and a session is not accepted on `/api/v1`. A session lasts 14 days, and signing out or changing the password ends every session of that person. Every sign-in or password change is counted before the password is checked: after 10 from one name and address together, or 30 from one address, in ten minutes, the answer is `429` with `Retry-After` until the window passes. Many attempts on one name from different addresses are slowed, not refused. Behind a proxy the address is the last `X-Forwarded-For` entry. A person can turn on two-step sign-in at `/two-step`: signing in then asks for the password and after it a six-digit code from an authenticator app (TOTP, 30 seconds, SHA-1). Each code works once, and wrong codes are counted the same way as wrong passwords. Turning it on shows ten recovery codes once (two groups of six characters); they are stored only as hashes. At the code step a recovery code can be typed in place of an authenticator code and works once; signing in with one lands on `/two-step`, which says so and how many are left. `/two-step` can make a new set with a current authenticator code, which ends the old set. Turning two-step off, or `totp_reset`, deletes the codes. Tokens are not affected. Someone who lost their phone is let back in from the server itself with `bin/dokkit rpc 'Dokkit.Accounts.totp_reset("name")'`. A user token made by a person stops working when that person is removed; user tokens made before that was recorded are not tied to anyone and have to be revoked and made again.
@@ -62,7 +62,7 @@ Roles for people: `owner`, `member`, and `viewer`. A viewer sees everything exce
 - Lists use cursors. A list answer is `{"items": [...], "next": "<cursor or null>"}` and the next page is asked for with `?cursor=`. A cursor is opaque and marks a place in the list, not a page number, so items added or removed between two calls leave no gap and no repeat. `?limit=` is 1 to 500 and defaults to 100 (500 for `/logs`). A cursor that is not one answers `422` with the code `bad_cursor`. Lists drawn from deploys and error groups reach back to the newest 1,000.
 - Lists take `q` (search), `machine` (id or name), `service` (id), `environment`, `from` and `to` (RFC 3339; a bad time answers `422` with `bad_time`) wherever those make sense: `/issues` all of them (`from` and `to` on when the issue opened), `/machines` `q` and `machine`, `/services` and `/jobs` `q`, `machine`, `service` and `environment`, `/deploys` and `/errors` all of them, `/jobs/<id>/runs` `from`, `to` and `result`, `/proposals` `q`, `machine` and `kind`, `/keys` `q`, `kind`, `machine`, `from` and `to`, `/users`, `/rules` and `/releases` `q`. `/services` also takes `kind` and `/jobs` `state`.
 - An error answer is `{"error": {"code": "...", "message": "..."}}`. Errors the web framework raises itself, such as a route that does not exist (`404`) or a body that is not valid JSON (`400`), answer `{"errors": {"detail": "Not Found"}}` instead, with the status's own words, when the request accepts JSON.
-- `401` for a missing or bad key (code `bad_key`), `403` for a key without the scope (code `no_scope`), `404` for something that does not exist or that the key may not know exists, `413` for too large, `422` for a body that does not fit this contract (a body that is not valid gzip answers `422` with the code `bad_gzip`), `429` with `Retry-After` when an app key has used up its request bucket (code `rate_limited`). The only other `429` is the sign-in throttle, which belongs to the browser.
+- `401` for a missing or bad key (code `bad_key`), `403` for a key without the scope (code `no_scope`), `404` for something that does not exist or that the key may not know exists, `413` for too large, `422` for a body that does not fit this contract (a body that is not valid gzip answers `422` with the code `bad_gzip`). `429` with `Retry-After` comes only from the alert test call (code `rate_limited`) and the sign-in throttle, which belongs to the browser. An app key has no limit on how many lines or calls it sends.
 
 ### Encryption
 
@@ -83,7 +83,7 @@ The server stamps every item with its own receive time and a log line keeps both
 - One log line: 64 KB. Longer lines are cut and marked as cut.
 - The last lines of a job's output: 16 KB.
 - A gzip body that inflates to more than 100 MB is refused as too large.
-- An app key has one bucket of 10,000, refilling at 100 a second, for every call it makes. `POST /report` takes one for each line; every other call takes one.
+- An app key has no limit on how fast it sends.
 
 ## Intake
 
@@ -111,7 +111,7 @@ The answer:
 {"accepted": 412, "refused": [{"line": 17, "code": "unknown_service", "message": "..."}]}
 ```
 
-A refused line does not fail the batch, including a line the database cannot store. An app key is limited to a bucket (see Limits) and answers `429` with `Retry-After` when it is empty. It may make 100 checks per service; a line that would make a 101st is refused with `too_many_checks`.
+A refused line does not fail the batch, including a line the database cannot store. It may make 100 checks per service; a line that would make a 101st is refused with `too_many_checks`.
 
 Every line has `type` and `at`. With a machine key the machine is known. With an app key the service is known, and the line may carry `host` so the machine can be recorded as seen.
 
@@ -137,7 +137,7 @@ Any line, and the bodies of `POST /errors` and `POST /deploys`, may carry `envir
 
 ### `POST /api/events/raw`
 
-The door for apps that log to Seq, at the address Seq clients post to (`POST /ingest/clef` takes the same body, where newer clients post CLEF). An app moves by changing its server address and API key. The body is CLEF, one JSON event a line (`Content-Type: application/vnd.serilog.clef`, or `?clef`), or Seq's older JSON form, `{"Events": [{"Timestamp", "Level", "MessageTemplate", "Properties", "Exception", "RenderedMessage"}]}`. The key is an app key, in `X-Seq-ApiKey` or `?apiKey=`. Each event becomes a `log` line of the key's service through the same path as `POST /report`, with the same limits, bucket and storage; see `log-lines.md`. The answer is Seq's: `201` with `{"MinimumLevelAccepted": null}`, or `{"Error": "..."}` with `400` (not CLEF or Seq JSON, or no event stored), `401`, `413` (more than 10,000 events or 5 MB) or `429` with `Retry-After`.
+The door for apps that log to Seq, at the address Seq clients post to (`POST /ingest/clef` takes the same body, where newer clients post CLEF). An app moves by changing its server address and API key. The body is CLEF, one JSON event a line (`Content-Type: application/vnd.serilog.clef`, or `?clef`), or Seq's older JSON form, `{"Events": [{"Timestamp", "Level", "MessageTemplate", "Properties", "Exception", "RenderedMessage"}]}`. The key is an app key, in `X-Seq-ApiKey` or `?apiKey=`. Each event becomes a `log` line of the key's service through the same path as `POST /report`, with the same limits and storage; see `log-lines.md`. The answer is Seq's: `201` with `{"MinimumLevelAccepted": null}`, or `{"Error": "..."}` with `400` (not CLEF or Seq JSON, or no event stored), `401` or `413` (more than 10,000 events or 5 MB).
 
 ### Ping URLs
 

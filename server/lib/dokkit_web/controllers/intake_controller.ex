@@ -1,6 +1,6 @@
 defmodule DokkitWeb.IntakeController do
   use DokkitWeb, :controller
-  alias Dokkit.{Intake, Keys, RateLimit}
+  alias Dokkit.{Intake, Keys}
 
   @max_body 5 * 1024 * 1024
   @max_plain 100 * 1024 * 1024
@@ -16,17 +16,11 @@ defmodule DokkitWeb.IntakeController do
     with {:ok, key} <- bearer(conn),
          {:ok, body, conn} <- body(conn),
          {:ok, text} <- plain(conn, body),
-         :ok <-
-           limit(
-             key,
-             length(:binary.matches(text, "\n")) + 1
-           ),
          {:ok, batch} <- batch(conn),
          {:ok, answer} <- Intake.report(key, batch, text) do
       json(conn, answer)
     else
       :unauthorized -> fail(conn, 401, "bad_key", "Missing or bad key.")
-      {:wait, seconds} -> slow(conn, seconds)
       :bad_batch -> fail(conn, 422, "bad_batch", "Dokkit-Batch must be a UUID.")
       :bad_gzip -> fail(conn, 422, "bad_gzip", "The body is not valid gzip.")
       _ -> fail(conn, 413, "too_large", "A batch is at most 5 MB compressed and 10,000 lines.")
@@ -56,13 +50,11 @@ defmodule DokkitWeb.IntakeController do
 
   def declare(conn, params) do
     with {:ok, key} <- bearer(conn),
-         :ok <- limit(key, 1),
          {:ok, owner} <- owner(key),
          {:ok, service} <- Dokkit.Estate.declare(owner, Map.drop(params, ["_format"])) do
       Dokkit.Issues.changed(false)
       json(conn, %{service: service.id})
     else
-      {:wait, seconds} -> slow(conn, seconds)
       :forbidden -> fail(conn, 403, "not_allowed", "This key belongs to no service.")
       {:error, message} when is_binary(message) -> fail(conn, 422, "bad_declaration", message)
       _ -> fail(conn, 401, "bad_key", "Missing or bad key.")
@@ -123,22 +115,19 @@ defmodule DokkitWeb.IntakeController do
 
   def deploy(conn, params) do
     with {:ok, key} <- bearer(conn),
-         :ok <- limit(key, 1),
          :ok <- Intake.deploy(key, params) do
       Dokkit.Issues.changed(false)
       json(conn, %{ok: true})
     else
-      {:wait, seconds} -> slow(conn, seconds)
       {:error, code, message} -> fail(conn, 422, code, message)
       _ -> fail(conn, 401, "bad_key", "Missing or bad key.")
     end
   end
 
   def error(conn, params) do
-    with {:ok, key} <- bearer(conn), :ok <- limit(key, 1), :ok <- Intake.error(key, params) do
+    with {:ok, key} <- bearer(conn), :ok <- Intake.error(key, params) do
       json(conn, %{ok: true})
     else
-      {:wait, seconds} -> slow(conn, seconds)
       {:error, code, message} -> fail(conn, 422, code, message)
       _ -> fail(conn, 401, "bad_key", "Missing or bad key.")
     end
@@ -148,7 +137,6 @@ defmodule DokkitWeb.IntakeController do
   def envelope(conn, params) do
     with {:ok, body, conn} <- body(conn),
          {:ok, key} <- Keys.verify(sentry_key(conn, params) || head_key(conn, body) || "", :app),
-         :ok <- limit(key, 1),
          {:ok, text} <- plain(conn, body),
          {_, reports} = Dokkit.Envelope.read(text) do
       for report <- reports, do: Intake.error(key, report)
@@ -162,7 +150,6 @@ defmodule DokkitWeb.IntakeController do
       |> json(%{})
     else
       :error -> fail(conn, 401, "bad_key", "Missing or bad key.")
-      {:wait, seconds} -> slow(conn, seconds)
       :bad_gzip -> fail(conn, 422, "bad_gzip", "The body is not valid gzip.")
       _ -> fail(conn, 413, "too_large", "Too large.")
     end
@@ -188,15 +175,6 @@ defmodule DokkitWeb.IntakeController do
     after
       :zlib.close(z)
     end
-  end
-
-  defp limit(%{kind: :app, id: id}, cost), do: RateLimit.take(id, cost)
-  defp limit(_, _), do: :ok
-
-  defp slow(conn, seconds) do
-    conn
-    |> put_resp_header("retry-after", to_string(seconds))
-    |> fail(429, "rate_limited", "Too many requests from this key.")
   end
 
   defp sentry_key(conn, params) do
@@ -281,7 +259,6 @@ defmodule DokkitWeb.IntakeController do
   def ping(conn, %{"key" => text, "name" => name, "event" => event} = params)
       when event in ~w(start ok fail) do
     with {:ok, key} <- Keys.verify(text, :app),
-         :ok <- limit(key, 1),
          {:ok, tail, conn} <- body(conn) do
       case Intake.ping(key, name, event, params["run"], tail) do
         {:error, code, message} -> fail(conn, 422, code, message)
@@ -289,7 +266,6 @@ defmodule DokkitWeb.IntakeController do
       end
     else
       :error -> fail(conn, 401, "bad_key", "Missing or bad key.")
-      {:wait, seconds} -> slow(conn, seconds)
       _ -> fail(conn, 413, "too_large", "Too large.")
     end
   end

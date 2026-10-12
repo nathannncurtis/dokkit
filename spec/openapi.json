@@ -289,30 +289,6 @@
                 }
               }
             }
-          },
-          "429": {
-            "description": "An app key has used up its bucket of 10,000 lines, refilling at 100 a second. Wait for Retry-After seconds.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": {
-                    "code": "rate_limited",
-                    "message": "Too many requests from this key."
-                  }
-                }
-              }
-            },
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds to wait.",
-                "schema": {
-                  "type": "integer"
-                }
-              }
-            }
           }
         },
         "security": [
@@ -467,30 +443,6 @@
                 }
               }
             }
-          },
-          "429": {
-            "description": "An app key has used up its bucket of 10,000 lines, refilling at 100 a second. Wait for Retry-After seconds.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": {
-                    "code": "rate_limited",
-                    "message": "Too many requests from this key."
-                  }
-                }
-              }
-            },
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds to wait.",
-                "schema": {
-                  "type": "integer"
-                }
-              }
-            }
           }
         },
         "security": []
@@ -631,30 +583,6 @@
                     "code": "too_many_checks",
                     "message": "A service takes at most 100 checks from an app key."
                   }
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "An app key has used up its bucket of 10,000 lines, refilling at 100 a second. Wait for Retry-After seconds.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": {
-                    "code": "rate_limited",
-                    "message": "Too many requests from this key."
-                  }
-                }
-              }
-            },
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds to wait.",
-                "schema": {
-                  "type": "integer"
                 }
               }
             }
@@ -1295,30 +1223,6 @@
                 }
               }
             }
-          },
-          "429": {
-            "description": "An app key has used up its bucket of 10,000 lines, refilling at 100 a second. Wait for Retry-After seconds.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": {
-                    "code": "rate_limited",
-                    "message": "Too many requests from this key."
-                  }
-                }
-              }
-            },
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds to wait.",
-                "schema": {
-                  "type": "integer"
-                }
-              }
-            }
           }
         },
         "security": [
@@ -1713,30 +1617,6 @@
                 }
               }
             }
-          },
-          "429": {
-            "description": "An app key has used up its bucket of 10,000 lines, refilling at 100 a second. Wait for Retry-After seconds.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": {
-                    "code": "rate_limited",
-                    "message": "Too many requests from this key."
-                  }
-                }
-              }
-            },
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds to wait.",
-                "schema": {
-                  "type": "integer"
-                }
-              }
-            }
           }
         },
         "security": [
@@ -1936,7 +1816,7 @@
         "tags": [
           "Intake"
         ],
-        "description": "The door for apps and libraries written for Seq: Serilog.Sinks.Seq, seqlog, and the pino, winston and bunyan Seq transports. An app moves by changing its server address and API key. The body is CLEF (one JSON event a line, content type `application/vnd.serilog.clef`, or `?clef`), or Seq's older JSON form `{\"Events\": [...]}` with `Timestamp`, `Level`, `MessageTemplate`, `Properties`, `Exception` and `RenderedMessage`. Each event is stored as a log line of the app key's service, by the same path as `POST /api/v1/report`: the same limits (10,000 events and 5 MB a request) and the same per-key rate. Levels are mapped (`Verbose`, `Debug`, `Information`, `Warning`, `Error`, `Fatal` and the short forms), templates are rendered with the properties, properties become `fields`, an exception is kept as `fields.exception`. A property named `service`, `at` or `type` is kept as `service_name`, `seq_at` or `seq_type`. The same body is accepted at `POST /ingest/clef`, where newer Seq clients post CLEF. Takes an app key (`dka_`), in the `X-Seq-ApiKey` header or the `apiKey` query value. Answers as Seq does: `201` with `{\"MinimumLevelAccepted\": null}`, and errors as `{\"Error\": \"...\"}`.",
+        "description": "The door for apps and libraries written for Seq: Serilog.Sinks.Seq, seqlog, and the pino, winston and bunyan Seq transports. An app moves by changing its server address and API key. The body is CLEF (one JSON event a line, content type `application/vnd.serilog.clef`, or `?clef`), or Seq's older JSON form `{\"Events\": [...]}` with `Timestamp`, `Level`, `MessageTemplate`, `Properties`, `Exception` and `RenderedMessage`. Each event is stored as a log line of the app key's service, by the same path as `POST /api/v1/report`: the same limits (10,000 events and 5 MB a request) and no rate limit. Levels are mapped (`Verbose`, `Debug`, `Information`, `Warning`, `Error`, `Fatal` and the short forms), templates are rendered with the properties, properties become `fields`, an exception is kept as `fields.exception`. A property named `service`, `at` or `type` is kept as `service_name`, `seq_at` or `seq_type`. The same body is accepted at `POST /ingest/clef`, where newer Seq clients post CLEF. Takes an app key (`dka_`), in the `X-Seq-ApiKey` header or the `apiKey` query value. Answers as Seq does: `201` with `{\"MinimumLevelAccepted\": null}`, and errors as `{\"Error\": \"...\"}`.",
         "parameters": [
           {
             "name": "clef",
@@ -2046,19 +1926,6 @@
                 },
                 "example": {
                   "Error": "A request is at most 5 MB and 10,000 events."
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too many events from this key. `Retry-After` says when to try again.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                },
-                "example": {
-                  "Error": "Too many events from this key."
                 }
               }
             }
@@ -2195,30 +2062,6 @@
                     "code": "bad_gzip",
                     "message": "The body is not valid gzip."
                   }
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "An app key has used up its bucket of 10,000 lines, refilling at 100 a second. Wait for Retry-After seconds.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": {
-                    "code": "rate_limited",
-                    "message": "Too many requests from this key."
-                  }
-                }
-              }
-            },
-            "headers": {
-              "Retry-After": {
-                "description": "Seconds to wait.",
-                "schema": {
-                  "type": "integer"
                 }
               }
             }
@@ -11720,7 +11563,7 @@
       "appKey": {
         "type": "http",
         "scheme": "bearer",
-        "description": "An app key, prefix `dka_`. Held by a library or a script inside an app. Write-only, for one service, rate-limited, and safe inside a browser page."
+        "description": "An app key, prefix `dka_`. Held by a library or a script inside an app. Write-only, for one service, and safe inside a browser page."
       },
       "userToken": {
         "type": "http",

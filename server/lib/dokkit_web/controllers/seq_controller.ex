@@ -1,7 +1,7 @@
 defmodule DokkitWeb.SeqController do
   @moduledoc "The door for apps that log to Seq. See spec/log-lines.md."
   use DokkitWeb, :controller
-  alias Dokkit.{Intake, Keys, RateLimit}
+  alias Dokkit.{Intake, Keys}
 
   @max_body 5 * 1024 * 1024
   @renamed %{"service" => "service_name", "type" => "seq_type", "at" => "seq_at"}
@@ -12,7 +12,6 @@ defmodule DokkitWeb.SeqController do
     with {:ok, key} <- Keys.verify(api_key(conn), :app),
          {:ok, body, conn} <- read_body(conn, length: @max_body),
          {:ok, lines} <- lines(conn, body),
-         :ok <- RateLimit.take(key.id, length(lines)),
          {:ok, %{accepted: accepted}} <- Intake.report(key, nil, encode(lines)) do
       if accepted == 0 and lines != [] do
         error(conn, 400, "No event could be stored.")
@@ -25,11 +24,6 @@ defmodule DokkitWeb.SeqController do
 
       :bad ->
         error(conn, 400, "The body is not CLEF or Seq's JSON events.")
-
-      {:wait, seconds} ->
-        conn
-        |> put_resp_header("retry-after", to_string(seconds))
-        |> error(429, "Too many events from this key.")
 
       _ ->
         error(conn, 413, "A request is at most 5 MB and 10,000 events.")
