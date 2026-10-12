@@ -98,15 +98,15 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
-  def drop_person(id) do
-    case Dokkit.Accounts.remove(id, %Dokkit.User{}) do
+  def drop_person(id, %{user_id: user_id}) do
+    case Dokkit.Accounts.remove(id, %Dokkit.User{id: user_id}) do
       :ok -> %{ok: true}
       {:error, why} -> {:error, "bad_person", why}
     end
   end
 
   def add_user(conn, params), do: reply(conn, new_person(params))
-  def remove_user(conn, %{"id" => id}), do: reply(conn, drop_person(id))
+  def remove_user(conn, %{"id" => id}), do: reply(conn, drop_person(id, conn.assigns.key))
 
   def versions(conn, _),
     do:

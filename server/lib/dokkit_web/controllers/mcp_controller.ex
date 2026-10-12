@@ -495,7 +495,6 @@ defmodule DokkitWeb.McpController do
   defp tool("revoke_key", %{"id" => id}), do: Api.drop_key(id)
   defp tool("people", args), do: listed(:users, args)
   defp tool("add_person", args), do: Api.new_person(args) |> r()
-  defp tool("remove_person", %{"id" => id}), do: Api.drop_person(id) |> r()
   defp tool("alert_settings", _), do: Dokkit.Alerts.view()
   defp tool("alert_people", _), do: Dokkit.People.view()
   defp tool("alert_who", _), do: Dokkit.People.who_list()
@@ -536,6 +535,7 @@ defmodule DokkitWeb.McpController do
   defp tool(_, _), do: {:error, "That tool needs different arguments."}
 
   defp tool("make_key", args, key), do: Api.make_key(args, key) |> r()
+  defp tool("remove_person", %{"id" => id}, key), do: Api.drop_person(id, key) |> r()
   defp tool("test_alert", args, key), do: Api.try_alert(args, key.id) |> r()
   defp tool(name, args, _), do: tool(name, args)
 

@@ -186,4 +186,13 @@ defmodule DokkitWeb.McpControllerTest do
     assert text =~ "mcp-person"
     assert {false, ~s({"ok":true})} = call(all, "remove_person", %{id: id})
   end
+
+  test "an AI tool cannot remove the person who made its token, and can remove someone else" do
+    {:ok, me} = Dokkit.Accounts.add("mcp-me", "owner", "a long enough password")
+    {:ok, other} = Dokkit.Accounts.add("mcp-other", "owner", "a long enough password")
+    {token, _} = Keys.mint(:user, %{scopes: ["admin", "read"], label: "mine", user_id: me.id})
+
+    assert {true, "You cannot remove yourself."} = call(token, "remove_person", %{id: me.id})
+    assert {false, ~s({"ok":true})} = call(token, "remove_person", %{id: other.id})
+  end
 end

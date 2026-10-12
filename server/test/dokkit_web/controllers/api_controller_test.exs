@@ -401,4 +401,15 @@ defmodule DokkitWeb.ApiControllerTest do
 
     assert job
   end
+
+  test "a token cannot remove the person who made it, and can remove someone else" do
+    {:ok, me} = Dokkit.Accounts.add("api-me", "owner", "a long enough password")
+    {:ok, other} = Dokkit.Accounts.add("api-other", "owner", "a long enough password")
+    {token, _} = Keys.mint(:user, %{scopes: ["admin", "read"], label: "mine", user_id: me.id})
+
+    assert %{"error" => %{"message" => "You cannot remove yourself."}} =
+             json_response(call(:delete, "/users/#{me.id}", token), 422)
+
+    assert %{"ok" => true} = json_response(call(:delete, "/users/#{other.id}", token), 200)
+  end
 end
