@@ -29,6 +29,8 @@ defmodule Dokkit.Machine do
     field :update_ok, :boolean
     field :update_note, :string
     field :update_at, :utc_datetime_usec
+    field :silent_route, :string
+    field :silent_wake, :boolean, default: true
     has_many :services, Dokkit.Service
     timestamps()
   end
@@ -102,7 +104,7 @@ defmodule Dokkit.Issue do
     belongs_to :machine, Dokkit.Machine
     belongs_to :service, Dokkit.Service
     belongs_to :check, Dokkit.Check
-    has_one :alert, Dokkit.Alert
+    has_many :alerts, Dokkit.Alert
     timestamps()
   end
 

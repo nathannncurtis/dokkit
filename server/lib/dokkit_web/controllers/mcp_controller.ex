@@ -14,18 +14,22 @@ defmodule DokkitWeb.McpController do
   @bool %{"type" => "boolean"}
   @scopes ~w(read read-logs act admin)
   @channel %{"type" => "string", "enum" => for({_, v} <- Dokkit.Alerts.channels(), do: v)}
+  @channels %{"anyOf" => [@channel, %{"type" => "array", "items" => @channel}]}
   @rule %{
     "kind" => @text,
     "state" => @text,
     "machine" => @text,
-    "channel" => @channel
+    "channel" => @channels,
+    "channels" => @channels
   }
   @person Map.new(Dokkit.People.fields(), &{&1, @text})
   @settings Map.merge(
               Map.new(Dokkit.Alerts.setting_keys(), &{&1, @text}),
               %{
-                "down" => @channel,
-                "degraded" => @channel,
+                "down" => @channels,
+                "degraded" => @channels,
+                "self_down" => @channels,
+                "self_degraded" => @channels,
                 "push_with" => %{"type" => "string", "enum" => ~w(ntfy pushover pagerduty)}
               }
             )
@@ -145,13 +149,16 @@ defmodule DokkitWeb.McpController do
     {"unwatch", "act", "Stop watching a service. Its open issues close.", %{"id" => @text},
      ["id"]},
     {"routing", "act",
-     "Set where a service's issues go when it stops (down) and when it struggles (degraded), and with night false whether they wait for morning at night. A field left out stays as it was; an empty down or degraded clears the route.",
+     "Set where a service's issues go when it stops (down) and when it struggles (degraded), and with night false whether they wait for morning at night. Each is one channel or a list of channels, each of which sends its own alert; none stands alone. A field left out stays as it was; an empty down or degraded clears the route.",
      %{
        "id" => @text,
-       "down" => @channel,
-       "degraded" => @channel,
+       "down" => @channels,
+       "degraded" => @channels,
        "night" => %{"type" => "boolean"}
      }, ["id"]},
+    {"machine_routing", "act",
+     "Set how a machine that stops reporting is announced: down is one channel or a list (empty for the server-wide choice for down), and night false holds the alert until the night ends (true, the default, wakes someone). A field left out stays as it was.",
+     %{"id" => @text, "down" => @channels, "night" => %{"type" => "boolean"}}, ["id"]},
     {"hold", "act",
      "Hold a service at a version, so a newer one is not offered. An empty or missing version lets it go.",
      %{"id" => @text, "version" => @text}, ["id"]},
@@ -307,7 +314,7 @@ defmodule DokkitWeb.McpController do
      "Change alert settings. A setting left out stays as it was; an empty secret clears it. If the address a secret is sent to changes (ntfy_url, smtp_host), send the secret again in the same call or it is cleared, and the answer says so. Addresses must be https, not this machine; mail ports are 25, 465, 587 and 2525.",
      @settings, []},
     {"test_alert", "admin",
-     "Send a test alert by one channel, to the server-wide destination or, with person, to that person's. Answers sent, or one fixed reason. Four at once, then one every 25 seconds.",
+     "Send a test alert by one channel, to the server-wide destination or, with person, to that person's. Answers sent, or one fixed reason. A page, or a push through PagerDuty, stays open for two minutes and then resolves itself. Four at once, then one every 25 seconds; a test that stays open costs twice as much: two at once, then one every 50 seconds.",
      %{"channel" => @channel, "person" => @text}, ["channel"]},
     {"set_alert_person", "admin",
      "Change a person's destinations. Takes the id from alert_people. A destination left out stays as it was; an empty one clears it.",
@@ -496,6 +503,7 @@ defmodule DokkitWeb.McpController do
   defp tool("watch", %{"id" => id}), do: Api.change(id, &Estate.set_watched(&1, true)) |> r()
   defp tool("unwatch", %{"id" => id}), do: Api.change(id, &Estate.set_watched(&1, false)) |> r()
   defp tool("routing", %{"id" => _} = args), do: Api.set_routing(args) |> r()
+  defp tool("machine_routing", %{"id" => _} = args), do: Api.set_machine_routing(args) |> r()
   defp tool("hold", %{"id" => id} = args), do: Api.set_held(id, args["version"]) |> r()
   defp tool("accept_proposal", args), do: Api.found(args, &Dokkit.Found.watch/1) |> r()
   defp tool("dismiss_proposal", args), do: Api.found(args, &Dokkit.Found.dismiss/1) |> r()
@@ -558,6 +566,10 @@ defmodule DokkitWeb.McpController do
       case properties[k] do
         %{"type" => type} = schema ->
           unless typed?(type, v, schema), do: {:error, "#{k} must be #{article(type)}."}
+
+        %{"anyOf" => options} ->
+          unless Enum.any?(options, &typed?(&1["type"], v, &1)),
+            do: {:error, "#{k} must be #{Enum.map_join(options, " or ", &article(&1["type"]))}."}
 
         _ ->
           nil

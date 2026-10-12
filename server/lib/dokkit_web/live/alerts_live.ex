@@ -1,7 +1,7 @@
 defmodule DokkitWeb.AlertsLive do
   use DokkitWeb, :live_view
   alias Dokkit.{Alerts, People}
-  alias DokkitWeb.WhoPick
+  alias DokkitWeb.{ChannelPick, WhoPick}
 
   @secrets Alerts.secrets()
   @push [{"ntfy", "ntfy"}, {"Pushover", "pushover"}, {"PagerDuty low urgency", "pagerduty"}]
@@ -54,7 +54,7 @@ defmodule DokkitWeb.AlertsLive do
           end
         end)
 
-      case Alerts.update(kept) do
+      case Alerts.update(alone(kept, socket.assigns.config)) do
         {:ok, config, note} ->
           socket =
             assign(socket,
@@ -87,7 +87,7 @@ defmodule DokkitWeb.AlertsLive do
   def handle_event("rule", params, socket) do
     if owner?(socket) do
       case params do
-        %{"rule" => rule} -> add_rule(rule)
+        %{"rule" => rule} -> add_rule(Map.update(rule, "channel", [], &Alerts.exclusive/1))
         %{"toggle" => id} -> Alerts.toggle_rule(id)
         %{"remove" => id} -> Alerts.delete_rule(id)
       end
@@ -244,16 +244,24 @@ defmodule DokkitWeb.AlertsLive do
   defp answer({:error, _, text}), do: {:error, text}
 
   defp no_mac?(config, key),
-    do: config[key] == "imessage" and config["imessage_machine"] in [nil, ""]
+    do: "imessage" in Alerts.split(config[key]) and config["imessage_machine"] in [nil, ""]
 
   defp rule_no_mac?(rules, config),
     do:
-      Enum.any?(rules, &(&1["on"] and &1["channel"] == "imessage")) and
+      Enum.any?(rules, &(&1["on"] and "imessage" in &1["channels"])) and
         config["imessage_machine"] in [nil, ""]
+
+  @choices ~w(down degraded self_down self_degraded)
+
+  defp alone(params, config) do
+    for {k, v} <- params, into: %{} do
+      if k in @choices and is_list(v), do: {k, Alerts.exclusive(v, config[k])}, else: {k, v}
+    end
+  end
 
   # Keep what was typed, so a page update does not put the saved values back over it.
   defp typed(socket, params, error) do
-    {secrets, plain} = Map.split(params, @secrets)
+    {secrets, plain} = params |> alone(socket.assigns.config) |> Map.split(@secrets)
 
     assign(socket,
       config: Map.merge(socket.assigns.config, plain),
@@ -262,6 +270,23 @@ defmodule DokkitWeb.AlertsLive do
       note: nil,
       error: error
     )
+  end
+
+  defp hm(at), do: Calendar.strftime(at, "%H:%M")
+
+  defp zone_now(config) do
+    if Alerts.zone_set?(config) do
+      hour = fn k -> String.pad_leading("#{Alerts.night_hour(config, k)}", 2, "0") <> ":00" end
+
+      "It is now #{hm(Alerts.local(DateTime.utc_now(), config))} there; night is #{hour.("night_from")} to #{hour.("night_to")}."
+    end
+  end
+
+  defp offset(config) do
+    case Alerts.night_hour(config, "night_offset") do
+      0 -> ""
+      n -> " with an offset of #{if n > 0, do: "+"}#{n} hours"
+    end
   end
 
   defp owner?(socket), do: socket.assigns.current_user.role == :owner
@@ -274,7 +299,12 @@ defmodule DokkitWeb.AlertsLive do
         states: Alerts.rule_states(),
         push: @push,
         self: Alerts.self_routes(assigns.config),
-        owner: assigns.current_user.role == :owner
+        owner: assigns.current_user.role == :owner,
+        zones: Alerts.zones(),
+        zone_now: zone_now(assigns.config),
+        offset: offset(assigns.config),
+        utc_now: hm(DateTime.utc_now()),
+        local_now: hm(Alerts.local(DateTime.utc_now(), assigns.config))
       )
 
     ~H"""
@@ -334,7 +364,7 @@ defmodule DokkitWeb.AlertsLive do
                   name="pagerduty_key"
                   config={@config}
                   label="PagerDuty routing key"
-                /> <.send_test channel="page" tests={@tests} />
+                /> <.send_test channel="page" stays tests={@tests} />
                 <span class="hint">
                   Through PagerDuty, for what cannot wait until morning. The key is the integration key of an Events API v2 integration. The page is resolved when the issue closes.
                 </span>
@@ -363,7 +393,7 @@ defmodule DokkitWeb.AlertsLive do
                   value={@config["push_with"]}
                   options={@push}
                   label="Push goes through"
-                /> <.send_test channel="push" tests={@tests} />
+                /> <.send_test channel="push" stays={@config["push_with"] == "pagerduty"} tests={@tests} />
                 <span class="hint">A quiet notification on your phone, for what should be seen today.</span>
               </dd>
               
@@ -613,8 +643,8 @@ defmodule DokkitWeb.AlertsLive do
               <dt>When something stops</dt>
               
               <dd>
-                <.pick
-                  name="down"
+                <ChannelPick.pick
+                  name="alerts[down]"
                   value={@config["down"]}
                   options={@channels}
                   label="When something stops"
@@ -627,8 +657,8 @@ defmodule DokkitWeb.AlertsLive do
               <dt>When something is struggling</dt>
               
               <dd>
-                <.pick
-                  name="degraded"
+                <ChannelPick.pick
+                  name="alerts[degraded]"
                   value={@config["degraded"]}
                   options={@channels}
                   label="When something is struggling"
@@ -638,7 +668,7 @@ defmodule DokkitWeb.AlertsLive do
                 </span>
                 
                 <span class="hint">
-                  An issue alerts once, when it opens. If it recovers and fails again inside 30 minutes, that is the same issue and it stays quiet.
+                  Tick more than one and each sends its own alert. Nobody stands alone. Page and Push through PagerDuty together make one incident, at the page's severity. An issue alerts once, when it opens. If it recovers and fails again inside 30 minutes, that is the same issue and it stays quiet.
                 </span>
               </dd>
             </dl>
@@ -647,11 +677,11 @@ defmodule DokkitWeb.AlertsLive do
               <dt>Dokkit stops taking reports</dt>
               
               <dd>
-                <.pick
-                  name="self_down"
+                <ChannelPick.pick
+                  name="alerts[self_down]"
                   value={@config["self_down"]}
                   options={@channels}
-                  blank={"Automatic (#{name(@channels, elem(@self, 0))})"}
+                  blank={"Automatic (#{names(@channels, elem(@self, 0))})"}
                   label="When Dokkit stops taking reports or cannot reach its database"
                 />
                 <span class="hint">
@@ -662,11 +692,11 @@ defmodule DokkitWeb.AlertsLive do
               <dt>Dokkit has lesser trouble</dt>
               
               <dd>
-                <.pick
-                  name="self_degraded"
+                <ChannelPick.pick
+                  name="alerts[self_degraded]"
                   value={@config["self_degraded"]}
                   options={@channels}
-                  blank={"Automatic (#{name(@channels, elem(@self, 1))})"}
+                  blank={"Automatic (#{names(@channels, elem(@self, 1))})"}
                   label="When Dokkit has lesser trouble"
                 />
                 <span class="hint">
@@ -754,7 +784,29 @@ defmodule DokkitWeb.AlertsLive do
                   aria-label="Hours from UTC"
                 />
                 <span class="hint">
-                  Start hour, end hour and hours from UTC, for example 22, 7 and -5. A service set not to wake you at night holds its alerts until the night ends.
+                  Start hour, end hour and hours from UTC, for example 22, 7 and -5. The hours from UTC are used only while no time zone is chosen. A service set not to wake you at night holds its alerts until the night ends.
+                </span>
+              </dd>
+
+              <dt>Time zone</dt>
+
+              <dd>
+                <input
+                  class="inp"
+                  style="flex: 1 1 240px"
+                  name="alerts[night_zone]"
+                  value={@config["night_zone"]}
+                  list="zones"
+                  placeholder="America/Los_Angeles"
+                  autocomplete="off"
+                  aria-label="Time zone for the night and the digest"
+                />
+                <datalist id="zones">
+                  <option :for={z <- @zones} value={z}></option>
+                </datalist>
+                <span :if={@zone_now} class="hint" id="zone-now">{@zone_now}</span>
+                <span :if={!@zone_now} class="hint bad" id="zone-warning" role="alert">
+                  No time zone is chosen, so the night is read in UTC{@offset}. The server's clock says {@utc_now} UTC, so it thinks it is {@local_now} where the night is kept. Alerts held for a service are held by that clock.
                 </span>
               </dd>
               
@@ -767,10 +819,10 @@ defmodule DokkitWeb.AlertsLive do
                   name="alerts[digest_at]"
                   value={@config["digest_at"]}
                   placeholder="07:00"
-                  aria-label="Digest time, UTC"
+                  aria-label="Digest time"
                 />
                 <span class="hint">
-                  One email a day at this time, UTC: what opened without paging, new errors, and numbers close to a limit. A day with nothing to say sends nothing.
+                  One email a day at this time, in the time zone above (UTC while none is chosen): what opened without paging, new errors, and numbers close to a limit. A day with nothing to say sends nothing.
                 </span>
               </dd>
             </dl>
@@ -874,7 +926,7 @@ defmodule DokkitWeb.AlertsLive do
                   name="pushover_user"
                   config={%{"pushover_user" => p.pushover_user}}
                   label="Pushover user key"
-                /> <.send_test channel="push" as={p.id <> ":push"} tests={@tests} />
+                /> <.send_test channel="push" stays={@config["push_with"] == "pagerduty"} as={p.id <> ":push"} tests={@tests} />
               </dd>
               
               <dt>Page</dt>
@@ -885,7 +937,7 @@ defmodule DokkitWeb.AlertsLive do
                   name="pagerduty_key"
                   config={%{"pagerduty_key" => p.pagerduty_key}}
                   label="PagerDuty routing key"
-                /> <.send_test channel="page" as={p.id <> ":page"} tests={@tests} />
+                /> <.send_test channel="page" stays as={p.id <> ":page"} tests={@tests} />
                 <span class="hint">
                   Only when this person has a PagerDuty integration of their own. Push goes the way chosen above.
                 </span>
@@ -963,12 +1015,12 @@ defmodule DokkitWeb.AlertsLive do
                     placeholder="On machine (blank for any)"
                     aria-label="On machine"
                   />
-                  <span class="dd">
-                    <select class="inp" name="rule[channel]" aria-label="Rule channel">
-                      <option :for={{text, value} <- @channels} value={value}>{text}</option>
-                    </select>
-                     <i class="ph ph-caret-down" aria-hidden="true"></i>
-                  </span>
+                  <ChannelPick.pick
+                    name="rule[channel]"
+                    options={@channels}
+                    label="Rule channels"
+                    blank="Nobody"
+                  />
                   
                   <span style="display: inline-flex; flex-wrap: wrap; gap: 4px 14px">
                     <label style="display: inline-flex; align-items: center; gap: 6px">
@@ -1048,11 +1100,14 @@ defmodule DokkitWeb.AlertsLive do
     on = if rule["machine"] == "", do: "", else: " on #{rule["machine"]}"
 
     "When #{String.downcase(name(kinds, rule["kind"]))} #{name(states, rule["state"])}#{on}: " <>
-      name(channels, rule["channel"])
+      Enum.map_join(rule["channels"], " and ", &name(channels, &1))
   end
 
   defp name(options, value),
     do: Enum.find_value(options, "", fn {text, v} -> v == value && text end)
+
+  defp names(options, value),
+    do: value |> Alerts.split() |> Enum.map_join(" and ", &name(options, &1))
 
   attr :at, :string, required: true
   attr :where, :string, default: nil
@@ -1078,6 +1133,7 @@ defmodule DokkitWeb.AlertsLive do
   attr :channel, :string, required: true
   attr :tests, :map, required: true
   attr :as, :string, default: nil
+  attr :stays, :boolean, default: false
 
   defp send_test(assigns) do
     assigns = assign(assigns, result: assigns.tests[assigns.as || assigns.channel])
@@ -1086,6 +1142,8 @@ defmodule DokkitWeb.AlertsLive do
     <button class="btn" type="submit" name="test" value={@channel} phx-disable-with="Sending">
       Send a test
     </button>
+
+    <span :if={@stays} class="hint">This test stays open for two minutes, then resolves itself.</span>
 
     <span :if={@result} class={["hint", elem(@result, 0) == :error && "bad"]} role="status">{elem(
       @result,

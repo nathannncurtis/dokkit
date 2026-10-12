@@ -301,7 +301,8 @@ defmodule DokkitWeb.GapsTest do
       assert {true, "webhook: The address must start with https://."} =
                tool(all, "set_alert_settings", %{webhook_url: "http://x.example"})
 
-      assert {true, "down must be a string."} = tool(all, "set_alert_settings", %{down: 5})
+      assert {true, "down must be a string or an array."} =
+               tool(all, "set_alert_settings", %{down: 5})
 
       Req.Test.stub(Alerts, &Plug.Conn.send_resp(&1, 200, "ok"))
       assert {false, ~s({"ok":true})} = tool(all, "test_alert", %{channel: "push"})

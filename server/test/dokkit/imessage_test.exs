@@ -49,7 +49,7 @@ defmodule Dokkit.ImessageTest do
   defp open_alert(app) do
     Intake.ping(app, "backup", "fail", nil, "disk full")
     assert Alerts.deliver_pending() == 1
-    [%{alert: alert}] = Issues.open_list()
+    [%{alerts: [alert]}] = Issues.open_list()
     alert
   end
 
@@ -320,12 +320,17 @@ defmodule Dokkit.ImessageTest do
         route_degraded: "text"
       })
 
-      Alerts.save(%{"down" => "text", "degraded" => "text", "email_to" => "a@b.example"})
+      Alerts.save(%{"email_to" => "a@b.example"})
 
       Repo.insert!(
         %Dokkit.Setting{
           key: "alerts",
-          value: Map.merge(Alerts.config(), %{"text_to" => "5551234567@carrier.example"})
+          value:
+            Map.merge(Alerts.config(), %{
+              "down" => "text",
+              "degraded" => "text",
+              "text_to" => "5551234567@carrier.example"
+            })
         },
         on_conflict: :replace_all,
         conflict_target: :key

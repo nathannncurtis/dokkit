@@ -59,9 +59,9 @@ defmodule DokkitWeb.PagesLiveTest do
     assert html =~ "Next expected"
     assert html =~ "As set on Alerts (Page)"
 
-    view |> form("#route-form", route: %{down: "push"}) |> render_change()
+    view |> form("#route-form", route: %{down: ["push"]}) |> render_change()
     assert Repo.reload!(service).route_down == "push"
-    view |> form("#route-form", route: %{down: ""}) |> render_change()
+    view |> form("#route-form", route: %{down: [""]}) |> render_change()
     assert Repo.reload!(service).route_down == nil
 
     {:ok, _, html} = live(conn, "/")

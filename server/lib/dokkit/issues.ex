@@ -122,7 +122,7 @@ defmodule Dokkit.Issues do
     from i in Issue,
       where: is_nil(i.closed_at),
       order_by: [desc: i.since],
-      preload: [:machine, :service, :check, :alert]
+      preload: [:machine, :service, :check, :alerts]
   end
 
   def snooze(ids, seconds) when is_integer(seconds) and seconds > 0,
@@ -216,7 +216,7 @@ defmodule Dokkit.Issues do
     unalerted =
       Repo.all(
         from i in Issue,
-          left_join: a in assoc(i, :alert),
+          left_join: a in assoc(i, :alerts),
           where:
             i.machine_id in ^Enum.map(back, & &1.machine_id) and i.kind != "machine" and
               is_nil(i.closed_at) and is_nil(i.acknowledged_at) and is_nil(a.id),

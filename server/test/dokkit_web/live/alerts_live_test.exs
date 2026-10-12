@@ -14,7 +14,7 @@ defmodule DokkitWeb.AlertsLiveTest do
     html =
       view
       |> form("#alerts-form",
-        alerts: %{down: "push", pagerduty_key: "S3CRET", ntfy_url: "https://ntfy.example/t"}
+        alerts: %{down: ["push"], pagerduty_key: "S3CRET", ntfy_url: "https://ntfy.example/t"}
       )
       |> render_submit()
 
@@ -93,7 +93,9 @@ defmodule DokkitWeb.AlertsLiveTest do
 
     html =
       view
-      |> form("#rule-form", rule: %{kind: "job", state: "down", machine: "nas", channel: "email"})
+      |> form("#rule-form",
+        rule: %{kind: "job", state: "down", machine: "nas", channel: ["email"]}
+      )
       |> render_submit()
 
     assert html =~ "When a job stops on nas: Email"

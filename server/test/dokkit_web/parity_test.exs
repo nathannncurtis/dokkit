@@ -58,6 +58,7 @@ defmodule DokkitWeb.ParityTest do
       "timing_typed" => @view,
       "timing" => {:member, ["PUT /api/v1/jobs/:id/timing"]},
       "route" => {:member, ["PUT /api/v1/services/:id/routing"]},
+      "silent" => {:member, ["PUT /api/v1/machines/:id/routing"]},
       "who" => {:owner, ["PUT /api/v1/alerts/who"]},
       "watching" =>
         {:member, ["POST /api/v1/services/:id/watch", "POST /api/v1/services/:id/unwatch"]},

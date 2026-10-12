@@ -110,7 +110,9 @@ defmodule Dokkit.PeopleTest do
   test "a test goes to the person's own destination" do
     ada = Enum.find(People.list(), &(&1.name == "ada"))
     assert Alerts.test("page", ada) == :ok
-    assert [{"ADA-KEY", "trigger", _}, {"ADA-KEY", "resolve", _}] = keys()
+    assert [{"ADA-KEY", "trigger", _}] = keys()
+    assert Alerts.resolve_tests(DateTime.add(DateTime.utc_now(), 130)) == 1
+    assert [{"ADA-KEY", "resolve", _}] = keys()
   end
 
   test "the digest goes to each person with what was theirs", %{service: service, ada: ada} do

@@ -1,7 +1,7 @@
 defmodule DokkitWeb.ServiceLive do
   use DokkitWeb, :live_view
   alias Dokkit.{Alerts, Estate, Issue, Issues}
-  alias DokkitWeb.WhoPick
+  alias DokkitWeb.{ChannelPick, WhoPick}
   alias Phoenix.LiveView.JS
 
   @cols "150px 110px 90px 90px minmax(0,1fr) 16px;--ncols:96px 72px 84px 56px minmax(0,1fr) 16px;--minw:426px"
@@ -58,10 +58,30 @@ defmodule DokkitWeb.ServiceLive do
   end
 
   def handle_event("route", %{"route" => params}, socket) do
-    if socket.assigns.current_user.role != :viewer,
-      do: Estate.set_routing(socket.assigns.service, params)
+    service = socket.assigns.service
+
+    params =
+      for {k, v} <- params, into: %{} do
+        if k in ~w(down degraded) and is_list(v),
+          do: {k, Alerts.exclusive(v, Map.get(service, :"route_#{k}"))},
+          else: {k, v}
+      end
+
+    if socket.assigns.current_user.role != :viewer, do: Estate.set_routing(service, params)
 
     {:noreply, load(socket)}
+  end
+
+  def handle_event("silent", %{"silent" => params}, socket) do
+    service = socket.assigns.service
+    saved = socket.assigns.current_user.role != :viewer and service.slug == "machine"
+
+    if saved do
+      params = Map.update(params, "down", [], &Alerts.exclusive(&1, service.machine.silent_route))
+      Estate.set_silent(service.machine, params)
+    end
+
+    {:noreply, assign(load(socket), silent_saved: saved)}
   end
 
   def handle_event("who", %{"who" => params}, socket) do
@@ -140,6 +160,7 @@ defmodule DokkitWeb.ServiceLive do
       runs: Estate.runs(service),
       logs: Dokkit.Logs.list(service: service.id, limit: 20),
       defaults: Alerts.config(),
+      silent_saved: false,
       people: Dokkit.People.list(),
       who: Dokkit.People.audience_rows()
     )
@@ -507,6 +528,51 @@ defmodule DokkitWeb.ServiceLive do
             </dl>
           </div>
           
+          <form :if={@service.slug == "machine"} class="card" id="silent-form" phx-submit="silent">
+            <h2>If this machine stops reporting</h2>
+
+            <dl class="kv">
+              <dt>Tell</dt>
+
+              <dd>
+                <ChannelPick.pick
+                  name="silent[down]"
+                  value={@service.machine.silent_route}
+                  options={@routes}
+                  label="Channels for this machine going quiet"
+                  blank={"As set on Alerts (#{names(@routes, @defaults["down"])})"}
+                  disabled={@current_user.role == :viewer}
+                />
+              </dd>
+
+              <dt>At night</dt>
+
+              <dd>
+                <input type="hidden" name="silent[night]" value="false" />
+                <label>
+                  <input
+                    type="checkbox"
+                    name="silent[night]"
+                    value="true"
+                    checked={@service.machine.silent_wake}
+                    disabled={@current_user.role == :viewer}
+                  /> Wake me at night for this
+                </label>
+
+                <span class="hint">Off holds the alert until the night ends, if the machine is still quiet.</span>
+              </dd>
+            </dl>
+
+            <div class="foot">
+              <span :if={@silent_saved} role="status">Saved.</span>
+              <span class="end">
+                <button class="btn primary" type="submit" disabled={@current_user.role == :viewer}>
+                  Save
+                </button>
+              </span>
+            </div>
+          </form>
+
           <div class="card">
             <h2>Who hears about it</h2>
 
@@ -516,22 +582,24 @@ defmodule DokkitWeb.ServiceLive do
               <dt>{if @job, do: "If a run fails", else: "If it stops"}</dt>
               
               <dd>
-                <.route
-                  name="down"
+                <ChannelPick.pick
+                  name="route[down]"
                   value={@service.route_down}
-                  routes={@routes}
-                  default={@defaults["down"]}
+                  options={@routes}
+                  label={if @job, do: "If a run fails", else: "If it stops"}
+                  blank={"As set on Alerts (#{names(@routes, @defaults["down"])})"}
                 />
               </dd>
               
               <dt :if={!@job}>If it degrades</dt>
               
               <dd :if={!@job}>
-                <.route
-                  name="degraded"
+                <ChannelPick.pick
+                  name="route[degraded]"
                   value={@service.route_degraded}
-                  routes={@routes}
-                  default={@defaults["degraded"]}
+                  options={@routes}
+                  label="If it degrades"
+                  blank={"As set on Alerts (#{names(@routes, @defaults["degraded"])})"}
                 />
               </dd>
               
@@ -580,30 +648,12 @@ defmodule DokkitWeb.ServiceLive do
     """
   end
 
-  attr :name, :string, required: true
-  attr :value, :string, required: true
-  attr :routes, :list, required: true
-  attr :default, :string, required: true
-
-  defp route(assigns) do
-    ~H"""
-    <span class="dd wide">
-      <select class="inp" name={"route[#{@name}]"} aria-label="Channel">
-        <option value="" selected={@value == nil}>
-          As set on Alerts ({name(@routes, @default)})
-        </option>
-        
-        <option :for={{text, value} <- @routes} value={value} selected={value == @value}>
-          {text}
-        </option>
-      </select>
-       <.ic name="caret-down" />
-    </span>
-    """
+  defp names(routes, value) do
+    case Alerts.split(value) do
+      [] -> "Nobody"
+      list -> Enum.map_join(list, " and ", fn c -> Enum.find_value(routes, fn {t, v} -> v == c && t end) end)
+    end
   end
-
-  defp name(routes, value),
-    do: Enum.find_value(routes, "Nobody", fn {text, v} -> v == value && text end)
 
   defp target(%{type: :http, config: %{"url" => url}}), do: "http " <> url
 

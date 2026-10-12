@@ -40,14 +40,14 @@ defmodule Dokkit.MachinesTest do
              %{
                title: "press01 stopped reporting",
                kind: "machine",
-               alert: %Alert{channel: "page"}
+               alerts: [%Alert{channel: "page"}]
              }
            ] = Issues.open_list()
 
     # What runs on a machine that is down opens its issue without alerting.
     post(build_conn(), "/api/v1/in/#{job.key}/job/proofs/fail")
 
-    assert [%{kind: "job", alert: nil}, %{kind: "machine"}] =
+    assert [%{kind: "job", alerts: []}, %{kind: "machine"}] =
              Enum.sort_by(Issues.open_list(), & &1.kind)
 
     {:ok, _, html} = live(signed_in(conn), "/")

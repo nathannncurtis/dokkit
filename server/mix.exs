@@ -54,7 +54,8 @@ defmodule Dokkit.MixProject do
       {:crontab, "~> 1.1"},
       {:req, "~> 0.5"},
       {:gen_smtp, "~> 1.2"},
-      {:eqrcode, "~> 0.2"}
+      {:eqrcode, "~> 0.2"},
+      {:tz, "~> 0.28"}
     ]
   end
 

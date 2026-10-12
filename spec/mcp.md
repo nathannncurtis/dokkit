@@ -46,7 +46,8 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `bulk` | `act` | Snoozes, unsnoozes or acknowledges many issues. |
 | `watch` | `act` | Starts watching a service. |
 | `unwatch` | `act` | Stops watching a service. |
-| `routing` | `act` | Sets where a service's issues go. A field that is not given stays as it was. |
+| `routing` | `act` | Sets where a service's issues go, one channel or a list of channels for `down` and for `degraded`. A field that is not given stays as it was. |
+| `machine_routing` | `act` | Sets how a machine that stops reporting is announced: `down`, one channel or a list, and `night`. A field that is not given stays as it was. |
 | `hold` | `act` | Holds a service at a version. |
 | `accept_proposal` | `act` | Accepts a found service or port. A hidden one can be named by id; `all` takes only what `proposals` shows unless `system` is true. |
 | `dismiss_proposal` | `act` | Dismisses a proposal, with the same rule for `all` and `system`. |
@@ -80,7 +81,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `alert_who` | `read` | Lists who is told at each level where someone is named. |
 | `set_alert_person` | `admin` | Changes a person's destinations. A field not given stays; an empty one clears it. |
 | `set_alert_who` | `admin` | Names who is told at one level (`default`, `rule`, `service` or `check`): person ids, or `["everyone"]`. |
-| `test_alert` | `admin` | Sends a test alert by one channel, or to one person's destination with `person`. Answers sent, or one fixed reason. Four at once for each token, then one every 25 seconds. |
+| `test_alert` | `admin` | Sends a test alert by one channel, or to one person's destination with `person`. Answers sent, or one fixed reason. Four at once for each token, then one every 25 seconds; a page, or a push through PagerDuty, stays open for two minutes and then resolves itself, and costs twice as much (two at once, then one every 50 seconds). |
 | `accept_suggestion` | `admin` | Sends a service's issues to the daily digest from now on. |
 | `dismiss_suggestion` | `admin` | Dismisses an alert suggestion. |
 | `restore_archive` | `admin` | Loads an archived month of logs back for a week. |

@@ -20,7 +20,8 @@ defmodule Dokkit.Alerts do
     "night_offset" => "0"
   }
   @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user smtp_password twilio_token)
-  @plain ~w(disk_limit memory_limit ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to digest_at heartbeat_url imessage_machine imessage_to twilio_sid twilio_from sms_to self_down self_degraded)
+  @plain ~w(disk_limit memory_limit ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to digest_at heartbeat_url imessage_machine imessage_to twilio_sid twilio_from sms_to self_down self_degraded night_zone)
+  @choices ~w(down degraded self_down self_degraded)
   @max_attempts 5
   @imessage_wait 300
   @smtp_ports [25, 465, 587, 2525]
@@ -37,6 +38,57 @@ defmodule Dokkit.Alerts do
   ]
 
   def channels, do: @channels
+
+  @doc "The channels in a stored or given choice, a list or text with commas. Unknown words are dropped."
+  def split(value) when is_list(value) do
+    value
+    |> Enum.filter(&is_binary/1)
+    |> Enum.map(&String.trim/1)
+    |> Enum.filter(&List.keymember?(@channels, &1, 1))
+    |> Enum.uniq()
+  end
+
+  def split(value) when is_binary(value), do: split(String.split(value, ","))
+  def split(_), do: []
+
+  @doc "A choice of channels as it is stored: names with commas between, or empty."
+  def choice(value), do: value |> split() |> Enum.join(",")
+
+  @doc "A ticked choice with `none` made to stand alone: it wins when it was ticked last, and gives way to a channel ticked after it."
+  def exclusive(new, old \\ []) do
+    new = split(new)
+
+    cond do
+      "none" not in new or length(new) == 1 -> new
+      "none" in split(old) or old == [] -> List.delete(new, "none")
+      true -> ["none"]
+    end
+  end
+
+  @doc "An error for a choice of channels that names an unknown one or mixes none with others, or nil."
+  def channel_error(value) do
+    given = if is_binary(value), do: String.split(value, ","), else: value
+
+    cond do
+      not is_list(given) or not Enum.all?(given, &is_binary/1) ->
+        "A channel is text, or a list of text."
+
+      true ->
+        given = given |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == "")) |> Enum.uniq()
+
+        cond do
+          Enum.any?(given, &(not List.keymember?(@channels, &1, 1))) ->
+            "A channel is one of #{Enum.map_join(@channels, ", ", &elem(&1, 1))}."
+
+          "none" in given and length(given) > 1 ->
+            "none cannot be combined with other channels."
+
+          true ->
+            nil
+        end
+    end
+  end
+
   def sends?(channel), do: channel != "none" and List.keymember?(@channels, channel, 1)
 
   @sent %{
@@ -104,7 +156,7 @@ defmodule Dokkit.Alerts do
 
     new =
       for({k, v} <- Map.take(params, Map.keys(@defaults) ++ @secrets ++ @plain), into: old) do
-        {k, String.trim(v)}
+        {k, if(k in @choices, do: choice(v), else: String.trim(v))}
       end
       |> Map.merge(Map.new(gone, &{&1, ""}))
       |> unblank()
@@ -126,7 +178,13 @@ defmodule Dokkit.Alerts do
     c = config()
     marks = Map.new(@hidden, &{&1, if(c[&1] in [nil, ""], do: "not set", else: "set")})
     {_, notice} = imessage_status(c)
-    c |> Map.drop(@hidden) |> Map.merge(marks) |> Map.put("imessage_status", notice)
+    lists = Map.new(@choices, &{&1 <> "_channels", split(c[&1])})
+
+    c
+    |> Map.drop(@hidden)
+    |> Map.merge(marks)
+    |> Map.merge(lists)
+    |> Map.put("imessage_status", notice)
   end
 
   @doc """
@@ -134,15 +192,20 @@ defmodule Dokkit.Alerts do
   which secrets the save cleared because their address changed, or is nil.
   """
   def update(params) do
-    params = Map.take(params, setting_keys())
+    params =
+      for {k, v} <- Map.take(params, setting_keys()), into: %{} do
+        if k in @choices and is_list(v) and Enum.all?(v, &is_binary/1),
+          do: {k, Enum.join(v, ",")},
+          else: {k, v}
+      end
 
     cond do
       Enum.any?(params, fn {_, v} -> not is_binary(v) end) ->
         {:error, "Every setting is text."}
 
       error =
-          bad_choice(params) || night_error(params) || bad_recipients(params) ||
-            bad_address(params) ->
+          bad_choice(params) || night_error(params) || zone_error(params) ||
+            bad_recipients(params) || bad_address(params) ->
         {:error, error}
 
       true ->
@@ -152,21 +215,11 @@ defmodule Dokkit.Alerts do
   end
 
   defp bad_choice(params) do
-    channels = for {_, v} <- @channels, do: v
-
-    Enum.find_value(
-      %{
-        "down" => channels,
-        "degraded" => channels,
-        "self_down" => channels,
-        "self_degraded" => channels,
-        "push_with" => ~w(ntfy pushover pagerduty)
-      },
-      fn {k, ok} ->
-        if String.trim(params[k] || "") not in ["" | ok],
-          do: "#{k} is one of #{Enum.join(ok, ", ")}."
-      end
-    )
+    Enum.find_value(@choices, fn k ->
+      if why = channel_error(params[k] || ""), do: "#{k}: #{why}"
+    end) ||
+      if String.trim(params["push_with"] || "") not in ["", "ntfy", "pushover", "pagerduty"],
+        do: "push_with is one of ntfy, pushover, pagerduty."
   end
 
   @phone ~r/^\+?[0-9][0-9 ()\-.]{5,19}$/
@@ -258,18 +311,49 @@ defmodule Dokkit.Alerts do
     end
   end
 
-  # No time zone database is installed, so the night is set in hours from UTC.
+  @doc """
+  The time on the clock where the night is kept: in the time zone set on the Alerts page, else
+  `now` moved by the old whole-hour offset from UTC.
+  """
+  def local(now, config \\ config()) do
+    case zone_now(now, config) do
+      %DateTime{time_zone: "Etc/UTC"} ->
+        DateTime.add(now, night_hour(config, "night_offset", -12..14) * 3600)
+
+      local ->
+        local
+    end
+  end
+
+  @doc "`now` in the time zone set on the Alerts page, or in UTC when none is set."
+  def zone_now(now, config \\ config()) do
+    with zone when zone not in [nil, ""] <- config["night_zone"],
+         {:ok, local} <- DateTime.shift_zone(now, zone) do
+      local
+    else
+      _ -> now
+    end
+  end
+
+  @doc "Whether the Alerts page has a time zone set that the database knows."
+  def zone_set?(config \\ config()),
+    do: match?({:ok, _}, DateTime.shift_zone(DateTime.utc_now(), config["night_zone"] || ""))
+
   @doc "Whether `now` falls in the night set on the Alerts page."
   def night?(now, config \\ config()) do
     from = night_hour(config, "night_from", 0..23)
     to = night_hour(config, "night_to", 0..23)
-    hour = Integer.mod(now.hour + night_hour(config, "night_offset", -12..14), 24)
+    hour = local(now, config).hour
     if from <= to, do: hour >= from and hour < to, else: hour >= from or hour < to
   end
 
   defp night_hour(config, key, range) do
     whole_hour(config[key], range) || String.to_integer(@defaults[key])
   end
+
+  @doc "A whole-hour night setting: `night_from`, `night_to` or `night_offset`."
+  def night_hour(config, key),
+    do: night_hour(config, key, if(key == "night_offset", do: -12..14, else: 0..23))
 
   defp whole_hour(value, range) do
     case Integer.parse(value || "") do
@@ -278,12 +362,32 @@ defmodule Dokkit.Alerts do
     end
   end
 
-  @doc "When the night ends, in the night's own offset, such as \"07:00 UTC+2\"."
-  def night_ends(config \\ config()) do
+  @doc "When the night ends, in the night's own clock, such as \"07:00 PDT\" or \"07:00 UTC+2\"."
+  def night_ends(config \\ config(), now \\ DateTime.utc_now()) do
     hour = night_hour(config, "night_to", 0..23) |> to_string() |> String.pad_leading(2, "0")
     offset = night_hour(config, "night_offset", -12..14)
-    "#{hour}:00 UTC#{if offset > 0, do: "+#{offset}", else: if(offset < 0, do: offset)}"
+
+    case zone_now(now, config) do
+      %DateTime{time_zone: "Etc/UTC"} ->
+        "#{hour}:00 UTC#{if offset > 0, do: "+#{offset}", else: if(offset < 0, do: offset)}"
+
+      %DateTime{zone_abbr: abbr} ->
+        "#{hour}:00 #{abbr}"
+    end
   end
+
+  @doc "An error for a time zone the database does not know, or nil."
+  def zone_error(params) do
+    zone = String.trim(params["night_zone"] || "")
+
+    if zone != "" and not match?({:ok, _}, DateTime.shift_zone(DateTime.utc_now(), zone)),
+      do: "night_zone is a time zone name such as America/Los_Angeles."
+  end
+
+  @zones ~w(UTC Pacific/Honolulu America/Anchorage America/Los_Angeles America/Phoenix America/Denver America/Chicago America/New_York America/Halifax America/St_Johns America/Sao_Paulo America/Mexico_City America/Toronto America/Vancouver Atlantic/Reykjavik Europe/London Europe/Dublin Europe/Lisbon Europe/Paris Europe/Berlin Europe/Madrid Europe/Rome Europe/Amsterdam Europe/Stockholm Europe/Athens Europe/Helsinki Europe/Istanbul Europe/Moscow Africa/Cairo Africa/Lagos Africa/Johannesburg Africa/Nairobi Asia/Dubai Asia/Karachi Asia/Kolkata Asia/Dhaka Asia/Bangkok Asia/Singapore Asia/Hong_Kong Asia/Shanghai Asia/Tokyo Asia/Seoul Australia/Perth Australia/Adelaide Australia/Sydney Australia/Brisbane Pacific/Auckland)
+
+  @doc "Common time zone names to pick from."
+  def zones, do: @zones
 
   @doc "An error for a night that is not whole hours, or nil."
   def night_error(params) do
@@ -302,7 +406,10 @@ defmodule Dokkit.Alerts do
   def rule_states, do: @states
 
   @doc "Rules, first match first. A service's own routing comes before them, the two defaults after."
-  def rules, do: (Repo.get(Setting, "rules") || %Setting{value: %{}}).value["list"] || []
+  def rules do
+    for r <- (Repo.get(Setting, "rules") || %Setting{value: %{}}).value["list"] || [],
+        do: Map.put(r, "channels", split(r["channel"]))
+  end
 
   def add_rule(params),
     do: save_rules(rules() ++ [Map.merge(rule(params), %{"id" => Ecto.UUID.generate()})])
@@ -312,7 +419,12 @@ defmodule Dokkit.Alerts do
     save_rules(
       for r <- rules() do
         if r["id"] == id do
-          given = Map.take(rule(params), Map.keys(params))
+          given =
+            Map.take(
+              rule(params),
+              Enum.map(Map.keys(params), &if(&1 == "channels", do: "channel", else: &1))
+            )
+
           on = if is_boolean(params["on"]), do: params["on"], else: r["on"]
           r |> Map.merge(given) |> Map.put("on", on)
         else
@@ -327,21 +439,25 @@ defmodule Dokkit.Alerts do
       "kind" => pick(@kinds, params["kind"]),
       "state" => pick(@states, params["state"]),
       "machine" => if(is_binary(params["machine"]), do: String.trim(params["machine"]), else: ""),
-      "channel" => if((c = pick(@channels, params["channel"])) == "", do: "none", else: c),
+      "channel" =>
+        if((c = choice(params["channels"] || params["channel"])) == "", do: "none", else: c),
       "on" => true
     }
   end
 
   @doc "An error for a rule whose fields are not text, a known word, or true or false; else nil."
   def rule_error(params) do
-    words = %{"kind" => @kinds, "state" => @states, "channel" => @channels}
+    words = %{"kind" => @kinds, "state" => @states}
 
-    Enum.find_value(~w(kind state channel machine on), fn k ->
+    Enum.find_value(~w(kind state channel channels machine on), fn k ->
       v = params[k]
 
       cond do
         not Map.has_key?(params, k) ->
           nil
+
+        k in ["channel", "channels"] ->
+          channel_error(v)
 
         k == "on" ->
           if not is_boolean(v), do: "on is true or false."
@@ -390,7 +506,7 @@ defmodule Dokkit.Alerts do
         order_by: [desc: i.count],
         preload: [service: s]
     )
-    |> Enum.reject(&(route(&1.service, &1.state) == "digest"))
+    |> Enum.reject(&(split(route(&1.service, &1.state)) == ["digest"]))
     |> Enum.uniq_by(& &1.service_id)
   end
 
@@ -418,8 +534,8 @@ defmodule Dokkit.Alerts do
 
   @doc "The channels the row for Dokkit itself uses when it stops taking reports (down) and for lesser trouble (degraded)."
   def self_routes(config \\ config()) do
-    {blank(pick(@channels, config["self_down"]), highest(config)),
-     blank(pick(@channels, config["self_degraded"]), "push")}
+    {blank(choice(config["self_down"]), highest(config)),
+     blank(choice(config["self_degraded"]), "push")}
   end
 
   defp blank("", fallback), do: fallback
@@ -440,6 +556,15 @@ defmodule Dokkit.Alerts do
   end
 
   defp pick(options, value), do: Enum.find_value(options, "", fn {_, v} -> v == value && v end)
+
+  defp first_set(choices),
+    do: Enum.find_value(choices, [], &(split(&1) != [] && split(&1)))
+
+  defp one_incident(channels, config) do
+    if "page" in channels and config["push_with"] == "pagerduty",
+      do: List.delete(channels, "push"),
+      else: channels
+  end
 
   defp save_rules(list) do
     Repo.insert!(%Setting{key: "rules", value: %{"list" => list}},
@@ -469,27 +594,56 @@ defmodule Dokkit.Alerts do
     # A soon issue never takes a rule, and never pages: a page for it goes as a push.
     rule = !issue.soon && ruled(issue, machine_name(issue.machine_id))
 
-    channel =
-      Map.get(service, :"route_#{issue.state}") || (rule && rule["channel"]) ||
-        config()[to_string(issue.state)]
+    config = config()
 
-    channel = if issue.soon and channel == "page", do: "push", else: channel
+    channels =
+      first_set([
+        Map.get(service, :"route_#{issue.state}"),
+        rule && rule["channel"],
+        config[to_string(issue.state)]
+      ])
+
+    channels =
+      if issue.soon,
+        do: channels |> Enum.map(&if(&1 == "page", do: "push", else: &1)) |> Enum.uniq(),
+        else: channels
 
     unless Dokkit.Issues.machine_down?(issue.machine_id) do
-      insert(issue, channel, if(holds?(service, channel, now), do: :held, else: :pending), rule)
+      insert(issue, one_incident(channels, config), &holds?(service, &1, now), rule)
     end
   end
 
-  def plan(%Issue{kind: "machine"} = issue, nil, _) do
-    rule = ruled(issue, machine_name(issue.machine_id))
-    insert(issue, (rule && rule["channel"]) || config()["down"], :pending, rule)
+  def plan(%Issue{kind: "machine"} = issue, nil, now) do
+    machine = Repo.get(Machine, issue.machine_id)
+    rule = ruled(issue, machine && machine.name)
+    config = config()
+
+    channels =
+      first_set([machine && machine.silent_route, rule && rule["channel"], config["down"]])
+
+    wakes = machine == nil or machine.silent_wake
+
+    insert(issue, one_incident(channels, config), &(not wakes and held?(&1, now)), rule)
   end
 
   def plan(_, _, _), do: nil
 
   # A held alert waits in the database for the sweep after the night ends.
-  defp holds?(%Service{night: false}, channel, now), do: channel != "digest" and night?(now)
+  defp holds?(%Service{night: false}, channel, now), do: held?(channel, now)
   defp holds?(_, _, _), do: false
+
+  defp held?(channel, now), do: channel != "digest" and night?(now)
+
+  @doc "Alerts held for a machine that stopped reporting go out now: it was set to wake someone at night."
+  def wake_machine(%Machine{id: id}) do
+    Repo.update_all(
+      from(a in Alert,
+        join: i in assoc(a, :issue),
+        where: a.status == :held and i.machine_id == ^id and i.kind == "machine"
+      ),
+      set: [status: :pending]
+    )
+  end
 
   # An issue that opens again inside the 30 minutes is told to whoever is named now.
   defp retarget(issue) do
@@ -509,8 +663,9 @@ defmodule Dokkit.Alerts do
     end
   end
 
-  defp insert(issue, channel, status, rule) do
-    if sends?(channel) do
+  defp insert(issue, channels, held?, rule) do
+    for channel <- channels, sends?(channel) do
+      status = if held?.(channel), do: :held, else: :pending
       alert = Repo.insert!(%Alert{issue_id: issue.id, channel: channel, status: status})
 
       People.target(
@@ -865,7 +1020,7 @@ defmodule Dokkit.Alerts do
     config = told(config(), person, channel)
 
     about = %{
-      id: "test",
+      id: "test-" <> Base.encode16(:crypto.strong_rand_bytes(4), case: :lower),
       short: "DOK-0",
       title: "A test from Dokkit",
       note: "If you can read this, the #{channel} channel works.",
@@ -874,12 +1029,64 @@ defmodule Dokkit.Alerts do
       url: Dokkit.Certificate.url()
     }
 
-    provider = provider(channel, config)
+    with :ok <- send_to(provider(channel, config), :open, about, config) do
+      if keeps_open?(channel, config), do: stay_open(about.id, channel, person)
+      :ok
+    end
+  end
 
-    with :ok <- send_to(provider, :open, about, config) do
-      if provider in [:pagerduty_high, :pagerduty_low],
-        do: send_to(provider, :close, about, config),
-        else: :ok
+  @test_stays 120
+
+  @doc "Whether a test by this channel stays open for two minutes: a PagerDuty incident is not noticed if it resolves at once."
+  def keeps_open?(channel, config \\ config()),
+    do: provider(channel, config) in [:pagerduty_high, :pagerduty_low]
+
+  def test_stays, do: @test_stays
+
+  defp stay_open(id, channel, person) do
+    due = DateTime.add(DateTime.utc_now(), @test_stays)
+
+    Repo.insert!(%Setting{
+      key: "test_open:" <> id,
+      value: %{
+        "id" => id,
+        "channel" => channel,
+        "person" => person && person.id,
+        "due" => DateTime.to_iso8601(due),
+        "tries" => 0
+      }
+    })
+  end
+
+  @doc """
+  Resolves the PagerDuty tests whose two minutes are up. The open tests are rows, so a restart
+  in between still sends the resolve on the next sweep. Returns how many resolved.
+  """
+  def resolve_tests(now \\ DateTime.utc_now()) do
+    rows = Repo.all(from s in Setting, where: like(s.key, "test_open:%"))
+
+    for %Setting{value: v} = row <- rows,
+        {:ok, due, _} = DateTime.from_iso8601(v["due"]),
+        DateTime.compare(due, now) != :gt,
+        reduce: 0 do
+      n ->
+        person = v["person"] && People.get(v["person"])
+        config = told(config(), person, v["channel"])
+        tries = v["tries"] + 1
+
+        case send_to(provider(v["channel"], config), :close, %{id: v["id"]}, config) do
+          :ok ->
+            Repo.delete!(row)
+            n + 1
+
+          {:error, _} when tries >= @max_attempts ->
+            Repo.delete!(row)
+            n
+
+          {:error, _} ->
+            Repo.update!(Ecto.Changeset.change(row, value: %{v | "tries" => tries}))
+            n
+        end
     end
   end
 

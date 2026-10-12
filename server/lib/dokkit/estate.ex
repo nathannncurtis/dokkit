@@ -11,6 +11,10 @@ defmodule Dokkit.Estate do
     )
   end
 
+  def machine(id) do
+    with {:ok, id} <- Ecto.UUID.cast(id), do: Repo.get(Machine, id)
+  end
+
   def service(id) do
     with {:ok, id} <- Ecto.UUID.cast(id),
          %Service{} = service <- Repo.get(Service, id) do
@@ -489,8 +493,28 @@ defmodule Dokkit.Estate do
     Dokkit.Issues.refresh(service)
   end
 
-  defp route(value),
-    do: Enum.find_value(Dokkit.Alerts.channels(), fn {_, v} -> v == value && v end)
+  defp route(value), do: if((c = Dokkit.Alerts.choice(value)) != "", do: c)
+
+  @doc "Changes how a machine going silent is announced: its channels (empty for the server-wide choice) and whether it wakes someone at night."
+  def set_silent(%Machine{} = machine, params) do
+    change = for k <- ["down"], Map.has_key?(params, k), do: {:silent_route, route(params[k])}
+
+    change =
+      case params["night"] do
+        v when v in [true, "true"] -> [silent_wake: true] ++ change
+        v when v in [false, "false"] -> [silent_wake: false] ++ change
+        _ -> change
+      end
+
+    machine = Repo.update!(Ecto.Changeset.change(machine, change))
+
+    if change[:silent_wake] do
+      Dokkit.Alerts.wake_machine(machine)
+      Dokkit.Issues.changed()
+    end
+
+    machine
+  end
 
   @doc "Starts or stops watching. Stopping closes what is open and forgets what the checks said."
   def set_watched(%Service{} = service, watched) when is_boolean(watched) do

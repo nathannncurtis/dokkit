@@ -3513,6 +3513,27 @@
                               }
                             }
                           }
+                        },
+                        "silent": {
+                          "type": "object",
+                          "description": "How this machine going silent is announced; see PUT /machines/{id}/routing.",
+                          "properties": {
+                            "down": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "down_channels": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "night": {
+                              "type": "boolean"
+                            }
+                          }
                         }
                       }
                     }
@@ -6233,7 +6254,7 @@
         "tags": [
           "Act"
         ],
-        "description": "Sets the channel for `down` and for `degraded`. A field that is not sent stays as it was; a value that is not a channel clears that route. `night` is optional; false holds the alerts of a night until it ends. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "description": "Sets the channels for `down` and for `degraded`, each one channel or a list of channels that each send their own alert. A field that is not sent stays as it was; a value that is not a channel clears that route. `none` cannot be combined with other channels (422 `bad_routing`). `night` is optional; false holds the alerts of a night until it ends. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
         "parameters": [
           {
             "name": "id",
@@ -6253,29 +6274,51 @@
                 "type": "object",
                 "properties": {
                   "down": {
-                    "type": "string",
-                    "enum": [
-                      "page",
-                      "push",
-                      "email",
-                      "imessage",
-                      "sms",
-                      "digest",
-                      "webhook",
-                      "none"
+                    "description": "One channel as text, or several as a list or as text with commas between. Each channel sends its own alert; `none` stands alone. A page and a push through PagerDuty together make one incident at the page's severity.",
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "page",
+                            "push",
+                            "email",
+                            "imessage",
+                            "sms",
+                            "digest",
+                            "webhook",
+                            "none"
+                          ]
+                        }
+                      }
                     ]
                   },
                   "degraded": {
-                    "type": "string",
-                    "enum": [
-                      "page",
-                      "push",
-                      "email",
-                      "imessage",
-                      "sms",
-                      "digest",
-                      "webhook",
-                      "none"
+                    "description": "One channel as text, or several as a list or as text with commas between. Each channel sends its own alert; `none` stands alone. A page and a push through PagerDuty together make one incident at the page's severity.",
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "page",
+                            "push",
+                            "email",
+                            "imessage",
+                            "sms",
+                            "digest",
+                            "webhook",
+                            "none"
+                          ]
+                        }
+                      }
                     ]
                   },
                   "night": {
@@ -6285,7 +6328,10 @@
                 }
               },
               "example": {
-                "down": "page",
+                "down": [
+                  "page",
+                  "email"
+                ],
                 "degraded": "digest",
                 "night": false
               }
@@ -6314,13 +6360,32 @@
                     },
                     "night": {
                       "type": "boolean"
+                    },
+                    "down_channels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "degraded_channels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   }
                 },
                 "example": {
-                  "down": "page",
+                  "down": "page,email",
                   "degraded": "digest",
-                  "night": false
+                  "night": false,
+                  "down_channels": [
+                    "page",
+                    "email"
+                  ],
+                  "degraded_channels": [
+                    "digest"
+                  ]
                 }
               }
             }
@@ -6368,6 +6433,22 @@
                   "error": {
                     "code": "not_found",
                     "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`none` was combined with other channels.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_routing",
+                    "message": "down: none cannot be combined with other channels."
                   }
                 }
               }
@@ -8718,7 +8799,7 @@
         "tags": [
           "Admin"
         ],
-        "description": "Sends a test alert by one channel. Answers ok, or 422 with one reason. For SMS it is Twilio's own message when it gave one, and for iMessage it is the Mac's answer, which is waited for up to a minute. For the others it is a fixed reason that never carries anything the far end said. A 422 with code `slow_down` comes after four tests at once for a token, then one every 25 seconds. Answers 422 too when the channel is not one that sends, or `person` is not a person on the server (code `bad_person`). Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "description": "Sends a test alert by one channel. Answers ok, or 422 with one reason. A page, and a push that goes through PagerDuty, stays open for two minutes and then resolves itself, so the phone has time to ring; the answer then carries `resolves_in` (120). For SMS it is Twilio's own message when it gave one, and for iMessage it is the Mac's answer, which is waited for up to a minute. For the others it is a fixed reason that never carries anything the far end said. A 422 with code `slow_down` comes after four tests at once for a token, then one every 25 seconds; a test that stays open costs twice as much: two at once, then one every 50 seconds. Answers 422 too when the channel is not one that sends, or `person` is not a person on the server (code `bad_person`). Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
         "requestBody": {
           "required": true,
           "content": {
@@ -8759,7 +8840,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Ok"
+                  "$ref": "#/components/schemas/Ok",
+                  "properties": {
+                    "resolves_in": {
+                      "type": "integer",
+                      "description": "Seconds until a test that stays open resolves itself. Absent for the other channels."
+                    }
+                  }
                 },
                 "example": {
                   "ok": true
@@ -11586,6 +11673,180 @@
           }
         ]
       }
+    },
+    "/api/v1/machines/{id}/routing": {
+      "put": {
+        "operationId": "setMachineRouting",
+        "summary": "Set how a machine that stops reporting is announced",
+        "tags": [
+          "Act"
+        ],
+        "description": "Sets the channels used when this machine stops reporting (`down`: one channel or a list; empty uses the server-wide choice for down) and whether the alert may wake someone at night (`night`, default true; false holds it until the night ends). A field that is not sent stays as it was. Takes a user token (`dku_`) with the `act` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the machine.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "down": {
+                    "description": "One channel as text, or several as a list or as text with commas between. Each channel sends its own alert; `none` stands alone. A page and a push through PagerDuty together make one incident at the page's severity.",
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "page",
+                            "push",
+                            "email",
+                            "imessage",
+                            "sms",
+                            "digest",
+                            "webhook",
+                            "none"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "night": {
+                    "type": "boolean",
+                    "description": "False holds the alert for a silent machine at night until the night ends. Default true."
+                  }
+                }
+              },
+              "example": {
+                "down": [
+                  "page"
+                ],
+                "night": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The routing now in force.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "down": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "down_channels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "night": {
+                      "type": "boolean"
+                    }
+                  }
+                },
+                "example": {
+                  "down": "page",
+                  "down_channels": [
+                    "page"
+                  ],
+                  "night": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not act."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`none` was combined with other channels.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_routing",
+                    "message": "down: none cannot be combined with other channels."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "act"
+            ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -11711,13 +11972,28 @@
               "object",
               "null"
             ],
-            "description": "The alert sent for it: channel and status.",
+            "description": "The first of its alerts (channel and status). `alerts` lists all of them.",
             "properties": {
               "channel": {
                 "type": "string"
               },
               "status": {
                 "type": "string"
+              }
+            }
+          },
+          "alerts": {
+            "type": "array",
+            "description": "Every alert sent for it, one for each channel: channel and status.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "channel": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
               }
             }
           }
@@ -11811,6 +12087,18 @@
                   },
                   "night": {
                     "type": "boolean"
+                  },
+                  "down_channels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "degraded_channels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               },
@@ -12114,19 +12402,27 @@
           },
           "channel": {
             "type": "string",
-            "enum": [
-              "page",
-              "push",
-              "email",
-              "imessage",
-              "sms",
-              "digest",
-              "webhook",
-              "none"
-            ]
+            "description": "The channel, or several with commas between."
           },
           "on": {
             "type": "boolean"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "page",
+                "push",
+                "email",
+                "imessage",
+                "sms",
+                "digest",
+                "webhook",
+                "none"
+              ]
+            },
+            "description": "The same choice as a list. Either field may be sent; `channels` wins."
           }
         }
       },
@@ -12157,21 +12453,49 @@
             "description": "A machine name. Empty means any."
           },
           "channel": {
-            "type": "string",
-            "enum": [
-              "page",
-              "push",
-              "email",
-              "imessage",
-              "sms",
-              "digest",
-              "webhook",
-              "none"
+            "description": "One channel as text, or several as text with commas between (stored and answered that way). Each sends its own alert; `none` stands alone.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "page",
+                    "push",
+                    "email",
+                    "imessage",
+                    "sms",
+                    "digest",
+                    "webhook",
+                    "none"
+                  ]
+                }
+              }
             ]
           },
           "on": {
             "type": "boolean",
             "description": "On update only. False turns the rule off."
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "page",
+                "push",
+                "email",
+                "imessage",
+                "sms",
+                "digest",
+                "webhook",
+                "none"
+              ]
+            },
+            "description": "The same choice as a list. Either field may be sent; `channels` wins."
           }
         }
       },
@@ -12386,29 +12710,11 @@
           },
           "down": {
             "type": "string",
-            "enum": [
-              "page",
-              "push",
-              "email",
-              "imessage",
-              "sms",
-              "digest",
-              "webhook",
-              "none"
-            ]
+            "description": "One channel, or several with commas between. One channel, or several with commas between."
           },
           "degraded": {
             "type": "string",
-            "enum": [
-              "page",
-              "push",
-              "email",
-              "imessage",
-              "sms",
-              "digest",
-              "webhook",
-              "none"
-            ]
+            "description": "One channel, or several with commas between. One channel, or several with commas between."
           },
           "push_with": {
             "type": "string",
@@ -12431,10 +12737,12 @@
             "type": "string"
           },
           "night_offset": {
-            "type": "string"
+            "type": "string",
+            "description": "Whole hours from UTC. Used only while night_zone is empty."
           },
           "digest_at": {
-            "type": "string"
+            "type": "string",
+            "description": "The time of the daily digest, on the clock of night_zone (UTC while it is empty)."
           },
           "smtp_host": {
             "type": "string"
@@ -12543,15 +12851,47 @@
           },
           "self_down": {
             "type": "string",
-            "description": "The channel for Dokkit's own row when it stops taking reports or cannot reach its database. Empty is the loudest channel that is set up."
+            "description": "The channel for Dokkit's own row when it stops taking reports or cannot reach its database. Empty is the loudest channel that is set up. One channel, or several with commas between. One channel, or several with commas between."
           },
           "self_degraded": {
             "type": "string",
-            "description": "The channel for lesser trouble with Dokkit itself. Empty is push."
+            "description": "The channel for lesser trouble with Dokkit itself. Empty is push. One channel, or several with commas between. One channel, or several with commas between."
           },
           "imessage_status": {
             "type": "string",
             "description": "Where iMessage sending stands: set up once the chosen Mac has answered a test, else what is still missing."
+          },
+          "down_channels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The same choice as a list."
+          },
+          "degraded_channels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The same choice as a list."
+          },
+          "self_down_channels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The same choice as a list."
+          },
+          "self_degraded_channels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The same choice as a list."
+          },
+          "night_zone": {
+            "type": "string",
+            "description": "A time zone name such as America/Los_Angeles, in which the night and the digest time are kept. While it is empty the night is read in UTC plus night_offset."
           }
         }
       },
@@ -12560,29 +12900,51 @@
         "description": "Any of the settings. One that is left out stays as it was. A secret, an address or a user name is written here and never returned. A secret sent as an empty string is cleared; one left out keeps its value. A secret goes to one host: if ntfy_url or smtp_host changes and ntfy_token or smtp_password is not sent in the same call, it is cleared and the answer carries a `note` that says so. Addresses must be https and may not be this machine or a link-local address unless the server sets DOKKIT_ALLOW_LOCAL_ALERTS=1. smtp_port is 25, 465, 587 or 2525. The night is whole hours: night_from and night_to from 0 to 23, night_offset (hours from UTC) from -12 to 14.",
         "properties": {
           "down": {
-            "type": "string",
-            "enum": [
-              "page",
-              "push",
-              "email",
-              "imessage",
-              "sms",
-              "digest",
-              "webhook",
-              "none"
+            "description": "One channel as text, or several as a list or as text with commas between. Each channel sends its own alert; `none` stands alone. A page and a push through PagerDuty together make one incident at the page's severity. One channel as text, or several as a list or as text with commas between. Each channel sends its own alert; `none` stands alone. A page and a push through PagerDuty together make one incident at the page's severity.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "page",
+                    "push",
+                    "email",
+                    "imessage",
+                    "sms",
+                    "digest",
+                    "webhook",
+                    "none"
+                  ]
+                }
+              }
             ]
           },
           "degraded": {
-            "type": "string",
-            "enum": [
-              "page",
-              "push",
-              "email",
-              "imessage",
-              "sms",
-              "digest",
-              "webhook",
-              "none"
+            "description": "One channel as text, or several as a list or as text with commas between. Each channel sends its own alert; `none` stands alone. A page and a push through PagerDuty together make one incident at the page's severity. One channel as text, or several as a list or as text with commas between. Each channel sends its own alert; `none` stands alone. A page and a push through PagerDuty together make one incident at the page's severity.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "page",
+                    "push",
+                    "email",
+                    "imessage",
+                    "sms",
+                    "digest",
+                    "webhook",
+                    "none"
+                  ]
+                }
+              }
             ]
           },
           "push_with": {
@@ -12606,10 +12968,12 @@
             "type": "string"
           },
           "night_offset": {
-            "type": "string"
+            "type": "string",
+            "description": "Whole hours from UTC. Used only while night_zone is empty."
           },
           "digest_at": {
-            "type": "string"
+            "type": "string",
+            "description": "The time of the daily digest, on the clock of night_zone (UTC while it is empty)."
           },
           "smtp_host": {
             "type": "string"
@@ -12673,12 +13037,56 @@
             "type": "string"
           },
           "self_down": {
-            "type": "string",
-            "description": "The channel for Dokkit's own row when it stops taking reports or cannot reach its database. Empty is the loudest channel that is set up."
+            "description": "The channel for Dokkit's own row when it stops taking reports or cannot reach its database. Empty is the loudest channel that is set up. One channel as text, or several as a list or as text with commas between. Each channel sends its own alert; `none` stands alone. A page and a push through PagerDuty together make one incident at the page's severity. One channel as text, or several as a list or as text with commas between. Each channel sends its own alert; `none` stands alone. A page and a push through PagerDuty together make one incident at the page's severity.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "page",
+                    "push",
+                    "email",
+                    "imessage",
+                    "sms",
+                    "digest",
+                    "webhook",
+                    "none"
+                  ]
+                }
+              }
+            ]
           },
           "self_degraded": {
+            "description": "The channel for lesser trouble with Dokkit itself. Empty is push. One channel as text, or several as a list or as text with commas between. Each channel sends its own alert; `none` stands alone. A page and a push through PagerDuty together make one incident at the page's severity. One channel as text, or several as a list or as text with commas between. Each channel sends its own alert; `none` stands alone. A page and a push through PagerDuty together make one incident at the page's severity.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "page",
+                    "push",
+                    "email",
+                    "imessage",
+                    "sms",
+                    "digest",
+                    "webhook",
+                    "none"
+                  ]
+                }
+              }
+            ]
+          },
+          "night_zone": {
             "type": "string",
-            "description": "The channel for lesser trouble with Dokkit itself. Empty is push."
+            "description": "A time zone name such as America/Los_Angeles, in which the night and the digest time are kept. While it is empty the night is read in UTC plus night_offset."
           }
         }
       },

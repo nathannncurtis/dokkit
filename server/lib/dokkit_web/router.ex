@@ -150,6 +150,7 @@ defmodule DokkitWeb.Router do
     put "/rules/:id", ApiController, :update_rule
     delete "/rules/:id", ApiController, :delete_rule
     put "/services/:id/routing", ApiController, :routing
+    put "/machines/:id/routing", ApiController, :machine_routing
     post "/services/:id/watch", ApiController, :watch
     post "/services/:id/unwatch", ApiController, :unwatch
     put "/services/:id/checks", ApiController, :checks

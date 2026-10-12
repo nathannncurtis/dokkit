@@ -143,17 +143,37 @@ defmodule DokkitWeb.ApiController do
   def bulk(conn, params), do: reply(conn, bulk_issues(params))
 
   def set_routing(%{"id" => id} = params) do
-    case Dokkit.Estate.service(id) do
-      nil ->
-        not_found()
-
-      service ->
-        s = Dokkit.Estate.set_routing(service, params)
-        %{down: s.route_down, degraded: s.route_degraded, night: s.night}
+    with nil <- mixed_none(params, ~w(down degraded)),
+         %{} = service <- Dokkit.Estate.service(id) do
+      Read.routing(Dokkit.Estate.set_routing(service, params))
+    else
+      nil -> not_found()
+      why -> {:error, "bad_routing", why}
     end
   end
 
   def routing(conn, params), do: reply(conn, set_routing(params))
+
+  def set_machine_routing(%{"id" => id} = params) do
+    with nil <- mixed_none(params, ["down"]),
+         %{} = machine <- Dokkit.Estate.machine(id) do
+      Read.silent(Dokkit.Estate.set_silent(machine, params))
+    else
+      nil -> not_found()
+      why -> {:error, "bad_routing", why}
+    end
+  end
+
+  def machine_routing(conn, params), do: reply(conn, set_machine_routing(params))
+
+  defp mixed_none(params, keys) do
+    Enum.find_value(keys, fn k ->
+      channels = Dokkit.Alerts.split(params[k])
+
+      if "none" in channels and length(channels) > 1,
+        do: "#{k}: none cannot be combined with other channels."
+    end)
+  end
 
   @doc "Changes a service, then returns it as the API shows it."
   def change(id, act) do
@@ -348,16 +368,23 @@ defmodule DokkitWeb.ApiController do
   def set_alert_who(conn, params), do: reply(conn, save_who(params))
 
   @test_cost 2_500
+  @open_test_cost 5_000
 
-  @doc "Sends a test alert. Answers ok, or one fixed reason. Four tests at once for each caller, then one every 25 seconds."
+  @doc "Sends a test alert. Answers ok, or one fixed reason. Four tests at once for each caller, then one every 25 seconds. A test that stays open for two minutes costs twice as much: two at once, then one every 50 seconds."
   def try_alert(%{"channel" => channel} = params, who) when is_binary(channel) do
     person = params["person"] && Dokkit.People.get(params["person"])
     bad_person = params["person"] != nil and person == nil
 
     with true <- Dokkit.Alerts.sends?(channel),
          false <- bad_person,
-         :ok <- Dokkit.RateLimit.take({:alert_test, who}, @test_cost) do
+         open? = Dokkit.Alerts.keeps_open?(channel),
+         :ok <-
+           Dokkit.RateLimit.take(
+             {:alert_test, who},
+             if(open?, do: @open_test_cost, else: @test_cost)
+           ) do
       case Dokkit.Alerts.test(channel, person) do
+        :ok when open? -> %{ok: true, resolves_in: Dokkit.Alerts.test_stays()}
         :ok -> %{ok: true}
         {:error, why} -> {:error, "send_failed", why}
       end

@@ -352,11 +352,12 @@ defmodule DokkitWeb.InboxLive do
           </div>
 
           <span
-            :if={told(@i.alert, @night)}
-            class={["tag", @i.alert.status == :failed && "warn"]}
-            title={@i.alert.error}
+            :for={a <- @i.alerts}
+            :if={told(a, @night)}
+            class={["tag", a.status == :failed && "warn"]}
+            title={a.error}
           >
-            {told(@i.alert, @night)}
+            {told(a, @night)}
           </span>
           <.link class="btn sm" navigate={where(@i)}>Open</.link>
           <span :if={@tab != :snoozed} class="end acts">

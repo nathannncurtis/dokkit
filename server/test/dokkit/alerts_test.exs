@@ -37,7 +37,7 @@ defmodule Dokkit.AlertsTest do
 
     assert event["payload"]["severity"] == "critical"
     assert event["payload"]["summary"] =~ "Nightly backup failed (vault, DOK-"
-    assert [%{alert: %Alert{status: :sent}}] = Issues.open_list()
+    assert [%{alerts: [%Alert{status: :sent}]}] = Issues.open_list()
 
     Intake.ping(key, "backup", "fail", nil, "")
     assert Alerts.deliver_pending() == 0
@@ -58,7 +58,7 @@ defmodule Dokkit.AlertsTest do
     Intake.ping(key, "backup", "fail", nil, "")
     Alerts.deliver_pending()
 
-    assert [%{alert: %Alert{status: :failed, error: "PagerDuty has no routing key yet."}}] =
+    assert [%{alerts: [%Alert{status: :failed, error: "PagerDuty has no routing key yet."}]}] =
              Issues.open_list()
 
     Alerts.save(%{"down" => "push", "pagerduty_key" => "R0UTE"})
@@ -69,7 +69,7 @@ defmodule Dokkit.AlertsTest do
     Repo.update_all(Alert, set: [updated_at: DateTime.add(DateTime.utc_now(), -120)])
     Alerts.deliver_pending()
     assert_received {:sent, "events.pagerduty.com", _, _}
-    assert [%{alert: %Alert{status: :sent}}] = Issues.open_list()
+    assert [%{alerts: [%Alert{status: :sent}]}] = Issues.open_list()
   end
 
   test "push goes to ntfy, quietly; other environments stay silent", %{key: key, service: service} do

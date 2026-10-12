@@ -327,7 +327,7 @@ defmodule Dokkit.LastRoundTest do
 
     test "the interface keeps a secret left empty and clears one that is ticked", %{conn: conn} do
       {:ok, view, _} = live(signed_in(conn), "/alerts")
-      view |> form("#alerts-form", alerts: %{down: "push"}) |> render_submit()
+      view |> form("#alerts-form", alerts: %{down: ["push"]}) |> render_submit()
       assert Alerts.config()["pagerduty_key"] == "K"
 
       view
@@ -396,10 +396,10 @@ defmodule Dokkit.LastRoundTest do
     test "the test call is rate limited for each token, in the API and the MCP" do
       t = admin()
 
-      for _ <- 1..4,
+      for _ <- 1..2,
           do:
             assert(
-              %{"ok" => true} =
+              %{"ok" => true, "resolves_in" => 120} =
                 json_response(api(:post, "/alerts/test", t, %{channel: "page"}), 200)
             )
 
@@ -421,7 +421,7 @@ defmodule Dokkit.LastRoundTest do
 
     test "test_alert is rate limited per token" do
       t = admin()
-      for _ <- 1..4, do: refute(call(t, "test_alert", %{channel: "page"})["isError"])
+      for _ <- 1..2, do: refute(call(t, "test_alert", %{channel: "page"})["isError"])
 
       assert %{"isError" => true, "content" => [%{"text" => "Too many tests." <> _}]} =
                call(t, "test_alert", %{channel: "page"})

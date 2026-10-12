@@ -8,7 +8,7 @@
 - A disk or memory over its limit on the Alerts page is `degraded` and takes the degraded route (a push unless changed). From 98 percent used it is `down`. A limit a `dokkit.toml` declares for a number is `down` as soon as it is passed.
 - A disk heading for its limit within 14 days is `soon`, and stays soon until the line is more than 16 days away. It needs readings over at least 4 days, and a rise in the whole of the last 7 days and in each half of them; the slowest of the three decides the days. A step up that then stays flat is not a rise. The forecast runs every 30 minutes; it closes when the limit is switched off or the readings stop. A disk over its limit whose readings stopped for a day closes too.
 - A job found by a scan and watched waits for its first report, and is not judged late until it has reported once. A Windows scheduled task or a systemd timer is reported by the program from the system's own record, with the next run after it was accepted; any other job is reported with `dokkit run --job <name> -- <command>` or `dokkit ping <name> ok`. A found job with no schedule is never judged late, and still raises an issue when a run fails.
-- A machine that has not reported for 3 minutes is down.
+- A machine that has not reported for 3 minutes is down. How that is announced is the machine's own setting (see Machines going silent).
 - Anything in an environment other than `production` never opens an issue that alerts.
 
 ## What stops repeats
@@ -23,9 +23,9 @@
 
 ## Night
 
-One night is set for the whole server on the Alerts page: a start hour, an end hour and the hours from UTC (22, 7 and 0 unless changed). No time zone database is installed, so the night is a fixed offset and does not follow daylight saving.
+One night is set for the whole server on the Alerts page: a start hour, an end hour and a time zone (22 and 7 unless changed). The time zone is a name from the IANA database, such as `America/Los_Angeles`, so the night follows daylight saving. The Alerts page shows what time it is there and the night's hours beside the setting. While no time zone is set the night is read as UTC plus `night_offset`, whole hours (0 unless changed), and the Alerts page says so in a warning with the server's clock and the hour it takes for local time. An existing offset is never turned into a time zone by itself, because an offset does not name one. The time zone database is the `tz` package, compiled into the release with its data: nothing is fetched at run time and nothing updates it between releases.
 
-Each service has a switch, "Wake me at night for this", on by default. When it is off and an alert for that service would go out during the night, Dokkit holds it and sends it when the night ends, if the issue is still open. An issue that closed in the meantime sends nothing. A held alert is a row in the database, so it survives a restart, and the once-a-minute sweep sends it. Whether an alert is held follows the server's clock when the report arrives, never the time the sender wrote. The first screen says "Held until 07:00 UTC+2" for it, in the night's own offset. Turning the switch on sends what is held for that service, except for an issue that is snoozed or seen. Turning the switch back on sends what is held for that service at once. The daily digest is not held.
+Each service has a switch, "Wake me at night for this", on by default. When it is off and an alert for that service would go out during the night, Dokkit holds it and sends it when the night ends, if the issue is still open. An issue that closed in the meantime sends nothing. A held alert is a row in the database, so it survives a restart, and the once-a-minute sweep sends it. Whether an alert is held follows the server's clock when the report arrives, never the time the sender wrote. The first screen says "Held until 07:00 PDT" for it, in the night's own clock (or "07:00 UTC+2" while only an offset is set). Turning the switch on sends what is held for that service, except for an issue that is snoozed or seen. Turning the switch back on sends what is held for that service at once. The daily digest is not held. Each alert of an issue is held on its own.
 
 ## Recovery
 
@@ -44,13 +44,19 @@ An issue closes itself after as many good results in a row as it takes to open: 
 | `webhook` | A plain web request to an address. |
 | `none` | Nobody. Nothing is sent. It can be chosen wherever a channel is chosen. |
 
+Wherever a channel is chosen, several can be: the two server-wide choices (`down`, `degraded`) and Dokkit's own two (`self_down`, `self_degraded`), a rule, and a service's routing for `down` and for `degraded`. Each channel in the list is its own alert with its own delivery, retries, night handling and resolve. `none` stands alone. A page and a push that goes through PagerDuty to the same issue make one incident: when both are listed only the page is sent, at severity `critical`. A choice is stored as the channel names with commas between (`page,email`), so a single channel is stored and answered exactly as before. The API takes a string, text with commas or a list, answers the text in the existing field and the list in a field beside it (`down_channels`, `degraded_channels`, a rule's `channels`). The people told are chosen per issue, so every alert of an issue goes to the same people, each at their own destination for that channel.
+
 ## Rules
 
-A rule is a condition, a channel (`none` among them), and who receives it. Rules are kept in order and the first one that fits wins; a rule can be switched off. Each service also has its own routing for `down` and for `degraded`, which a `dokkit.toml` can suggest and the interface decides.
+A rule is a condition, one or more channels (`none` among them, alone), and who receives it. Rules are kept in order and the first one that fits wins; a rule can be switched off. Each service also has its own routing for `down` and for `degraded`, which a `dokkit.toml` can suggest and the interface decides.
+
+## Machines going silent
+
+A machine that stops reporting opens an issue of its own, and that issue is announced by the machine's setting "If this machine stops reporting": its channels (one or several; when none are set the server-wide choice for `down` decides, after a rule that fits) and whether it wakes someone at night. Waking at night is on unless it is switched off, and then the alert is held, per channel, until the night ends if the machine is still silent. A machine set to `none` shows in Dokkit and sends nothing. The setting is on the machine's own page, under "The machine itself", and on `PUT /machines/<id>/routing`.
 
 ## The digest
 
-Sent once a day at a time that is a setting (07:00 UTC unless changed). It holds:
+Sent once a day at a time that is a setting (07:00 unless changed), on the clock of the night's time zone, UTC while none is set. It holds:
 
 - errors first seen in the last day, from any app, by machine and service
 - issues that opened without paging, and issues that closed without paging and had opened before the day began
@@ -103,3 +109,5 @@ The mail server may use ports 25, 465, 587 and 2525 only. The host is not looked
 A secret goes only to the host it was saved for. If `ntfy_url` or `smtp_host` changes in a save and its secret (`ntfy_token`, `smtp_password`) is not sent in the same save, the secret is cleared and the answer says so. A secret is cleared on its own by sending it empty; in the interface, by ticking Clear beside it.
 
 A test send answers sent, or one fixed reason: "Dokkit could not deliver it there. The server log has the reason." Nothing the far end said (a banner, a body, a status) is shown; the log has it. Each token or person may send four tests at once, then one every 25 seconds.
+
+A test by `page`, or by `push` when push goes through PagerDuty, opens an incident and leaves it open for two minutes before it resolves, so a phone has time to ring; resolving at once leaves an incident nobody was told about. The open test is a row in the database and the once-a-minute sweep resolves it when its two minutes are up, so a restart in between still resolves it at the next sweep after the server is back, and the resolve happens within three minutes of the test. Each test has a dedup key of its own, so two tests are two incidents. A test that stays open costs twice as much of the allowance: two at once, then one every 50 seconds. The page says "This test stays open for two minutes, then resolves itself." beside the button, and the API answers `resolves_in` (120) for it.

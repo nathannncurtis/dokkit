@@ -47,12 +47,13 @@ defmodule Dokkit.Read do
       Repo.all(
         from i in Issue,
           left_join: s in assoc(i, :service),
-          left_join: a in assoc(i, :alert),
+          left_join: a in assoc(i, :alerts),
           where: not i.soon and i.since < ^edge,
           where: is_nil(i.closed_at) or i.closed_at > ^from,
           where: is_nil(s.id) or s.environment == "production",
           order_by: i.since,
           select: %{
+            id: i.id,
             machine_id: i.machine_id,
             state: i.state,
             since: i.since,
@@ -119,7 +120,7 @@ defmodule Dokkit.Read do
           do: Map.delete(m, :kind)
         ),
       events:
-        for i <- issues,
+        for i <- Enum.uniq_by(issues, & &1.id),
             DateTime.compare(i.since, from) != :lt,
             DateTime.compare(i.since, to) != :gt do
           %{
@@ -128,8 +129,11 @@ defmodule Dokkit.Read do
             machine: names[i.machine_id],
             state: i.state,
             sent:
-              (i.status in [:sent, :closing, :closed] && Dokkit.Alerts.sent_word(i.channel)) ||
-                nil,
+              Enum.find_value(
+                issues,
+                &((&1.id == i.id and &1.status in [:sent, :closing, :closed]) &&
+                    Dokkit.Alerts.sent_word(&1.channel))
+              ),
             closed_at: i.closed_at
           }
         end
@@ -157,11 +161,32 @@ defmodule Dokkit.Read do
 
   def users, do: for(u <- Dokkit.Accounts.list(), do: Map.take(u, [:id, :name, :role]))
 
+  @doc "A service's own routing: the channels as text with commas, and as lists."
+  def routing(s) do
+    %{
+      down: s.route_down,
+      degraded: s.route_degraded,
+      night: s.night,
+      down_channels: Dokkit.Alerts.split(s.route_down),
+      degraded_channels: Dokkit.Alerts.split(s.route_degraded)
+    }
+  end
+
+  @doc "How a machine that stops reporting is announced. No channels means the server-wide choice for down."
+  def silent(m) do
+    %{
+      down: m.silent_route,
+      down_channels: Dokkit.Alerts.split(m.silent_route),
+      night: m.silent_wake
+    }
+  end
+
   def machine(id) do
     with %{} = m <- Enum.find(machines(), &(&1.id == id)) do
       config = Dokkit.Alerts.config()
 
       Map.merge(m, %{
+        silent: silent(Dokkit.Estate.machine(id)),
         metrics: Dokkit.Numbers.machine_latest(id),
         services: services(%{"machine" => id}),
         thresholds: %{
@@ -203,7 +228,7 @@ defmodule Dokkit.Read do
   def one_issue(id) do
     with {:ok, id} <- Ecto.UUID.cast(id),
          %Issue{} = i <- Repo.get(Issue, id) do
-      i = Repo.preload(i, [:machine, :service, :check, :alert])
+      i = Repo.preload(i, [:machine, :service, :check, :alerts])
       Map.merge(issue(i), %{closed_at: i.closed_at, notes: i.notes, history: history(i)})
     else
       _ -> nil
@@ -280,7 +305,7 @@ defmodule Dokkit.Read do
 
       Map.merge(service_row(s, s.machine), %{
         checks: checks,
-        routing: %{down: s.route_down, degraded: s.route_degraded, night: s.night},
+        routing: routing(s),
         restart: s.restart,
         keep_messages: s.keep_messages,
         stats: s.stats,
@@ -288,7 +313,7 @@ defmodule Dokkit.Read do
         facts: (s.declared && s.declared["service"]) || %{},
         versions: versions_of(s),
         deploys: deploys(service: s.id, limit: 10),
-        open_issue: open && issue(Repo.preload(open, [:machine, :service, :check, :alert]))
+        open_issue: open && issue(Repo.preload(open, [:machine, :service, :check, :alerts]))
       })
     end
   end
@@ -384,7 +409,7 @@ defmodule Dokkit.Read do
               from i in Issue,
                 where: i.service_id == ^s.id and i.since >= ^deploy.at,
                 order_by: i.since,
-                preload: [:machine, :service, :check, :alert]
+                preload: [:machine, :service, :check, :alerts]
             )
 
           %{
@@ -520,7 +545,7 @@ defmodule Dokkit.Read do
           where: ^all_of(filters),
           order_by: [desc: i.since, desc: i.id],
           limit: ^(n + 1),
-          preload: [:machine, :service, :check, :alert]
+          preload: [:machine, :service, :check, :alerts]
       )
       |> cut(n, &tkey(&1.since, &1.id))
       |> mapped(&issue/1)
@@ -866,9 +891,13 @@ defmodule Dokkit.Read do
       acknowledged_at: i.acknowledged_at,
       machine: i.machine.name,
       service: i.service_id,
-      alert: i.alert && %{channel: i.alert.channel, status: i.alert.status}
+      alert: alert_view(List.first(i.alerts)),
+      alerts: Enum.map(i.alerts, &alert_view/1)
     }
   end
+
+  defp alert_view(nil), do: nil
+  defp alert_view(a), do: %{channel: a.channel, status: a.status}
 
   defp service_row(s, m) do
     %{

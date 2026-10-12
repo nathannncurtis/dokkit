@@ -8,14 +8,15 @@ defmodule Dokkit.Digest do
   require Logger
   alias Dokkit.{Alert, Check, ErrorGroup, Issue, People, Repo, Setting}
 
-  @doc "Sends today's digest once the set time has passed. Returns :sent, :nothing or :not_yet."
+  @doc "Sends today's digest once the set time has passed, on the clock of the time zone set for the night, else UTC. Returns :sent, :nothing or :not_yet."
   def tick(now, config) do
-    today = Date.to_iso8601(DateTime.to_date(now))
+    here = Dokkit.Alerts.zone_now(now, config)
+    today = Date.to_iso8601(DateTime.to_date(here))
     state = (Repo.get(Setting, "digest") || %Setting{value: %{}}).value
 
     cond do
       state["sent"] == today -> :not_yet
-      Calendar.strftime(now, "%H:%M") < (config["digest_at"] || "07:00") -> :not_yet
+      Calendar.strftime(here, "%H:%M") < (config["digest_at"] || "07:00") -> :not_yet
       mailboxes(config) == [] -> :not_yet
       true -> send(now, today, config, if(state["day"] == today, do: state["done"], else: []))
     end
