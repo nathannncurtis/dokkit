@@ -128,6 +128,25 @@ defmodule DokkitWeb.ApiControllerTest do
     assert json_response(call(:get, "/%6Cogs", read), 403)
   end
 
+  test "logs page by cursor when there are more lines than the limit", %{all: all} do
+    {:ok, other} = Estate.add_job(%{"name" => "Zeta sync", "machine" => "zetabox"})
+    report(other.key, for(n <- 1..3, do: %{type: "log", level: "info", msg: "zeta #{n}"}))
+
+    first = json_response(call(:get, "/logs?machine=zetabox&limit=2", all), 200)
+    assert length(first["items"]) == 2
+
+    rest =
+      json_response(call(:get, "/logs?machine=zetabox&limit=2&cursor=#{first["next"]}", all), 200)
+
+    assert %{"items" => [_], "next" => nil} = rest
+
+    assert Enum.sort(Enum.map(first["items"] ++ rest["items"], & &1["msg"])) == [
+             "zeta 1",
+             "zeta 2",
+             "zeta 3"
+           ]
+  end
+
   test "logs are filtered by machine and by time", %{all: all} do
     {:ok, other} =
       Estate.add_job(%{"name" => "Zeta sync", "machine" => "zetabox", "schedule" => "0 2 * * *"})

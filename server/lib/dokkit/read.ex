@@ -798,7 +798,8 @@ defmodule Dokkit.Read do
 
   defp pad(n), do: n |> Integer.to_string() |> String.pad_leading(20, "0")
 
-  defp tkey(at, id), do: pad(if(at, do: DateTime.to_unix(at, :microsecond), else: 0)) <> id
+  defp tkey(at, id),
+    do: pad(if(at, do: DateTime.to_unix(at, :microsecond), else: 0)) <> to_string(id)
 
   defp page(items, params, key, dir \\ :asc) do
     case cursor(params) do
@@ -851,6 +852,13 @@ defmodule Dokkit.Read do
 
   defp cursor(_), do: {:ok, nil}
 
+  defp cursor_id(id) do
+    case Integer.parse(id) do
+      {n, ""} -> {:ok, n}
+      _ -> Ecto.UUID.cast(id)
+    end
+  end
+
   defp cursor_at(params) do
     case cursor(params) do
       {:ok, nil} ->
@@ -858,7 +866,7 @@ defmodule Dokkit.Read do
 
       {:ok, <<micro::binary-size(20), id::binary>>} ->
         with {n, ""} <- Integer.parse(micro),
-             {:ok, id} <- Ecto.UUID.cast(id),
+             {:ok, id} <- cursor_id(id),
              {:ok, at} <- DateTime.from_unix(n, :microsecond) do
           {:ok, {at, id}}
         else
