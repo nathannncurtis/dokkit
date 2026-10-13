@@ -336,7 +336,25 @@ defmodule Dokkit.QuietWindow do
     field :reason, :string
     field :by, :string
     field :ended_by, :string
+    field :hold, :boolean, default: false
     belongs_to :machine, Dokkit.Machine
+  end
+end
+
+defmodule Dokkit.QuietSchedule do
+  use Dokkit.Schema
+
+  schema "quiet_schedules" do
+    field :repeat, :string
+    field :at, :utc_datetime_usec
+    field :time, :string
+    field :days, {:array, :integer}, default: []
+    field :seconds, :integer
+    field :reason, :string
+    field :by, :string
+    field :last_started_on, :date
+    belongs_to :machine, Dokkit.Machine
+    timestamps(updated_at: false)
   end
 end
 

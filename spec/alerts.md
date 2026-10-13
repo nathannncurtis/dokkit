@@ -38,6 +38,13 @@ The window stops covering the machine at the first of these:
 
 From that moment the usual rules apply at once. If the machine is still silent when the window ends, the "stopped reporting" issue opens on the next sweep (within a minute, once the machine has been silent for 3 minutes) and carries a note: "Planned downtime ended at 03:20 UTC (reason). The machine has not reported since 03:02 UTC." A check that failed during the window is counted from the first result after it, so it opens an issue after its usual number of failures.
 
+**Scheduled.** A person on the machine's page, or a tool through `POST /machines/<id>/quiet/schedules`, can schedule a window for a machine: once at a date and time, every day at a time, or on chosen weekdays at a time. Times are in the night time zone set on the Alerts page (UTC when none is set). Each schedule has a length (at most 4 hours), a reason and who made it.
+
+- Once a minute the server starts a window for each schedule that is due, for the time that is left of it, so a server that was down at the start still covers the rest. Its history entry is made by `schedule (<who made it>)`.
+- A `once` schedule is due from its start until its start plus its length, and is removed after it starts, or when that time has passed without it. A repeating one is due on a chosen day from its time until its time plus its length, and starts at most once a day; a window that crosses midnight belongs to the day it started. When daylight saving time skips a time of day, the first time after the gap is used; when it repeats one, the first.
+- If a window is already running for the machine, the scheduled one replaces it only if it would end later.
+- A window started by a schedule is held: it does not end early when the machine comes back. It ends when its time is up or when someone ends it. Windows started any other way end early as above.
+
 Every start and end is kept in the machine's history with who asked: `machine` (its own key), a person's name, `token <label>` or `mcp`, and for an end also `machine back` or `replaced by <who>`. The first screen says how many machines are in a window, and the Everything page and the machine's own page show the window with an End now button.
 
 ## Night

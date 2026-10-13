@@ -10,6 +10,8 @@ defmodule Dokkit.Quiet do
 
   def most, do: @most
 
+  def machine_exists?(id), do: match?(%Machine{kind: :enrolled}, machine(id))
+
   @doc "A duration such as 90s, 15m or 4h as seconds; 0 ends a window. Errors above the most."
   def parse(text) when is_binary(text) do
     case Regex.run(~r/^(\d+)([smh]?)$/, String.trim(text)) do
@@ -28,13 +30,13 @@ defmodule Dokkit.Quiet do
   def parse(_), do: :error
 
   @doc "Starts a window for a machine, replacing one that is running. `for` of 0 ends it."
-  def start(machine_id, %{} = params, by) do
+  def start(machine_id, %{} = params, by, opts \\ []) do
     with {:ok, seconds} <- parse(params["for"]),
          %Machine{kind: :enrolled} <- machine(machine_id) do
       if seconds == 0 do
         stop(machine_id, by)
       else
-        now = DateTime.utc_now()
+        now = opts[:now] || DateTime.utc_now()
         reason = reason(params["reason"])
         ended(machine_id, now, "replaced by " <> by)
 
@@ -44,7 +46,8 @@ defmodule Dokkit.Quiet do
             started_at: now,
             until: DateTime.add(now, seconds),
             reason: reason,
-            by: by
+            by: by,
+            hold: opts[:hold] == true
           })
 
         Dokkit.Issues.changed(false)
@@ -79,14 +82,14 @@ defmodule Dokkit.Quiet do
     end
   end
 
-  defp reason(text) when is_binary(text) do
+  def reason(text) when is_binary(text) do
     case text |> String.trim() |> String.slice(0, 200) do
       "" -> nil
       text -> text
     end
   end
 
-  defp reason(_), do: nil
+  def reason(_), do: nil
 
   defp ended(machine_id, now, by) do
     Repo.update_all(running(machine_id, now), set: [ended_at: now, ended_by: by])
@@ -162,10 +165,12 @@ defmodule Dokkit.Quiet do
   end
 
   @doc """
-  Once a minute. Notes that a machine in a window has gone silent. Ends a window early when the
-  machine reported again after that and every reported check has reported since it went silent.
+  Once a minute. Starts the scheduled windows that are due. Notes that a machine in a window has
+  gone silent. Ends a window early when the machine reported again after that and every reported
+  check has reported since it went silent. A held window is left to run its time.
   """
   def tick(now) do
+    Dokkit.QuietSchedules.run(now)
     quiet = DateTime.add(now, -@silent_seconds)
 
     Repo.update_all(
@@ -182,7 +187,7 @@ defmodule Dokkit.Quiet do
       Repo.all(
         from w in QuietWindow,
           join: m in assoc(w, :machine),
-          where: is_nil(w.ended_at) and w.until > ^now and not is_nil(w.silent_at),
+          where: is_nil(w.ended_at) and w.until > ^now and not is_nil(w.silent_at) and not w.hold,
           where: m.last_seen_at > w.silent_at,
           select: w
       )

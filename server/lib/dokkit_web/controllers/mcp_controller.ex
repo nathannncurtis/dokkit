@@ -285,6 +285,26 @@ defmodule DokkitWeb.McpController do
      %{"id" => @text, "for" => @text, "reason" => @text}, ["id", "for"]},
     {"end_downtime", "act", "End a machine's planned downtime now. Takes the id from machines.",
      %{"id" => @text}, ["id"]},
+    {"downtime_schedules", "read",
+     "The planned downtime scheduled for a machine, each with its id, repeat, time, days, length in seconds, reason, who made it and when it next starts. Takes the id from machines.",
+     %{"id" => @text}, ["id"]},
+    {"schedule_downtime", "act",
+     "Schedule planned downtime for an enrolled machine, so it starts by itself. repeat is once (with at, an RFC 3339 time), daily or weekly (with time, such as 02:00 in the server's night time zone, or UTC when none is set; weekly also takes days, 1 for Monday to 7 for Sunday). `for` is the length (such as 30m, at most 4h). A window it starts is not ended early when the machine comes back. Takes the id from machines.",
+     %{
+       "id" => @text,
+       "repeat" => %{"type" => "string", "enum" => ~w(once daily weekly)},
+       "at" => @text,
+       "time" => @text,
+       "days" => %{
+         "type" => "array",
+         "items" => %{"type" => "integer", "minimum" => 1, "maximum" => 7}
+       },
+       "for" => @text,
+       "reason" => @text
+     }, ["id", "repeat", "for"]},
+    {"remove_scheduled_downtime", "act",
+     "Remove a scheduled planned downtime. Takes the id from machines and the schedule from downtime_schedules.",
+     %{"id" => @text, "schedule" => @text}, ["id", "schedule"]},
     {"update_all", "admin",
      "Ask the updater on every machine that has one to move to a release this server holds completely, such as v1.2.3.",
      %{"version" => @text}, ["version"]},
@@ -547,6 +567,14 @@ defmodule DokkitWeb.McpController do
   defp tool("scan_machine", %{"id" => id}), do: Api.look_again(id, "mcp") |> r()
   defp tool("plan_downtime", %{"id" => id} = args), do: Api.plan_downtime(id, args, "mcp") |> r()
   defp tool("end_downtime", %{"id" => id}), do: Api.end_downtime(id, "mcp") |> r()
+  defp tool("downtime_schedules", %{"id" => id}), do: Api.downtime_schedules(id) |> r()
+
+  defp tool("schedule_downtime", %{"id" => id} = args),
+    do: Api.schedule_downtime(id, args, "mcp") |> r()
+
+  defp tool("remove_scheduled_downtime", %{"id" => id, "schedule" => schedule}),
+    do: Api.unschedule_downtime(id, schedule) |> r()
+
   defp tool("update_all", %{"version" => version}), do: Api.approve_update(version, :all) |> r()
   defp tool("add_job", args), do: Api.new_job(args) |> r()
   defp tool("add_app", args), do: Api.new_app(args) |> r()

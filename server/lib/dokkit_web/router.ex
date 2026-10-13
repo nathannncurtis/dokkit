@@ -172,6 +172,9 @@ defmodule DokkitWeb.Router do
     post "/machines/:id/scan", ApiController, :scan_machine
     post "/machines/:id/quiet", ApiController, :quiet_machine
     delete "/machines/:id/quiet", ApiController, :end_quiet_machine
+    get "/machines/:id/quiet/schedules", ApiController, :quiet_schedules
+    post "/machines/:id/quiet/schedules", ApiController, :add_quiet_schedule
+    delete "/machines/:id/quiet/schedules/:schedule", ApiController, :remove_quiet_schedule
     get "/alerts", ApiController, :alert_settings
     put "/alerts", ApiController, :set_alert_settings
     post "/alerts/test", ApiController, :test_alert

@@ -19,6 +19,8 @@ defmodule DokkitWeb.ServiceLive do
              id: id,
              timing_error: nil,
              timing: %{},
+             schedule: %{},
+             schedule_error: nil,
              range: "7"
            )
          )}
@@ -116,6 +118,21 @@ defmodule DokkitWeb.ServiceLive do
     {:noreply, load(socket)}
   end
 
+  def handle_event("schedule_form", %{"schedule" => p}, socket),
+    do: {:noreply, assign(socket, schedule: p)}
+
+  def handle_event("schedule_add", %{"schedule" => p}, socket) do
+    case DokkitWeb.QuietBand.add_schedule(socket, socket.assigns.service.machine_id, p) do
+      {:error, _, text} -> {:noreply, assign(load(socket), schedule: p, schedule_error: text)}
+      _ -> {:noreply, assign(load(socket), schedule: %{}, schedule_error: nil)}
+    end
+  end
+
+  def handle_event("schedule_remove", %{"id" => id}, socket) do
+    DokkitWeb.QuietBand.remove_schedule(socket, socket.assigns.service.machine_id, id)
+    {:noreply, load(socket)}
+  end
+
   def handle_event("note", %{"text" => text}, socket) do
     issue = socket.assigns.issue
 
@@ -162,9 +179,13 @@ defmodule DokkitWeb.ServiceLive do
     history = history(service, socket.assigns.range, now)
     socket = assign(socket, numbers: numbers, history: history)
 
+    config = Alerts.config()
+
     assign(socket,
       service: service,
       job: job,
+      schedules: Dokkit.QuietSchedules.lines(service.machine_id, now, config),
+      zone: Dokkit.QuietSchedules.zone_label(config, now),
       planned: Enum.find(Dokkit.Quiet.active(now), &(&1.machine_id == service.machine_id)),
       checks: Enum.reject(service.checks, &(&1.type == :job)),
       issue: Estate.open_issue(service),
@@ -260,6 +281,15 @@ defmodule DokkitWeb.ServiceLive do
               machine={@service.machine_id}
               planned={@planned}
               control={@service.slug == "machine"}
+              disabled={@current_user.role == :viewer}
+            />
+            <DokkitWeb.QuietBand.schedules
+              :if={@service.slug == "machine"}
+              machine={@service.machine_id}
+              schedules={@schedules}
+              form={@schedule}
+              error={@schedule_error}
+              zone={@zone}
               disabled={@current_user.role == :viewer}
             />
           </div>

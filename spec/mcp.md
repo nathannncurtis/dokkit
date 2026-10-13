@@ -56,6 +56,9 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `scan_machine` | `act` | Asks an enrolled machine to look itself over again and send what it finds to proposals. Nothing found is watched until accepted. |
 | `plan_downtime` | `act` | Says an enrolled machine is going down on purpose for a length of time (`for`, such as `15m`, at most `4h`; optional `reason`): no issue opens and nothing is sent for the machine going silent or its checks failing until the time is up. A second call replaces the window; `for` of `0` ends it. |
 | `end_downtime` | `act` | Ends a machine's planned downtime now. |
+| `downtime_schedules` | `read` | A machine's scheduled planned downtime: each with `id`, `repeat`, `at`, `time`, `days`, `for_seconds`, `reason`, `by` and `next`. |
+| `schedule_downtime` | `act` | Schedules planned downtime that the server starts by itself: `repeat` of `once` (with `at`, an RFC 3339 time), `daily` or `weekly` (with `time`, such as `02:00`, in the night time zone, and for `weekly` `days`, 1 for Monday to 7 for Sunday), `for` (such as `30m`, at most `4h`) and an optional `reason`. A window it starts is not ended early when the machine comes back. |
+| `remove_scheduled_downtime` | `act` | Removes a scheduled planned downtime, by the `schedule` id from `downtime_schedules`. |
 | `add_rule` | `admin` | Adds an alert rule. |
 | `update_rule` | `admin` | Changes an alert rule. A field left out stays as it was; an empty one clears it. |
 | `delete_rule` | `admin` | Deletes an alert rule. |

@@ -454,6 +454,38 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
+  @doc "A machine's scheduled planned downtime."
+  def downtime_schedules(id) do
+    if Dokkit.Quiet.machine_exists?(id),
+      do: %{items: Dokkit.QuietSchedules.list(id), next: nil},
+      else: not_found()
+  end
+
+  def schedule_downtime(id, params, who) do
+    case Dokkit.QuietSchedules.add(id, params, who) do
+      {:ok, schedule} ->
+        Enum.find(Dokkit.QuietSchedules.list(id), &(&1.id == schedule.id))
+
+      error ->
+        error
+    end
+  end
+
+  def unschedule_downtime(id, schedule) do
+    case Dokkit.QuietSchedules.remove(id, schedule) do
+      {:ok, _} -> %{ok: true}
+      error -> error
+    end
+  end
+
+  def quiet_schedules(conn, %{"id" => id}), do: reply(conn, downtime_schedules(id))
+
+  def add_quiet_schedule(conn, %{"id" => id} = params),
+    do: reply(conn, schedule_downtime(id, params, "token " <> (conn.assigns.key.label || "")))
+
+  def remove_quiet_schedule(conn, %{"id" => id, "schedule" => schedule}),
+    do: reply(conn, unschedule_downtime(id, schedule))
+
   def quiet_machine(conn, %{"id" => id} = params),
     do: reply(conn, plan_downtime(id, params, "token " <> (conn.assigns.key.label || "")))
 

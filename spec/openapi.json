@@ -11169,6 +11169,309 @@
         }
       }
     },
+    "/api/v1/machines/{id}/quiet/schedules": {
+      "get": {
+        "operationId": "listDowntimeSchedules",
+        "summary": "A machine's scheduled planned downtime",
+        "tags": [
+          "Read"
+        ],
+        "description": "The planned downtime scheduled for the machine, as `{items, next}`. Each item has `id`, `repeat` (`once`, `daily` or `weekly`), `at` (for `once`), `time` (for the repeating kinds, in the server's night time zone, or UTC when none is set), `days` (1 for Monday to 7 for Sunday), `for_seconds`, `reason`, `by` and `next` (the next start, or null). Takes a user token (`dku_`) with the `read` scope. 404 when the machine is not an enrolled machine.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the machine.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The schedules.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "0b6f2d54-8a1e-4e0c-9d7b-2f3a61c4d8e5",
+                      "repeat": "daily",
+                      "at": null,
+                      "time": "02:00",
+                      "days": [1, 2, 3, 4, 5, 6, 7],
+                      "for_seconds": 1800,
+                      "reason": "nightly update",
+                      "by": "ana",
+                      "next": "2026-10-14T09:00:00.000000Z"
+                    }
+                  ],
+                  "next": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "scheduleDowntime",
+        "summary": "Schedule planned downtime for a machine",
+        "tags": [
+          "Act"
+        ],
+        "description": "Schedules a window that the server starts by itself, once at a time or repeating. A window it starts is not ended early when the machine comes back; it ends when its time is up or when someone ends it. If the server was down at the start, the window covers the time that is left. Answers with the schedule. 404 when the machine is not an enrolled machine; 422 `bad_duration` or `bad_schedule` for a bad length, repeat, time, days or a `once` time in the past. Takes a user token (`dku_`) with the `act` scope.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the machine.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "repeat",
+                  "for"
+                ],
+                "properties": {
+                  "repeat": {
+                    "type": "string",
+                    "enum": [
+                      "once",
+                      "daily",
+                      "weekly"
+                    ]
+                  },
+                  "at": {
+                    "type": "string",
+                    "description": "For `once`: the start, in RFC 3339."
+                  },
+                  "time": {
+                    "type": "string",
+                    "description": "For `daily` and `weekly`: the time of day, such as `02:00`, in the server's night time zone (UTC when none is set)."
+                  },
+                  "days": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 7
+                    },
+                    "description": "For `weekly`: the weekdays, 1 for Monday to 7 for Sunday."
+                  },
+                  "for": {
+                    "type": "string",
+                    "description": "How long, such as `30m` or `4h`; at most `4h`."
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "repeat": "weekly",
+                "time": "02:00",
+                "days": [1, 3],
+                "for": "30m",
+                "reason": "nightly update"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The schedule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "id": "0b6f2d54-8a1e-4e0c-9d7b-2f3a61c4d8e5",
+                  "repeat": "weekly",
+                  "at": null,
+                  "time": "02:00",
+                  "days": [1, 3],
+                  "for_seconds": 1800,
+                  "reason": "nightly update",
+                  "by": "token ops",
+                  "next": "2026-10-14T09:00:00.000000Z"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not act."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A bad length, repeat, time or days.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_schedule",
+                    "message": "time is the time of day, such as 02:00."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/machines/{id}/quiet/schedules/{schedule}": {
+      "delete": {
+        "operationId": "removeDowntimeSchedule",
+        "summary": "Remove a scheduled planned downtime",
+        "tags": [
+          "Act"
+        ],
+        "description": "Removes the schedule. A window it already started keeps running; end it with `DELETE /machines/{id}/quiet`. Takes a user token (`dku_`) with the `act` scope.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the machine.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "schedule",
+            "in": "path",
+            "description": "The id of the schedule.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not act."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/machines/{id}/scan": {
       "post": {
         "operationId": "scanMachine",

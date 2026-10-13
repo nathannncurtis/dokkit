@@ -204,6 +204,7 @@ defmodule Dokkit.Read do
 
       Map.merge(m, %{
         silent: silent(Dokkit.Estate.machine(id)),
+        schedules: Dokkit.QuietSchedules.list(id),
         downtime_history: Enum.map(Dokkit.Quiet.history(id), &Dokkit.Quiet.view/1),
         metrics: Dokkit.Numbers.machine_latest(id),
         services: services(%{"machine" => id}),
