@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -208,13 +209,22 @@ func findServices() (all []found) {
 }
 
 func findPorts() (all []found) {
-	seen := map[string]bool{}
-	add := func(port, program string, owner func() (string, string)) {
-		if !seen[port+program] {
-			seen[port+program] = true
-			o, w := owner()
-			all = append(all, mark(found{"port": port, "program": program}, o, w))
+	seen := map[string]int{}
+	add := func(local, program string, owner func() (string, string)) {
+		address, port := listenAddress(local)
+		if i, ok := seen[port+program]; ok {
+			if addressRank(address) < addressRank(all[i]["address"]) {
+				all[i]["address"] = address
+			}
+			return
 		}
+		seen[port+program] = len(all)
+		o, w := owner()
+		one := mark(found{"port": port, "program": program}, o, w)
+		if address != "" {
+			one["address"] = address
+		}
+		all = append(all, one)
 	}
 	if runtime.GOOS != "windows" {
 		units := map[string][2]string{}
@@ -225,7 +235,7 @@ func findPorts() (all []found) {
 			}
 			_, program, _ := strings.Cut(l, `(("`)
 			program, _, _ = strings.Cut(program, `"`)
-			add(f[3][strings.LastIndex(f[3], ":")+1:], program, func() (string, string) { return linuxPortOwner(l, units) })
+			add(f[3], program, func() (string, string) { return linuxPortOwner(l, units) })
 		}
 		return
 	}
@@ -234,10 +244,31 @@ func findPorts() (all []found) {
 	for _, l := range output("netstat", "-ano", "-p", "TCP") {
 		// A listening row is the one with nobody on the other end.
 		if f := strings.Fields(l); len(f) == 5 && f[0] == "TCP" && strings.HasSuffix(f[2], ":0") {
-			add(f[1][strings.LastIndex(f[1], ":")+1:], programs[f[4]], func() (string, string) { return windowsPortOwner(f[4], programs, services, parents) })
+			add(f[1], programs[f[4]], func() (string, string) { return windowsPortOwner(f[4], programs, services, parents) })
 		}
 	}
 	return
+}
+
+// listenAddress splits "host:port" as ss and netstat write it: IPv6 in brackets, a zone after %, "*" for any.
+func listenAddress(local string) (address, port string) {
+	i := strings.LastIndex(local, ":")
+	address, _, _ = strings.Cut(local[:max(i, 0)], "%")
+	return strings.Trim(address, "[]"), local[i+1:]
+}
+
+// addressRank orders what a machine can dial itself: any address, then loopback, then a specific one.
+func addressRank(address string) int {
+	ip := net.ParseIP(address)
+	switch {
+	case address == "*" || ip != nil && ip.IsUnspecified():
+		return 0
+	case ip != nil && ip.IsLoopback():
+		return 1
+	case address == "":
+		return 3
+	}
+	return 2
 }
 
 // windowsPortOwner follows the process, then the processes that started it, to the first one that is a service.
@@ -283,6 +314,9 @@ func findContainers() (all []found) {
 			}
 			if len(f) > 2 {
 				one["port"] = publishedPort(f[2])
+				if a := publishedAddress(f[2]); a != "" {
+					one["address"] = a
+				}
 			}
 			all = append(all, one)
 		}
@@ -290,12 +324,20 @@ func findContainers() (all []found) {
 	return
 }
 
-var published = regexp.MustCompile(`:(\d+)->\d+/tcp`)
+var published = regexp.MustCompile(`([0-9a-fA-F.:]*):(\d+)->\d+/tcp`)
+
+// publishedAddress is the address the first published TCP port is bound to on this machine.
+func publishedAddress(ports string) string {
+	if m := published.FindStringSubmatch(ports); m != nil {
+		return m[1]
+	}
+	return ""
+}
 
 // publishedPort is the first TCP port a container offers on this machine, from docker's "0.0.0.0:8080->80/tcp".
 func publishedPort(ports string) string {
 	if m := published.FindStringSubmatch(ports); m != nil {
-		return m[1]
+		return m[2]
 	}
 	return ""
 }

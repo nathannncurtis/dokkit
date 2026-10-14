@@ -57,7 +57,10 @@ defmodule Dokkit.Found do
           {:tcp, to_string(n)} not in watched,
           do:
             {"port", to_string(n),
-             %{"label" => "Port #{n}", "saw" => text(p["program"]) || "Listening"}, p}
+             put_address(
+               %{"label" => "Port #{n}", "saw" => text(p["program"]) || "Listening"},
+               p["address"]
+             ), p}
 
     containers =
       for %{"name" => name, "port" => port} = c <- List.wrap(found["containers"]),
@@ -69,11 +72,14 @@ defmodule Dokkit.Found do
           {:tcp, to_string(n)} not in watched,
           do:
             {"container", slug(name),
-             %{
-               "label" => text(name),
-               "saw" => "Container " <> (text(c["image"]) || "") <> ", port #{n}",
-               "port" => n
-             }, c}
+             put_address(
+               %{
+                 "label" => text(name),
+                 "saw" => "Container " <> (text(c["image"]) || "") <> ", port #{n}",
+                 "port" => n
+               },
+               c["address"]
+             ), c}
 
     sites =
       for %{"name" => name, "url" => url} = s <- List.wrap(found["sites"]),
@@ -226,6 +232,21 @@ defmodule Dokkit.Found do
 
   defp text(value), do: is_binary(value) && value != "" && String.slice(value, 0, 300)
 
+  # Only a specific address is kept: a wildcard, a loopback or anything unreadable stays on localhost.
+  defp put_address(detail, address) do
+    with true <- is_binary(address),
+         {:ok, ip} <- :inet.parse_address(String.to_charlist(address)),
+         false <- ip in [{0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 1}],
+         false <- match?({127, _, _, _}, ip) do
+      Map.put(detail, "address", address)
+    else
+      _ -> detail
+    end
+  end
+
+  defp with_host(config, %{"address" => address}), do: Map.put(config, "host", address)
+  defp with_host(config, _), do: config
+
   defp waiting, do: from(f in Finding, where: not f.dismissed)
 
   # What a person would pick from: the operating system's own things are left out unless system: true.
@@ -268,11 +289,11 @@ defmodule Dokkit.Found do
 
           "port" ->
             {"port-" <> f.key, "#{f.detail["saw"]} on port #{f.key}", :service, :tcp, "tcp",
-             %{"port" => String.to_integer(f.key)}}
+             with_host(%{"port" => String.to_integer(f.key)}, f.detail)}
 
           "container" ->
             {"container-" <> f.key, f.detail["label"], :service, :tcp, "tcp",
-             %{"port" => f.detail["port"]}}
+             with_host(%{"port" => f.detail["port"]}, f.detail)}
 
           "site" ->
             {"site-" <> f.key, f.detail["label"], :service, :http, "http",

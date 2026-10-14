@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -322,6 +323,60 @@ func TestIISSiteAndContainerPort(t *testing.T) {
 	}
 	if got := publishedPort("5432/tcp"); got != "" {
 		t.Fatal(got)
+	}
+}
+
+func TestAPortRecordsTheAddressItIsBoundTo(t *testing.T) {
+	for local, want := range map[string][2]string{
+		"64.62.155.195:8443": {"64.62.155.195", "8443"},
+		"0.0.0.0:135":        {"0.0.0.0", "135"},
+		"[::]:445":           {"::", "445"},
+		"[::1]:49664":        {"::1", "49664"},
+		"[fe80::1%eth0]:22":  {"fe80::1", "22"},
+		"[fe80::2]%eth0:22":  {"fe80::2", "22"},
+		"127.0.0.53%lo:53":   {"127.0.0.53", "53"},
+		"*:22":               {"*", "22"},
+		"[2001:db8::5]:443":  {"2001:db8::5", "443"},
+	} {
+		if a, p := listenAddress(local); a != want[0] || p != want[1] {
+			t.Errorf("%s: %q %q", local, a, p)
+		}
+	}
+	best := ""
+	for _, a := range []string{"10.0.0.5", "127.0.0.1", "10.0.0.6", "::", "0.0.0.0"} {
+		if best == "" || addressRank(a) < addressRank(best) {
+			best = a
+		}
+	}
+	if best != "::" {
+		t.Fatalf("a wildcard is preferred: %q", best)
+	}
+	if addressRank("::1") >= addressRank("10.0.0.5") || addressRank("10.0.0.5") >= addressRank("") {
+		t.Fatal("loopback comes before a specific address, which comes before none")
+	}
+	if got := publishedAddress("127.0.0.1:8080->80/tcp"); got != "127.0.0.1" {
+		t.Fatal(got)
+	}
+	if got := publishedAddress("0.0.0.0:8080->80/tcp, :::8080->80/tcp"); got != "0.0.0.0" {
+		t.Fatal(got)
+	}
+	if got := publishedAddress(":::8080->80/tcp"); got != "::" {
+		t.Fatal(got)
+	}
+}
+
+func TestATCPCheckDialsItsHost(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.2:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer l.Close()
+	port := l.Addr().(*net.TCPAddr).Port
+	if r := (&check{Type: "tcp", Host: "127.0.0.2", Port: port}).run(); !r.ok {
+		t.Fatalf("the configured host is dialled: %+v", r)
+	}
+	if r := (&check{Type: "tcp", Port: port}).run(); r.ok {
+		t.Fatal("with no host it dials localhost")
 	}
 }
 

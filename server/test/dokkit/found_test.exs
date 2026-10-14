@@ -60,6 +60,55 @@ defmodule Dokkit.FoundTest do
     assert html =~ "Print Spooler"
   end
 
+  test "a watched port is checked on its own address only when that is a specific one" do
+    machine = Repo.insert!(%Machine{name: "found-ports", kind: :enrolled})
+    {key, _} = Keys.mint(:machine, %{machine_id: machine.id})
+    as = put_req_header(build_conn(), "authorization", "Bearer " <> key)
+
+    ports =
+      for {port, address} <- [
+            {8443, "64.62.155.195"},
+            {8444, "2001:db8::5"},
+            {8445, "0.0.0.0"},
+            {8446, "::"},
+            {8447, "*"},
+            {8448, "127.0.0.1"},
+            {8449, "::1"},
+            {8450, nil},
+            {8451, "not an address"}
+          ] do
+        Map.merge(
+          %{port: to_string(port), program: "svc.exe"},
+          if(address, do: %{address: address}, else: %{})
+        )
+      end
+
+    containers = [
+      %{name: "web", image: "nginx", port: "9000", address: "10.1.2.3"},
+      %{name: "db", image: "postgres", port: "9001", address: "0.0.0.0"}
+    ]
+
+    post(as, "/api/v1/proposals", %{os: "windows", found: %{ports: ports, containers: containers}})
+
+    Found.watch(for f <- Found.list(), f.machine_id == machine.id, do: f.id)
+
+    config = fn slug ->
+      Repo.one!(
+        from c in Dokkit.Check,
+          join: s in Dokkit.Service,
+          on: s.id == c.service_id,
+          where: s.machine_id == ^machine.id and s.slug == ^slug,
+          select: c.config
+      )
+    end
+
+    assert config.("port-8443") == %{"port" => 8443, "host" => "64.62.155.195"}
+    assert config.("port-8444") == %{"port" => 8444, "host" => "2001:db8::5"}
+    for p <- 8445..8451, do: assert(config.("port-#{p}") == %{"port" => p})
+    assert config.("container-web") == %{"port" => 9000, "host" => "10.1.2.3"}
+    assert config.("container-db") == %{"port" => 9001}
+  end
+
   test "on Linux, systemd units are kept and watched", %{conn: _} do
     machine = Repo.insert!(%Machine{name: "found-linux", kind: :enrolled})
     {key, _} = Keys.mint(:machine, %{machine_id: machine.id})

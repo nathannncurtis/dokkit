@@ -114,6 +114,8 @@ The decision is made from facts the machine gives the account the scan runs as, 
 
 **Linux ports.** The listening process's service comes from its control group, which `ss -p` names only for processes the account may see; the port takes that unit's origin. A process in a login session is `yours`; an owner that cannot be told is `yours` with "owner not known".
 
+**Port addresses.** A found port carries `address`, the local address it is bound to, from the same `netstat` or `ss` row (IPv6 without brackets or zone); a container's is the address of its first published TCP port. A port bound on several addresses is listed once, with a wildcard address if it has one, else a loopback, else the first specific one. Watching a found port makes a `tcp` check on that address when it is a specific one; a wildcard, a loopback or no address (an older program) leaves `host` out, so the check dials `localhost`. macOS has no port list yet.
+
 **Cron.** An account's own crontab is `yours`. Lines of `/etc/crontab` that run `run-parts` are `system`, other lines there are `yours`. A file in `/etc/cron.d` that a package owns follows the same package rule as units, and any other is `yours`.
 
 **QNAP.** On a QNAP NAS (`/etc/config/uLinux.conf` exists) the crontab is judged by the program of each line: add-ons (`.qpkg`, `/mnt/ext/opt`, or the `#_QSC_` and `#_SA_` tags the QNAP app center writes) are `software`; a program under `/share/`, `/home/`, `/root/` or `/tmp/` is `yours`; the rest of the file system is the firmware and is `system`.
