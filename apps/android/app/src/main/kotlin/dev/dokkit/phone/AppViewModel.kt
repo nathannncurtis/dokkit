@@ -37,7 +37,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var unlocked by mutableStateOf(false)
     var lockMessage by mutableStateOf<String?>(null)
     var adding by mutableStateOf(false)
+    var loaded by mutableStateOf(false)
+        private set
+    var pasteOnly by mutableStateOf(false)
     val openMachines = mutableStateMapOf<String, Boolean>()
+    val openMore = mutableStateMapOf<String, Boolean>()
 
     val selected: PairedServer? get() = servers.firstOrNull { it.id == selectedId } ?: servers.firstOrNull()
     val selectedState: ServerState get() = selected?.let { states[it.id] } ?: ServerState()
@@ -45,6 +49,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun load() {
         val list = withContext(Dispatchers.IO) { runCatching { refresher.store.servers() }.getOrDefault(emptyList()) }
         servers = list
+        loaded = true
         val fresh = withContext(Dispatchers.IO) {
             list.filter { it.id !in states }.associate { it.id to refresher.load(it.id) }
         }

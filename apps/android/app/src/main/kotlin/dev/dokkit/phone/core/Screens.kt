@@ -5,15 +5,12 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.time.temporal.ChronoUnit
-import java.util.UUID
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.doubleOrNull
 
 sealed class Level(val word: String, val rank: Int) {
     data object Ok : Level("OK", 0)
     data object Degraded : Level("Degraded", 2)
     data object Down : Level("Down", 3)
-    data object Unknown : Level("Unknown", 1)
+    data object Unknown : Level("No signal yet", 1)
     data object Unwatched : Level("Not watched", 0)
     data class Other(val raw: String) : Level(raw.cap(), 1)
 
@@ -100,41 +97,6 @@ data class IssueRow(
     val flags: List<String>,
 )
 
-data class NotWatchedRow(val id: String, val name: String, val machine: String, val kind: String, val saw: String?)
-
-data class Section(val title: String, val rows: List<IssueRow>)
-
-data class NeedsYouScreen(
-    val sections: List<Section>,
-    val notWatched: List<NotWatchedRow>,
-    val fine: String?,
-    val nothingNeedsYou: Boolean,
-)
-
-data class Vital(val label: String, val percent: Int, val isHot: Boolean)
-
-data class ServiceRow(
-    val id: String,
-    val name: String,
-    val level: Level,
-    val kind: String,
-    val version: String?,
-    val environment: String?,
-    val note: String?,
-    val chart: List<Double?>,
-)
-
-data class MachineRow(
-    val id: String,
-    val name: String,
-    val os: String?,
-    val level: Level,
-    val notice: String?,
-    val vitals: List<Vital>,
-    val nextWindow: String?,
-    val services: List<ServiceRow>,
-)
-
 data class CheckRow(val name: String, val kind: String?, val level: Level, val note: String?, val checked: String?)
 
 data class HistoryRow(val whenText: String?, val text: String)
@@ -161,59 +123,6 @@ data class ServiceScreen(
 )
 
 object Screens {
-    fun needsYou(s: Snapshot, now: Instant): NeedsYouScreen {
-        val names = serviceNames(s)
-        val box = s.inbox
-        fun rows(l: List<Issue>?) = (l ?: emptyList()).map { issueRow(it, names, now) }
-        val sections = listOf("Needs you" to rows(box?.needsYou), "Soon" to rows(box?.soon), "Snoozed" to rows(box?.snoozed))
-            .filter { it.second.isNotEmpty() }
-            .map { Section(it.first, it.second) }
-        val notWatched = (box?.notWatched ?: emptyList()).map {
-            NotWatchedRow(it.id ?: UUID.randomUUID().toString(), it.detail?.label ?: it.name ?: "Unnamed", it.machine ?: "", it.kind ?: "", it.detail?.saw)
-        }
-        var fine: String? = null
-        val f = box?.fine
-        if (f != null && (f.services != null || f.machines != null)) {
-            val parts = mutableListOf<String>()
-            f.services?.let { parts += "$it service${if (it == 1) "" else "s"}" }
-            f.machines?.let { parts += "$it machine${if (it == 1) "" else "s"}" }
-            fine = parts.joinToString(" and ") + " fine"
-        }
-        return NeedsYouScreen(sections, notWatched, fine, box?.needsYou.isNullOrEmpty())
-    }
-
-    fun everything(s: Snapshot): List<MachineRow> {
-        val top = (s.services ?: emptyList()).associateBy { it.id }
-        return (s.machines ?: emptyList()).map { m ->
-            val services = (m.services ?: emptyList()).map { svc ->
-                val full = top[svc.id] ?: svc
-                ServiceRow(
-                    id = svc.id,
-                    name = svc.name ?: "Unnamed",
-                    level = Level.of(svc.state ?: full.state),
-                    kind = svc.kind ?: full.kind ?: "service",
-                    version = svc.version ?: full.version,
-                    environment = envTag(svc.environment ?: full.environment),
-                    note = svc.note ?: full.note,
-                    chart = full.chart?.values ?: emptyList(),
-                )
-            }.sortedWith(compareByDescending<ServiceRow> { it.level.rank }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
-            val worst = services.map { it.level }.maxByOrNull { it.rank } ?: Level.Ok
-            val seen = parseDate(m.lastSeenAt)
-            val until = parseDate(m.plannedDowntime?.until)
-            val notice = when {
-                m.down == true -> "Stopped reporting" + (seen?.let { ", last seen ${shortTime(it)}" } ?: "")
-                m.plannedDowntime != null -> "Planned downtime" + (until?.let { " until ${shortTime(it)}" } ?: "")
-                else -> null
-            }
-            val next = (m.schedules ?: emptyList())
-                .mapNotNull { sc -> (parseDate(sc.next) ?: parseDate(sc.at))?.let { it to sc } }
-                .minByOrNull { it.first }
-            val nextText = next?.let { (at, sc) -> "Next planned downtime " + shortTime(at) + (sc.reason?.let { ", $it" } ?: "") }
-            MachineRow(m.id, m.name ?: "Unnamed", m.os, if (m.down == true) Level.Down else worst, notice, vitals(m.vitals ?: emptyMap()), nextText, services)
-        }.sortedWith(compareByDescending<MachineRow> { it.level.rank }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
-    }
-
     fun service(s: Snapshot, id: String, now: Instant): ServiceScreen? {
         val full = (s.services ?: emptyList()).firstOrNull { it.id == id }
             ?: (s.machines ?: emptyList()).flatMap { it.services ?: emptyList() }.firstOrNull { it.id == id }
@@ -231,7 +140,7 @@ object Screens {
             version = full.version,
             environment = full.environment,
             note = full.note,
-            checks = (full.checks ?: emptyList()).map {
+            checks = (full.checks ?: emptyList()).filter { Level.of(it.state) != Level.Unwatched }.map {
                 CheckRow(it.name ?: "check", it.type, Level.of(it.state), it.note, parseDate(it.checkedAt)?.let { t -> Age.ago(t, now) })
             },
             issue = open?.let { issueRow(it, names, now) },
@@ -249,14 +158,14 @@ object Screens {
         )
     }
 
-    private fun serviceNames(s: Snapshot): Map<String, String?> {
+    internal fun serviceNames(s: Snapshot): Map<String, String?> {
         val out = mutableMapOf<String, String?>()
         s.machines?.forEach { m -> m.services?.forEach { out[it.id] = it.name } }
         s.services?.forEach { out[it.id] = it.name }
         return out
     }
 
-    private fun issueRow(i: Issue, names: Map<String, String?>, now: Instant): IssueRow {
+    internal fun issueRow(i: Issue, names: Map<String, String?>, now: Instant): IssueRow {
         val flags = mutableListOf<String>()
         parseDate(i.snoozedUntil)?.takeIf { it.isAfter(now) }?.let { flags += "Snoozed until ${shortTime(it)}" }
         if (i.acknowledgedAt != null) flags += "Seen"
@@ -306,16 +215,4 @@ object Screens {
         return out
     }
 
-    private fun vitals(v: Map<String, kotlinx.serialization.json.JsonElement>): List<Vital> {
-        val num = v.mapNotNull { (k, e) -> (e as? JsonPrimitive)?.doubleOrNull?.let { k to it } }.toMap()
-        fun make(label: String, x: Double) = Vital(label, Math.round(x).toInt(), x >= 90)
-        val out = mutableListOf<Vital>()
-        num["cpu.percent"]?.let { out += make("Processor", it) }
-        num["memory.used_percent"]?.let { out += make("Memory", it) }
-        num.entries.sortedBy { it.key }.filter { it.key.startsWith("disk.used_percent.") }
-            .forEach { out += make("Disk " + it.key.removePrefix("disk.used_percent."), it.value) }
-        return out
-    }
-
-    private fun envTag(e: String?): String? = if (e == null || e == "production") null else e
 }

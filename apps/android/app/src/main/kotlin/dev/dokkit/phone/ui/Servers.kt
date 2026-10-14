@@ -60,10 +60,6 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun ServersTab(vm: AppViewModel, now: Instant) {
-    if (vm.adding) {
-        AddServer(vm)
-        return
-    }
     val p = LocalPalette.current
     val scope = rememberCoroutineScope()
     var removing by remember { mutableStateOf<PairedServer?>(null) }
@@ -83,7 +79,10 @@ fun ServersTab(vm: AppViewModel, now: Instant) {
             }
         }
         Button(
-            onClick = { vm.adding = true },
+            onClick = {
+                vm.pasteOnly = false
+                vm.adding = true
+            },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             colors = ButtonDefaults.buttonColors(containerColor = p.brand, contentColor = p.brandInk),
         ) {
@@ -135,7 +134,7 @@ private fun ServerRow(s: PairedServer, state: ServerState, current: Boolean, now
 }
 
 @Composable
-private fun AddServer(vm: AppViewModel) {
+fun AddServer(vm: AppViewModel) {
     val p = LocalPalette.current
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -159,9 +158,10 @@ private fun AddServer(vm: AppViewModel) {
         }
     }
 
+    val scan = !vm.pasteOnly
     BackHandler { vm.adding = false }
     LaunchedEffect(Unit) {
-        if (!camera && !asked) {
+        if (scan && !camera && !asked) {
             asked = true
             ask.launch(Manifest.permission.CAMERA)
         }
@@ -175,11 +175,14 @@ private fun AddServer(vm: AppViewModel) {
             Text("Add a server", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
         }
         Text(
-            "Scan the QR code in the Dokkit web interface under Settings, Phones, Add a phone. It is shown once.",
+            if (scan) "Scan the QR code in the Dokkit web interface under Settings, Phones, Add a phone. It is shown once."
+            else "Paste the code from the Dokkit web interface, under Settings, Phones, Add a phone.",
             style = MaterialTheme.typography.bodyMedium,
             color = p.mute,
         )
-        if (camera) {
+        if (!scan) {
+            Unit
+        } else if (camera) {
             QrScanner(onCode = { submit(it) }, modifier = Modifier.fillMaxWidth().heightIn(min = 300.dp, max = 300.dp))
         } else {
             Notice("The camera is off", "Allow the camera to scan, or paste the code below.", Icons.Filled.Info)

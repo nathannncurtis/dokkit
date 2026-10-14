@@ -43,10 +43,10 @@ import dev.dokkit.phone.core.Freshness
 import dev.dokkit.phone.core.Level
 
 @Composable
-fun StateMark(level: Level) {
+fun StateMark(level: Level, word: String = level.word) {
     val color = LocalPalette.current.of(level)
     Row(
-        Modifier.clearAndSetSemantics { contentDescription = "State ${level.word}" },
+        Modifier.clearAndSetSemantics { contentDescription = "State $word" },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -61,7 +61,7 @@ fun StateMark(level: Level) {
                 is Level.Other -> drawCircle(color, radius = size.minDimension / 2 - line.width / 2, style = line)
             }
         }
-        Text(level.word, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium, color = color)
+        Text(word, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium, color = color)
     }
 }
 

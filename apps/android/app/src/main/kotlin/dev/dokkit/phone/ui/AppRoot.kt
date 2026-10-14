@@ -10,10 +10,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -62,10 +61,26 @@ fun AppRoot(vm: AppViewModel) {
     }
     BackHandler(enabled = service != null) { service = null }
 
+    if (vm.adding) {
+        AddServer(vm)
+        return
+    }
+    if (vm.loaded && vm.servers.isEmpty()) {
+        FirstRun(
+            onScan = {
+                vm.pasteOnly = false
+                vm.adding = true
+            },
+            onPaste = {
+                vm.pasteOnly = true
+                vm.adding = true
+            },
+        )
+        return
+    }
     val tabs: List<Triple<String, ImageVector, Int>> = listOf(
-        Triple("Needs you", Icons.Filled.Warning, 0),
-        Triple("Everything", Icons.AutoMirrored.Filled.List, 1),
-        Triple("Servers", Icons.Filled.Settings, 2),
+        Triple("Home", Icons.Filled.Home, 0),
+        Triple("Servers", Icons.Filled.Settings, 1),
     )
     Scaffold(
         containerColor = p.bg,
@@ -91,8 +106,7 @@ fun AppRoot(vm: AppViewModel) {
             val open = service
             when {
                 open != null -> ServiceDetail(vm, open, now) { service = null }
-                tab == 0 -> NeedsYouTab(vm, now) { service = it }
-                tab == 1 -> EverythingTab(vm, now) { service = it }
+                tab == 0 -> HomeTab(vm, now) { service = it }
                 else -> ServersTab(vm, now)
             }
         }
