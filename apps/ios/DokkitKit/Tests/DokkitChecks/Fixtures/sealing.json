@@ -1,0 +1,86 @@
+{
+  "note": "Fixed values for tests. Never use these keys for anything real.",
+  "upload_key": "dkr_729nLrMYIgy8I0YoubM6pyvho0c71L4IJO9Y",
+  "mailbox": "92bea4d52a1d53f0c8111edf39e26a89",
+  "counter": 184223,
+  "content_key": "OVOVwmxGbJHA+Lq4bFW7mQnfsdxA2UcDZQ70JBub07w=",
+  "snapshot_json": "{\"schema\":1,\"server\":{\"name\":\"Northwind\",\"version\":\"v0.1.18\",\"made_at\":\"2026-10-14T03:20:00Z\",\"counter\":184223},\"inbox\":{\"needs_you\":[],\"soon\":[]},\"machines\":[],\"services\":[],\"issues\":[],\"jobs\":[],\"logs\":{}}",
+  "snapshot_gzip": "H4sIAAAAAAACCjWOwQqDMBBE/2XPKkmUIvmInnqqiMS41JSahURti+Tfuxa9zc4sb2aDaEecDGiZQcSwYgC9gTcTgoYrhXl8Oz9ABpxER57dVRSykDV7kxmwMzN7SqhLLkUuq5sotRJaiDs/WFr8vCNlXSlVpgyc7+nzr0AcYvelBXTTcjft7KZNO9WOzmM8Ah7l7Hm5GJdTP6k/1IserLaUfkv/KanPAAAA",
+  "body_additional_data": "dokkit-phone-v1|92bea4d52a1d53f0c8111edf39e26a89|body|184223",
+  "envelope": {
+    "schema": 1,
+    "counter": 184223,
+    "made_at": "2026-10-14T03:20:00Z",
+    "slots": {
+      "0b7b5be6970fb935b5518fa11580da01": {
+        "token_sha256": "cd77d1c0fd9965feb29959ffa4ea5ed98b341ce4cbbe60f18d1492096605f6ea",
+        "nonce": "oqmkNQDNrO81Sgbi",
+        "key": "L6A76ncZJCocP0YbKbQwvl9FLBnnz3YQFxq5q4xLB5X1sY6sZSDAWrDvAzLFD3v8"
+      },
+      "94890db549666a4aaa03e349ceb49b27": {
+        "token_sha256": "513155d90d915130756970ec756c63626c42daf34002a7cfc8e236d8a4348b7b",
+        "nonce": "5dhZlz3ni6Lb/zxL",
+        "key": "Pf/5h6zgvVbSlo9wVN1qVJT7yUGtwrplFogxE3PxJm/cUZFtiJ3Yg0CqQ6VNxwMN"
+      }
+    },
+    "nonce": "AZYWJSGPpsrrpknb",
+    "body": "RyrnhWRSZeWUACmsyG9UACv/NhwdEZ9F9JjucNPgFJ+9GnSjGfqtLH0DW/2r5Gv7CqXuqwtH3xdg3vvKWtgXxzAT/+qmaoUQZnwviCPNlhIQxx+rTDGZXMjanB5OqG2A+npAFWQ6BN5gfRNPn37s8NMrstHNfr0gIXEflw6u/LvsSX8CVQMiJh0odS5xxV1MrPpF6MvqzSNgpX4mNaFpNzSN7J5eLzlJmgfSZm1nEpBXMfw8VPSFLnrq/g=="
+  },
+  "phones": [
+    {
+      "name": "work iphone",
+      "slot": "0b7b5be6970fb935b5518fa11580da01",
+      "token": "dkf_SLwf10jvcR1Gxj1t2KHX9SdKXCIt4u1gO1Mz",
+      "phone_key": "oH2VHT5KI7YxcqdJLhRcdnMI2pI+KU4RnjK7QycK2zM=",
+      "pairing": {
+        "relay": "https://relay.example.com",
+        "mailbox": "92bea4d52a1d53f0c8111edf39e26a89",
+        "slot": "0b7b5be6970fb935b5518fa11580da01",
+        "token": "dkf_SLwf10jvcR1Gxj1t2KHX9SdKXCIt4u1gO1Mz",
+        "key": "oH2VHT5KI7YxcqdJLhRcdnMI2pI+KU4RnjK7QycK2zM=",
+        "name": "Northwind"
+      },
+      "pairing_code": "dokkit-phone:1:eyJyZWxheSI6Imh0dHBzOi8vcmVsYXkuZXhhbXBsZS5jb20iLCJtYWlsYm94IjoiOTJiZWE0ZDUyYTFkNTNmMGM4MTExZWRmMzllMjZhODkiLCJzbG90IjoiMGI3YjViZTY5NzBmYjkzNWI1NTE4ZmExMTU4MGRhMDEiLCJ0b2tlbiI6ImRrZl9TTHdmMTBqdmNSMUd4ajF0MktIWDlTZEtYQ0l0NHUxZ08xTXoiLCJrZXkiOiJvSDJWSFQ1S0k3WXhjcWRKTGhSY2RuTUkycEkrS1U0Um5qSzdReWNLMnpNPSIsIm5hbWUiOiJOb3J0aHdpbmQifQ",
+      "slot_answer": {
+        "schema": 1,
+        "counter": 184223,
+        "made_at": "2026-10-14T03:20:00Z",
+        "slot_nonce": "oqmkNQDNrO81Sgbi",
+        "key": "L6A76ncZJCocP0YbKbQwvl9FLBnnz3YQFxq5q4xLB5X1sY6sZSDAWrDvAzLFD3v8",
+        "nonce": "AZYWJSGPpsrrpknb",
+        "body": "RyrnhWRSZeWUACmsyG9UACv/NhwdEZ9F9JjucNPgFJ+9GnSjGfqtLH0DW/2r5Gv7CqXuqwtH3xdg3vvKWtgXxzAT/+qmaoUQZnwviCPNlhIQxx+rTDGZXMjanB5OqG2A+npAFWQ6BN5gfRNPn37s8NMrstHNfr0gIXEflw6u/LvsSX8CVQMiJh0odS5xxV1MrPpF6MvqzSNgpX4mNaFpNzSN7J5eLzlJmgfSZm1nEpBXMfw8VPSFLnrq/g=="
+      }
+    },
+    {
+      "name": "pixel",
+      "slot": "94890db549666a4aaa03e349ceb49b27",
+      "token": "dkf_1HrxeszME7anzfr4GIcCAbCKTh7hJ11XqUwN",
+      "phone_key": "/2OhScMVIHz6aXNWwWDMVtc9Rx8tZ6Hj1KZ1KX9wXis=",
+      "pairing": {
+        "relay": "https://relay.example.com",
+        "mailbox": "92bea4d52a1d53f0c8111edf39e26a89",
+        "slot": "94890db549666a4aaa03e349ceb49b27",
+        "token": "dkf_1HrxeszME7anzfr4GIcCAbCKTh7hJ11XqUwN",
+        "key": "/2OhScMVIHz6aXNWwWDMVtc9Rx8tZ6Hj1KZ1KX9wXis=",
+        "name": "Northwind"
+      },
+      "pairing_code": "dokkit-phone:1:eyJyZWxheSI6Imh0dHBzOi8vcmVsYXkuZXhhbXBsZS5jb20iLCJtYWlsYm94IjoiOTJiZWE0ZDUyYTFkNTNmMGM4MTExZWRmMzllMjZhODkiLCJzbG90IjoiOTQ4OTBkYjU0OTY2NmE0YWFhMDNlMzQ5Y2ViNDliMjciLCJ0b2tlbiI6ImRrZl8xSHJ4ZXN6TUU3YW56ZnI0R0ljQ0FiQ0tUaDdoSjExWHFVd04iLCJrZXkiOiIvMk9oU2NNVklIejZhWE5Xd1dETVZ0YzlSeDh0WjZIajFLWjFLWDl3WGlzPSIsIm5hbWUiOiJOb3J0aHdpbmQifQ",
+      "slot_answer": {
+        "schema": 1,
+        "counter": 184223,
+        "made_at": "2026-10-14T03:20:00Z",
+        "slot_nonce": "5dhZlz3ni6Lb/zxL",
+        "key": "Pf/5h6zgvVbSlo9wVN1qVJT7yUGtwrplFogxE3PxJm/cUZFtiJ3Yg0CqQ6VNxwMN",
+        "nonce": "AZYWJSGPpsrrpknb",
+        "body": "RyrnhWRSZeWUACmsyG9UACv/NhwdEZ9F9JjucNPgFJ+9GnSjGfqtLH0DW/2r5Gv7CqXuqwtH3xdg3vvKWtgXxzAT/+qmaoUQZnwviCPNlhIQxx+rTDGZXMjanB5OqG2A+npAFWQ6BN5gfRNPn37s8NMrstHNfr0gIXEflw6u/LvsSX8CVQMiJh0odS5xxV1MrPpF6MvqzSNgpX4mNaFpNzSN7J5eLzlJmgfSZm1nEpBXMfw8VPSFLnrq/g=="
+      }
+    }
+  ],
+  "must_fail": [
+    "the body opened with another counter in the additional data",
+    "a wrapped key opened with another slot id in the additional data",
+    "a wrapped key opened with another phone's key",
+    "any byte of body or key changed",
+    "a key or token whose last six characters are not the checksum of its 30-character body"
+  ]
+}

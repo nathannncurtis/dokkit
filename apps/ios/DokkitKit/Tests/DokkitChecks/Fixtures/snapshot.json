@@ -1,0 +1,4544 @@
+{
+  "server": {
+    "name": "Northwind",
+    "version": "v0.1.18",
+    "counter": 184223,
+    "made_at": "2026-10-14T03:20:00Z"
+  },
+  "services": [
+    {
+      "id": "d574aace-093b-4ebc-91b1-7583589db1c2",
+      "machine": "build",
+      "name": "Artifact store",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "build",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "artifact-store",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/artifact-store"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.739000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "artifact-store",
+        "kind": "service",
+        "name": "Artifact store"
+      }
+    },
+    {
+      "id": "2784f9ba-f43b-455d-b8f6-c238daa7eb9e",
+      "machine": "build",
+      "name": "Cache cleaner",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "build",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "cache-cleaner",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/cache-cleaner"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.739000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "cache-cleaner",
+        "kind": "service",
+        "name": "Cache cleaner"
+      }
+    },
+    {
+      "id": "a42333ef-6b96-4643-91ca-119ae1ede2f2",
+      "machine": "build",
+      "name": "Ci runner",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "build",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "ci-runner",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/ci-runner"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.739000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "ci-runner",
+        "kind": "service",
+        "name": "Ci runner"
+      }
+    },
+    {
+      "id": "5a58e6da-a68c-416c-a35f-a3712e8c57d3",
+      "machine": "build",
+      "name": "Docker daemon",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "build",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "docker-daemon",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/docker-daemon"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.739000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "docker-daemon",
+        "kind": "service",
+        "name": "Docker daemon"
+      }
+    },
+    {
+      "id": "58850cc7-cc00-438f-987d-b85420a0c52a",
+      "machine": "build",
+      "name": "Nightly build",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "job",
+      "versions": [
+        {
+          "machine": "build",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "nightly-build",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "nightly-build",
+          "type": "job",
+          "value": null,
+          "state": "ok",
+          "config": {},
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T14:16:50.362000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "nightly-build",
+        "kind": "job",
+        "name": "Nightly build"
+      }
+    },
+    {
+      "id": "5366f28b-be74-4145-a58d-f9c1805801eb",
+      "machine": "build",
+      "name": "Package mirror",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "build",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "package-mirror",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/package-mirror"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.739000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "package-mirror",
+        "kind": "service",
+        "name": "Package mirror"
+      }
+    },
+    {
+      "id": "ee4be3cb-1590-4c21-aec3-6c92e0eb751d",
+      "machine": "build",
+      "name": "Web preview",
+      "restart": false,
+      "version": null,
+      "state": "down",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "build",
+          "version": null,
+          "environment": "dev",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": "Connection refused",
+      "environment": "dev",
+      "held": null,
+      "slug": "web-preview",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "down",
+          "config": {
+            "url": "http://localhost/web-preview"
+          },
+          "source": "file",
+          "note": "Connection refused",
+          "checked_at": "2026-10-13T22:24:50.362000Z"
+        }
+      ],
+      "open_issue": {
+        "count": 1,
+        "id": "8d6a83c6-0524-4677-9eef-98a58615c2f4",
+        "machine": "build",
+        "state": "down",
+        "service": "ee4be3cb-1590-4c21-aec3-6c92e0eb751d",
+        "title": "Web preview is down",
+        "alert": null,
+        "kind": "http",
+        "since": "2026-10-13T22:24:50.362000Z",
+        "alerts": [],
+        "soon": false,
+        "note": "Connection refused",
+        "short_id": "DOK-10",
+        "acknowledged_at": null,
+        "snoozed_until": null
+      },
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "dev",
+        "id": "web-preview",
+        "kind": "service",
+        "name": "Web preview"
+      }
+    },
+    {
+      "id": "ac77ef78-cae2-4e7c-8649-8b58069f1b35",
+      "machine": "db-01",
+      "name": "Log shipper",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "db-01",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "log-shipper",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/log-shipper"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.675000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "log-shipper",
+        "kind": "service",
+        "name": "Log shipper"
+      }
+    },
+    {
+      "id": "4281f696-0735-42fa-bdd4-4e57a76d7313",
+      "machine": "db-01",
+      "name": "Nightly purge",
+      "restart": false,
+      "version": null,
+      "state": "down",
+      "stats": null,
+      "kind": "job",
+      "versions": [
+        {
+          "machine": "db-01",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": "Expected at 01:00 UTC. Its last good run was Oct 12 01:04 UTC and took 4 minutes.",
+      "environment": "production",
+      "held": null,
+      "slug": "nightly-purge",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "nightly-purge",
+          "type": "job",
+          "value": null,
+          "state": "down",
+          "config": {
+            "grace": "20m",
+            "max_runtime": "1h",
+            "schedule": "0 1 * * *"
+          },
+          "source": "file",
+          "note": "Expected at 01:00 UTC. Its last good run was Oct 12 01:04 UTC and took 4 minutes.",
+          "checked_at": "2026-10-13T01:30:00.000000Z"
+        }
+      ],
+      "open_issue": {
+        "count": 1,
+        "id": "3350329d-e9d2-4bce-95bc-ddd1143e4fe3",
+        "machine": "db-01",
+        "state": "down",
+        "service": "4281f696-0735-42fa-bdd4-4e57a76d7313",
+        "title": "Nightly purge did not run",
+        "alert": {
+          "status": "sent",
+          "channel": "page"
+        },
+        "kind": "job",
+        "since": "2026-10-13T01:30:00.000000Z",
+        "alerts": [
+          {
+            "status": "sent",
+            "channel": "page"
+          }
+        ],
+        "soon": false,
+        "note": "Expected at 01:00 UTC. Its last good run was Oct 12 01:04 UTC and took 4 minutes.",
+        "short_id": "DOK-3",
+        "acknowledged_at": null,
+        "snoozed_until": null
+      },
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "nightly-purge",
+        "kind": "job",
+        "name": "Nightly purge"
+      }
+    },
+    {
+      "id": "ad3b4163-43aa-459e-8676-e1eabd136efa",
+      "machine": "db-01",
+      "name": "Pg exporter",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "db-01",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "pg-exporter",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/pg-exporter"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.675000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "pg-exporter",
+        "kind": "service",
+        "name": "Pg exporter"
+      }
+    },
+    {
+      "id": "798c6ac3-4488-4ad6-90e5-def5f879c494",
+      "machine": "db-01",
+      "name": "Pgbouncer",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "db-01",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "pgbouncer",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/pgbouncer"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.675000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "pgbouncer",
+        "kind": "service",
+        "name": "Pgbouncer"
+      }
+    },
+    {
+      "id": "64af793a-fc76-4c4d-8553-3535133f3472",
+      "machine": "db-01",
+      "name": "Postgres",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "db-01",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "postgres",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/postgres"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T19:24:50.362000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "postgres",
+        "kind": "service",
+        "name": "Postgres"
+      }
+    },
+    {
+      "id": "f296f7af-7def-4c1a-b4ce-933ca4e7efe5",
+      "machine": "db-01",
+      "name": "Replica sync",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "db-01",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "replica-sync",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/replica-sync"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.675000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "replica-sync",
+        "kind": "service",
+        "name": "Replica sync"
+      }
+    },
+    {
+      "id": "6ecfbccf-e6c9-4702-ae3d-fd17e44d5dd9",
+      "machine": "db-01",
+      "name": "The machine itself",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "db-01",
+          "version": null,
+          "environment": "production",
+          "held": null
+        },
+        {
+          "machine": "nas",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "machine",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "memory.used_percent",
+          "type": "threshold",
+          "value": 58.0,
+          "state": "ok",
+          "config": {
+            "limit_from": "memory_limit",
+            "metric": "memory.used_percent"
+          },
+          "source": "reported",
+          "note": null,
+          "checked_at": "2026-10-13T23:24:50.362000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {}
+    },
+    {
+      "id": "f09c8eff-9070-4f24-a0d7-7050ef4e7f88",
+      "machine": "db-01",
+      "name": "Wal archive",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "db-01",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "wal-archive",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/wal-archive"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.675000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "wal-archive",
+        "kind": "service",
+        "name": "Wal archive"
+      }
+    },
+    {
+      "id": "6950e301-326c-4ea0-9392-ff9842fa78fd",
+      "machine": "mail",
+      "name": "Antivirus",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "mail",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "antivirus",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/antivirus"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.726000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "antivirus",
+        "kind": "service",
+        "name": "Antivirus"
+      }
+    },
+    {
+      "id": "cb4ed69f-6812-45fe-aba1-d4d88da7b7d2",
+      "machine": "mail",
+      "name": "Dkim signer",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "mail",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "dkim-signer",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/dkim-signer"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.726000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "dkim-signer",
+        "kind": "service",
+        "name": "Dkim signer"
+      }
+    },
+    {
+      "id": "d96e14a0-a018-4367-adc7-9160e1cc4ac7",
+      "machine": "mail",
+      "name": "Dovecot",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "mail",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "dovecot",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/dovecot"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.726000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "dovecot",
+        "kind": "service",
+        "name": "Dovecot"
+      }
+    },
+    {
+      "id": "c0487d6a-9f4a-4b6b-a383-328f238dcb61",
+      "machine": "mail",
+      "name": "List server",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "mail",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "list-server",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/list-server"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.726000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "list-server",
+        "kind": "service",
+        "name": "List server"
+      }
+    },
+    {
+      "id": "09c211c9-b15c-4bae-a367-36eaf3e8ede9",
+      "machine": "mail",
+      "name": "Mail queue",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "mail",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "mail-queue",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/mail-queue"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.726000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "mail-queue",
+        "kind": "service",
+        "name": "Mail queue"
+      }
+    },
+    {
+      "id": "ab114821-0e70-4961-9712-46f0c594463f",
+      "machine": "mail",
+      "name": "Mail tls",
+      "restart": false,
+      "version": null,
+      "state": "degraded",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "mail",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": "It expires on 2026-11-03.",
+      "environment": "production",
+      "held": null,
+      "slug": "mail-tls",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "certificate",
+          "type": "expiry",
+          "value": null,
+          "state": "degraded",
+          "config": {},
+          "source": "file",
+          "note": "It expires on 2026-11-03.",
+          "checked_at": "2026-10-13T21:54:50.362000Z"
+        },
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/mail-tls"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.726000Z"
+        }
+      ],
+      "open_issue": {
+        "count": 1,
+        "id": "d9bb2f88-a7fb-40d5-9df8-d3a406d48f55",
+        "machine": "mail",
+        "state": "degraded",
+        "service": "ab114821-0e70-4961-9712-46f0c594463f",
+        "title": "Certificate for mail expires in 21 days",
+        "alert": {
+          "status": "sent",
+          "channel": "push"
+        },
+        "kind": "expiry",
+        "since": "2026-10-13T21:54:50.362000Z",
+        "alerts": [
+          {
+            "status": "sent",
+            "channel": "push"
+          }
+        ],
+        "soon": true,
+        "note": "It expires on 2026-11-03.",
+        "short_id": "DOK-8",
+        "acknowledged_at": null,
+        "snoozed_until": null
+      },
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "mail-tls",
+        "kind": "service",
+        "name": "Mail tls"
+      }
+    },
+    {
+      "id": "93259eb6-7d8d-49ff-8f98-0e9b3e16c6ab",
+      "machine": "mail",
+      "name": "Postfix",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "mail",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "postfix",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/postfix"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.726000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "postfix",
+        "kind": "service",
+        "name": "Postfix"
+      }
+    },
+    {
+      "id": "d487d751-d004-4f03-a3df-34437bf2577e",
+      "machine": "mail",
+      "name": "Spam filter",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "mail",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "spam-filter",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/spam-filter"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.726000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "spam-filter",
+        "kind": "service",
+        "name": "Spam filter"
+      }
+    },
+    {
+      "id": "71b6f6fe-92f6-4701-af92-7d6ae975c632",
+      "machine": "mail",
+      "name": "Webmail",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "mail",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "webmail",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/webmail"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.726000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "webmail",
+        "kind": "service",
+        "name": "Webmail"
+      }
+    },
+    {
+      "id": "57a29e45-bfeb-45a2-9b2f-46aeea9e23e2",
+      "machine": "nas",
+      "name": "Backup",
+      "restart": false,
+      "version": null,
+      "state": "degraded",
+      "stats": null,
+      "kind": "job",
+      "versions": [
+        {
+          "machine": "nas",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": "It took 3 hours. The limit is 2h. That is 2 times in the last 7 days.",
+      "environment": "production",
+      "held": null,
+      "slug": "backup",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "backup",
+          "type": "job",
+          "value": null,
+          "state": "degraded",
+          "config": {
+            "max_runtime": "2h"
+          },
+          "source": "file",
+          "note": "It took 3 hours. The limit is 2h. That is 2 times in the last 7 days.",
+          "checked_at": "2026-10-12T23:34:50.362000Z"
+        }
+      ],
+      "open_issue": {
+        "count": 1,
+        "id": "8af3249d-a232-4002-8c10-815cb6262008",
+        "machine": "nas",
+        "state": "degraded",
+        "service": "57a29e45-bfeb-45a2-9b2f-46aeea9e23e2",
+        "title": "Backup ran long",
+        "alert": {
+          "status": "sent",
+          "channel": "push"
+        },
+        "kind": "job",
+        "since": "2026-10-12T23:34:50.362000Z",
+        "alerts": [
+          {
+            "status": "sent",
+            "channel": "push"
+          }
+        ],
+        "soon": true,
+        "note": "It took 3 hours. The limit is 2h. That is 2 times in the last 7 days.",
+        "short_id": "DOK-2",
+        "acknowledged_at": null,
+        "snoozed_until": null
+      },
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "backup",
+        "kind": "job",
+        "name": "Backup"
+      }
+    },
+    {
+      "id": "5983f5aa-3eed-4e6b-bc57-78487a3da811",
+      "machine": "nas",
+      "name": "Media index",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "nas",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "media-index",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/media-index"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.715000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "media-index",
+        "kind": "service",
+        "name": "Media index"
+      }
+    },
+    {
+      "id": "738ca4b4-03cf-456e-99e0-244c0955037e",
+      "machine": "nas",
+      "name": "Nfs export",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "nas",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "nfs-export",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/nfs-export"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.715000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "nfs-export",
+        "kind": "service",
+        "name": "Nfs export"
+      }
+    },
+    {
+      "id": "e17f0f17-d1a9-4d54-84ac-bd02791f3e8e",
+      "machine": "nas",
+      "name": "Photo sync",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "nas",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "photo-sync",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/photo-sync"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.715000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "photo-sync",
+        "kind": "service",
+        "name": "Photo sync"
+      }
+    },
+    {
+      "id": "0a31752c-67ed-4678-becd-cda0dfe8dd1f",
+      "machine": "nas",
+      "name": "Replication",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "nas",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "replication",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/replication"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.715000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "replication",
+        "kind": "service",
+        "name": "Replication"
+      }
+    },
+    {
+      "id": "059e2692-9a3c-4991-8b93-613a9eb9ef31",
+      "machine": "nas",
+      "name": "Smart monitor",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "nas",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "smart-monitor",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/smart-monitor"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.715000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "smart-monitor",
+        "kind": "service",
+        "name": "Smart monitor"
+      }
+    },
+    {
+      "id": "cbb3f6c9-5873-46e6-b7f2-886384a349a1",
+      "machine": "nas",
+      "name": "Smb share",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "nas",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "smb-share",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/smb-share"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.715000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "smb-share",
+        "kind": "service",
+        "name": "Smb share"
+      }
+    },
+    {
+      "id": "00ef9d3e-c6ce-4040-994c-a6f2181f4252",
+      "machine": "nas",
+      "name": "Snapshot keeper",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "nas",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "snapshot-keeper",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/snapshot-keeper"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.715000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "snapshot-keeper",
+        "kind": "service",
+        "name": "Snapshot keeper"
+      }
+    },
+    {
+      "id": "1a042d91-e691-4c87-af6f-2b81b5146090",
+      "machine": "nas",
+      "name": "The machine itself",
+      "restart": false,
+      "version": null,
+      "state": "degraded",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "db-01",
+          "version": null,
+          "environment": "production",
+          "held": null
+        },
+        {
+          "machine": "nas",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": "It is 91 percent full. The limit is 90. At this week's rate it is full in about 7 days.",
+      "environment": "production",
+      "held": null,
+      "slug": "machine",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "disk.used_percent.data",
+          "type": "threshold",
+          "value": 91.0,
+          "state": "degraded",
+          "config": {
+            "full_in_days": 7,
+            "limit_from": "disk_limit",
+            "metric": "disk.used_percent.data"
+          },
+          "source": "reported",
+          "note": "It is 91 percent full. The limit is 90. At this week's rate it is full in about 7 days.",
+          "checked_at": "2026-10-13T23:54:50.362000Z"
+        }
+      ],
+      "open_issue": {
+        "count": 1,
+        "id": "c47d0d08-e6a5-4a75-bc0e-61bcae301843",
+        "machine": "nas",
+        "state": "degraded",
+        "service": "1a042d91-e691-4c87-af6f-2b81b5146090",
+        "title": "Disk data is nearly full",
+        "alert": {
+          "status": "sent",
+          "channel": "push"
+        },
+        "kind": "threshold",
+        "since": "2026-10-13T23:54:50.362000Z",
+        "alerts": [
+          {
+            "status": "sent",
+            "channel": "push"
+          }
+        ],
+        "soon": false,
+        "note": "It is 91 percent full. The limit is 90. At this week's rate it is full in about 7 days.",
+        "short_id": "DOK-4",
+        "acknowledged_at": null,
+        "snoozed_until": null
+      },
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {}
+    },
+    {
+      "id": "3ea7ab0e-1dc0-4b31-a20a-c9067d1bff08",
+      "machine": "sql",
+      "name": "Etl loader",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "sql",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "etl-loader",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/etl-loader"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.748000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "etl-loader",
+        "kind": "service",
+        "name": "Etl loader"
+      }
+    },
+    {
+      "id": "f2cf8a96-672a-4feb-b5fc-88721733d455",
+      "machine": "sql",
+      "name": "Linked server",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "sql",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "linked-server",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/linked-server"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.748000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "linked-server",
+        "kind": "service",
+        "name": "Linked server"
+      }
+    },
+    {
+      "id": "36eefe64-168a-4de7-8793-48d97c62b5e8",
+      "machine": "sql",
+      "name": "Report builder",
+      "restart": false,
+      "version": null,
+      "state": "degraded",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "sql",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": "Reports take over a minute.",
+      "environment": "production",
+      "held": null,
+      "slug": "report-builder",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "degraded",
+          "config": {
+            "url": "http://localhost/report-builder"
+          },
+          "source": "file",
+          "note": "Reports take over a minute.",
+          "checked_at": "2026-10-13T17:54:50.362000Z"
+        }
+      ],
+      "open_issue": {
+        "count": 1,
+        "id": "f725d972-d690-44a6-add8-b77060dad218",
+        "machine": "sql",
+        "state": "degraded",
+        "service": "36eefe64-168a-4de7-8793-48d97c62b5e8",
+        "title": "Report builder is slow",
+        "alert": {
+          "status": "sent",
+          "channel": "push"
+        },
+        "kind": "http",
+        "since": "2026-10-13T17:54:50.362000Z",
+        "alerts": [
+          {
+            "status": "sent",
+            "channel": "push"
+          }
+        ],
+        "soon": false,
+        "note": "Reports take over a minute.",
+        "short_id": "DOK-9",
+        "acknowledged_at": null,
+        "snoozed_until": "2026-10-14T07:54:50.925000Z"
+      },
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "report-builder",
+        "kind": "service",
+        "name": "Report builder"
+      }
+    },
+    {
+      "id": "0e67ca0c-4741-46c5-b5c1-e6af0fe2a86e",
+      "machine": "sql",
+      "name": "Reporting portal",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "sql",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "reporting-portal",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/reporting-portal"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.748000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "reporting-portal",
+        "kind": "service",
+        "name": "Reporting portal"
+      }
+    },
+    {
+      "id": "ed3a1999-5da5-478a-8aec-f3caa56bfd93",
+      "machine": "sql",
+      "name": "Sql agent",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "sql",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "sql-agent",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/sql-agent"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.748000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "sql-agent",
+        "kind": "service",
+        "name": "Sql agent"
+      }
+    },
+    {
+      "id": "dc157c6a-2463-4543-8765-c190baeb25bb",
+      "machine": "sql",
+      "name": "Sql server",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "sql",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "sql-server",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/sql-server"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.748000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "sql-server",
+        "kind": "service",
+        "name": "Sql server"
+      }
+    },
+    {
+      "id": "c6d5b430-ac2f-45e8-b15c-b6cc4cfb5300",
+      "machine": "sql",
+      "name": "Ssis",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "sql",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "ssis",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/ssis"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.748000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "ssis",
+        "kind": "service",
+        "name": "Ssis"
+      }
+    },
+    {
+      "id": "66b4ed72-dd7a-4d62-97b0-795a616d9ed6",
+      "machine": "sql",
+      "name": "Ssrs",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "sql",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "ssrs",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/ssrs"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.748000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "ssrs",
+        "kind": "service",
+        "name": "Ssrs"
+      }
+    },
+    {
+      "id": "f413882a-3322-4a43-9911-4fd7666cac70",
+      "machine": "web-02",
+      "name": "Api",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "web-02",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "api",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/api"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.697000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "api",
+        "kind": "service",
+        "name": "Api"
+      }
+    },
+    {
+      "id": "17f83d21-5f1d-4e56-bcc3-37a9d7b9fa43",
+      "machine": "web-02",
+      "name": "Cdn sync",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "web-02",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "cdn-sync",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/cdn-sync"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.697000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "cdn-sync",
+        "kind": "service",
+        "name": "Cdn sync"
+      }
+    },
+    {
+      "id": "520373cd-22e7-4f22-9560-23f50beda59d",
+      "machine": "web-02",
+      "name": "Image cache",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "web-02",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "image-cache",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/image-cache"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.697000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "image-cache",
+        "kind": "service",
+        "name": "Image cache"
+      }
+    },
+    {
+      "id": "f81ddfb1-f830-4c9d-aba1-b087e4dac99d",
+      "machine": "web-02",
+      "name": "Nginx",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "web-02",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "nginx",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/nginx"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T21:34:50.362000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "nginx",
+        "kind": "service",
+        "name": "Nginx"
+      }
+    },
+    {
+      "id": "c54e93ee-0327-49ac-8273-bcd33a7c7796",
+      "machine": "web-02",
+      "name": "Payment gateway",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "dependency",
+      "versions": [
+        {
+          "machine": "web-02",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "payment-gateway",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "http",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "https://payments.example.com/health"
+          },
+          "source": "reported",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:51.028000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {}
+    },
+    {
+      "id": "82da2f05-5cd8-4211-8d18-46fe0113d9f7",
+      "machine": "web-02",
+      "name": "Redis",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "web-02",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "redis",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/redis"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.697000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "redis",
+        "kind": "service",
+        "name": "Redis"
+      }
+    },
+    {
+      "id": "193ced77-f361-4244-b5b6-bd66ab1e272d",
+      "machine": "web-02",
+      "name": "Resize worker",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "web-02",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "resize-worker",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/resize-worker"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.697000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "resize-worker",
+        "kind": "service",
+        "name": "Resize worker"
+      }
+    },
+    {
+      "id": "c56566f4-9639-4dbe-8d7f-3dc7911287fe",
+      "machine": "web-02",
+      "name": "Search index",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "web-02",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "search-index",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/search-index"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.697000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "search-index",
+        "kind": "service",
+        "name": "Search index"
+      }
+    },
+    {
+      "id": "506f66fc-2a45-4ee0-9483-a5a1b41db0f4",
+      "machine": "web-02",
+      "name": "Session store",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "web-02",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "session-store",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/session-store"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.697000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "session-store",
+        "kind": "service",
+        "name": "Session store"
+      }
+    },
+    {
+      "id": "83e117c6-2ce8-4e6f-8e66-9e40521d3bb8",
+      "machine": "web-02",
+      "name": "Upload portal",
+      "restart": false,
+      "version": "2.4.1",
+      "state": "degraded",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "web-02",
+          "version": "2.4.1",
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [
+        {
+          "machine": "web-02",
+          "name": "Upload portal",
+          "version": "2.4.1",
+          "at": "2026-10-13T22:54:50.362000Z",
+          "how": "reported",
+          "service": "83e117c6-2ce8-4e6f-8e66-9e40521d3bb8",
+          "from": "2.4.0",
+          "by": "ci",
+          "commit": "9f3c2ab"
+        }
+      ],
+      "note": "Three checks in a row took over two seconds.",
+      "environment": "production",
+      "held": null,
+      "slug": "upload-portal",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "latency",
+          "type": "custom",
+          "value": null,
+          "state": "degraded",
+          "config": {},
+          "source": "file",
+          "note": "Three checks in a row took over two seconds.",
+          "checked_at": "2026-10-13T23:14:50.362000Z"
+        },
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/upload-portal"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.697000Z"
+        }
+      ],
+      "open_issue": {
+        "count": 1,
+        "id": "043a2335-87d6-4002-9bb4-be234bcbbf9f",
+        "machine": "web-02",
+        "state": "degraded",
+        "service": "83e117c6-2ce8-4e6f-8e66-9e40521d3bb8",
+        "title": "Upload portal answers slowly",
+        "alert": {
+          "status": "sent",
+          "channel": "push"
+        },
+        "kind": "custom",
+        "since": "2026-10-13T23:14:50.362000Z",
+        "alerts": [
+          {
+            "status": "sent",
+            "channel": "push"
+          }
+        ],
+        "soon": false,
+        "note": "Three checks in a row took over two seconds.",
+        "short_id": "DOK-7",
+        "acknowledged_at": null,
+        "snoozed_until": null
+      },
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "upload-portal",
+        "kind": "service",
+        "name": "Upload portal"
+      }
+    },
+    {
+      "id": "f873e902-922f-4f37-9606-c48cb80cc319",
+      "machine": "web-02",
+      "name": "Upload portal",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "web-02",
+          "version": null,
+          "environment": "staging",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "staging",
+      "held": null,
+      "slug": "upload-portal-staging",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost:8081/healthz"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:51.032000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "staging",
+        "id": "upload-portal-staging",
+        "kind": "service",
+        "name": "Upload portal"
+      }
+    },
+    {
+      "id": "35bf2e89-1f10-42cf-b552-8b7e5b99f3a0",
+      "machine": "web-02",
+      "name": "Worker queue",
+      "restart": false,
+      "version": null,
+      "state": "ok",
+      "stats": null,
+      "kind": "service",
+      "versions": [
+        {
+          "machine": "web-02",
+          "version": null,
+          "environment": "production",
+          "held": null
+        }
+      ],
+      "deploys": [],
+      "note": null,
+      "environment": "production",
+      "held": null,
+      "slug": "worker-queue",
+      "keep_messages": false,
+      "checks": [
+        {
+          "name": "up",
+          "type": "http",
+          "value": null,
+          "state": "ok",
+          "config": {
+            "url": "http://localhost/worker-queue"
+          },
+          "source": "file",
+          "note": null,
+          "checked_at": "2026-10-13T23:54:50.697000Z"
+        }
+      ],
+      "open_issue": null,
+      "routing": {
+        "down": null,
+        "degraded": null,
+        "night": true,
+        "degraded_channels": [],
+        "down_channels": []
+      },
+      "stats_at": null,
+      "chart": [],
+      "facts": {
+        "environment": "production",
+        "id": "worker-queue",
+        "kind": "service",
+        "name": "Worker queue"
+      }
+    }
+  ],
+  "inbox": {
+    "fine": {
+      "services": 45,
+      "machines": 6
+    },
+    "soon": [
+      {
+        "count": 1,
+        "id": "d9bb2f88-a7fb-40d5-9df8-d3a406d48f55",
+        "machine": "mail",
+        "state": "degraded",
+        "service": "ab114821-0e70-4961-9712-46f0c594463f",
+        "title": "Certificate for mail expires in 21 days",
+        "alert": {
+          "status": "sent",
+          "channel": "push"
+        },
+        "kind": "expiry",
+        "since": "2026-10-13T21:54:50.362000Z",
+        "alerts": [
+          {
+            "status": "sent",
+            "channel": "push"
+          }
+        ],
+        "soon": true,
+        "note": "It expires on 2026-11-03.",
+        "short_id": "DOK-8",
+        "acknowledged_at": null,
+        "snoozed_until": null
+      },
+      {
+        "count": 1,
+        "id": "8af3249d-a232-4002-8c10-815cb6262008",
+        "machine": "nas",
+        "state": "degraded",
+        "service": "57a29e45-bfeb-45a2-9b2f-46aeea9e23e2",
+        "title": "Backup ran long",
+        "alert": {
+          "status": "sent",
+          "channel": "push"
+        },
+        "kind": "job",
+        "since": "2026-10-12T23:34:50.362000Z",
+        "alerts": [
+          {
+            "status": "sent",
+            "channel": "push"
+          }
+        ],
+        "soon": true,
+        "note": "It took 3 hours. The limit is 2h. That is 2 times in the last 7 days.",
+        "short_id": "DOK-2",
+        "acknowledged_at": null,
+        "snoozed_until": null
+      }
+    ],
+    "snoozed": [
+      {
+        "count": 1,
+        "id": "f725d972-d690-44a6-add8-b77060dad218",
+        "machine": "sql",
+        "state": "degraded",
+        "service": "36eefe64-168a-4de7-8793-48d97c62b5e8",
+        "title": "Report builder is slow",
+        "alert": {
+          "status": "sent",
+          "channel": "push"
+        },
+        "kind": "http",
+        "since": "2026-10-13T17:54:50.362000Z",
+        "alerts": [
+          {
+            "status": "sent",
+            "channel": "push"
+          }
+        ],
+        "soon": false,
+        "note": "Reports take over a minute.",
+        "short_id": "DOK-9",
+        "acknowledged_at": null,
+        "snoozed_until": "2026-10-14T07:54:50.925000Z"
+      }
+    ],
+    "needs_you": [
+      {
+        "count": 1,
+        "id": "c47d0d08-e6a5-4a75-bc0e-61bcae301843",
+        "machine": "nas",
+        "state": "degraded",
+        "service": "1a042d91-e691-4c87-af6f-2b81b5146090",
+        "title": "Disk data is nearly full",
+        "alert": {
+          "status": "sent",
+          "channel": "push"
+        },
+        "kind": "threshold",
+        "since": "2026-10-13T23:54:50.362000Z",
+        "alerts": [
+          {
+            "status": "sent",
+            "channel": "push"
+          }
+        ],
+        "soon": false,
+        "note": "It is 91 percent full. The limit is 90. At this week's rate it is full in about 7 days.",
+        "short_id": "DOK-4",
+        "acknowledged_at": null,
+        "snoozed_until": null
+      },
+      {
+        "count": 1,
+        "id": "043a2335-87d6-4002-9bb4-be234bcbbf9f",
+        "machine": "web-02",
+        "state": "degraded",
+        "service": "83e117c6-2ce8-4e6f-8e66-9e40521d3bb8",
+        "title": "Upload portal answers slowly",
+        "alert": {
+          "status": "sent",
+          "channel": "push"
+        },
+        "kind": "custom",
+        "since": "2026-10-13T23:14:50.362000Z",
+        "alerts": [
+          {
+            "status": "sent",
+            "channel": "push"
+          }
+        ],
+        "soon": false,
+        "note": "Three checks in a row took over two seconds.",
+        "short_id": "DOK-7",
+        "acknowledged_at": null,
+        "snoozed_until": null
+      },
+      {
+        "count": 1,
+        "id": "3350329d-e9d2-4bce-95bc-ddd1143e4fe3",
+        "machine": "db-01",
+        "state": "down",
+        "service": "4281f696-0735-42fa-bdd4-4e57a76d7313",
+        "title": "Nightly purge did not run",
+        "alert": {
+          "status": "sent",
+          "channel": "page"
+        },
+        "kind": "job",
+        "since": "2026-10-13T01:30:00.000000Z",
+        "alerts": [
+          {
+            "status": "sent",
+            "channel": "page"
+          }
+        ],
+        "soon": false,
+        "note": "Expected at 01:00 UTC. Its last good run was Oct 12 01:04 UTC and took 4 minutes.",
+        "short_id": "DOK-3",
+        "acknowledged_at": null,
+        "snoozed_until": null
+      }
+    ],
+    "planned_downtime": [],
+    "not_watched": [
+      {
+        "id": "720b93c4-4c6d-40ae-9df6-5b071968816b",
+        "machine": "sql",
+        "name": "defrag",
+        "origin": null,
+        "kind": "job",
+        "why": null,
+        "detail": {
+          "label": "defrag",
+          "limits": [],
+          "record": "wrapper",
+          "saw": "0 3 * * 0",
+          "schedule": "0 3 * * 0",
+          "source": "task-scheduler"
+        }
+      },
+      {
+        "id": "f51709fb-82bb-414d-b061-7d057080cb35",
+        "machine": "build",
+        "name": "22",
+        "origin": null,
+        "kind": "port",
+        "why": null,
+        "detail": {
+          "label": "Port 22",
+          "saw": "sshd"
+        }
+      },
+      {
+        "id": "8b771e54-a253-4ff6-ad7a-226a0fb261de",
+        "machine": "web-02",
+        "name": "8443",
+        "origin": null,
+        "kind": "port",
+        "why": null,
+        "detail": {
+          "label": "Port 8443",
+          "saw": "Listening"
+        }
+      },
+      {
+        "id": "6b1cf649-b7dc-4b8f-b992-ec6ecb33bee1",
+        "machine": "build",
+        "name": "Spooler",
+        "origin": null,
+        "kind": "service",
+        "why": null,
+        "detail": {
+          "label": "Print Spooler",
+          "saw": "Running",
+          "type": "windows-service"
+        }
+      }
+    ],
+    "other_environments": [
+      {
+        "issues": [
+          {
+            "count": 1,
+            "id": "8d6a83c6-0524-4677-9eef-98a58615c2f4",
+            "machine": "build",
+            "state": "down",
+            "service": "ee4be3cb-1590-4c21-aec3-6c92e0eb751d",
+            "title": "Web preview is down",
+            "alert": null,
+            "kind": "http",
+            "since": "2026-10-13T22:24:50.362000Z",
+            "alerts": [],
+            "soon": false,
+            "note": "Connection refused",
+            "short_id": "DOK-10",
+            "acknowledged_at": null,
+            "snoozed_until": null
+          }
+        ],
+        "environment": "dev"
+      }
+    ]
+  },
+  "logs": {
+    "1a042d91-e691-4c87-af6f-2b81b5146090": [],
+    "36eefe64-168a-4de7-8793-48d97c62b5e8": [],
+    "4281f696-0735-42fa-bdd4-4e57a76d7313": [],
+    "57a29e45-bfeb-45a2-9b2f-46aeea9e23e2": [],
+    "83e117c6-2ce8-4e6f-8e66-9e40521d3bb8": [
+      {
+        "msg": "upload received",
+        "level": "info",
+        "t": "2026-10-13T23:54:51.007000Z"
+      },
+      {
+        "msg": "stored in the share",
+        "level": "info",
+        "t": "2026-10-13T23:52:50.362000Z"
+      },
+      {
+        "msg": "resize timed out after 30 s",
+        "level": "error",
+        "t": "2026-10-13T23:49:50.362000Z"
+      },
+      {
+        "msg": "thumbnail made",
+        "level": "info",
+        "t": "2026-10-13T23:46:50.362000Z"
+      },
+      {
+        "msg": "upload received",
+        "level": "info",
+        "t": "2026-10-13T23:43:50.362000Z"
+      },
+      {
+        "msg": "resize timed out after 30 s",
+        "level": "error",
+        "t": "2026-10-13T23:40:50.362000Z"
+      },
+      {
+        "msg": "virus scan passed",
+        "level": "info",
+        "t": "2026-10-13T23:37:50.362000Z"
+      },
+      {
+        "msg": "thumbnail made",
+        "level": "info",
+        "t": "2026-10-13T23:34:50.362000Z"
+      },
+      {
+        "msg": "resize timed out after 30 s",
+        "level": "error",
+        "t": "2026-10-13T23:31:50.362000Z"
+      },
+      {
+        "msg": "stored in the share",
+        "level": "info",
+        "t": "2026-10-13T23:28:50.362000Z"
+      },
+      {
+        "msg": "virus scan passed",
+        "level": "info",
+        "t": "2026-10-13T23:25:50.362000Z"
+      },
+      {
+        "msg": "resize timed out after 30 s",
+        "level": "error",
+        "t": "2026-10-13T23:22:50.362000Z"
+      },
+      {
+        "msg": "upload received",
+        "level": "info",
+        "t": "2026-10-13T23:19:50.362000Z"
+      },
+      {
+        "msg": "stored in the share",
+        "level": "info",
+        "t": "2026-10-13T23:16:50.362000Z"
+      },
+      {
+        "msg": "virus scan passed",
+        "level": "info",
+        "t": "2026-10-13T23:13:50.362000Z"
+      },
+      {
+        "msg": "thumbnail made",
+        "level": "info",
+        "t": "2026-10-13T23:10:50.362000Z"
+      },
+      {
+        "msg": "upload received",
+        "level": "info",
+        "t": "2026-10-13T23:07:50.362000Z"
+      },
+      {
+        "msg": "stored in the share",
+        "level": "info",
+        "t": "2026-10-13T23:04:50.362000Z"
+      },
+      {
+        "msg": "virus scan passed",
+        "level": "info",
+        "t": "2026-10-13T23:01:50.362000Z"
+      },
+      {
+        "msg": "thumbnail made",
+        "level": "info",
+        "t": "2026-10-13T22:58:50.362000Z"
+      }
+    ],
+    "ab114821-0e70-4961-9712-46f0c594463f": [],
+    "ee4be3cb-1590-4c21-aec3-6c92e0eb751d": []
+  },
+  "jobs": [
+    {
+      "id": "58850cc7-cc00-438f-987d-b85420a0c52a",
+      "machine": "build",
+      "name": "Nightly build",
+      "state": "ok",
+      "schedule": null,
+      "next_expected": null,
+      "last_run": {
+        "total": 9000,
+        "run": "build-2",
+        "done": 4000,
+        "started_at": "2026-10-13T23:48:50.362000Z",
+        "result": "running",
+        "tail": null,
+        "exit_code": null,
+        "finished_at": null,
+        "duration_ms": null
+      },
+      "grace": null,
+      "last_good_run": "2026-10-13T14:16:50.362000Z",
+      "max_runtime": null
+    },
+    {
+      "id": "4281f696-0735-42fa-bdd4-4e57a76d7313",
+      "machine": "db-01",
+      "name": "Nightly purge",
+      "state": "down",
+      "schedule": "0 1 * * *",
+      "next_expected": "2026-10-14T01:00:00Z",
+      "last_run": {
+        "total": null,
+        "run": "purge-1",
+        "done": null,
+        "started_at": "2026-10-12T01:00:05.000000Z",
+        "result": "ok",
+        "tail": "Purged 17211 rows\nVacuum finished",
+        "exit_code": 0,
+        "finished_at": "2026-10-12T01:04:05.000000Z",
+        "duration_ms": 240000
+      },
+      "grace": "20m",
+      "last_good_run": "2026-10-12T01:04:05.000000Z",
+      "max_runtime": "1h"
+    },
+    {
+      "id": "57a29e45-bfeb-45a2-9b2f-46aeea9e23e2",
+      "machine": "nas",
+      "name": "Backup",
+      "state": "degraded",
+      "schedule": null,
+      "next_expected": null,
+      "last_run": {
+        "total": null,
+        "run": "backup-1",
+        "done": null,
+        "started_at": "2026-10-12T20:34:50.362000Z",
+        "result": "ok",
+        "tail": "Copied 412 GB in 3 h 0 min",
+        "exit_code": 0,
+        "finished_at": "2026-10-12T23:34:50.362000Z",
+        "duration_ms": 10800000
+      },
+      "grace": null,
+      "last_good_run": "2026-10-12T23:34:50.362000Z",
+      "max_runtime": "2h"
+    }
+  ],
+  "machines": [
+    {
+      "id": "f26be644-7d4d-4243-9301-b49b625138c5",
+      "name": "build",
+      "silent": {
+        "down": null,
+        "night": true,
+        "down_channels": []
+      },
+      "os": "windows",
+      "down": false,
+      "services": [
+        {
+          "id": "d574aace-093b-4ebc-91b1-7583589db1c2",
+          "machine": "build",
+          "name": "Artifact store",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "artifact-store"
+        },
+        {
+          "id": "2784f9ba-f43b-455d-b8f6-c238daa7eb9e",
+          "machine": "build",
+          "name": "Cache cleaner",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "cache-cleaner"
+        },
+        {
+          "id": "a42333ef-6b96-4643-91ca-119ae1ede2f2",
+          "machine": "build",
+          "name": "Ci runner",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "ci-runner"
+        },
+        {
+          "id": "5a58e6da-a68c-416c-a35f-a3712e8c57d3",
+          "machine": "build",
+          "name": "Docker daemon",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "docker-daemon"
+        },
+        {
+          "id": "58850cc7-cc00-438f-987d-b85420a0c52a",
+          "machine": "build",
+          "name": "Nightly build",
+          "version": null,
+          "state": "ok",
+          "kind": "job",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "nightly-build"
+        },
+        {
+          "id": "5366f28b-be74-4145-a58d-f9c1805801eb",
+          "machine": "build",
+          "name": "Package mirror",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "package-mirror"
+        },
+        {
+          "id": "ee4be3cb-1590-4c21-aec3-6c92e0eb751d",
+          "machine": "build",
+          "name": "Web preview",
+          "version": null,
+          "state": "down",
+          "kind": "service",
+          "note": "Connection refused",
+          "environment": "dev",
+          "held": null,
+          "slug": "web-preview"
+        }
+      ],
+      "kind": "enrolled",
+      "schedules": [],
+      "vitals": {},
+      "last_seen_at": "2026-10-13T23:54:51.023000Z",
+      "planned_downtime": null,
+      "metrics": [],
+      "needs_a_look": 1,
+      "downtime_history": [],
+      "thresholds": {
+        "disk_used_percent": "90",
+        "memory_used_percent": "95"
+      }
+    },
+    {
+      "id": "108c3c7a-3465-4c9f-b48a-cbc7c352a171",
+      "name": "db-01",
+      "silent": {
+        "down": null,
+        "night": true,
+        "down_channels": []
+      },
+      "os": "linux",
+      "down": false,
+      "services": [
+        {
+          "id": "ac77ef78-cae2-4e7c-8649-8b58069f1b35",
+          "machine": "db-01",
+          "name": "Log shipper",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "log-shipper"
+        },
+        {
+          "id": "4281f696-0735-42fa-bdd4-4e57a76d7313",
+          "machine": "db-01",
+          "name": "Nightly purge",
+          "version": null,
+          "state": "down",
+          "kind": "job",
+          "note": "Expected at 01:00 UTC. Its last good run was Oct 12 01:04 UTC and took 4 minutes.",
+          "environment": "production",
+          "held": null,
+          "slug": "nightly-purge"
+        },
+        {
+          "id": "ad3b4163-43aa-459e-8676-e1eabd136efa",
+          "machine": "db-01",
+          "name": "Pg exporter",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "pg-exporter"
+        },
+        {
+          "id": "798c6ac3-4488-4ad6-90e5-def5f879c494",
+          "machine": "db-01",
+          "name": "Pgbouncer",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "pgbouncer"
+        },
+        {
+          "id": "64af793a-fc76-4c4d-8553-3535133f3472",
+          "machine": "db-01",
+          "name": "Postgres",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "postgres"
+        },
+        {
+          "id": "f296f7af-7def-4c1a-b4ce-933ca4e7efe5",
+          "machine": "db-01",
+          "name": "Replica sync",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "replica-sync"
+        },
+        {
+          "id": "6ecfbccf-e6c9-4702-ae3d-fd17e44d5dd9",
+          "machine": "db-01",
+          "name": "The machine itself",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "machine"
+        },
+        {
+          "id": "f09c8eff-9070-4f24-a0d7-7050ef4e7f88",
+          "machine": "db-01",
+          "name": "Wal archive",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "wal-archive"
+        }
+      ],
+      "kind": "enrolled",
+      "schedules": [
+        {
+          "id": "d12981b5-c391-4bc5-ab20-cc2e1c6539f7",
+          "reason": "Windows updates",
+          "time": "01:00",
+          "next": "2026-10-19T01:00:00Z",
+          "at": null,
+          "days": [
+            1,
+            2
+          ],
+          "repeat": "weekly",
+          "by": "sample",
+          "for_seconds": 7200
+        },
+        {
+          "id": "0d57a7e5-3753-4ed3-ac7f-8026aea91b9f",
+          "reason": "Windows updates",
+          "time": "01:00",
+          "next": "2026-10-19T01:00:00Z",
+          "at": null,
+          "days": [
+            1,
+            2
+          ],
+          "repeat": "weekly",
+          "by": "sample",
+          "for_seconds": 7200
+        }
+      ],
+      "vitals": {},
+      "last_seen_at": "2026-10-13T23:54:51.034000Z",
+      "planned_downtime": null,
+      "metrics": [
+        {
+          "name": "memory.used_percent",
+          "value": 58.0,
+          "at": "2026-10-13T23:24:50.362000Z"
+        }
+      ],
+      "needs_a_look": 1,
+      "downtime_history": [],
+      "thresholds": {
+        "disk_used_percent": "90",
+        "memory_used_percent": "95"
+      }
+    },
+    {
+      "id": "0dec82c3-190d-4a04-acb1-9de274f8fc6f",
+      "name": "mail",
+      "silent": {
+        "down": null,
+        "night": true,
+        "down_channels": []
+      },
+      "os": "linux",
+      "down": false,
+      "services": [
+        {
+          "id": "6950e301-326c-4ea0-9392-ff9842fa78fd",
+          "machine": "mail",
+          "name": "Antivirus",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "antivirus"
+        },
+        {
+          "id": "cb4ed69f-6812-45fe-aba1-d4d88da7b7d2",
+          "machine": "mail",
+          "name": "Dkim signer",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "dkim-signer"
+        },
+        {
+          "id": "d96e14a0-a018-4367-adc7-9160e1cc4ac7",
+          "machine": "mail",
+          "name": "Dovecot",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "dovecot"
+        },
+        {
+          "id": "c0487d6a-9f4a-4b6b-a383-328f238dcb61",
+          "machine": "mail",
+          "name": "List server",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "list-server"
+        },
+        {
+          "id": "09c211c9-b15c-4bae-a367-36eaf3e8ede9",
+          "machine": "mail",
+          "name": "Mail queue",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "mail-queue"
+        },
+        {
+          "id": "ab114821-0e70-4961-9712-46f0c594463f",
+          "machine": "mail",
+          "name": "Mail tls",
+          "version": null,
+          "state": "degraded",
+          "kind": "service",
+          "note": "It expires on 2026-11-03.",
+          "environment": "production",
+          "held": null,
+          "slug": "mail-tls"
+        },
+        {
+          "id": "93259eb6-7d8d-49ff-8f98-0e9b3e16c6ab",
+          "machine": "mail",
+          "name": "Postfix",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "postfix"
+        },
+        {
+          "id": "d487d751-d004-4f03-a3df-34437bf2577e",
+          "machine": "mail",
+          "name": "Spam filter",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "spam-filter"
+        },
+        {
+          "id": "71b6f6fe-92f6-4701-af92-7d6ae975c632",
+          "machine": "mail",
+          "name": "Webmail",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "webmail"
+        }
+      ],
+      "kind": "enrolled",
+      "schedules": [],
+      "vitals": {},
+      "last_seen_at": "2026-10-13T23:54:50.727000Z",
+      "planned_downtime": null,
+      "metrics": [],
+      "needs_a_look": 1,
+      "downtime_history": [],
+      "thresholds": {
+        "disk_used_percent": "90",
+        "memory_used_percent": "95"
+      }
+    },
+    {
+      "id": "94a633c6-98bb-47c4-a62d-dadfe261031e",
+      "name": "nas",
+      "silent": {
+        "down": null,
+        "night": true,
+        "down_channels": []
+      },
+      "os": "linux",
+      "down": false,
+      "services": [
+        {
+          "id": "57a29e45-bfeb-45a2-9b2f-46aeea9e23e2",
+          "machine": "nas",
+          "name": "Backup",
+          "version": null,
+          "state": "degraded",
+          "kind": "job",
+          "note": "It took 3 hours. The limit is 2h. That is 2 times in the last 7 days.",
+          "environment": "production",
+          "held": null,
+          "slug": "backup"
+        },
+        {
+          "id": "5983f5aa-3eed-4e6b-bc57-78487a3da811",
+          "machine": "nas",
+          "name": "Media index",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "media-index"
+        },
+        {
+          "id": "738ca4b4-03cf-456e-99e0-244c0955037e",
+          "machine": "nas",
+          "name": "Nfs export",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "nfs-export"
+        },
+        {
+          "id": "e17f0f17-d1a9-4d54-84ac-bd02791f3e8e",
+          "machine": "nas",
+          "name": "Photo sync",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "photo-sync"
+        },
+        {
+          "id": "0a31752c-67ed-4678-becd-cda0dfe8dd1f",
+          "machine": "nas",
+          "name": "Replication",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "replication"
+        },
+        {
+          "id": "059e2692-9a3c-4991-8b93-613a9eb9ef31",
+          "machine": "nas",
+          "name": "Smart monitor",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "smart-monitor"
+        },
+        {
+          "id": "cbb3f6c9-5873-46e6-b7f2-886384a349a1",
+          "machine": "nas",
+          "name": "Smb share",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "smb-share"
+        },
+        {
+          "id": "00ef9d3e-c6ce-4040-994c-a6f2181f4252",
+          "machine": "nas",
+          "name": "Snapshot keeper",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "snapshot-keeper"
+        },
+        {
+          "id": "1a042d91-e691-4c87-af6f-2b81b5146090",
+          "machine": "nas",
+          "name": "The machine itself",
+          "version": null,
+          "state": "degraded",
+          "kind": "service",
+          "note": "It is 91 percent full. The limit is 90. At this week's rate it is full in about 7 days.",
+          "environment": "production",
+          "held": null,
+          "slug": "machine"
+        }
+      ],
+      "kind": "enrolled",
+      "schedules": [],
+      "vitals": {},
+      "last_seen_at": "2026-10-13T23:54:50.875000Z",
+      "planned_downtime": null,
+      "metrics": [
+        {
+          "name": "disk.used_percent.data",
+          "value": 91.0,
+          "at": "2026-10-13T23:54:50.362000Z"
+        }
+      ],
+      "needs_a_look": 2,
+      "downtime_history": [],
+      "thresholds": {
+        "disk_used_percent": "90",
+        "memory_used_percent": "95"
+      }
+    },
+    {
+      "id": "7dc359f5-a659-41a0-ba2a-10e66bc584b3",
+      "name": "sql",
+      "silent": {
+        "down": null,
+        "night": true,
+        "down_channels": []
+      },
+      "os": "windows",
+      "down": false,
+      "services": [
+        {
+          "id": "3ea7ab0e-1dc0-4b31-a20a-c9067d1bff08",
+          "machine": "sql",
+          "name": "Etl loader",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "etl-loader"
+        },
+        {
+          "id": "f2cf8a96-672a-4feb-b5fc-88721733d455",
+          "machine": "sql",
+          "name": "Linked server",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "linked-server"
+        },
+        {
+          "id": "36eefe64-168a-4de7-8793-48d97c62b5e8",
+          "machine": "sql",
+          "name": "Report builder",
+          "version": null,
+          "state": "degraded",
+          "kind": "service",
+          "note": "Reports take over a minute.",
+          "environment": "production",
+          "held": null,
+          "slug": "report-builder"
+        },
+        {
+          "id": "0e67ca0c-4741-46c5-b5c1-e6af0fe2a86e",
+          "machine": "sql",
+          "name": "Reporting portal",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "reporting-portal"
+        },
+        {
+          "id": "ed3a1999-5da5-478a-8aec-f3caa56bfd93",
+          "machine": "sql",
+          "name": "Sql agent",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "sql-agent"
+        },
+        {
+          "id": "dc157c6a-2463-4543-8765-c190baeb25bb",
+          "machine": "sql",
+          "name": "Sql server",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "sql-server"
+        },
+        {
+          "id": "c6d5b430-ac2f-45e8-b15c-b6cc4cfb5300",
+          "machine": "sql",
+          "name": "Ssis",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "ssis"
+        },
+        {
+          "id": "66b4ed72-dd7a-4d62-97b0-795a616d9ed6",
+          "machine": "sql",
+          "name": "Ssrs",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "ssrs"
+        }
+      ],
+      "kind": "enrolled",
+      "schedules": [],
+      "vitals": {},
+      "last_seen_at": "2026-10-13T23:54:50.748000Z",
+      "planned_downtime": null,
+      "metrics": [],
+      "needs_a_look": 1,
+      "downtime_history": [],
+      "thresholds": {
+        "disk_used_percent": "90",
+        "memory_used_percent": "95"
+      }
+    },
+    {
+      "id": "4ecd63bf-ceba-4739-aa27-4280a5a0c2fd",
+      "name": "web-02",
+      "silent": {
+        "down": null,
+        "night": true,
+        "down_channels": []
+      },
+      "os": "linux",
+      "down": false,
+      "services": [
+        {
+          "id": "f413882a-3322-4a43-9911-4fd7666cac70",
+          "machine": "web-02",
+          "name": "Api",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "api"
+        },
+        {
+          "id": "17f83d21-5f1d-4e56-bcc3-37a9d7b9fa43",
+          "machine": "web-02",
+          "name": "Cdn sync",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "cdn-sync"
+        },
+        {
+          "id": "520373cd-22e7-4f22-9560-23f50beda59d",
+          "machine": "web-02",
+          "name": "Image cache",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "image-cache"
+        },
+        {
+          "id": "f81ddfb1-f830-4c9d-aba1-b087e4dac99d",
+          "machine": "web-02",
+          "name": "Nginx",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "nginx"
+        },
+        {
+          "id": "c54e93ee-0327-49ac-8273-bcd33a7c7796",
+          "machine": "web-02",
+          "name": "Payment gateway",
+          "version": null,
+          "state": "ok",
+          "kind": "dependency",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "payment-gateway"
+        },
+        {
+          "id": "82da2f05-5cd8-4211-8d18-46fe0113d9f7",
+          "machine": "web-02",
+          "name": "Redis",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "redis"
+        },
+        {
+          "id": "193ced77-f361-4244-b5b6-bd66ab1e272d",
+          "machine": "web-02",
+          "name": "Resize worker",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "resize-worker"
+        },
+        {
+          "id": "c56566f4-9639-4dbe-8d7f-3dc7911287fe",
+          "machine": "web-02",
+          "name": "Search index",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "search-index"
+        },
+        {
+          "id": "506f66fc-2a45-4ee0-9483-a5a1b41db0f4",
+          "machine": "web-02",
+          "name": "Session store",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "session-store"
+        },
+        {
+          "id": "f873e902-922f-4f37-9606-c48cb80cc319",
+          "machine": "web-02",
+          "name": "Upload portal",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "staging",
+          "held": null,
+          "slug": "upload-portal-staging"
+        },
+        {
+          "id": "83e117c6-2ce8-4e6f-8e66-9e40521d3bb8",
+          "machine": "web-02",
+          "name": "Upload portal",
+          "version": "2.4.1",
+          "state": "degraded",
+          "kind": "service",
+          "note": "Three checks in a row took over two seconds.",
+          "environment": "production",
+          "held": null,
+          "slug": "upload-portal"
+        },
+        {
+          "id": "35bf2e89-1f10-42cf-b552-8b7e5b99f3a0",
+          "machine": "web-02",
+          "name": "Worker queue",
+          "version": null,
+          "state": "ok",
+          "kind": "service",
+          "note": null,
+          "environment": "production",
+          "held": null,
+          "slug": "worker-queue"
+        }
+      ],
+      "kind": "enrolled",
+      "schedules": [],
+      "vitals": {},
+      "last_seen_at": "2026-10-13T23:54:51.032000Z",
+      "planned_downtime": null,
+      "metrics": [],
+      "needs_a_look": 1,
+      "downtime_history": [],
+      "thresholds": {
+        "disk_used_percent": "90",
+        "memory_used_percent": "95"
+      }
+    }
+  ],
+  "issues": [
+    {
+      "count": 1,
+      "id": "3350329d-e9d2-4bce-95bc-ddd1143e4fe3",
+      "machine": "db-01",
+      "state": "down",
+      "service": "4281f696-0735-42fa-bdd4-4e57a76d7313",
+      "title": "Nightly purge did not run",
+      "alert": {
+        "status": "sent",
+        "channel": "page"
+      },
+      "history": [
+        {
+          "at": "2026-10-13T01:30:00.000000Z",
+          "event": "opened"
+        }
+      ],
+      "kind": "job",
+      "since": "2026-10-13T01:30:00.000000Z",
+      "alerts": [
+        {
+          "status": "sent",
+          "channel": "page"
+        }
+      ],
+      "soon": false,
+      "note": "Expected at 01:00 UTC. Its last good run was Oct 12 01:04 UTC and took 4 minutes.",
+      "short_id": "DOK-3",
+      "acknowledged_at": null,
+      "snoozed_until": null,
+      "closed_at": null,
+      "notes": []
+    },
+    {
+      "count": 1,
+      "id": "8d6a83c6-0524-4677-9eef-98a58615c2f4",
+      "machine": "build",
+      "state": "down",
+      "service": "ee4be3cb-1590-4c21-aec3-6c92e0eb751d",
+      "title": "Web preview is down",
+      "alert": null,
+      "history": [
+        {
+          "at": "2026-10-13T22:24:50.362000Z",
+          "event": "opened"
+        }
+      ],
+      "kind": "http",
+      "since": "2026-10-13T22:24:50.362000Z",
+      "alerts": [],
+      "soon": false,
+      "note": "Connection refused",
+      "short_id": "DOK-10",
+      "acknowledged_at": null,
+      "snoozed_until": null,
+      "closed_at": null,
+      "notes": []
+    },
+    {
+      "count": 1,
+      "id": "d9bb2f88-a7fb-40d5-9df8-d3a406d48f55",
+      "machine": "mail",
+      "state": "degraded",
+      "service": "ab114821-0e70-4961-9712-46f0c594463f",
+      "title": "Certificate for mail expires in 21 days",
+      "alert": {
+        "status": "sent",
+        "channel": "push"
+      },
+      "history": [
+        {
+          "at": "2026-10-13T21:54:50.362000Z",
+          "event": "opened"
+        }
+      ],
+      "kind": "expiry",
+      "since": "2026-10-13T21:54:50.362000Z",
+      "alerts": [
+        {
+          "status": "sent",
+          "channel": "push"
+        }
+      ],
+      "soon": true,
+      "note": "It expires on 2026-11-03.",
+      "short_id": "DOK-8",
+      "acknowledged_at": null,
+      "snoozed_until": null,
+      "closed_at": null,
+      "notes": []
+    },
+    {
+      "count": 1,
+      "id": "f725d972-d690-44a6-add8-b77060dad218",
+      "machine": "sql",
+      "state": "degraded",
+      "service": "36eefe64-168a-4de7-8793-48d97c62b5e8",
+      "title": "Report builder is slow",
+      "alert": {
+        "status": "sent",
+        "channel": "push"
+      },
+      "history": [
+        {
+          "at": "2026-10-13T17:54:50.362000Z",
+          "event": "opened"
+        },
+        {
+          "at": null,
+          "until": "2026-10-14T07:54:50.925000Z",
+          "event": "snoozed"
+        }
+      ],
+      "kind": "http",
+      "since": "2026-10-13T17:54:50.362000Z",
+      "alerts": [
+        {
+          "status": "sent",
+          "channel": "push"
+        }
+      ],
+      "soon": false,
+      "note": "Reports take over a minute.",
+      "short_id": "DOK-9",
+      "acknowledged_at": null,
+      "snoozed_until": "2026-10-14T07:54:50.925000Z",
+      "closed_at": null,
+      "notes": []
+    },
+    {
+      "count": 1,
+      "id": "8af3249d-a232-4002-8c10-815cb6262008",
+      "machine": "nas",
+      "state": "degraded",
+      "service": "57a29e45-bfeb-45a2-9b2f-46aeea9e23e2",
+      "title": "Backup ran long",
+      "alert": {
+        "status": "sent",
+        "channel": "push"
+      },
+      "history": [
+        {
+          "at": "2026-10-12T23:34:50.362000Z",
+          "event": "opened"
+        }
+      ],
+      "kind": "job",
+      "since": "2026-10-12T23:34:50.362000Z",
+      "alerts": [
+        {
+          "status": "sent",
+          "channel": "push"
+        }
+      ],
+      "soon": true,
+      "note": "It took 3 hours. The limit is 2h. That is 2 times in the last 7 days.",
+      "short_id": "DOK-2",
+      "acknowledged_at": null,
+      "snoozed_until": null,
+      "closed_at": null,
+      "notes": []
+    },
+    {
+      "count": 1,
+      "id": "c47d0d08-e6a5-4a75-bc0e-61bcae301843",
+      "machine": "nas",
+      "state": "degraded",
+      "service": "1a042d91-e691-4c87-af6f-2b81b5146090",
+      "title": "Disk data is nearly full",
+      "alert": {
+        "status": "sent",
+        "channel": "push"
+      },
+      "history": [
+        {
+          "at": "2026-10-13T23:54:50.362000Z",
+          "event": "opened"
+        }
+      ],
+      "kind": "threshold",
+      "since": "2026-10-13T23:54:50.362000Z",
+      "alerts": [
+        {
+          "status": "sent",
+          "channel": "push"
+        }
+      ],
+      "soon": false,
+      "note": "It is 91 percent full. The limit is 90. At this week's rate it is full in about 7 days.",
+      "short_id": "DOK-4",
+      "acknowledged_at": null,
+      "snoozed_until": null,
+      "closed_at": null,
+      "notes": []
+    },
+    {
+      "count": 1,
+      "id": "043a2335-87d6-4002-9bb4-be234bcbbf9f",
+      "machine": "web-02",
+      "state": "degraded",
+      "service": "83e117c6-2ce8-4e6f-8e66-9e40521d3bb8",
+      "title": "Upload portal answers slowly",
+      "alert": {
+        "status": "sent",
+        "channel": "push"
+      },
+      "history": [
+        {
+          "at": "2026-10-13T23:14:50.362000Z",
+          "event": "opened"
+        }
+      ],
+      "kind": "custom",
+      "since": "2026-10-13T23:14:50.362000Z",
+      "alerts": [
+        {
+          "status": "sent",
+          "channel": "push"
+        }
+      ],
+      "soon": false,
+      "note": "Three checks in a row took over two seconds.",
+      "short_id": "DOK-7",
+      "acknowledged_at": null,
+      "snoozed_until": null,
+      "closed_at": null,
+      "notes": []
+    }
+  ],
+  "schema": 1
+}
