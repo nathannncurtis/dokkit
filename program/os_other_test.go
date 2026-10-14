@@ -52,7 +52,7 @@ func TestEachDiskIsListedOnce(t *testing.T) {
 		"/dev/disk3s3 482000000 900000 200000000 1% /Volumes/Recovery",
 		"/dev/disk5s1 1000000 840000 160000 85% /Volumes/Backup",
 	}
-	got := disksFrom(mac)
+	got := disksFrom(mac, false)
 	if len(got) != 2 || got[0]["mount"] != "/" || got[1]["mount"] != "/Volumes/Backup" {
 		t.Fatalf("%v", got)
 	}
@@ -62,7 +62,21 @@ func TestEachDiskIsListedOnce(t *testing.T) {
 		"/dev/loop3 100000 100000 0 100% /snap/core/1",
 		"/dev/sdb1 200000000 1000 199999000 1% /data",
 	}
-	if got = disksFrom(linux); len(got) != 2 || got[1]["mount"] != "/data" {
+	if got = disksFrom(linux, false); len(got) != 2 || got[1]["mount"] != "/data" {
 		t.Fatalf("%v", got)
+	}
+	qnap := []string{
+		"/dev/md9                505300    342312    162988  68% /mnt/HDA_ROOT",
+		"/dev/mapper/vg1-lv1312      493336       300    493036   0% /mnt/pool1",
+		"/dev/mapper/vg2-lv1313     2314032       888   2313144   0% /mnt/pool2",
+		"/dev/mapper/cachedev1  2815016648 2028679236 785796740  72% /share/CACHEDEV1_DATA",
+		"/dev/sdj1            27234878328 18923879320 8310458336  69% /share/external/DEV3303_1",
+		"/dev/md13               426984    363748     63236  85% /mnt/ext",
+	}
+	if got = disksFrom(qnap, true); len(got) != 2 || got[0]["mount"] != "/share/CACHEDEV1_DATA" || got[1]["mount"] != "/share/external/DEV3303_1" {
+		t.Fatalf("%v", got)
+	}
+	if got = disksFrom(qnap, false); len(got) != 6 {
+		t.Fatalf("not a QNAP, so every disk counts: %v", got)
 	}
 }

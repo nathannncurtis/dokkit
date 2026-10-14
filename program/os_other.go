@@ -126,20 +126,23 @@ func cpuTimes() (idle, total uint64, ok bool) {
 	return idle, total, total > 0
 }
 
-func findDisks() []found { return disksFrom(output("df", "-P", "-k")) }
+func findDisks() []found { return disksFrom(output("df", "-P", "-k"), qnapNAS()) }
 
 var apfsSlice = regexp.MustCompile(`^(/dev/disk\d+)s\d+.*`)
+
+var qnapSystem = regexp.MustCompile(`^/mnt/(HDA_ROOT|ext|pool\d+)$`)
 
 // A disk is listed once however many mounts show it: the volumes of an APFS container (the
 // first, "/", stands for it) and bind mounts and subvolumes of one device all report one disk.
 // The helper volumes macOS mounts under /System/Volumes and the Recovery volume, and the
-// read-only loop devices of snap packages, are not disks anyone fills.
-func disksFrom(lines []string) (all []found) {
+// read-only loop devices of snap packages, are not disks anyone fills; nor, on a QNAP, the firmware's
+// own partitions (/mnt/HDA_ROOT, /mnt/ext) and the system volume of each storage pool (/mnt/poolN).
+func disksFrom(lines []string, qnap bool) (all []found) {
 	seen := map[string]bool{}
 	for _, l := range lines {
 		f := strings.Fields(l)
 		if len(f) < 6 || !strings.HasPrefix(f[0], "/dev/") || strings.HasPrefix(f[0], "/dev/loop") ||
-			strings.HasPrefix(f[5], "/System/Volumes/") || f[5] == "/Volumes/Recovery" {
+			strings.HasPrefix(f[5], "/System/Volumes/") || f[5] == "/Volumes/Recovery" || qnap && qnapSystem.MatchString(f[5]) {
 			continue
 		}
 		device := apfsSlice.ReplaceAllString(f[0], "$1")
