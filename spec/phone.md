@@ -156,7 +156,9 @@ Rules for both:
 - The age of the snapshot is always on screen. Past five minutes it is shown as a warning, since the server, its network or the relay is not delivering.
 - Several servers can be paired, each with its own relay.
 - The last snapshot of each server is kept on the phone, encrypted by the system, and removed when the server is removed from the app.
-- Opening the app asks for the phone's own unlock (Face ID, fingerprint or passcode).
+- Opening the app, and returning to it from the background, asks for the phone's own unlock (Face ID, fingerprint or passcode). While the app is not in front its screen is covered.
+- Portrait only.
+- Colours are the web interface's defaults: its light theme with the teal accent, and the Ember dark base with the orange accent. The icon is the web interface's own.
 - No account, no analytics, no crash reporting to a third party, no network request to anything but the paired relays.
 - Light and dark, following the phone, in the product's own colours.
 
