@@ -55,7 +55,7 @@ class HomeTest {
         assertEquals("Up · 2 min ago", card.status)
         assertTrue(card.spoken.contains("CPU 90 percent, high"))
         assertTrue(card.spoken.contains("Disk D: 86 percent, high"))
-        assertTrue(card.spoken.endsWith("nothing watched."))
+        assertTrue(card.spoken.endsWith("nothing watched"))
     }
 
     @Test
