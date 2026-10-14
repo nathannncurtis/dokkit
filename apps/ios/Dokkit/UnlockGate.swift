@@ -6,6 +6,7 @@ struct UnlockGate<Content: View>: View {
     @Environment(\.scenePhase) private var phase
     @State private var unlocked = false
     @State private var busy = false
+    @State private var asked = false
     @State private var message: String?
 
     var body: some View {
@@ -14,10 +15,10 @@ struct UnlockGate<Content: View>: View {
             if !unlocked || phase != .active { cover }
         }
         .onChange(of: phase) { _, new in
-            if new == .background { unlocked = false }
-            if new == .active, !unlocked { Task { await unlock() } }
+            if new == .background { unlocked = false; asked = false }
+            if new == .active { Task { await askOnce() } }
         }
-        .task { await unlock() }
+        .task { await askOnce() }
     }
 
     private var cover: some View {
@@ -31,6 +32,13 @@ struct UnlockGate<Content: View>: View {
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
+    }
+
+    // The Face ID sheet makes the app inactive and active again, so asking on every activation would ask again after Cancel.
+    private func askOnce() async {
+        guard !asked else { return }
+        asked = true
+        await unlock()
     }
 
     private func unlock() async {
