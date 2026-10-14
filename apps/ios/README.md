@@ -11,7 +11,7 @@ You need a Mac with Xcode 16 or later, an iPhone on iOS 17 or later, and an Appl
 1. Install XcodeGen: `brew install xcodegen`.
 2. In this folder run `xcodegen generate`. It writes `Dokkit.xcodeproj`.
 3. Open `Dokkit.xcodeproj` in Xcode.
-4. Select the Dokkit target, then Signing & Capabilities. Choose your Team (your Apple ID works) and change the bundle identifier from `dev.dokkit.phone` to one of your own, such as `com.yourname.dokkit`. Or set both in `project.yml` before step 2.
+4. Select the Dokkit target, then Signing & Capabilities. Choose your Team (your Apple ID works) and change the bundle identifier from `dev.dokkit.phone` to one of your own, such as `com.yourname.dokkit`. Or, before step 2, put both in a file `Local.xcconfig` in this folder, as `DEVELOPMENT_TEAM = ...` and `PRODUCT_BUNDLE_IDENTIFIER = ...`. Git ignores that file and it survives `xcodegen generate`.
 5. On the iPhone turn on Developer Mode (Settings, Privacy & Security, Developer Mode) and connect it to the Mac.
 6. Choose the iPhone as the run destination and press Run.
 7. The first time, trust your developer profile on the phone (Settings, General, VPN & Device Management).
