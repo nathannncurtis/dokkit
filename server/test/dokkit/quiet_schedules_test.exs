@@ -282,10 +282,7 @@ defmodule Dokkit.QuietSchedulesTest do
     assert %{"items" => []} = as(read, :get, path) |> json_response(200)
   end
 
-  defp page(m) do
-    service = Repo.insert!(%Service{machine_id: m.id, slug: "machine", name: "Machine"})
-    live(signed_in(build_conn()), "/s/#{service.id}")
-  end
+  defp page(m), do: live(signed_in(build_conn()), "/machines/#{m.id}")
 
   test "the machine's page schedules a one-off in the night time zone" do
     la()

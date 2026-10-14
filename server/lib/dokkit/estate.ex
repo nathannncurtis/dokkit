@@ -15,6 +15,27 @@ defmodule Dokkit.Estate do
     with {:ok, id} <- Ecto.UUID.cast(id), do: Repo.get(Machine, id)
   end
 
+  @doc "The row that stands for a machine itself, with its checks, or nil."
+  def machine_service(machine_id) do
+    Repo.one(
+      from s in Service,
+        where: s.machine_id == ^machine_id and s.slug == "machine",
+        preload: [checks: ^from(c in Check, order_by: c.name)]
+    )
+  end
+
+  def machine_services(machine_id),
+    do: Repo.all(from s in Service, where: s.machine_id == ^machine_id, order_by: s.name)
+
+  @doc "When a service last reported: its newest check or stats, or nil."
+  def last_reported(%Service{id: id, stats_at: stats_at}) do
+    checked = Repo.all(from c in Check, where: c.service_id == ^id, select: c.checked_at)
+
+    [stats_at | checked]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.max(DateTime, fn -> nil end)
+  end
+
   def service(id) do
     with {:ok, id} <- Ecto.UUID.cast(id),
          %Service{} = service <- Repo.get(Service, id) do

@@ -255,8 +255,7 @@ defmodule Dokkit.QuietTest do
 
   test "the machine's page starts a window" do
     m = machine("attic")
-    service = Repo.insert!(%Service{machine_id: m.id, slug: "machine", name: "Machine"})
-    {:ok, view, html} = live(signed_in(build_conn()), "/s/#{service.id}")
+    {:ok, view, html} = live(signed_in(build_conn()), "/machines/#{m.id}")
     assert html =~ "quiet-form-#{m.id}"
 
     view

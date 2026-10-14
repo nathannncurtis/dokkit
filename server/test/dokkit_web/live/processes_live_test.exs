@@ -36,9 +36,16 @@ defmodule DokkitWeb.ProcessesLiveTest do
     end
   end
 
-  test "the card says nothing has arrived yet", %{conn: conn, service: service} do
-    {:ok, _, html} = live(conn, "/s/#{service.id}")
+  test "the card says nothing has arrived yet", %{conn: conn, machine: machine} do
+    {:ok, _, html} = live(conn, "/machines/#{machine.id}")
     assert html =~ "None received yet"
+  end
+
+  test "the machine's own service page no longer has the card", %{conn: conn, service: service} do
+    {:ok, view, _} = live(conn, "/s/#{service.id}")
+    refute has_element?(view, "#processes")
+    refute has_element?(view, "#history")
+    refute has_element?(view, "#silent-form")
   end
 
   test "a service that is not the machine has no card", %{conn: conn, machine: m} do
@@ -49,7 +56,7 @@ defmodule DokkitWeb.ProcessesLiveTest do
 
   test "the card lists the top 50, sorts, filters, shows all and shows the last hour", ctx do
     feed(ctx.key, many(60))
-    {:ok, view, html} = live(ctx.conn, "/s/#{ctx.service.id}")
+    {:ok, view, html} = live(ctx.conn, "/machines/#{ctx.machine.id}")
 
     assert html =~ "Taken"
     assert has_element?(view, "#proc-60")

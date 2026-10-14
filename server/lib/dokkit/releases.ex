@@ -104,10 +104,28 @@ defmodule Dokkit.Releases do
     |> tap(fn r -> if match?({:ok, _}, r), do: Dokkit.Issues.changed(false) end)
   end
 
+  @doc "Whether an update to `held` can be offered to the machine."
+  def movable?(m, held) do
+    m.has_updater and held != nil and
+      (newer?(held, m.program_version) or (m.hosts_server and newer?(held, m.server_version))) and
+      (is_nil(m.wanted_version) or m.update_ok == false)
+  end
+
+  @doc "What became of the last update asked of a machine, or nil."
+  def outcome(%{wanted_version: nil, update_ok: true, update_version: v}), do: "Updated to #{v}"
+
+  def outcome(%{update_ok: false, update_version: v, update_note: note}),
+    do: "Update to #{v} failed: #{note}"
+
+  def outcome(%{wanted_version: v}) when is_binary(v), do: "Asked to move to #{v}"
+  def outcome(_), do: nil
+
   defp set(query, version) do
     Repo.update_all(query,
       set: [
         wanted_version: version,
+        update_started_at: DateTime.utc_now(),
+        update_asked_at: nil,
         update_version: nil,
         update_ok: nil,
         update_note: nil,
@@ -137,8 +155,15 @@ defmodule Dokkit.Releases do
       |> Enum.reject(&is_nil/1)
 
     if m.wanted_version && complete?(m.wanted_version) &&
-         Enum.any?(parts, &(&1 != m.wanted_version)),
-       do: m.wanted_version
+         Enum.any?(parts, &(&1 != m.wanted_version)) do
+      if m.update_started_at && is_nil(m.update_asked_at),
+        do:
+          Repo.update_all(from(x in Machine, where: x.id == ^machine_id),
+            set: [update_asked_at: DateTime.utc_now()]
+          )
+
+      m.wanted_version
+    end
   end
 
   @doc "Keeps the last result, and clears the wanted version when it worked."

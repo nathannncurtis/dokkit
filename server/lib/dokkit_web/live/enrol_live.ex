@@ -189,7 +189,7 @@ defmodule DokkitWeb.EnrolLive do
           <div class="foot" id="enrol-state">
             <span :if={@machine}>
               <.ic name="check-circle" /> Token <span class="mono">{@key.hint}</span>
-              became <.link navigate={~p"/all#m-#{@machine.id}"}>{@machine.name}</.link>
+              became <.link navigate={~p"/machines/#{@machine.id}"}>{@machine.name}</.link>
               and is spent. It reports once a minute; three minutes of silence opens an issue.
             </span>
             <span :if={!@machine and @key.revoked_at}>

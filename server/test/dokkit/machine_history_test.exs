@@ -1,7 +1,7 @@
 defmodule Dokkit.MachineHistoryTest do
   use DokkitWeb.ConnCase, async: false
   import Phoenix.LiveViewTest
-  alias Dokkit.{Keys, Machine, Numbers, Repo, Service}
+  alias Dokkit.{Keys, Machine, Numbers, Repo}
 
   defp token(scopes), do: elem(Keys.mint(:user, %{scopes: scopes, label: "x"}), 0)
 
@@ -86,9 +86,8 @@ defmodule Dokkit.MachineHistoryTest do
 
   test "the machine page draws a chart for each number, the disk first", %{conn: conn} do
     m = machine("porch")
-    service = Repo.get_by!(Service, machine_id: m.id, slug: "machine")
     conn = signed_in(conn)
-    {:ok, view, html} = live(conn, "/s/#{service.id}")
+    {:ok, view, html} = live(conn, "/machines/#{m.id}")
     assert html =~ ~s(id="history-disk.used_percent.C")
     assert html =~ ~s(id="history-memory.used_percent")
     assert html =~ "Disk C in use"
@@ -102,10 +101,7 @@ defmodule Dokkit.MachineHistoryTest do
   test "a machine with no readings says so", %{conn: conn} do
     m = Repo.insert!(%Machine{name: "pantry", kind: :enrolled})
 
-    service =
-      Repo.insert!(%Service{machine_id: m.id, slug: "machine", name: "The machine itself"})
-
-    {:ok, _, html} = live(signed_in(conn), "/s/#{service.id}")
+    {:ok, _, html} = live(signed_in(conn), "/machines/#{m.id}")
     assert html =~ "No readings yet"
   end
 end

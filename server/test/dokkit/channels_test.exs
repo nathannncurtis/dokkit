@@ -174,8 +174,7 @@ defmodule Dokkit.ChannelsTest do
 
     test "the machine's page has the card and saves it", %{conn: conn} do
       m = silent("silent-e", DateTime.utc_now())
-      s = Repo.insert!(%Service{machine_id: m.id, slug: "machine", name: "The machine itself"})
-      {:ok, view, html} = live(signed_in(conn), "/s/#{s.id}")
+      {:ok, view, html} = live(signed_in(conn), "/machines/#{m.id}")
       assert html =~ "If this machine stops reporting"
 
       view

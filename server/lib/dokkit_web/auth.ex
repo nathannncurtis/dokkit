@@ -28,9 +28,17 @@ defmodule DokkitWeb.Auth do
     socket
     |> assign_shell()
     |> Phoenix.LiveView.attach_hook(:shell, :handle_info, fn
-      :issues_changed, socket -> {:cont, debounce(socket, :shell, &assign_shell/1)}
-      {:settled, :shell}, socket -> {:halt, settle(socket, :shell, &assign_shell/1)}
-      _, socket -> {:cont, socket}
+      :issues_changed, socket ->
+        {:cont, debounce(socket, :shell, &assign_shell/1)}
+
+      {:settled, :shell}, socket ->
+        {:halt, settle(socket, :shell, &assign_shell/1)}
+
+      :update_tick, socket ->
+        {:halt, socket |> Phoenix.LiveView.put_private(:update_tick, false) |> assign_shell()}
+
+      _, socket ->
+        {:cont, socket}
     end)
   end
 
@@ -60,10 +68,21 @@ defmodule DokkitWeb.Auth do
     shell = %{
       machines: Dokkit.Issues.machines(),
       open: Dokkit.Issues.open_count(),
-      waiting: Dokkit.Found.count()
+      waiting: Dokkit.Found.count(),
+      updating: Dokkit.UpdateRun.current(),
+      failed: Dokkit.UpdateRun.failed()
     }
 
-    Phoenix.Component.assign(socket, :shell, shell)
+    socket = Phoenix.Component.assign(socket, :shell, shell)
+
+    # Nothing changes when a machine goes silent, so a running update is looked at again on a timer.
+    if shell.updating && Phoenix.LiveView.connected?(socket) &&
+         !socket.private[:update_tick] do
+      Process.send_after(self(), :update_tick, 5000)
+      Phoenix.LiveView.put_private(socket, :update_tick, true)
+    else
+      socket
+    end
   end
 
   def sign_in(conn, user) do

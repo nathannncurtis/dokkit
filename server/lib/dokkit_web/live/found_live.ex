@@ -246,16 +246,16 @@ defmodule DokkitWeb.FoundLive do
     |> Enum.join(", ")
   end
 
-  defp scan_says(nil), do: nil
-  defp scan_says(%{state: :queued}), do: "Asked. Waiting for the machine to take it."
-  defp scan_says(%{state: :running}), do: "Looking now."
+  def scan_says(nil), do: nil
+  def scan_says(%{state: :queued}), do: "Asked. Waiting for the machine to take it."
+  def scan_says(%{state: :running}), do: "Looking now."
 
-  defp scan_says(%{state: :ok, finished_at: at}),
+  def scan_says(%{state: :ok, finished_at: at}),
     do: "Looked at #{DokkitWeb.Show.at(at)} UTC. What it found is below."
 
-  defp scan_says(%{state: :fail, output: out}), do: "Could not look: " <> String.trim(out || "")
+  def scan_says(%{state: :fail, output: out}), do: "Could not look: " <> String.trim(out || "")
 
-  defp scan_says(%{state: :refused, output: out}) do
+  def scan_says(%{state: :refused, output: out}) do
     if String.starts_with?(out || "", "This program does not run that"),
       do: "This machine's program is too old to be asked.",
       else: "The machine refused: " <> String.trim(out || "")

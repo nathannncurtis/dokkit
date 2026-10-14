@@ -366,6 +366,7 @@ defmodule DokkitWeb.UpdatesTest do
     end
 
     defp settled(view) do
+      send(view.pid, {:settled, :shell})
       send(view.pid, {:settled, :page})
       render(view)
     end
@@ -397,10 +398,11 @@ defmodule DokkitWeb.UpdatesTest do
       assert member_html =~ "Program v1.0.0"
       _ = view
 
-      html = view2 |> element("#upd-#{m.id} button") |> render_click()
-      assert html =~ "Asked to move to v1.1.0"
-      refute html =~ "Update to v1.1.0"
+      view2 |> element("#upd-#{m.id} button") |> render_click()
       assert reload(m).wanted_version == "v1.1.0"
+      html = settled(view2)
+      assert html =~ "Updating to v1.1.0"
+      refute html =~ "Update to v1.1.0"
 
       json_response(
         call(:post, "/update/result", mkey, %{version: "v1.1.0", ok: false, note: "file in use"}),
@@ -409,6 +411,7 @@ defmodule DokkitWeb.UpdatesTest do
 
       html = settled(view2)
       assert html =~ "Update to v1.1.0 failed: file in use"
+      assert has_element?(view2, "#update-failed", "file in use")
       assert has_element?(view2, "#upd-#{m.id} button")
 
       json_response(

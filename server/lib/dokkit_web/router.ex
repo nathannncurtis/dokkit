@@ -43,11 +43,13 @@ defmodule DokkitWeb.Router do
     live_session :user, on_mount: {DokkitWeb.Auth, :user} do
       live "/", InboxLive
       live "/all", EverythingLive
+      live "/apps", AppsLive
+      live "/machines/new", EnrolLive
+      live "/machines/:id", MachineLive
       live "/jobs", JobsLive, :index
       live "/jobs/new", JobsLive, :new
       live "/s/:id", ServiceLive
       live "/logs", LogsLive
-      live "/machines/new", EnrolLive
       live "/errors", ErrorsLive
       live "/errors/:id", ErrorsLive
       live "/deploys", DeploysLive, :deploys

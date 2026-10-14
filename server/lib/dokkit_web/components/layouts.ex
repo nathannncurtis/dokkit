@@ -8,6 +8,41 @@ defmodule DokkitWeb.Layouts do
   attr :user, :map, required: true
   slot :inner_block, required: true
 
+  def app(%{shell: %{updating: %{}}} = assigns) do
+    ~H"""
+    <main class="updating" id="updating" aria-labelledby="updating-h">
+      <div class="up">
+        <.mark />
+        <h1 id="updating-h" tabindex="-1">Updating to {@shell.updating.version}</h1>
+        <div
+          class="prog"
+          role="progressbar"
+          aria-label="Machines finished"
+          aria-valuemin="0"
+          aria-valuemax={@shell.updating.total}
+          aria-valuenow={@shell.updating.done}
+          aria-valuetext={"#{@shell.updating.done} of #{@shell.updating.total} finished"}
+          style={"--v:#{div(@shell.updating.done * 100, @shell.updating.total)}%"}
+        >
+          <i></i>
+        </div>
+        <p class="up-count">{@shell.updating.done} of {@shell.updating.total} finished</p>
+        <p class="up-restart" role="status">
+          <.ic name="arrows-clockwise" />Dokkit is restarting. This screen carries on when it answers.
+        </p>
+        <ul class="up-list">
+          <li :for={m <- @shell.updating.machines} id={"updating-#{m.id}"}>
+            <span>{m.name}</span>
+            <span class={["tag", m.state == :failed && "warn", m.state == :done && "ok"]}>
+              <.ic name={step_icon(m.state)} />{step(m)}
+            </span>
+          </li>
+        </ul>
+      </div>
+    </main>
+    """
+  end
+
   def app(assigns) do
     ~H"""
     <div class="shell">
@@ -32,9 +67,9 @@ defmodule DokkitWeb.Layouts do
           </.link>
         <% end %>
 
-        <h3 :if={@shell.machines != []}>Machines</h3>
+        <h3 :if={machines(@shell) != []}>Machines</h3>
 
-        <.link :for={m <- @shell.machines} class="nav" navigate={~p"/all" <> "#m-#{m.id}"}>
+        <.link :for={m <- machines(@shell)} class="nav" navigate={~p"/machines/#{m.id}"}>
           <span class={["dot", attention(m) > 0 && "warn"]}></span>{m.name}<span
             :if={attention(m) > 0}
             class="q"
@@ -60,11 +95,28 @@ defmodule DokkitWeb.Layouts do
     """
   end
 
+  defp machines(shell), do: Enum.filter(shell.machines, &(&1.kind in [:enrolled, :seen]))
+
+  defp step_icon(:done), do: "check-circle"
+  defp step_icon(:failed), do: "x-circle"
+  defp step_icon(_), do: "arrows-clockwise"
+
+  defp step(%{state: :waiting}), do: "Waiting"
+  defp step(%{state: :installing}), do: "Installing"
+  defp step(%{state: :done}), do: "Done"
+  defp step(%{note: note}), do: "Failed: #{note}"
+
   defp attention(m), do: Map.get(m, :attention, m.bad)
   defp soon(m), do: Map.get(m, :soon, 0)
 
   defp count(%{open: n}, :inbox) when n > 0, do: n
   defp count(%{waiting: n}, :found) when n > 0, do: n
+
+  defp count(%{machines: machines}, :apps) do
+    n = for m <- machines, m.kind == :group, reduce: 0, do: (acc -> acc + attention(m))
+    if n > 0, do: n
+  end
+
   defp count(_, _), do: nil
 
   defp nav do
@@ -73,6 +125,7 @@ defmodule DokkitWeb.Layouts do
        [
          {:inbox, "tray", "Inbox", ~p"/"},
          {:all, "squares-four", "Everything", ~p"/all"},
+         {:apps, "app-window", "Apps", ~p"/apps"},
          {:jobs, "clock-countdown", "Jobs", ~p"/jobs"},
          {:logs, "scroll", "Logs", ~p"/logs"},
          {:errors, "bug", "Errors", ~p"/errors"}

@@ -34,7 +34,23 @@ defmodule DokkitWeb.ParityTest do
       "quiet_start" => {:member, ["POST /api/v1/machines/:id/quiet"]},
       "quiet_end" => {:member, ["DELETE /api/v1/machines/:id/quiet"]},
       "update" => {:owner, ["POST /api/v1/machines/:id/update"]},
-      "update_all" => {:owner, ["POST /api/v1/update-all"]}
+      "update_all" => {:owner, ["POST /api/v1/update-all"]},
+      "dismiss_update" => @view
+    },
+    "MachineLive" => %{
+      "range" => {:viewer, ["GET /api/v1/machines/:id/series"]},
+      "quiet_start" => {:member, ["POST /api/v1/machines/:id/quiet"]},
+      "quiet_end" => {:member, ["DELETE /api/v1/machines/:id/quiet"]},
+      "schedule_form" => @view,
+      "procs_filter" => {:viewer, ["GET /api/v1/machines/:id/processes"]},
+      "procs_sort" => {:viewer, ["GET /api/v1/machines/:id/processes"]},
+      "procs_all" => {:viewer, ["GET /api/v1/machines/:id/processes"]},
+      "procs_history" => {:viewer, ["GET /api/v1/machines/:id/processes/history"]},
+      "schedule_add" => {:member, ["POST /api/v1/machines/:id/quiet/schedules"]},
+      "schedule_remove" => {:member, ["DELETE /api/v1/machines/:id/quiet/schedules/:schedule"]},
+      "silent" => {:member, ["PUT /api/v1/machines/:id/routing"]},
+      "update" => {:owner, ["POST /api/v1/machines/:id/update"]},
+      "scan" => {:member, ["POST /api/v1/machines/:id/scan"]}
     },
     "EnrolLive" => %{
       "token" => {:owner, ["POST /api/v1/keys"]},
@@ -55,21 +71,10 @@ defmodule DokkitWeb.ParityTest do
     "JobsLive" => %{"add" => {:owner, ["POST /api/v1/jobs"]}},
     "LogsLive" => %{"filter" => {:viewer, ["GET /api/v1/logs"]}},
     "ServiceLive" => %{
-      "range" =>
-        {:viewer, ["GET /api/v1/services/:id/series", "GET /api/v1/machines/:id/series"]},
-      "quiet_start" => {:member, ["POST /api/v1/machines/:id/quiet"]},
       "quiet_end" => {:member, ["DELETE /api/v1/machines/:id/quiet"]},
-      "schedule_form" => @view,
-      "procs_filter" => {:viewer, ["GET /api/v1/machines/:id/processes"]},
-      "procs_sort" => {:viewer, ["GET /api/v1/machines/:id/processes"]},
-      "procs_all" => {:viewer, ["GET /api/v1/machines/:id/processes"]},
-      "procs_history" => {:viewer, ["GET /api/v1/machines/:id/processes/history"]},
-      "schedule_add" => {:member, ["POST /api/v1/machines/:id/quiet/schedules"]},
-      "schedule_remove" => {:member, ["DELETE /api/v1/machines/:id/quiet/schedules/:schedule"]},
       "timing_typed" => @view,
       "timing" => {:member, ["PUT /api/v1/jobs/:id/timing"]},
       "route" => {:member, ["PUT /api/v1/services/:id/routing"]},
-      "silent" => {:member, ["PUT /api/v1/machines/:id/routing"]},
       "who" => {:owner, ["PUT /api/v1/alerts/who"]},
       "watching" =>
         {:member, ["POST /api/v1/services/:id/watch", "POST /api/v1/services/:id/unwatch"]},

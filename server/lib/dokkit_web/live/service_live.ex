@@ -18,14 +18,7 @@ defmodule DokkitWeb.ServiceLive do
              page_title: service.name,
              id: id,
              timing_error: nil,
-             timing: %{},
-             schedule: %{},
-             schedule_error: nil,
-             range: "7",
-             procs_q: "",
-             procs_sort: "memory",
-             procs_all: false,
-             procs_history: false
+             timing: %{}
            )
          )}
     end
@@ -36,27 +29,6 @@ defmodule DokkitWeb.ServiceLive do
 
   def handle_info({:settled, :page}, socket),
     do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
-
-  @ranges [
-    {"1", "The last 24 hours", 96},
-    {"7", "The last 7 days", 168},
-    {"30", "The last 30 days", 180}
-  ]
-
-  def handle_event("range", %{"range" => range}, socket) when range in ~w(1 7 30),
-    do: {:noreply, load(assign(socket, range: range))}
-
-  def handle_event("procs_filter", %{"q" => q}, socket),
-    do: {:noreply, load(assign(socket, procs_q: String.slice(q, 0, 100)))}
-
-  def handle_event("procs_sort", %{"sort" => sort}, socket) when sort in ~w(memory cpu),
-    do: {:noreply, load(assign(socket, procs_sort: sort))}
-
-  def handle_event("procs_all", _, socket),
-    do: {:noreply, load(assign(socket, procs_all: !socket.assigns.procs_all))}
-
-  def handle_event("procs_history", _, socket),
-    do: {:noreply, load(assign(socket, procs_history: !socket.assigns.procs_history))}
 
   def handle_event("timing_typed", %{"timing" => params}, socket),
     do: {:noreply, assign(socket, timing: params)}
@@ -90,18 +62,6 @@ defmodule DokkitWeb.ServiceLive do
     {:noreply, load(socket)}
   end
 
-  def handle_event("silent", %{"silent" => params}, socket) do
-    service = socket.assigns.service
-    saved = socket.assigns.current_user.role != :viewer and service.slug == "machine"
-
-    if saved do
-      params = Map.update(params, "down", [], &Alerts.exclusive(&1, service.machine.silent_route))
-      Estate.set_silent(service.machine, params)
-    end
-
-    {:noreply, assign(load(socket), silent_saved: saved)}
-  end
-
   def handle_event("who", %{"who" => params}, socket) do
     if socket.assigns.current_user.role == :owner, do: WhoPick.save(params)
     {:noreply, load(socket)}
@@ -124,28 +84,8 @@ defmodule DokkitWeb.ServiceLive do
     {:noreply, load(socket)}
   end
 
-  def handle_event("quiet_start", %{"quiet" => p}, socket) do
-    DokkitWeb.QuietBand.start(socket, Map.put(p, "machine", socket.assigns.service.machine_id))
-    {:noreply, load(socket)}
-  end
-
   def handle_event("quiet_end", _, socket) do
     DokkitWeb.QuietBand.stop(socket, socket.assigns.service.machine_id)
-    {:noreply, load(socket)}
-  end
-
-  def handle_event("schedule_form", %{"schedule" => p}, socket),
-    do: {:noreply, assign(socket, schedule: p)}
-
-  def handle_event("schedule_add", %{"schedule" => p}, socket) do
-    case DokkitWeb.QuietBand.add_schedule(socket, socket.assigns.service.machine_id, p) do
-      {:error, _, text} -> {:noreply, assign(load(socket), schedule: p, schedule_error: text)}
-      _ -> {:noreply, assign(load(socket), schedule: %{}, schedule_error: nil)}
-    end
-  end
-
-  def handle_event("schedule_remove", %{"id" => id}, socket) do
-    DokkitWeb.QuietBand.remove_schedule(socket, socket.assigns.service.machine_id, id)
     {:noreply, load(socket)}
   end
 
@@ -172,6 +112,9 @@ defmodule DokkitWeb.ServiceLive do
     {:noreply, load(socket)}
   end
 
+  defp machine_path(%{kind: :group}), do: ~p"/apps"
+  defp machine_path(machine), do: ~p"/machines/#{machine.id}"
+
   defp snoozed?(issue),
     do:
       issue.snoozed_until != nil and
@@ -192,101 +135,28 @@ defmodule DokkitWeb.ServiceLive do
         {name, values, values |> Enum.reject(&is_nil/1) |> List.last()}
       end
 
-    history = history(service, socket.assigns.range, now)
-    socket =
-      assign(socket,
-        numbers: numbers,
-        history: history,
-        procs: processes(service, socket.assigns, now)
-      )
-
-    config = Alerts.config()
-
     assign(socket,
+      numbers: numbers,
       service: service,
       job: job,
-      schedules: Dokkit.QuietSchedules.lines(service.machine_id, now, config),
-      zone: Dokkit.QuietSchedules.zone_label(config, now),
       planned: Enum.find(Dokkit.Quiet.active(now), &(&1.machine_id == service.machine_id)),
       checks: Enum.reject(service.checks, &(&1.type == :job)),
       issue: Estate.open_issue(service),
       runs: Estate.runs(service),
       logs: Dokkit.Logs.list(service: service.id, limit: 20),
       defaults: Alerts.config(),
-      silent_saved: false,
       people: Dokkit.People.list(),
       who: Dokkit.People.audience_rows()
     )
   end
 
-  defp history(%{slug: "machine"} = service, range, now) do
-    {_, _, points} = List.keyfind(@ranges, range, 0)
-    from = DateTime.add(now, -String.to_integer(range) * 86_400)
-
-    for name <- Dokkit.Numbers.names({:machine, service.machine_id}) do
-      check = Enum.find(service.checks, &(&1.name == name))
-      open? = check != nil and check.state != :ok
-
-      %{
-        name: name,
-        open: open?,
-        note: open? && check.note,
-        limit: check && Dokkit.Numbers.limit(check),
-        points: Dokkit.Numbers.series({:machine, service.machine_id}, name, from, now, points)
-      }
-    end
-    |> Enum.sort_by(&{!&1.open, !String.starts_with?(&1.name, "disk."), &1.name})
-  end
-
-  defp history(_, _, _), do: nil
-
-  defp processes(%{slug: "machine"} = service, a, now) do
-    list =
-      Dokkit.Processes.list(service.machine, %{
-        "q" => a.procs_q,
-        "sort" => a.procs_sort,
-        "limit" => if(a.procs_all, do: 10_000, else: 50)
-      })
-
-    recent =
-      if a.procs_history,
-        do:
-          service.machine
-          |> Dokkit.Processes.history(a.procs_sort, DateTime.add(now, -3600), now)
-          |> Enum.reverse(),
-        else: []
-
-    %{list: list, history: recent}
-  end
-
-  defp processes(_, _, _), do: nil
-
-  defp mb(bytes), do: "#{Integer.to_string(round(bytes / 1_048_576))} MB"
-  defp percent(nil), do: "-"
-  defp percent(n), do: "#{Float.round(n * 1.0, 1)}%"
-  defp hhmm(%DateTime{} = t), do: Calendar.strftime(t, "%H:%M")
-
-  defp top_line(items, "cpu", n),
-    do: Enum.map_join(Enum.take(items, n), ", ", &"#{&1["name"]} #{percent(&1["cpu_percent"])}")
-
-  defp top_line(items, _, n),
-    do: Enum.map_join(Enum.take(items, n), ", ", &"#{&1["name"]} #{mb(&1["memory_bytes"])}")
-
-  defp latest(points),
-    do: points |> Enum.map(& &1.value) |> Enum.reject(&is_nil/1) |> List.last()
-
-  defp title("memory.used_percent"), do: "Memory in use"
-  defp title("cpu.percent"), do: "Processor in use"
-  defp title("disk.used_percent." <> disk), do: "Disk #{disk} in use"
-  defp title(name), do: name
-
   def render(assigns) do
-    assigns = assign(assigns, cols: @cols, ranges: @ranges, routes: Dokkit.Alerts.channels())
+    assigns = assign(assigns, cols: @cols, routes: Dokkit.Alerts.channels())
 
     ~H"""
     <Layouts.app active={:all} shell={@shell} user={@current_user}>
       <div class="crumb">
-        <.link navigate={~p"/all"}>Everything</.link><.ic name="caret-right" /><span>{@service.machine.name}</span><.ic name="caret-right" /><span>{@service.name}</span>
+        <.link navigate={~p"/all"}>Everything</.link><.ic name="caret-right" /><.link navigate={machine_path(@service.machine)}>{@service.machine.name}</.link><.ic name="caret-right" /><span>{@service.name}</span>
       </div>
       
       <div class="head">
@@ -295,6 +165,14 @@ defmodule DokkitWeb.ServiceLive do
         </h1>
         
         <div class="end">
+          <.link
+            :if={@service.slug == "machine"}
+            class="btn"
+            id="machine-page"
+            navigate={machine_path(@service.machine)}
+          >
+            <.ic name="desktop" />{@service.machine.name}
+          </.link>
           <.link class="btn" navigate={~p"/logs?#{[s: @service.id]}"}><.ic name="scroll" />Logs</.link>
           <button :if={@issue && !@issue.acknowledged_at} class="btn" type="button" phx-click="seen">
             <.ic name="eye" />Mark as seen
@@ -329,149 +207,12 @@ defmodule DokkitWeb.ServiceLive do
       
       <div class="body rail">
         <div class="col">
-          <div :if={@planned || @service.slug == "machine"} class="card" id="downtime">
+          <div :if={@planned && @service.slug != "machine"} class="card" id="downtime">
             <DokkitWeb.QuietBand.band
               machine={@service.machine_id}
               planned={@planned}
-              control={@service.slug == "machine"}
               disabled={@current_user.role == :viewer}
             />
-            <DokkitWeb.QuietBand.schedules
-              :if={@service.slug == "machine"}
-              machine={@service.machine_id}
-              schedules={@schedules}
-              form={@schedule}
-              error={@schedule_error}
-              zone={@zone}
-              disabled={@current_user.role == :viewer}
-            />
-          </div>
-
-          <div :if={@history} class="card" id="history">
-            <h2>
-              History
-              <span class="end">
-                <form phx-change="range" id="range-form">
-                  <span class="dd">
-                    <select class="inp" name="range" aria-label="Show">
-                      <option :for={{v, text, _} <- @ranges} value={v} selected={v == @range}>
-                        {text}
-                      </option>
-                    </select>
-                     <.ic name="caret-down" />
-                  </span>
-                </form>
-              </span>
-            </h2>
-            
-            <p :if={@history == []} class="lead">
-              No readings yet. This machine's disks, memory and processor appear here once it reports them.
-            </p>
-            
-            <div :for={h <- @history} class="chart" id={"history-" <> h.name}>
-              <div class="top">
-                <b>{title(h.name)}</b>
-                <span class="mono">{latest(h.points) && "#{Float.round(latest(h.points), 1)}%"}</span>
-                <span :if={h.note} class="st warn">{h.note}</span>
-              </div>
-               <DokkitWeb.Show.line points={h.points} limit={h.limit} label={title(h.name)} />
-            </div>
-          </div>
-          
-          <div :if={@procs} class="card procs" id="processes">
-            <h2>
-              Processes
-              <span class="end">
-                {if @procs.list.at, do: "Taken #{at(@procs.list.at)} UTC", else: "None received yet"}
-              </span>
-            </h2>
-
-            <p :if={!@procs.list.at} class="lead">
-              No process list yet. The installed program sends one about once a minute.
-            </p>
-
-            <div :if={@procs.list.at} class="p-ctl">
-              <form phx-change="procs_filter" phx-submit="procs_filter" id="procs-form">
-                <input
-                  class="inp"
-                  type="search"
-                  name="q"
-                  value={@procs_q}
-                  placeholder="Filter by name or path"
-                  aria-label="Filter processes by name or path"
-                  autocomplete="off"
-                  phx-debounce="300"
-                />
-              </form>
-              <span role="group" aria-label="Sort by" style="display: flex; gap: 8px">
-                <button
-                  class={["btn sm", @procs_sort == "memory" && "primary"]}
-                  type="button"
-                  phx-click="procs_sort"
-                  phx-value-sort="memory"
-                  aria-pressed={to_string(@procs_sort == "memory")}
-                >
-                  Memory
-                </button>
-                <button
-                  class={["btn sm", @procs_sort == "cpu" && "primary"]}
-                  type="button"
-                  phx-click="procs_sort"
-                  phx-value-sort="cpu"
-                  aria-pressed={to_string(@procs_sort == "cpu")}
-                >
-                  Processor
-                </button>
-              </span>
-            </div>
-
-            <p :if={@procs.list.at && @procs.list.items == []} class="lead">
-              No process matches.
-            </p>
-
-            <div :if={@procs.list.items != []} class="lh p-row">
-              <span>Name</span><span class="r">PID</span><span class="r">Memory</span><span class="r">Processor</span><span class="p-path">Path</span>
-            </div>
-
-            <div :for={p <- @procs.list.items} class="li slim p-row" id={"proc-#{p["pid"]}"}>
-              <span title={p["name"]}>{p["name"]}</span>
-              <span class="mono r">{p["pid"]}</span>
-              <span class="mono r">
-                {mb(p["memory_bytes"])}{p["memory_percent"] && " · #{Float.round(p["memory_percent"], 1)}%"}
-              </span>
-              <span class="mono r">{percent(p["cpu_percent"])}</span>
-              <span class="mono p-path" title={p["path"]}>{p["path"]}</span>
-            </div>
-
-            <div :if={@procs.list.at} class="foot">
-              <button
-                :if={@procs.list.count > 50 || @procs_all}
-                class="btn sm"
-                type="button"
-                phx-click="procs_all"
-              >
-                {if @procs_all, do: "Show the top 50", else: "Show all #{@procs.list.count}"}
-              </button>
-              <button class="btn sm ghost" type="button" phx-click="procs_history">
-                {if @procs_history, do: "Hide the last hour", else: "Show the last hour"}
-              </button>
-            </div>
-
-            <p :if={@procs_history && @procs.history == []} class="lead">
-              Nothing was kept for the last hour.
-            </p>
-
-            <div
-              :for={h <- @procs.history}
-              :if={@procs_history}
-              class="li slim"
-              style="--cols: 56px minmax(0,1fr)"
-            >
-              <span class="mono">{hhmm(h.at)}</span>
-              <span class="mono" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap" title={top_line(h.items, @procs_sort, 10)}>
-                {top_line(h.items, @procs_sort, 3)}
-              </span>
-            </div>
           </div>
 
           <div :if={@issue && @issue.processes} class="card" id="at-the-time">
@@ -479,11 +220,11 @@ defmodule DokkitWeb.ServiceLive do
 
             <div class="li slim" style="--cols: 90px minmax(0,1fr)">
               <span class="mute">Most memory</span>
-              <span class="mono">{top_line(@issue.processes["top_memory"], "memory", 5)}</span>
+              <span class="mono">{DokkitWeb.MachineCards.top_line(@issue.processes["top_memory"], "memory", 5)}</span>
             </div>
             <div class="li slim" style="--cols: 90px minmax(0,1fr)">
               <span class="mute">Most processor</span>
-              <span class="mono">{top_line(@issue.processes["top_cpu"], "cpu", 5)}</span>
+              <span class="mono">{DokkitWeb.MachineCards.top_line(@issue.processes["top_cpu"], "cpu", 5)}</span>
             </div>
           </div>
 
@@ -740,51 +481,6 @@ defmodule DokkitWeb.ServiceLive do
             </dl>
           </div>
           
-          <form :if={@service.slug == "machine"} class="card" id="silent-form" phx-submit="silent">
-            <h2>If this machine stops reporting</h2>
-
-            <dl class="kv">
-              <dt>Tell</dt>
-
-              <dd>
-                <ChannelPick.pick
-                  name="silent[down]"
-                  value={@service.machine.silent_route}
-                  options={@routes}
-                  label="Channels for this machine going quiet"
-                  blank={"As set on Alerts (#{names(@routes, @defaults["down"])})"}
-                  disabled={@current_user.role == :viewer}
-                />
-              </dd>
-
-              <dt>At night</dt>
-
-              <dd>
-                <input type="hidden" name="silent[night]" value="false" />
-                <label>
-                  <input
-                    type="checkbox"
-                    name="silent[night]"
-                    value="true"
-                    checked={@service.machine.silent_wake}
-                    disabled={@current_user.role == :viewer}
-                  /> Wake me at night for this
-                </label>
-
-                <span class="hint">Off holds the alert until the night ends, if the machine is still quiet.</span>
-              </dd>
-            </dl>
-
-            <div class="foot">
-              <span :if={@silent_saved} role="status">Saved.</span>
-              <span class="end">
-                <button class="btn primary" type="submit" disabled={@current_user.role == :viewer}>
-                  Save
-                </button>
-              </span>
-            </div>
-          </form>
-
           <div class="card">
             <h2>Who hears about it</h2>
 

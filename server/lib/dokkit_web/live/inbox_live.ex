@@ -76,6 +76,7 @@ defmodule DokkitWeb.InboxLive do
       planned: Enum.filter(socket.assigns.shell.machines, & &1.planned),
       day: Dokkit.Read.day(),
       linked: Enum.map(socket.assigns.shell.machines, & &1.id),
+      apps: for(m <- socket.assigns.shell.machines, m.kind == :group, do: m.id),
       picked: MapSet.intersection(socket.assigns.picked, MapSet.new(now ++ soon, & &1.id))
     )
   end
@@ -252,7 +253,7 @@ defmodule DokkitWeb.InboxLive do
               </div>
 
               <div :for={m <- @day.machines} class="ln">
-                <.link :if={m.id in @linked} navigate={~p"/all" <> "#m-#{m.id}"} title={m.name}>
+                <.link :if={m.id in @linked} navigate={home(m.id, @apps)} title={m.name}>
                   {m.name}
                 </.link>
                 <span :if={m.id not in @linked} title={m.name}>{m.name}</span>
@@ -283,7 +284,7 @@ defmodule DokkitWeb.InboxLive do
 
           <div :if={@shell.machines == []} class="empty">No machines yet.</div>
 
-          <.link :for={m <- @shell.machines} class="est" navigate={~p"/all" <> "#m-#{m.id}"}>
+          <.link :for={m <- @shell.machines} class="est" navigate={home(m.id, @apps)}>
             <b><span class={["lvl", m.attention > 0 && "warn"]}></span>{m.name}</b>
             <span class={["st", m.attention > 0 && "warn"]}>{estate(m)}</span>
           </.link>
@@ -348,7 +349,9 @@ defmodule DokkitWeb.InboxLive do
           <div class="num">
             <span :if={@i.count > 1}>{@i.count}<small>times</small></span>
           </div>
-          <span class="tag" title={@i.machine.name}>{@i.machine.name}</span>
+          <.link class="tag" title={@i.machine.name} navigate={~p"/machines/#{@i.machine_id}"}>
+            {@i.machine.name}
+          </.link>
           <span :if={@tab == :snoozed}></span> <.ic :if={@tab != :snoozed} name="caret-down" />
         </summary>
 
@@ -451,7 +454,9 @@ defmodule DokkitWeb.InboxLive do
   defp told(%{status: :failed}, _), do: "Alert not sent"
   defp told(_, _), do: nil
 
-  defp where(%Issue{service_id: nil, machine_id: id}), do: ~p"/all" <> "#m-#{id}"
+  defp home(id, apps), do: if(id in apps, do: ~p"/apps", else: ~p"/machines/#{id}")
+
+  defp where(%Issue{service_id: nil, machine_id: id}), do: ~p"/machines/#{id}"
   defp where(%Issue{service_id: id}), do: ~p"/s/#{id}"
 
   @check_kinds %{

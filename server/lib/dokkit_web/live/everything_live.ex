@@ -46,6 +46,11 @@ defmodule DokkitWeb.EverythingLive do
   def handle_event("update_all", _, socket),
     do: owner(socket, fn held -> Dokkit.Releases.approve(held, :all) end)
 
+  def handle_event("dismiss_update", _, socket) do
+    Dokkit.UpdateRun.dismiss()
+    {:noreply, socket}
+  end
+
   def handle_event("quiet_start", %{"quiet" => p}, socket) do
     DokkitWeb.QuietBand.start(socket, p)
     {:noreply, load(socket)}
@@ -74,28 +79,13 @@ defmodule DokkitWeb.EverythingLive do
       planned: for(m <- listed, m.planned, into: %{}, do: {m.id, m.planned}),
       vitals: Dokkit.Numbers.vitals(),
       held: held,
-      movable: Enum.count(machines, &can_move?(&1, held))
+      movable: Enum.count(machines, &Dokkit.Releases.movable?(&1, held))
     )
-  end
-
-  defp can_move?(m, held) do
-    m.has_updater and held != nil and
-      (Dokkit.Releases.newer?(held, m.program_version) or
-         (m.hosts_server and Dokkit.Releases.newer?(held, m.server_version))) and
-      (is_nil(m.wanted_version) or m.update_ok == false)
   end
 
   # No updater: only a Windows machine is told how to get one.
   defp windows?(m),
     do: m.kind == :enrolled and String.contains?(String.downcase(m.os || ""), "windows")
-
-  defp outcome(%{wanted_version: nil, update_ok: true, update_version: v}), do: "Updated to #{v}"
-
-  defp outcome(%{update_ok: false, update_version: v, update_note: note}),
-    do: "Update to #{v} failed: #{note}"
-
-  defp outcome(%{wanted_version: v}) when is_binary(v), do: "Asked to move to #{v}"
-  defp outcome(_), do: nil
 
   def render(assigns) do
     ~H"""
@@ -129,6 +119,18 @@ defmodule DokkitWeb.EverythingLive do
       </div>
       
       <div class="body">
+        <div :if={@shell.failed != []} class="notice" id="update-failed" role="status">
+          <b><.ic name="warning" />{failed_title(@shell.failed)}</b>
+          <span class="end">
+            <button class="btn sm" type="button" phx-click="dismiss_update">Dismiss</button>
+          </span>
+          <ul>
+            <li :for={m <- @shell.failed}>
+              <.link navigate={~p"/machines/#{m.id}"}>{m.name}</.link>: {m.note}
+            </li>
+          </ul>
+        </div>
+
         <form :if={@dep_open} class="card" id="dependency-form" phx-submit="dependency">
           <h2>Add a dependency</h2>
           
@@ -216,7 +218,7 @@ defmodule DokkitWeb.EverythingLive do
                   ></span><.lvl
                     :if={!@planned[m.id] || m.id in @down}
                     state={if m.id in @down, do: :down, else: worst(m.services)}
-                  />{m.name}</span>
+                  /><.link navigate={home(m)}>{m.name}</.link></span>
                 <span :if={m.os} class="mute" style="font-weight:400">{m.os}</span>
                 <span class="end">
                   <span :if={@planned[m.id]} class="tag">Planned downtime until {Calendar.strftime(@planned[m.id].until, "%H:%M")} UTC</span>
@@ -249,10 +251,10 @@ defmodule DokkitWeb.EverythingLive do
                     " / Server #{m.server_version || "unknown"}"}
                 </span>
                 
-                <span :if={outcome(m)} class={["st", m.update_ok == false && "warn"]}>{outcome(m)}</span>
+                <span :if={Dokkit.Releases.outcome(m)} class={["st", m.update_ok == false && "warn"]}>{Dokkit.Releases.outcome(m)}</span>
                 <span class="end">
                   <button
-                    :if={@current_user.role == :owner and can_move?(m, @held)}
+                    :if={@current_user.role == :owner and Dokkit.Releases.movable?(m, @held)}
                     class="btn sm"
                     type="button"
                     phx-click="update"
@@ -287,6 +289,12 @@ defmodule DokkitWeb.EverythingLive do
     </Layouts.app>
     """
   end
+
+  defp home(%{kind: :group}), do: ~p"/apps"
+  defp home(m), do: ~p"/machines/#{m.id}"
+
+  defp failed_title([_]), do: "1 machine did not update"
+  defp failed_title(list), do: "#{length(list)} machines did not update"
 
   defp count(services, :bad), do: Enum.count(services, &(&1.state in [:degraded, :down]))
   defp count(services, :ok), do: Enum.count(services, &(&1.state == :ok))

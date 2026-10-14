@@ -29,6 +29,8 @@ defmodule Dokkit.Machine do
     field :update_ok, :boolean
     field :update_note, :string
     field :update_at, :utc_datetime_usec
+    field :update_started_at, :utc_datetime_usec
+    field :update_asked_at, :utc_datetime_usec
     field :silent_route, :string
     field :silent_wake, :boolean, default: true
     has_many :services, Dokkit.Service

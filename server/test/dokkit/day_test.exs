@@ -181,7 +181,7 @@ defmodule Dokkit.DayTest do
     assert html =~ "The last day"
     assert html =~ ~r/ui-vault at \d\d:\d\d: something was down/
     assert html =~ ~r/ui-vault at \d\d:\d\d: no signal/
-    assert html =~ ~s(href="/all#m-#{m.id}")
+    assert html =~ ~s(href="/machines/#{m.id}")
   end
 
   test "the first screen draws an issue of Dokkit's own, which has no machine in the last day",
