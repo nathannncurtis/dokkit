@@ -60,8 +60,12 @@ func TestASlowStatsAddressHoldsNothingBack(t *testing.T) {
 		w.Write([]byte(`{"schema":1}`))
 	}))
 	defer app.Close()
-	defer close(release)
 	w := statsWatcher(t, app.URL, "")
+	defer func() {
+		close(release)
+		for end := time.Now().Add(5 * time.Second); w.statsBusy.Load() && time.Now().Before(end); time.Sleep(time.Millisecond) {
+		}
+	}()
 	started := time.Now()
 	w.statsSoon()
 	w.statsSoon()
