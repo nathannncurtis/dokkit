@@ -61,29 +61,7 @@ struct SnapshotTests {
         let cut = try Snapshot.decode(Data(#"{"server":{"left_out":["logs"]}}"#.utf8))
         try await expect(leftOutText(cut) == "Log lines were left out of this snapshot to keep it small.")
         let empty = try Snapshot.decode(Data("{}".utf8))
-        try await expect(Screens.needsYou(empty, now: now).nothingNeedsYou)
-        try await expect(Screens.everything(empty).isEmpty)
-    }
-
-    func needsYouScreen() async throws {
-        let n = Screens.needsYou(s, now: now)
-        try await expect(n.sections.map(\.title) == ["Needs you", "Soon", "Snoozed"])
-        try await expect(n.sections[0].rows.count == 3)
-        try await expect(n.sections[0].rows.allSatisfy { !$0.shortId.isEmpty && $0.serviceName != nil })
-        try await expect(n.sections[2].rows[0].flags.first?.hasPrefix("Snoozed until") == true)
-        try await expect(n.notWatched.count == 4)
-        try await expect(n.notWatched.first?.name == "defrag")
-        try await expect(n.fine == "45 services and 6 machines fine")
-        try await expect(!n.nothingNeedsYou)
-    }
-
-    func everythingScreen() async throws {
-        let rows = Screens.everything(s)
-        try await expect(rows.count == 6)
-        try await expect(rows.map(\.level.rank) == rows.map(\.level.rank).sorted(by: >))
-        let db = rows.first { $0.name == "db-01" }
-        try await expect(db?.level == .down)
-        try await expect(db?.services.first?.level == .down)
+        try await expect(Home.make(empty, now: now).machines.isEmpty)
     }
 
     func serviceScreen() async throws {
@@ -102,14 +80,6 @@ struct SnapshotTests {
         try await expect(Screens.service(s, id: "0ae2b839-1e1a-4c8a-8170-524922bd9207", now: now)?.job.isEmpty == false)
     }
 
-    func chartDrawsFromValues() async throws {
-        let json = #"{"machines":[{"id":"m","name":"m","services":[{"id":"s","name":"S","state":"ok"}]}],"services":[{"id":"s","name":"S","state":"ok","chart":{"metric":"latency","values":[1,null,3]}}]}"#
-        let snap = try Snapshot.decode(Data(json.utf8))
-        try await expect(Screens.everything(snap)[0].services[0].chart == [1, nil, 3])
-        try await expect(Screens.service(snap, id: "s", now: Fixtures.now)?.chart == [1, nil, 3])
-        try await expect(snap.services?.first?.chart?.metric == "latency")
-    }
-
     func realChartsDecode() async throws {
         let rawServices = Fixtures.raw["services"] as! [[String: Any]]
         for (a, b) in zip(Fixtures.snapshot.services ?? [], rawServices) {
@@ -119,10 +89,11 @@ struct SnapshotTests {
         try await expect(Fixtures.snapshot.server?.leftOut != nil || Fixtures.raw["server"] != nil)
     }
 
-    func vitalsAreShown() async throws {
-        let json = #"{"machines":[{"id":"m","name":"m","vitals":{"cpu.percent":12.4,"memory.used_percent":93,"disk.used_percent.C:":50}}]}"#
-        let rows = Screens.everything(try Snapshot.decode(Data(json.utf8)))
-        try await expect(rows[0].vitals == [Vital(label: "Processor", percent: 12, isHot: false), Vital(label: "Memory", percent: 93, isHot: true), Vital(label: "Disk C:", percent: 50, isHot: false)])
+    func chartDrawsFromValues() async throws {
+        let json = #"{"services":[{"id":"s","name":"S","state":"ok","chart":{"metric":"latency","values":[1,null,3]}}]}"#
+        let snap = try Snapshot.decode(Data(json.utf8))
+        try await expect(Screens.service(snap, id: "s", now: Fixtures.now)?.chart == [1, nil, 3])
+        try await expect(snap.services?.first?.chart?.metric == "latency")
     }
 
     func ageTextAndWarning() async throws {

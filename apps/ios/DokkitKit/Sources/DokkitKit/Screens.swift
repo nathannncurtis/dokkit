@@ -19,7 +19,7 @@ public enum Level: Equatable, Hashable, Sendable {
         case .ok: "OK"
         case .degraded: "Degraded"
         case .down: "Down"
-        case .unknown: "Unknown"
+        case .unknown: "No signal yet"
         case .unwatched: "Not watched"
         case .other(let s): s.prefix(1).uppercased() + s.dropFirst()
         }
@@ -104,54 +104,6 @@ public struct IssueRow: Identifiable, Equatable, Sendable {
     public var flags: [String]
 }
 
-public struct NotWatchedRow: Identifiable, Equatable, Sendable {
-    public var id: String
-    public var name: String
-    public var machine: String
-    public var kind: String
-    public var saw: String?
-}
-
-public struct NeedsYouScreen: Equatable, Sendable {
-    public struct Section: Identifiable, Equatable, Sendable {
-        public var title: String
-        public var rows: [IssueRow]
-        public var id: String { title }
-    }
-    public var sections: [Section]
-    public var notWatched: [NotWatchedRow]
-    public var fine: String?
-    public var nothingNeedsYou: Bool
-}
-
-public struct Vital: Equatable, Sendable {
-    public var label: String
-    public var percent: Int
-    public var isHot: Bool
-}
-
-public struct ServiceRow: Identifiable, Equatable, Sendable {
-    public var id: String
-    public var name: String
-    public var level: Level
-    public var kind: String
-    public var version: String?
-    public var environment: String?
-    public var note: String?
-    public var chart: [Double?]
-}
-
-public struct MachineRow: Identifiable, Equatable, Sendable {
-    public var id: String
-    public var name: String
-    public var os: String?
-    public var level: Level
-    public var notice: String?
-    public var vitals: [Vital]
-    public var nextWindow: String?
-    public var services: [ServiceRow]
-}
-
 public struct CheckRow: Equatable, Sendable {
     public var name: String
     public var kind: String?
@@ -191,63 +143,6 @@ public struct ServiceScreen: Equatable, Sendable {
 }
 
 public enum Screens {
-    public static func needsYou(_ s: Snapshot, now: Date) -> NeedsYouScreen {
-        let names = serviceNames(s)
-        let box = s.inbox
-        func rows(_ l: [Issue]?) -> [IssueRow] { (l ?? []).map { issueRow($0, names: names, now: now) } }
-        var sections: [NeedsYouScreen.Section] = []
-        let groups: [(String, [IssueRow])] = [("Needs you", rows(box?.needsYou)), ("Soon", rows(box?.soon)), ("Snoozed", rows(box?.snoozed))]
-        for (title, list) in groups where !list.isEmpty { sections.append(NeedsYouScreen.Section(title: title, rows: list)) }
-        let notWatched = (box?.notWatched ?? []).map {
-            NotWatchedRow(
-                id: $0.id ?? UUID().uuidString, name: $0.detail?.label ?? $0.name ?? "Unnamed",
-                machine: $0.machine ?? "", kind: $0.kind ?? "", saw: $0.detail?.saw)
-        }
-        var fine: String?
-        if let f = box?.fine, f.services != nil || f.machines != nil {
-            var parts: [String] = []
-            if let n = f.services { parts.append("\(n) service\(n == 1 ? "" : "s")") }
-            if let n = f.machines { parts.append("\(n) machine\(n == 1 ? "" : "s")") }
-            fine = parts.joined(separator: " and ") + " fine"
-        }
-        return NeedsYouScreen(
-            sections: sections, notWatched: notWatched, fine: fine,
-            nothingNeedsYou: (box?.needsYou ?? []).isEmpty)
-    }
-
-    public static func everything(_ s: Snapshot) -> [MachineRow] {
-        let top = Dictionary((s.services ?? []).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        return (s.machines ?? []).map { m in
-            let services = (m.services ?? []).map { svc -> ServiceRow in
-                let full = top[svc.id] ?? svc
-                return ServiceRow(
-                    id: svc.id, name: svc.name ?? "Unnamed", level: Level(svc.state ?? full.state), kind: svc.kind ?? full.kind ?? "service",
-                    version: svc.version ?? full.version, environment: envTag(svc.environment ?? full.environment),
-                    note: svc.note ?? full.note, chart: full.chart?.values ?? [])
-            }.sorted(by: worse)
-            let worst = services.map(\.level).max { $0.rank < $1.rank } ?? .ok
-            var notice: String?
-            if m.down == true {
-                notice = "Stopped reporting" + (m.lastSeenAt.map { ", last seen \(shortTime($0))" } ?? "")
-            } else if let w = m.plannedDowntime {
-                notice = "Planned downtime" + (w.until.map { " until \(shortTime($0))" } ?? "")
-            }
-            let next = (m.schedules ?? []).compactMap { sc in (sc.next ?? sc.at).map { ($0, sc) } }.min { $0.0 < $1.0 }
-            var nextText: String?
-            if let next {
-                nextText = "Next planned downtime " + shortTime(next.0)
-                if let reason = next.1.reason { nextText = (nextText ?? "") + ", " + reason }
-            }
-            return MachineRow(
-                id: m.id, name: m.name ?? "Unnamed", os: m.os, level: m.down == true ? .down : worst, notice: notice,
-                vitals: vitals(m.vitals ?? [:]),
-                nextWindow: nextText,
-                services: services)
-        }.sorted {
-            $0.level.rank != $1.level.rank ? $0.level.rank > $1.level.rank : $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-        }
-    }
-
     public static func service(_ s: Snapshot, id: String, now: Date) -> ServiceScreen? {
         let top: Service? = (s.services ?? []).first { $0.id == id }
         let nested: Service? = (s.machines ?? []).flatMap { $0.services ?? [] }.first { $0.id == id }
@@ -271,7 +166,7 @@ public enum Screens {
             })
     }
 
-    private static func serviceNames(_ s: Snapshot) -> [String: String] {
+    static func serviceNames(_ s: Snapshot) -> [String: String] {
         var out: [String: String] = [:]
         for m in s.machines ?? [] { for svc in m.services ?? [] { out[svc.id] = svc.name } }
         for svc in s.services ?? [] { out[svc.id] = svc.name }
@@ -317,22 +212,5 @@ public enum Screens {
         if let g = j.lastGoodRun { out.append(["Last good run", shortTime(g)]) }
         if let n = j.nextExpected { out.append(["Next expected", shortTime(n)]) }
         return out
-    }
-
-    private static func vitals(_ v: [String: Double]) -> [Vital] {
-        func make(_ label: String, _ x: Double) -> Vital { Vital(label: label, percent: Int(x.rounded()), isHot: x >= 90) }
-        var out: [Vital] = []
-        if let x = v["cpu.percent"] { out.append(make("Processor", x)) }
-        if let x = v["memory.used_percent"] { out.append(make("Memory", x)) }
-        for (k, x) in v.sorted(by: { $0.key < $1.key }) where k.hasPrefix("disk.used_percent.") {
-            out.append(make("Disk " + k.dropFirst("disk.used_percent.".count), x))
-        }
-        return out
-    }
-
-    private static func envTag(_ e: String?) -> String? { e == nil || e == "production" ? nil : e }
-
-    private static func worse(_ a: ServiceRow, _ b: ServiceRow) -> Bool {
-        a.level.rank != b.level.rank ? a.level.rank > b.level.rank : a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
     }
 }
