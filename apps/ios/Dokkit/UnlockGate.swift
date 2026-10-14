@@ -1,3 +1,4 @@
+import DokkitUI
 import LocalAuthentication
 import SwiftUI
 
@@ -6,18 +7,19 @@ struct UnlockGate<Content: View>: View {
     @Environment(\.scenePhase) private var phase
     @State private var unlocked = false
     @State private var busy = false
+    @State private var asked = false
     @State private var message: String?
 
     var body: some View {
         ZStack {
             if unlocked { content() }
-            if !unlocked || phase != .active { cover }
+            if !unlocked { cover } else if phase != .active { Look.background.ignoresSafeArea() }
         }
         .onChange(of: phase) { _, new in
-            if new == .background { unlocked = false }
-            if new == .active, !unlocked { Task { await unlock() } }
+            if new == .background { unlocked = false; asked = false }
+            if new == .active { Task { await askOnce() } }
         }
-        .task { await unlock() }
+        .task { await askOnce() }
     }
 
     private var cover: some View {
@@ -26,11 +28,19 @@ struct UnlockGate<Content: View>: View {
             Text("Dokkit is locked").font(.headline)
             if let message { Text(message).font(.subheadline).multilineTextAlignment(.center) }
             Button("Unlock") { Task { await unlock() } }
-                .buttonStyle(.borderedProminent).frame(minHeight: 44)
+                .buttonStyle(.borderedProminent).tint(Look.brand).frame(minHeight: 44)
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground))
+        .foregroundStyle(Look.ink)
+        .background(Look.background)
+    }
+
+    // The Face ID sheet makes the app inactive and active again, so asking on every activation would ask again after Cancel.
+    private func askOnce() async {
+        guard !asked else { return }
+        asked = true
+        await unlock()
     }
 
     private func unlock() async {

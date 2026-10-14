@@ -144,10 +144,19 @@ Two native apps, one in Swift for iOS and one in Kotlin for Android, with the sa
 
 | Screen | Shows |
 |---|---|
-| **Needs you** | The inbox, in the web interface's order, with the age of the snapshot at the top. |
-| **Everything** | Machines, each opening to its services, with state and the small chart. |
+| **First run** | Shown while no server is paired: what the app is (a read-only view; alerts still come the usual way), where the code is (Settings, Phones, Add a phone in the web interface), and Scan the code. |
+| **Home** | One screen. At the top, one box: what needs attention, each issue as a line that opens its service, or "Everything is fine" with how many machines are up and how many things are running. Under it the machines, hardware first, each a card: its name, Up or Down with when it last reported, three small meters for processor, memory and its fullest disk, and one line counting what runs on it. Then the groups that are not a machine (apps, and the server's own row), each a card with the count line only. |
+| **A machine, opened** | Its card opens in place to what is watched on it: trouble first, then up to eight that are fine and "and N more that are fine", which opens the rest; things with no signal yet are one line naming the first three. Each service line opens the service. |
 | **A service** | Its checks, version, open issue with its history, its day chart, and its last log lines while it has an open issue. |
 | **Servers** | The paired servers, and Add a server, which opens the camera for a QR code. |
+
+How Home reads:
+
+- Everything is collapsed when the app opens. The question it answers without a tap is whether anything needs attention and whether the hardware is up.
+- A machine that is down, or has something in trouble, sorts first. A meter past 85 percent is drawn in the warning colour, with its number.
+- Nothing unwatched is shown anywhere in the app: deciding what to watch is done in the web interface. Snoozed issues are not in the top box; a line under it says how many are snoozed.
+- A thing that is watched and has not reported yet is said as "no signal yet", never as a state word of its own among the fine ones.
+- Other environments than production are left off Home.
 
 Rules for both:
 
@@ -156,7 +165,9 @@ Rules for both:
 - The age of the snapshot is always on screen. Past five minutes it is shown as a warning, since the server, its network or the relay is not delivering.
 - Several servers can be paired, each with its own relay.
 - The last snapshot of each server is kept on the phone, encrypted by the system, and removed when the server is removed from the app.
-- Opening the app asks for the phone's own unlock (Face ID, fingerprint or passcode).
+- Opening the app, and returning to it from the background, asks for the phone's own unlock (Face ID, fingerprint or passcode). While the app is not in front its screen is covered.
+- Portrait only.
+- Colours are the web interface's defaults: its light theme with the teal accent, and the Ember dark base with the orange accent. The icon is the web interface's own.
 - No account, no analytics, no crash reporting to a third party, no network request to anything but the paired relays.
 - Light and dark, following the phone, in the product's own colours.
 
