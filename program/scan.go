@@ -67,6 +67,11 @@ func look(skip map[string]bool, folders []string) ([]byte, map[string]int) {
 	if !skip["jobs"] {
 		jobs, notes := findJobs()
 		all["jobs"], doc["notes"] = withoutOwn(jobs), notes
+		if portsNote != "" && !skip["ports"] {
+			doc["notes"] = append([]string{portsNote}, notes...)
+		}
+	} else if portsNote != "" && !skip["ports"] {
+		doc["notes"] = []string{portsNote}
 	}
 	counts := map[string]int{}
 	for name, list := range all {
@@ -225,6 +230,10 @@ func findPorts() (all []found) {
 			one["address"] = address
 		}
 		all = append(all, one)
+	}
+	if runtime.GOOS == "darwin" {
+		lsofPorts(lsofOutput(), add)
+		return
 	}
 	if runtime.GOOS != "windows" {
 		units := map[string][2]string{}
