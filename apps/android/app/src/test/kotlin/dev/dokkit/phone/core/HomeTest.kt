@@ -21,8 +21,11 @@ class HomeTest {
     @Test
     fun fixtureHasIssuesInTheTopBoxAndSnoozedLine() {
         val h = Home.build(Fixtures.snapshot, now)
-        val top = h.top as TopBox.Trouble
+        val top = h.top as TopBox.Attention
+        val box = Fixtures.snapshot.inbox
         assertEquals("3 need you", top.title)
+        assertTrue(top.urgent)
+        assertEquals((box?.needsYou?.size ?: 0) + (box?.soon?.size ?: 0), top.issues.size)
         assertTrue(top.issues.all { it.title.isNotEmpty() && it.detail.isNotEmpty() && it.serviceId != null })
         assertEquals(Fixtures.snapshot.inbox?.snoozed?.size?.let { "$it snoozed" }, h.snoozed)
         assertEquals(6, h.hardware.size + h.groups.size)
@@ -37,7 +40,7 @@ class HomeTest {
                 machine("g", "apps", "group", listOf(svc("4", "w", "unknown"))),
             ),
         )
-        assertEquals(TopBox.Fine("1 of 2 machines up · 3 things running"), h.top)
+        assertEquals(TopBox.Fine("Everything is fine", "1 of 2 machines up · 3 things running"), h.top)
         assertNull(h.snoozed)
     }
 
@@ -45,9 +48,13 @@ class HomeTest {
     fun metersUseTheFullestDiskAndWarnAbove85() {
         val vitals = ""","vitals":{"cpu.percent":90,"memory.used_percent":85,"disk.used_percent.C:":40,"disk.used_percent.D:":86.4},"last_seen_at":"2026-10-13T23:58:00Z""""
         val card = build(listOf(machine("a", "a", "enrolled", emptyList(), vitals))).hardware.single()
-        assertEquals(listOf(MeterRow("CPU", 90, true), MeterRow("Memory", 85, false), MeterRow("Disk", 86, true)), card.meters)
+        assertEquals(
+            listOf(Triple("CPU", 90, true), Triple("Memory", 85, false), Triple("Disk D:", 86, true)),
+            card.meters.map { Triple(it.label + (it.subject?.let { s -> " $s" } ?: ""), it.percent, it.isHot) },
+        )
         assertEquals("Up · 2 min ago", card.status)
         assertTrue(card.spoken.contains("CPU 90 percent, high"))
+        assertTrue(card.spoken.contains("Disk D: 86 percent, high"))
         assertTrue(card.spoken.endsWith("nothing watched."))
     }
 
@@ -81,10 +88,9 @@ class HomeTest {
     fun eightFineThenTheRestAndTroubleFirst() {
         val services = (1..11).map { svc("o$it", "ok%02d".format(it), "ok") } + svc("t", "broken", "down") + svc("d", "slow", "degraded")
         val card = build(listOf(machine("a", "a", "enrolled", services))).hardware.single()
-        assertEquals(listOf("Down", "Degraded"), card.kids.trouble.map { it.word })
-        assertEquals(8, card.kids.fine.size)
-        assertEquals("and 3 more that are fine", card.kids.moreLine)
-        assertEquals(3, card.kids.more.size)
+        assertEquals(listOf("Down", "Degraded"), card.trouble.map { it.level.word })
+        assertEquals(8, card.fine.size)
+        assertEquals(3, card.moreFine.size)
         assertEquals("11 fine · 2 in trouble", card.counts)
         assertTrue(card.inTrouble)
     }
@@ -102,14 +108,39 @@ class HomeTest {
         )
         val card = build(listOf(machine("a", "a", "enrolled", services))).hardware.single()
         assertEquals("1 fine · 4 no signal", card.counts)
-        assertEquals("4 with no signal yet: a, b, c…", card.kids.quietLine)
-        assertFalse(card.kids.fine.any { it.name == "hidden" || it.name == "staging thing" })
+        assertEquals("4 with no signal yet: a, b, c…", card.quietLine)
+        assertFalse(card.fine.any { it.name == "hidden" || it.name == "staging thing" })
     }
 
     @Test
     fun plannedDowntimeIsOneLine() {
         val card = build(listOf(machine("a", "a", "enrolled", emptyList(), ""","planned_downtime":{"until":"2026-10-14T05:00:00Z"}"""))).hardware.single()
-        assertTrue(card.kids.plannedLine!!.startsWith("Planned downtime until "))
-        assertFalse(card.kids.isEmpty)
+        assertTrue(card.notice!!.startsWith("Planned downtime until "))
+        assertTrue(card.spoken.contains("Planned downtime until "))
+    }
+
+    @Test
+    fun soonOnlyIsWarningAndLinesFollowIos() {
+        val inbox = """{"soon":[{"id":"i","title":"Disk filling","service":"s1","machine":"m1","since":"2026-10-13T20:00:00Z","alert":{"status":"held"}}]}"""
+        val machines = """[{"id":"m","name":"m1","kind":"enrolled","services":[{"id":"s1","name":"Portal","state":"ok"}]}]"""
+        val h = Home.build(Snapshot.decode("""{"inbox":$inbox,"machines":$machines}""".toByteArray()), now)
+        val top = h.top as TopBox.Attention
+        assertEquals("1 coming up soon", top.title)
+        assertFalse(top.urgent)
+        assertEquals("Portal · m1 · open 4 h · alert held for the night", top.issues.single().detail)
+    }
+
+    @Test
+    fun downSaysLastReportedAndScheduledWindowShowsOnTheClosedCard() {
+        val extra = ""","down":true,"last_seen_at":"2026-10-13T21:00:00Z","schedules":[{"next":"2026-10-20T05:00:00Z"}]"""
+        val card = build(listOf(machine("a", "a", "enrolled", emptyList(), extra))).hardware.single()
+        assertEquals("Down · last reported 3 h ago", card.status)
+        assertTrue(card.notice!!.startsWith("Planned downtime scheduled, next "))
+    }
+
+    @Test
+    fun noHardwareSaysOnlyThingsRunning() {
+        val h = build(listOf(machine("g", "apps", "group", listOf(svc("1", "x", "ok")))))
+        assertEquals(TopBox.Fine("Everything is fine", "1 thing running"), h.top)
     }
 }

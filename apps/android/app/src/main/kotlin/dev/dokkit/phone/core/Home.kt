@@ -8,24 +8,15 @@ import kotlinx.serialization.json.doubleOrNull
 data class TopIssue(val id: String, val title: String, val detail: String, val serviceId: String?)
 
 sealed interface TopBox {
-    data class Trouble(val title: String, val issues: List<TopIssue>) : TopBox
-    data class Fine(val summary: String) : TopBox
+    data class Attention(val title: String, val issues: List<TopIssue>, val urgent: Boolean) : TopBox
+    data class Fine(val headline: String, val detail: String) : TopBox
 }
 
-data class MeterRow(val label: String, val percent: Int?, val hot: Boolean)
-
-data class KidRow(val id: String, val name: String, val level: Level, val word: String)
-
-data class Kids(
-    val trouble: List<KidRow>,
-    val fine: List<KidRow>,
-    val more: List<KidRow>,
-    val quietLine: String?,
-    val plannedLine: String?,
-) {
-    val moreLine: String? get() = if (more.isEmpty()) null else "and ${more.size} more that are fine"
-    val isEmpty: Boolean get() = trouble.isEmpty() && fine.isEmpty() && more.isEmpty() && quietLine == null && plannedLine == null
+data class MeterRow(val label: String, val subject: String?, val percent: Int, val isHot: Boolean, val fraction: Float) {
+    val spoken: String get() = (subject?.let { "$label $it" } ?: label) + " $percent percent" + if (isHot) ", high" else ""
 }
+
+data class KidRow(val id: String, val name: String, val level: Level)
 
 data class MachineCard(
     val id: String,
@@ -33,12 +24,20 @@ data class MachineCard(
     val hardware: Boolean,
     val down: Boolean,
     val inTrouble: Boolean,
+    val mark: Level,
+    val word: String?,
     val status: String?,
     val meters: List<MeterRow>,
     val counts: String,
-    val kids: Kids,
+    val notice: String?,
+    val trouble: List<KidRow>,
+    val fine: List<KidRow>,
+    val moreFine: List<KidRow>,
+    val quietLine: String?,
     val spoken: String,
-)
+) {
+    val isEmpty: Boolean get() = trouble.isEmpty() && fine.isEmpty() && moreFine.isEmpty() && quietLine == null
+}
 
 data class HomeScreen(val top: TopBox, val snoozed: String?, val hardware: List<MachineCard>, val groups: List<MachineCard>)
 
@@ -47,86 +46,111 @@ object Home {
     const val FINE_SHOWN = 8
 
     fun build(s: Snapshot, now: Instant): HomeScreen {
-        val cards = (s.machines ?: emptyList()).map { card(it, s, now) }
+        val cards = (s.machines ?: emptyList()).map { card(it, now) }
         val order = compareBy<MachineCard>({ !it.down }, { !it.inTrouble }).thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
-        val hardware = cards.filter { it.hardware }.sortedWith(order)
-        val groups = cards.filter { !it.hardware }.sortedWith(order)
-        val snoozed = s.inbox?.snoozed?.size?.takeIf { it > 0 }?.let { "$it snoozed" }
-        return HomeScreen(topBox(s, cards, hardware, now), snoozed, hardware, groups)
+        val snoozed = s.inbox?.snoozed?.size ?: 0
+        return HomeScreen(
+            topBox(s, now),
+            if (snoozed > 0) "$snoozed snoozed" else null,
+            cards.filter { it.hardware }.sortedWith(order),
+            cards.filter { !it.hardware }.sortedWith(order),
+        )
     }
 
-    private fun topBox(s: Snapshot, cards: List<MachineCard>, hardware: List<MachineCard>, now: Instant): TopBox {
+    private fun isProduction(environment: String?) = environment == null || environment == "production"
+
+    private fun topBox(s: Snapshot, now: Instant): TopBox {
         val names = Screens.serviceNames(s)
-        val rows = (s.inbox?.needsYou ?: emptyList()).map { Screens.issueRow(it, names, now) }
-        if (rows.isNotEmpty()) {
-            val issues = rows.map {
-                TopIssue(it.id, it.title, listOfNotNull(it.serviceName, it.machine.ifEmpty { null }, it.since).joinToString(" · "), it.serviceId)
-            }
-            return TopBox.Trouble("${issues.size} need you", issues)
+        val needs = s.inbox?.needsYou ?: emptyList()
+        val soon = s.inbox?.soon ?: emptyList()
+        if (needs.isNotEmpty() || soon.isNotEmpty()) {
+            val title = if (needs.isEmpty()) "${soon.size} coming up soon" else "${needs.size} need you"
+            return TopBox.Attention(title, (needs + soon).map { line(it, names, now) }, needs.isNotEmpty())
         }
-        val running = cards.sumOf { c -> c.kids.fine.size + c.kids.more.size }
-        return TopBox.Fine("${hardware.count { !it.down }} of ${hardware.size} machines up · $running things running")
+        val machines = s.machines ?: emptyList()
+        val hardware = machines.filter { it.kind == "enrolled" }
+        val running = machines.sumOf { m -> (m.services ?: emptyList()).count { isProduction(it.environment) && Level.of(it.state) == Level.Ok } }
+        val things = "$running thing${if (running == 1) "" else "s"} running"
+        val detail = if (hardware.isEmpty()) things else "${hardware.count { it.down != true }} of ${hardware.size} machines up · $things"
+        return TopBox.Fine("Everything is fine", detail)
     }
 
-    private fun card(m: Machine, s: Snapshot, now: Instant): MachineCard {
-        val top = (s.services ?: emptyList()).associateBy { it.id }
-        val watched = (m.services ?: emptyList()).mapNotNull { svc ->
-            val full = top[svc.id] ?: svc
-            val level = Level.of(svc.state ?: full.state)
-            val env = svc.environment ?: full.environment
-            if (level == Level.Unwatched || (env != null && env != "production")) null
-            else KidRow(svc.id, svc.name ?: full.name ?: "Unnamed", level, "")
-        }
-        val byName = compareBy<KidRow, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
-        val trouble = watched.filter { it.level == Level.Down || it.level == Level.Degraded }
-            .sortedWith(compareBy<KidRow> { it.level != Level.Down }.then(byName)).map { it.copy(word = it.level.word) }
-        val fine = watched.filter { it.level == Level.Ok }.sortedWith(byName)
-        val quiet = watched.filter { it.level != Level.Ok && it.level != Level.Down && it.level != Level.Degraded }.sortedWith(byName)
-
-        val counts = listOfNotNull(
-            fine.size.takeIf { it > 0 }?.let { "$it fine" },
-            trouble.size.takeIf { it > 0 }?.let { "$it in trouble" },
-            quiet.size.takeIf { it > 0 }?.let { "$it no signal" },
-        ).joinToString(" · ").ifEmpty { "nothing watched" }
-
-        val quietLine = quiet.takeIf { it.isNotEmpty() }?.let {
-            "${it.size} with no signal yet: " + it.take(3).joinToString(", ") { r -> r.name } + if (it.size > 3) "…" else ""
-        }
-        val kids = Kids(trouble, fine.take(FINE_SHOWN).map { it.copy(word = "OK") }, fine.drop(FINE_SHOWN).map { it.copy(word = "OK") }, quietLine, planned(m))
-
-        val hardware = m.kind == "enrolled"
-        val down = hardware && m.down == true
-        val seen = parseDate(m.lastSeenAt)?.let { Age.ago(it, now) }
-        val status = if (!hardware) null else (if (down) "Down" else "Up") + (seen?.let { " · $it" } ?: "")
-        val meters = if (hardware) meters(m.vitals ?: emptyMap()) else emptyList()
-        val spoken = buildString {
-            append(m.name ?: "Unnamed").append(". ")
-            status?.let { append(it).append(". ") }
-            if (meters.isNotEmpty()) {
-                append(meters.joinToString(", ") { r ->
-                    r.label + " " + (r.percent?.let { p -> "$p percent" + if (r.hot) ", high" else "" } ?: "no reading")
-                }).append(". ")
-            }
-            append(counts).append('.')
-        }
-        return MachineCard(m.id, m.name ?: "Unnamed", hardware, down, trouble.isNotEmpty(), status, meters, counts, kids, spoken)
-    }
-
-    private fun planned(m: Machine): String? {
-        if (m.plannedDowntime != null) return "Planned downtime" + (parseDate(m.plannedDowntime.until)?.let { " until ${shortTime(it)}" } ?: "")
-        val next = (m.schedules ?: emptyList())
-            .mapNotNull { sc -> (parseDate(sc.next) ?: parseDate(sc.at))?.let { it to sc } }
-            .minByOrNull { it.first } ?: return null
-        return "Next planned downtime " + shortTime(next.first) + (next.second.reason?.let { ", $it" } ?: "")
+    private fun line(i: Issue, names: Map<String, String?>, now: Instant): TopIssue {
+        val parts = mutableListOf<String>()
+        i.service?.let { names[it] }?.let { parts += it }
+        i.machine?.takeIf { it.isNotEmpty() }?.let { parts += it }
+        parseDate(i.since)?.let { parts += "open " + Age.ago(it, now).replace(" ago", "") }
+        if (i.snoozedUntil == null && i.alert?.status == "held") parts += "alert held for the night"
+        return TopIssue(i.id, i.title ?: "Untitled", parts.joinToString(" · "), i.service)
     }
 
     private fun meters(v: Map<String, JsonElement>): List<MeterRow> {
         val num = v.mapNotNull { (k, e) -> (e as? JsonPrimitive)?.doubleOrNull?.let { k to it } }.toMap()
-        val cpu = num["cpu.percent"]
-        val mem = num["memory.used_percent"]
-        val disk = num.filterKeys { it.startsWith("disk.used_percent.") }.values.maxOrNull()
-        if (cpu == null && mem == null && disk == null) return emptyList()
-        fun row(label: String, x: Double?) = MeterRow(label, x?.let { Math.round(it).toInt() }, x != null && x > HOT_ABOVE)
-        return listOf(row("CPU", cpu), row("Memory", mem), row("Disk", disk))
+        val out = mutableListOf<MeterRow>()
+        num["cpu.percent"]?.let { out += meter("CPU", it, null) }
+        num["memory.used_percent"]?.let { out += meter("Memory", it, null) }
+        val prefix = "disk.used_percent."
+        num.filterKeys { it.startsWith(prefix) }.entries
+            .minWithOrNull(compareByDescending<Map.Entry<String, Double>> { it.value }.thenBy { it.key })
+            ?.let { out += meter("Disk", it.value, it.key.removePrefix(prefix)) }
+        return out
+    }
+
+    private fun meter(label: String, value: Double, subject: String?) =
+        MeterRow(label, subject, Math.round(value).toInt(), value > HOT_ABOVE, (value.coerceIn(0.0, 100.0) / 100).toFloat())
+
+    private fun countLine(fine: Int, trouble: Int, quiet: Int): String = listOfNotNull(
+        if (fine > 0) "$fine fine" else null,
+        if (trouble > 0) "$trouble in trouble" else null,
+        if (quiet > 0) "$quiet no signal" else null,
+    ).joinToString(" · ").ifEmpty { "nothing watched" }
+
+    private fun card(m: Machine, now: Instant): MachineCard {
+        val trouble = mutableListOf<KidRow>()
+        val fine = mutableListOf<KidRow>()
+        val quiet = mutableListOf<KidRow>()
+        for (svc in m.services ?: emptyList()) {
+            if (!isProduction(svc.environment)) continue
+            val level = Level.of(svc.state)
+            val item = KidRow(svc.id, svc.name ?: "Unnamed", level)
+            when (level) {
+                Level.Ok -> fine += item
+                Level.Unknown -> quiet += item
+                Level.Unwatched -> Unit
+                else -> trouble += item
+            }
+        }
+        val byName = compareBy<KidRow, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
+        trouble.sortWith(compareByDescending<KidRow> { it.level.rank }.then(byName))
+        fine.sortWith(byName)
+        quiet.sortWith(byName)
+
+        val hardware = m.kind == "enrolled"
+        val down = hardware && m.down == true
+        val hasTrouble = trouble.isNotEmpty()
+        val word = if (!hardware) null else if (down) "Down" else "Up"
+        val status = word?.let { w ->
+            val seen = parseDate(m.lastSeenAt)?.let { Age.ago(it, now) }
+            w + (seen?.let { if (down) " · last reported $it" else " · $it" } ?: "")
+        }
+        val meterList = meters(m.vitals ?: emptyMap())
+        val counts = countLine(fine.size, trouble.size, quiet.size)
+        val quietLine = quiet.takeIf { it.isNotEmpty() }?.let {
+            "${it.size} with no signal yet: " + it.take(3).joinToString(", ") { r -> r.name } + if (it.size > 3) "…" else ""
+        }
+        val notice = notice(m)
+        val spoken = (listOfNotNull(m.name ?: "Unnamed", status) + meterList.map { it.spoken } + counts + listOfNotNull(notice))
+            .joinToString(". ")
+        return MachineCard(
+            m.id, m.name ?: "Unnamed", hardware, down, hasTrouble,
+            if (down) Level.Down else if (hasTrouble) Level.Degraded else Level.Ok,
+            word, status, meterList, counts, notice, trouble, fine.take(FINE_SHOWN), fine.drop(FINE_SHOWN), quietLine, spoken,
+        )
+    }
+
+    private fun notice(m: Machine): String? {
+        m.plannedDowntime?.let { w -> return "Planned downtime" + (parseDate(w.until)?.let { " until ${shortTime(it)}" } ?: "") }
+        val next = (m.schedules ?: emptyList()).mapNotNull { parseDate(it.next) ?: parseDate(it.at) }.minOrNull() ?: return null
+        return "Planned downtime scheduled, next ${shortTime(next)}"
     }
 }

@@ -108,10 +108,11 @@ fun HomeTab(vm: AppViewModel, now: Instant, onOpen: (String) -> Unit) {
 private fun TopBoxView(top: TopBox, onOpen: (String) -> Unit) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(16.dp)
+    val tint = if ((top as? TopBox.Attention)?.urgent == false) p.warn else p.bad
     when (top) {
-        is TopBox.Trouble -> Column(
-            Modifier.fillMaxWidth().clip(shape).background(p.bad.copy(alpha = 0.16f).compositeOver(p.panel))
-                .border(1.dp, p.bad.copy(alpha = 0.45f), shape),
+        is TopBox.Attention -> Column(
+            Modifier.fillMaxWidth().clip(shape).background(tint.copy(alpha = 0.16f).compositeOver(p.panel))
+                .border(1.dp, tint.copy(alpha = 0.45f), shape),
         ) {
             Text(
                 top.title,
@@ -135,8 +136,8 @@ private fun TopBoxView(top: TopBox, onOpen: (String) -> Unit) {
         ) {
             Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = p.ok, modifier = Modifier.size(28.dp))
             Column {
-                Text("Everything is fine", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
-                Text(top.summary, style = MaterialTheme.typography.bodySmall, color = p.mute)
+                Text(top.headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
+                Text(top.detail, style = MaterialTheme.typography.bodySmall, color = p.mute)
             }
         }
     }
@@ -166,9 +167,10 @@ private fun MachineCardView(vm: AppViewModel, card: MachineCard, onOpen: (String
                 Text(card.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 Icon(if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = p.mute)
             }
-            card.status?.let { StateMark(if (card.down) Level.Down else if (card.inTrouble) Level.Degraded else Level.Ok, it) }
+            card.status?.let { StateMark(card.mark, it) }
             if (card.meters.isNotEmpty()) Meters(card.meters)
             Text(card.counts, style = MaterialTheme.typography.bodySmall, color = p.mute)
+            card.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.mute) }
         }
         if (open) {
             RowDivider()
@@ -189,14 +191,14 @@ private fun Meters(meters: List<MeterRow>) {
 @Composable
 private fun Meter(m: MeterRow, modifier: Modifier) {
     val p = LocalPalette.current
-    val color = if (m.hot) p.warn else p.mute
+    val color = if (m.isHot) p.warn else p.mute
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(m.label, style = MaterialTheme.typography.labelMedium, color = p.mute)
-            Text(m.percent?.let { "$it%" } ?: "–", style = MaterialTheme.typography.labelMedium, color = color, fontWeight = if (m.hot) FontWeight.SemiBold else FontWeight.Normal)
+            Text(m.subject?.let { "${m.label} $it" } ?: m.label, style = MaterialTheme.typography.labelMedium, color = p.mute)
+            Text("${m.percent}%", style = MaterialTheme.typography.labelMedium, color = color, fontWeight = if (m.isHot) FontWeight.SemiBold else FontWeight.Normal)
         }
         Box(Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(p.chip)) {
-            Box(Modifier.fillMaxHeight().fillMaxWidth(((m.percent ?: 0) / 100f).coerceIn(0f, 1f)).clip(RoundedCornerShape(3.dp)).background(color))
+            Box(Modifier.fillMaxHeight().fillMaxWidth(m.fraction).clip(RoundedCornerShape(3.dp)).background(color))
         }
     }
 }
@@ -204,26 +206,21 @@ private fun Meter(m: MeterRow, modifier: Modifier) {
 @Composable
 private fun Kids(vm: AppViewModel, card: MachineCard, onOpen: (String) -> Unit) {
     val p = LocalPalette.current
-    val k = card.kids
     val more = vm.openMore[card.id] ?: false
-    if (k.isEmpty) Line("Nothing is watched on it.")
-    k.trouble.forEach { KidLine(it, onOpen) }
-    k.fine.forEach { KidLine(it, onOpen) }
-    if (more) {
-        k.more.forEach { KidLine(it, onOpen) }
-    } else {
-        k.moreLine?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.bodyMedium,
-                color = p.mute,
-                modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "Show the rest") { vm.openMore[card.id] = true }
-                    .heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 12.dp),
-            )
-        }
+    if (card.isEmpty) Line("Nothing is watched on it.")
+    card.trouble.forEach { KidLine(it, onOpen) }
+    card.fine.forEach { KidLine(it, onOpen) }
+    if (more) card.moreFine.forEach { KidLine(it, onOpen) }
+    if (card.moreFine.isNotEmpty()) {
+        Text(
+            if (more) "Show fewer" else "and ${card.moreFine.size} more that are fine",
+            style = MaterialTheme.typography.bodyMedium,
+            color = p.mute,
+            modifier = Modifier.fillMaxWidth().clickable { vm.openMore[card.id] = !more }
+                .heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 12.dp),
+        )
     }
-    k.quietLine?.let { Line(it) }
-    k.plannedLine?.let { Line(it) }
+    card.quietLine?.let { Line(it) }
 }
 
 @Composable
