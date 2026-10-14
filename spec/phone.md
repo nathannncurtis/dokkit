@@ -114,18 +114,19 @@ JSON, built from the same server code as the web interface, with `schema: 1` and
 | `services` | Each with its machine, kind, state, version, environment, its checks with their last result and note, and the last 24 hourly points of the chart its row shows. |
 | `issues` | Each open issue's history: the last 20 events (opened, alerted, snoozed, noted, closed) with their times and notes. |
 | `jobs` | Each with its schedule, last run, last good run and next expected run. |
+| `logs` | For each service with an open issue, its last 20 log lines, as the Logs page shows them. |
 
-It holds no keys, no people's destinations, no settings and no log lines.
+It holds no keys, no people's destinations and no settings. Log lines travel as they were stored, with whatever customer and job details they carry.
 
 ## The apps
 
-One app for iOS and one for Android, with the same screens:
+Two native apps, one in Swift for iOS and one in Kotlin for Android, with the same screens. Their source is in this repository. The project publishes neither in a store: whoever uses the app builds it and signs it with their own account, as with the `dokkit` program.
 
 | Screen | Shows |
 |---|---|
 | **Needs you** | The inbox, in the web interface's order, with the age of the snapshot at the top. |
 | **Everything** | Machines, each opening to its services, with state and the small chart. |
-| **A service** | Its checks, version, open issue with its history, and its day chart. |
+| **A service** | Its checks, version, open issue with its history, its day chart, and its last log lines while it has an open issue. |
 | **Servers** | The paired servers, and Add a server, which opens the camera for a QR code. |
 
 Rules for both:
@@ -141,7 +142,7 @@ Rules for both:
 
 ## Losing a phone
 
-Remove it under Phones. The next upload, made at once, has no slot for it: its token stops working and no later snapshot is sealed to its key. Snapshots it already downloaded stay readable on that phone, which is why a snapshot holds no secrets.
+Remove it under Phones. The next upload, made at once, has no slot for it: its token stops working and no later snapshot is sealed to its key. Snapshots it already downloaded stay readable on that phone, log lines included, which is why a snapshot holds no keys or settings.
 
 ## Not in this version
 
@@ -149,9 +150,4 @@ Remove it under Phones. The next upload, made at once, has no slot for it: its t
 - Actions of any kind.
 - Notifications from the app.
 - A relay run by the project, and storage buckets as a relay.
-
-## Open
-
-1. How the apps are built: two native apps (Swift and Kotlin) or one codebase for both.
-2. How people get the app: published in the two stores, or built and signed by whoever uses it, as the `dokkit` program is.
-3. Whether a snapshot may carry the last log lines of a service that has an open issue. Log text can hold customer and job details, and a downloaded snapshot stays on a phone that is later removed.
+- Builds in the App Store or Play Store.
