@@ -176,9 +176,25 @@ jobs:
           name: windows-server
           path: out/*
 
+  ios:
+    runs-on: macos-15
+    continue-on-error: true
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the unsigned app
+        working-directory: apps/ios
+        run: ./build-unsigned.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phone-ios
+          path: apps/ios/out/*
+
   release:
     if: always() && github.ref_type == 'tag'
-    needs: [image, program, mac, windows-server]
+    needs: [image, program, mac, windows-server, ios]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -193,8 +209,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
-          # Six programs and the Windows server, each with its checksum.
-          found=$(ls assets 2>/dev/null | wc -l)
+          # Six programs and the Windows server, each with its checksum. The phone apps are added when they built.
+          found=$(ls assets 2>/dev/null | grep -v -e '^dokkit-ios' -e '^dokkit-android' | wc -l)
           if [ "$found" -ne 14 ]; then
             echo "::warning::Not published: $found of 14 files were built."
             ls assets
