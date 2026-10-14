@@ -636,6 +636,45 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
+  def delete_logs(conn, params), do: reply(conn, delete_service_logs(params))
+
+  def delete_service_logs(%{"id" => id} = p) do
+    with %{} = service <- Dokkit.Estate.service(id),
+         {:ok, filter} <- move_filter(p, "bad_delete"),
+         {:ok, range} <- move_range(p),
+         {:ok, text} <- delete_text(p),
+         {:ok, level} <- delete_level(p),
+         opts = filter ++ range ++ text ++ level,
+         true <- opts != [] || {:error, "no_filter", "Give at least one filter."} do
+      dry = p["dry"] in [true, "true"]
+      n = Dokkit.Logs.delete(service.id, [dry: dry] ++ opts)
+
+      if dry do
+        %{would_delete: n}
+      else
+        Logger.info("Deleted #{n} log lines of service #{service.id}: #{inspect(opts)}")
+        %{deleted: n}
+      end
+    else
+      nil -> not_found()
+      {:error, _, _} = error -> error
+    end
+  end
+
+  defp delete_text(%{"q" => q}) when is_binary(q),
+    do: {:ok, if(String.trim(q) == "", do: [], else: [q: String.trim(q)])}
+
+  defp delete_text(p) when not is_map_key(p, "q"), do: {:ok, []}
+  defp delete_text(_), do: {:error, "bad_delete", "q is a text."}
+
+  defp delete_level(%{"level" => level}) do
+    if level in Dokkit.Logs.levels(),
+      do: {:ok, [level: level]},
+      else: {:error, "bad_delete", "level is one of #{Enum.join(Dokkit.Logs.levels(), ", ")}."}
+  end
+
+  defp delete_level(_), do: {:ok, []}
+
   defp target(to, from) do
     with true <- is_binary(to) || {:error, "bad_move", "to is a service id."},
          %{} = service <- Dokkit.Estate.service(to) || not_found(),
@@ -644,18 +683,20 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
-  defp move_filter(%{"field" => field, "values" => values})
+  defp move_filter(p, code \\ "bad_move")
+
+  defp move_filter(%{"field" => field, "values" => values}, code)
        when is_binary(field) and is_list(values) do
     if field =~ ~r/\A[A-Za-z0-9_]+\z/ and length(values) <= 200 and
          Enum.all?(values, &is_binary/1),
        do: {:ok, [field: field, values: values]},
-       else: {:error, "bad_move", "field is letters, digits and _; values are at most 200 texts."}
+       else: {:error, code, "field is letters, digits and _; values are at most 200 texts."}
   end
 
-  defp move_filter(p) when not is_map_key(p, "field") and not is_map_key(p, "values"),
+  defp move_filter(p, _) when not is_map_key(p, "field") and not is_map_key(p, "values"),
     do: {:ok, []}
 
-  defp move_filter(_), do: {:error, "bad_move", "field and values go together."}
+  defp move_filter(_, code), do: {:error, code, "field and values go together."}
 
   defp move_range(p) do
     Enum.reduce_while([{"from", :from}, {"until", :until}], {:ok, []}, fn {key, opt},
@@ -750,14 +791,29 @@ defmodule DokkitWeb.ApiController do
   # changes something.
   def needs(method, path) do
     case {method, Enum.at(path, 2), List.last(path)} do
-      {_, area, _} when area in ["keys", "users", "update-all", "phones"] -> "admin"
-      {"GET", "certificate", "settings"} -> "admin"
-      {_, "logs", "retention"} -> "admin"
-      {"GET", "logs", _} -> "read-logs"
-      {"GET", _, _} -> "read"
-      {_, area, _} when area in ["rules", "alerts", "releases", "certificate"] -> "admin"
-      {"POST", area, area} when area in ["jobs", "apps", "dependencies"] -> "admin"
-      {_, _, last} -> if last in ~w(checks restart update restore move), do: "admin", else: "act"
+      {_, area, _} when area in ["keys", "users", "update-all", "phones"] ->
+        "admin"
+
+      {"GET", "certificate", "settings"} ->
+        "admin"
+
+      {_, "logs", "retention"} ->
+        "admin"
+
+      {"GET", "logs", _} ->
+        "read-logs"
+
+      {"GET", _, _} ->
+        "read"
+
+      {_, area, _} when area in ["rules", "alerts", "releases", "certificate"] ->
+        "admin"
+
+      {"POST", area, area} when area in ["jobs", "apps", "dependencies"] ->
+        "admin"
+
+      {_, _, last} ->
+        if last in ~w(checks restart update restore move delete), do: "admin", else: "act"
     end
   end
 

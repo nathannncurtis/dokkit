@@ -199,5 +199,6 @@ defmodule DokkitWeb.Router do
     get "/logs/archives", ApiController, :archives
     post "/logs/archives/:name/restore", ApiController, :restore_archive
     post "/services/:id/logs/move", ApiController, :move_logs
+    post "/services/:id/logs/delete", ApiController, :delete_logs
   end
 end

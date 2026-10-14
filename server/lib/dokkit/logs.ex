@@ -4,7 +4,7 @@ defmodule Dokkit.Logs do
   alias Dokkit.{Log, Repo}
 
   @levels ~w(trace debug info warn error fatal)
-  @clef (for {names, level} <- [
+  @clef for {names, level} <- [
               {~w(verbose vrb v silly trace trc), "trace"},
               {~w(debug dbg d), "debug"},
               {~w(information info inf i), "info"},
@@ -14,7 +14,7 @@ defmodule Dokkit.Logs do
             ],
             name <- names,
             into: %{},
-            do: {name, level})
+            do: {name, level}
   @max_msg 64 * 1024
 
   def levels, do: @levels
@@ -118,26 +118,7 @@ defmodule Dokkit.Logs do
   `until` (a time range, `until` exclusive), `dry` (count only). Returns the number of lines.
   """
   def move(from, to, opts \\ []) do
-    base =
-      Enum.reduce(opts, from(l in Log, where: l.service_id == ^from), fn
-        {:field, field}, q ->
-          values = opts[:values]
-
-          where(
-            q,
-            [l],
-            fragment("?->>?", l.fields, type(^field, :string)) in type(^values, {:array, :string})
-          )
-
-        {:from, at}, q ->
-          where(q, [l], l.at >= ^at)
-
-        {:until, at}, q ->
-          where(q, [l], l.at < ^at)
-
-        _, q ->
-          q
-      end)
+    base = scoped(from, opts)
 
     if opts[:dry] do
       Repo.aggregate(base, :count, timeout: 120_000)
@@ -146,6 +127,55 @@ defmodule Dokkit.Logs do
       set = if machine, do: [service_id: to, machine_id: machine], else: [service_id: to]
       move_batches(base, set, 0)
     end
+  end
+
+  defp scoped(service, opts) do
+    Enum.reduce(opts, from(l in Log, where: l.service_id == ^service), fn
+      {:field, field}, q ->
+        values = opts[:values]
+
+        where(
+          q,
+          [l],
+          fragment("?->>?", l.fields, type(^field, :string)) in type(^values, {:array, :string})
+        )
+
+      {:from, at}, q ->
+        where(q, [l], l.at >= ^at)
+
+      {:until, at}, q ->
+        where(q, [l], l.at < ^at)
+
+      {:level, level}, q ->
+        where(q, [l], l.level == ^level)
+
+      {:q, text}, q ->
+        where(q, [l], ilike(l.msg, ^"%#{String.replace(text, ["\\", "%", "_"], &("\\" <> &1))}%"))
+
+      _, q ->
+        q
+    end)
+  end
+
+  @doc """
+  Deletes the lines of a service in batches of 20,000. `opts` as for `move/3`, and `q` (the line's
+  message contains the text), `level` (that level exactly), `dry` (count only). Returns the number
+  of lines.
+  """
+  def delete(service, opts \\ []) do
+    base = scoped(service, opts)
+
+    if opts[:dry],
+      do: Repo.aggregate(base, :count, timeout: 120_000),
+      else: delete_batches(base, 0)
+  end
+
+  defp delete_batches(base, total) do
+    ids = from l in base, select: l.id, limit: @move_batch
+
+    {n, _} = Repo.delete_all(from(l in Log, where: l.id in subquery(ids)), timeout: 120_000)
+
+    if n == 0, do: total, else: delete_batches(base, total + n)
   end
 
   defp move_batches(base, set, total) do

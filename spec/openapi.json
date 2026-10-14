@@ -10558,6 +10558,177 @@
         }
       }
     },
+    "/api/v1/services/{id}/logs/delete": {
+      "post": {
+        "operationId": "deleteLogs",
+        "summary": "Delete log lines of a service",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Deletes the log lines of a service that match every filter given, across all monthly partitions and in batches of 20,000, and answers when done. At least one filter is required, so a call can never empty a service by accident. With dry=true nothing changes and the answer counts the lines that would go. Takes a user token (`dku_`) with the `admin` scope. Not offered through MCP.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The service the lines are deleted from.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "dry",
+            "in": "query",
+            "description": "true to count without deleting.",
+            "schema": {
+              "type": "boolean"
+            },
+            "required": false
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "type": "string",
+                    "description": "A field name in the line's fields: letters, digits and _."
+                  },
+                  "values": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 200,
+                    "description": "Lines whose field is one of these go. Goes with field."
+                  },
+                  "q": {
+                    "type": "string",
+                    "description": "Lines whose message contains this text, case-insensitive."
+                  },
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "trace",
+                      "debug",
+                      "info",
+                      "warn",
+                      "error",
+                      "fatal"
+                    ],
+                    "description": "Lines at exactly this level."
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "RFC 3339; lines at or after this time."
+                  },
+                  "until": {
+                    "type": "string",
+                    "description": "RFC 3339; lines before this time."
+                  }
+                }
+              },
+              "example": {
+                "field": "app_name",
+                "values": [
+                  "Records Finder"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deleted, or counted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "integer"
+                    },
+                    "would_delete": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "deleted": 104211
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "No filter, a bad field, values, q or level, or a bad time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_filter",
+                    "message": "Give at least one filter."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/releases": {
       "get": {
         "operationId": "listReleases",
