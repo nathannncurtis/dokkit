@@ -248,7 +248,9 @@ defmodule Dokkit.Read do
     with {:ok, id} <- Ecto.UUID.cast(id),
          %Issue{} = i <- Repo.get(Issue, id) do
       i = Repo.preload(i, [:machine, :service, :check, :alerts])
+
       Map.merge(issue(i), %{closed_at: i.closed_at, notes: i.notes, history: history(i)})
+      |> then(&if(i.processes, do: Map.put(&1, :processes, i.processes), else: &1))
     else
       _ -> nil
     end
@@ -484,6 +486,33 @@ defmodule Dokkit.Read do
   @doc "Chart data for a machine's own numbers, like a service's."
   def machine_series(id, params) do
     with %{} <- Enum.find(Issues.machines(), &(&1.id == id)), do: chart({:machine, id}, params)
+  end
+
+  @doc "A machine's newest process list. nil when there is no such machine."
+  def processes(id, params) do
+    with %Machine{} = m <- Dokkit.Processes.machine(id), do: Dokkit.Processes.list(m, params)
+  end
+
+  @doc "The top lists kept for a machine over up to 24 hours, oldest first."
+  def process_history(id, params) do
+    now = DateTime.utc_now()
+    kind = params["kind"] || "memory"
+
+    with %Machine{} = m <- Dokkit.Processes.machine(id),
+         {:ok, to} <- time(params["to"], now),
+         {:ok, from} <- time(params["from"], DateTime.add(to, -3600)),
+         true <- kind in ~w(memory cpu),
+         :lt <- DateTime.compare(from, to) do
+      from = Enum.max([from, DateTime.add(now, -86_400)], DateTime)
+      %{kind: kind, samples: Dokkit.Processes.history(m, kind, from, to)}
+    else
+      nil ->
+        nil
+
+      _ ->
+        {:error, "bad_range",
+         "from and to are RFC 3339 with from before to, and kind is memory or cpu."}
+    end
   end
 
   defp chart(owner, params) do

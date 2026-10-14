@@ -132,6 +132,23 @@ defmodule DokkitWeb.McpController do
        "to" => @text,
        "points" => %{"type" => "integer", "minimum" => 1, "maximum" => 500}
      }, []},
+    {"processes", "read",
+     "A machine's newest process list, taken about once a minute: name, pid, memory (bytes and percent of the machine's memory), processor percent (null on a first sample), path. sort is memory (default) or cpu; q matches name or path; pid picks one process; limit defaults to 50, at most 10,000. Answers at, total_memory_bytes, items and count (all that matched).",
+     %{
+       "machine" => @text,
+       "sort" => %{"type" => "string", "enum" => ~w(memory cpu)},
+       "q" => @text,
+       "pid" => %{"type" => "integer", "minimum" => 0},
+       "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => 10_000}
+     }, ["machine"]},
+    {"process_history", "read",
+     "The top 10 processes by memory or by processor of a machine, one list a minute, up to 24 hours back. kind is memory (default) or cpu; from and to are RFC 3339 and default to the last hour.",
+     %{
+       "machine" => @text,
+       "kind" => %{"type" => "string", "enum" => ~w(memory cpu)},
+       "from" => @text,
+       "to" => @text
+     }, ["machine"]},
     {"day", "read",
      "The last 24 hours in half hours: for each machine, which half hours had something down, something that needed a look, nothing, or no signal, and the issues that opened. to is RFC 3339 and defaults to now.",
      %{"to" => @text}, []},
@@ -520,6 +537,11 @@ defmodule DokkitWeb.McpController do
       end
     )
   end
+
+  defp tool("processes", %{"machine" => id} = args), do: seen(Read.processes(id, args))
+
+  defp tool("process_history", %{"machine" => id} = args),
+    do: id |> Read.process_history(args) |> seen() |> r()
 
   defp tool("day", args), do: Api.the_day(args) |> r()
   defp tool("unsnooze", %{"id" => id}), do: known(Issues.unsnooze(id))

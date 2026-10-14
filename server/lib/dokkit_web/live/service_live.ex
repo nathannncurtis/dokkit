@@ -21,7 +21,11 @@ defmodule DokkitWeb.ServiceLive do
              timing: %{},
              schedule: %{},
              schedule_error: nil,
-             range: "7"
+             range: "7",
+             procs_q: "",
+             procs_sort: "memory",
+             procs_all: false,
+             procs_history: false
            )
          )}
     end
@@ -41,6 +45,18 @@ defmodule DokkitWeb.ServiceLive do
 
   def handle_event("range", %{"range" => range}, socket) when range in ~w(1 7 30),
     do: {:noreply, load(assign(socket, range: range))}
+
+  def handle_event("procs_filter", %{"q" => q}, socket),
+    do: {:noreply, load(assign(socket, procs_q: String.slice(q, 0, 100)))}
+
+  def handle_event("procs_sort", %{"sort" => sort}, socket) when sort in ~w(memory cpu),
+    do: {:noreply, load(assign(socket, procs_sort: sort))}
+
+  def handle_event("procs_all", _, socket),
+    do: {:noreply, load(assign(socket, procs_all: !socket.assigns.procs_all))}
+
+  def handle_event("procs_history", _, socket),
+    do: {:noreply, load(assign(socket, procs_history: !socket.assigns.procs_history))}
 
   def handle_event("timing_typed", %{"timing" => params}, socket),
     do: {:noreply, assign(socket, timing: params)}
@@ -177,7 +193,12 @@ defmodule DokkitWeb.ServiceLive do
       end
 
     history = history(service, socket.assigns.range, now)
-    socket = assign(socket, numbers: numbers, history: history)
+    socket =
+      assign(socket,
+        numbers: numbers,
+        history: history,
+        procs: processes(service, socket.assigns, now)
+      )
 
     config = Alerts.config()
 
@@ -218,6 +239,38 @@ defmodule DokkitWeb.ServiceLive do
   end
 
   defp history(_, _, _), do: nil
+
+  defp processes(%{slug: "machine"} = service, a, now) do
+    list =
+      Dokkit.Processes.list(service.machine, %{
+        "q" => a.procs_q,
+        "sort" => a.procs_sort,
+        "limit" => if(a.procs_all, do: 10_000, else: 50)
+      })
+
+    recent =
+      if a.procs_history,
+        do:
+          service.machine
+          |> Dokkit.Processes.history(a.procs_sort, DateTime.add(now, -3600), now)
+          |> Enum.reverse(),
+        else: []
+
+    %{list: list, history: recent}
+  end
+
+  defp processes(_, _, _), do: nil
+
+  defp mb(bytes), do: "#{Integer.to_string(round(bytes / 1_048_576))} MB"
+  defp percent(nil), do: "-"
+  defp percent(n), do: "#{Float.round(n * 1.0, 1)}%"
+  defp hhmm(%DateTime{} = t), do: Calendar.strftime(t, "%H:%M")
+
+  defp top_line(items, "cpu", n),
+    do: Enum.map_join(Enum.take(items, n), ", ", &"#{&1["name"]} #{percent(&1["cpu_percent"])}")
+
+  defp top_line(items, _, n),
+    do: Enum.map_join(Enum.take(items, n), ", ", &"#{&1["name"]} #{mb(&1["memory_bytes"])}")
 
   defp latest(points),
     do: points |> Enum.map(& &1.value) |> Enum.reject(&is_nil/1) |> List.last()
@@ -325,6 +378,115 @@ defmodule DokkitWeb.ServiceLive do
             </div>
           </div>
           
+          <div :if={@procs} class="card procs" id="processes">
+            <h2>
+              Processes
+              <span class="end">
+                {if @procs.list.at, do: "Taken #{at(@procs.list.at)} UTC", else: "None received yet"}
+              </span>
+            </h2>
+
+            <p :if={!@procs.list.at} class="lead">
+              No process list yet. The installed program sends one about once a minute.
+            </p>
+
+            <div :if={@procs.list.at} class="p-ctl">
+              <form phx-change="procs_filter" phx-submit="procs_filter" id="procs-form">
+                <input
+                  class="inp"
+                  type="search"
+                  name="q"
+                  value={@procs_q}
+                  placeholder="Filter by name or path"
+                  aria-label="Filter processes by name or path"
+                  autocomplete="off"
+                  phx-debounce="300"
+                />
+              </form>
+              <span role="group" aria-label="Sort by" style="display: flex; gap: 8px">
+                <button
+                  class={["btn sm", @procs_sort == "memory" && "primary"]}
+                  type="button"
+                  phx-click="procs_sort"
+                  phx-value-sort="memory"
+                  aria-pressed={to_string(@procs_sort == "memory")}
+                >
+                  Memory
+                </button>
+                <button
+                  class={["btn sm", @procs_sort == "cpu" && "primary"]}
+                  type="button"
+                  phx-click="procs_sort"
+                  phx-value-sort="cpu"
+                  aria-pressed={to_string(@procs_sort == "cpu")}
+                >
+                  Processor
+                </button>
+              </span>
+            </div>
+
+            <p :if={@procs.list.at && @procs.list.items == []} class="lead">
+              No process matches.
+            </p>
+
+            <div :if={@procs.list.items != []} class="lh p-row">
+              <span>Name</span><span class="r">PID</span><span class="r">Memory</span><span class="r">Processor</span><span class="p-path">Path</span>
+            </div>
+
+            <div :for={p <- @procs.list.items} class="li slim p-row" id={"proc-#{p["pid"]}"}>
+              <span title={p["name"]}>{p["name"]}</span>
+              <span class="mono r">{p["pid"]}</span>
+              <span class="mono r">
+                {mb(p["memory_bytes"])}{p["memory_percent"] && " · #{Float.round(p["memory_percent"], 1)}%"}
+              </span>
+              <span class="mono r">{percent(p["cpu_percent"])}</span>
+              <span class="mono p-path" title={p["path"]}>{p["path"]}</span>
+            </div>
+
+            <div :if={@procs.list.at} class="foot">
+              <button
+                :if={@procs.list.count > 50 || @procs_all}
+                class="btn sm"
+                type="button"
+                phx-click="procs_all"
+              >
+                {if @procs_all, do: "Show the top 50", else: "Show all #{@procs.list.count}"}
+              </button>
+              <button class="btn sm ghost" type="button" phx-click="procs_history">
+                {if @procs_history, do: "Hide the last hour", else: "Show the last hour"}
+              </button>
+            </div>
+
+            <p :if={@procs_history && @procs.history == []} class="lead">
+              Nothing was kept for the last hour.
+            </p>
+
+            <div
+              :for={h <- @procs.history}
+              :if={@procs_history}
+              class="li slim"
+              style="--cols: 56px minmax(0,1fr)"
+            >
+              <span class="mono">{hhmm(h.at)}</span>
+              <span class="mono" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap" title={top_line(h.items, @procs_sort, 10)}>
+                {top_line(h.items, @procs_sort, 3)}
+              </span>
+            </div>
+          </div>
+
+          <div :if={@issue && @issue.processes} class="card" id="at-the-time">
+            <h2>At the time<span class="end">{String.slice(@issue.processes["at"], 0, 16) |> String.replace("T", " ")} UTC</span></h2>
+
+            <div class="li slim" style="--cols: 90px minmax(0,1fr)">
+              <span class="mute">Most memory</span>
+              <span class="mono">{top_line(@issue.processes["top_memory"], "memory", 5)}</span>
+            </div>
+            <div class="li slim" style="--cols: 90px minmax(0,1fr)">
+              <span class="mute">Most processor</span>
+              <span class="mono">{top_line(@issue.processes["top_cpu"], "cpu", 5)}</span>
+            </div>
+          </div>
+
           <div :if={@issue} class="card">
             <h2>Notes<span :if={@issue.notes != []} class="cnt">{length(@issue.notes)}</span></h2>
             

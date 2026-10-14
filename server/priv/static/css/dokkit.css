@@ -688,3 +688,14 @@ input, select { accent-color: var(--brand); caret-color: var(--brand); }
   .fnd-sec > .grp .end .btn { padding: 0 8px; }
   .fnd .head, .fnd > .lead { padding-inline: 16px; }
 }
+
+/* processes */
+.procs .p-row { grid-template-columns: minmax(0, 1.2fr) 64px 130px 72px minmax(0, 2fr); }
+.procs .p-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-ctl { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.p-ctl form { flex: 1 1 180px; display: flex; }
+.p-ctl .inp { flex: 1; }
+@media (max-width: 760px) {
+  .procs .p-row { grid-template-columns: minmax(0, 1fr) 52px 108px 56px; }
+  .procs .p-path { display: none; }
+}

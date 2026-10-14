@@ -10,6 +10,7 @@ defmodule Dokkit.Intake do
   alias Dokkit.Intake.Refused
 
   @max_lines 10_000
+  @max_processes 1024 * 1024
   @app_checks 100
   @tail_bytes 16 * 1024
   @states %{"ok" => :ok, "degraded" => :degraded, "down" => :down}
@@ -112,7 +113,11 @@ defmodule Dokkit.Intake do
   end
 
   defp decode(text) do
-    with {:ok, line} <- Jason.decode(text), do: {:ok, clean(line)}
+    with {:ok, line} <- Jason.decode(text) do
+      if byte_size(text) > @max_processes and match?(%{"type" => "processes"}, line),
+        do: {:error, "too_large", "A processes line is at most 1 MB."},
+        else: {:ok, clean(line)}
+    end
   end
 
   # Postgres text and jsonb refuse NUL and invalid UTF-8.
@@ -191,8 +196,11 @@ defmodule Dokkit.Intake do
 
   defp answer(batch), do: %{accepted: batch.accepted, refused: batch.refused}
 
-  defp line(%Key{kind: :app}, type, _, _) when type in ~w(state inventory),
+  defp line(%Key{kind: :app}, type, _, _) when type in ~w(state inventory processes),
     do: {:error, "not_allowed", "An app key may not send #{type}."}
+
+  defp line(%Key{kind: :machine, machine_id: id}, "processes", line, at),
+    do: Dokkit.Processes.record(id, line, at)
 
   defp line(key, type, line, at) when type in ~w(state custom) do
     with {:ok, service} <- service(key, line),

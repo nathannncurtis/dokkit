@@ -393,6 +393,7 @@ defmodule Dokkit.Issues do
         title: title || plain_title(service, check, state),
         since: at,
         number: from && renumber(from),
+        processes: Dokkit.Processes.snapshot(check, service.machine_id, state, now),
         notes: (from && from.notes) || [],
         snoozed_until: if(snoozed, do: heir.snoozed_until),
         acknowledged_at: heir && heir.acknowledged_at

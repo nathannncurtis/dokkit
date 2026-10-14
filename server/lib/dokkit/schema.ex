@@ -101,6 +101,7 @@ defmodule Dokkit.Issue do
     field :acknowledged_at, :utc_datetime_usec
     field :soon, :boolean, default: false
     field :notes, {:array, :map}, default: []
+    field :processes, :map
     belongs_to :machine, Dokkit.Machine
     belongs_to :service, Dokkit.Service
     belongs_to :check, Dokkit.Check
@@ -379,5 +380,29 @@ defmodule Dokkit.Phone do
     field :key, :binary
     field :last_fetch_at, :utc_datetime_usec
     timestamps(updated_at: false)
+  end
+end
+
+defmodule Dokkit.ProcessList do
+  use Ecto.Schema
+  @primary_key {:machine_id, :binary_id, autogenerate: false}
+  @foreign_key_type :binary_id
+
+  schema "process_lists" do
+    field :at, :utc_datetime_usec
+    field :total_memory_bytes, :integer
+    field :items, {:array, :map}
+  end
+end
+
+defmodule Dokkit.ProcessTop do
+  use Ecto.Schema
+  @foreign_key_type :binary_id
+
+  schema "process_tops" do
+    field :kind, :string
+    field :at, :utc_datetime_usec
+    field :items, {:array, :map}
+    belongs_to :machine, Dokkit.Machine
   end
 end

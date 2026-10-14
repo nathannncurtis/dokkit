@@ -71,6 +71,7 @@ defmodule Dokkit.Watch do
   def prune(now) do
     Dokkit.Numbers.prune(now)
     Dokkit.Slots.prune(now)
+    Dokkit.Processes.prune(now)
 
     Repo.delete_all(
       from b in Dokkit.Batch,
