@@ -56,8 +56,8 @@ object Home {
     }
 
     private fun topBox(s: Snapshot, cards: List<MachineCard>, hardware: List<MachineCard>, now: Instant): TopBox {
-        val names = serviceNames(s)
-        val rows = (s.inbox?.needsYou ?: emptyList()).map { issueRow(it, names, now) }
+        val names = Screens.serviceNames(s)
+        val rows = (s.inbox?.needsYou ?: emptyList()).map { Screens.issueRow(it, names, now) }
         if (rows.isNotEmpty()) {
             val issues = rows.map {
                 TopIssue(it.id, it.title, listOfNotNull(it.serviceName, it.machine.ifEmpty { null }, it.since).joinToString(" · "), it.serviceId)
