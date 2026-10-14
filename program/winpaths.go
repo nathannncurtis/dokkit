@@ -30,7 +30,7 @@ func isOwnItem(name string) bool {
 // strangers are the names in the folder that the program did not put there.
 func strangers(names []string) (out []string) {
 	for _, n := range names {
-		if !isOwnItem(n) && !strings.EqualFold(n, "update") {
+		if !isOwnItem(n) && !strings.EqualFold(n, "update") && !strings.EqualFold(n, taskListFile) {
 			out = append(out, n)
 		}
 	}
@@ -42,7 +42,7 @@ func refusal(dir string, names []string) error {
 	if len(s) == 0 {
 		return nil
 	}
-	return fmt.Errorf("%s holds %s, which dokkit did not put there. It keeps only config.json, spool, dokkit.log and update in that folder. Nothing was changed. Move those out, then install again", dir, strings.Join(s, ", "))
+	return fmt.Errorf("%s holds %s, which dokkit did not put there. It keeps only config.json, spool, dokkit.log, tasks.json and update in that folder. Nothing was changed. Move those out, then install again", dir, strings.Join(s, ", "))
 }
 
 // Local Service, the account Windows keeps for services that need no rights of their own.

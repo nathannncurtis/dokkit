@@ -31,6 +31,7 @@ type hostOps struct {
 	portUp                    func(port string) bool
 	versionOf                 func(exe string) string
 	schedule                  func() // makes the updater's own task, units or plist the current ones; nil in a rehearsal
+	tasks                     func() // leaves the list of scheduled tasks for the program to read; Windows only
 }
 
 var (
@@ -138,6 +139,9 @@ func updaterRun() int {
 	}
 	if ops.schedule != nil {
 		ops.schedule()
+	}
+	if ops.tasks != nil {
+		ops.tasks()
 	}
 	return code
 }

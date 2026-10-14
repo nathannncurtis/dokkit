@@ -40,6 +40,11 @@ func findJobs() (jobs []found, notes []string) {
 	case "windows":
 		jobs = parseSchtasks(output("schtasks", "/query", "/fo", "csv", "/v"), zoneMinutes())
 		notes = []string{noteTaskScheduler}
+		if !ops.admin() {
+			var note string
+			jobs, note = tasksFromFile(filepath.Join(machineDir(), taskListFile), jobs, zoneMinutes(), time.Now())
+			notes = append(notes, note)
+		}
 	case "darwin":
 		jobs, notes = findCron(), []string{noteCron, noteLaunchd}
 		jobs = append(jobs, findLaunchd()...)

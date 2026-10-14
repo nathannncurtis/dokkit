@@ -42,6 +42,7 @@ func realHost() hostOps {
 		admin:    func() bool { return windows.GetCurrentProcessToken().IsElevated() },
 		lock:     lockFile,
 		schedule: upgradeTask,
+		tasks:    publishTasks,
 		stopService: func(name string) error {
 			return withService(name, func(s *mgr.Service) error {
 				if st, err := s.Query(); err == nil && st.State == svc.Stopped {
@@ -89,6 +90,20 @@ func realHost() hostOps {
 			}
 			return devVersion
 		},
+	}
+}
+
+func publishTasks() {
+	dir := machineDir()
+	if !exists(dir) {
+		return
+	}
+	err := publishTaskList(filepath.Join(dir, taskListFile), time.Now(), func() ([]string, error) {
+		out, err := runTool("schtasks.exe", "/query", "/fo", "csv", "/v")
+		return strings.Split(strings.ReplaceAll(out, "\r", ""), "\n"), err
+	})
+	if err != nil {
+		logf("%v", err)
 	}
 }
 

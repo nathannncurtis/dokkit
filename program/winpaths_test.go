@@ -51,7 +51,7 @@ func TestInheritanceIsRemovedFromTheFolderAloneThenTheInsideIsReset(t *testing.T
 }
 
 func TestAFolderWithAnythingElseIsRefusedAndSaysWhat(t *testing.T) {
-	if err := refusal("d", []string{"config.json", "spool", "dokkit.log", "Update"}); err != nil {
+	if err := refusal("d", []string{"config.json", "spool", "dokkit.log", "Update", "Tasks.json"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := refusal("d", nil); err != nil {
