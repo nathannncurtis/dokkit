@@ -3,6 +3,7 @@ name: ios
 on:
   workflow_dispatch:
 
+# Run by hand. A step that fails is reported in the last step and does not fail the run.
 jobs:
   build:
     runs-on: macos-15
@@ -14,15 +15,15 @@ jobs:
         continue-on-error: true
         working-directory: apps/ios/DokkitKit
         run: set -o pipefail; swift run DokkitChecks 2>&1 | tail -40
-      - name: Build the app for the simulator, unsigned
+      - name: Build the unsigned app
         id: app
         continue-on-error: true
         working-directory: apps/ios
-        run: |
-          set -o pipefail
-          brew install xcodegen
-          xcodegen generate
-          xcodebuild -project Dokkit.xcodeproj -scheme Dokkit -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO build 2>&1 | grep -E 'error:|warning: unre|BUILD|\*\*' | sort -u | head -80
+        run: ./build-unsigned.sh
+      - uses: actions/upload-artifact@v4
+        if: steps.app.outcome == 'success'
+        with:
+          name: phone-ios
+          path: apps/ios/out/*
       - name: Result
         run: echo "checks=${{ steps.checks.outcome }} app=${{ steps.app.outcome }}"

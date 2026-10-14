@@ -1,3 +1,5 @@
 Dokkit.xcodeproj/
 xcuserdata/
 DerivedData/
+build/
+out/
