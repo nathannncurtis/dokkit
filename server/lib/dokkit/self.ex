@@ -68,6 +68,7 @@ defmodule Dokkit.Self do
     reports(service, now, booted)
     certificate(service, now)
     archive(service, now)
+    relay(service, now)
   end
 
   @warn_days 21
@@ -140,6 +141,17 @@ defmodule Dokkit.Self do
             note: "The archive folder cannot be written to."
           )
       end
+    end
+  end
+
+  defp relay(service, now) do
+    case Dokkit.Phones.trouble(now) do
+      nil ->
+        if Repo.get_by(Check, service_id: service.id, name: "relay"),
+          do: Issues.record(check(service, "relay"), :ok, at: now)
+
+      note ->
+        Issues.record(check(service, "relay"), :degraded, at: now, note: note)
     end
   end
 

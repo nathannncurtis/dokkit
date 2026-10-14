@@ -3,7 +3,14 @@ defmodule Dokkit.Keys do
   import Ecto.Query
   alias Dokkit.{Key, Machine, Repo}
 
-  @prefixes %{enrol: "dke_", machine: "dkm_", app: "dka_", user: "dku_"}
+  @prefixes %{
+    enrol: "dke_",
+    machine: "dkm_",
+    app: "dka_",
+    user: "dku_",
+    fetch: "dkf_",
+    upload: "dkr_"
+  }
   @alphabet ~c"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
   def mint(kind, attrs \\ %{}) do

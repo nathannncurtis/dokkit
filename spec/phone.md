@@ -31,7 +31,7 @@ Because nothing is asked on demand, the app answers no question the snapshot was
 
 The relay holds only what it cannot open.
 
-- Each phone has one key: 32 random bytes made by the server at pairing. The server keeps it (encrypted with the server's own secret, like other stored secrets) and the phone keeps it in the system key store (Keychain on iOS, Keystore on Android), set so it is not included in backups and is not readable while the phone is locked before first unlock.
+- Each phone has one key: 32 random bytes made by the server at pairing. The server keeps it in its database, as it keeps its other stored secrets, and the phone keeps it in the system key store (Keychain on iOS, Keystore on Android), set so it is not included in backups and is not readable while the phone is locked before first unlock.
 - For each snapshot the server makes a fresh 32-byte content key, compresses the snapshot JSON with gzip, and encrypts it with AES-256-GCM under the content key with a random 12-byte nonce.
 - For each phone it encrypts the content key with AES-256-GCM under that phone's key, with its own random nonce. Each encryption carries additional data that names the mailbox and the snapshot's counter, and the wrapped key's also names the slot, so a sealed part cannot be moved to another mailbox, slot or time.
 - A phone opens its own wrapped content key, then the body. A body that does not open is treated as no snapshot. The relay has no key, so it cannot read a snapshot or make one a phone will accept.
@@ -106,14 +106,14 @@ The relay keeps one envelope per mailbox, in a file, and its own access log (tim
 
 Settings gets a **Phones** section, for the owner.
 
-- **The relay**: its address and the upload key from `dokkit relay add`. Saving it makes one upload and says whether the relay took it.
+- **The relay**: its address, its mailbox and the upload key from `dokkit relay add`, which prints the mailbox as `/m/<mailbox>`; the address may be pasted with that ending and the mailbox is read from it. The address must be `https`. Saving it makes one upload, even with no phone paired, and says in words whether the relay took it. The key is shown afterwards only as set or not set.
 - **Add a phone**: asks for a name ("Work iPhone") and shows a QR code once, for two minutes. The code holds the relay's address, the mailbox id, the slot id, the fetch token and the phone's key. Nothing else pairs a phone: the server never learns whether the code was scanned except by the slot's first fetch.
-- **The phones**: each with its name, when it was added, when it last fetched, and Remove. Remove drops the slot from the next upload, which is made at once.
-- Changing the relay's address or upload key keeps the phones only when the mailbox is the same one; otherwise each phone is paired again.
+- **The phones**: each with its name, when it was added, when it last fetched, and Remove. Remove drops the slot from the next upload, which is made at once, also when it was the last phone: the envelope then has no slots.
+- Changing the relay's address or upload key keeps the phones only when the mailbox is the same one; otherwise every phone is removed, an envelope with no slots is sent to the old mailbox, and each phone is paired again. The page says this before saving.
 
-The server uploads once a minute, in the sweep it already runs, and at once when an issue opens or closes. An upload is skipped while no phone is paired. When uploads have failed for five minutes, Dokkit's own row says so at the level of its lesser troubles (`self_degraded`), with the relay's answer.
+The server uploads once a minute, in the sweep it already runs, and again soon after any change to an issue (opened, closed, snoozed, seen, noted): three seconds after the first change of a burst, and never more than one upload in twenty seconds, so a burst makes one. An upload is skipped while no phone is paired. The counter is the Unix time in seconds or the last counter plus one, whichever is higher, and is stored before each upload. A `409` does not say what the relay holds, so the next upload adds one to the last counter, and each further `409` doubles what is added. Failures are logged when the answer changes, never with a key. When uploads have failed for five minutes, Dokkit's own row has a check `relay` at the level of its lesser troubles (`self_degraded`), with the relay's answer as its note; the next good upload clears it.
 
-The API has the same three things under `admin`: `GET /phones`, `POST /phones` (answers the QR's contents, once) and `DELETE /phones/<id>`, and `GET`/`PUT /phones/relay`. Like keys and people, adding a phone is not offered through the MCP.
+The API has the same three things under `admin`: `GET /phones`, `POST /phones` (answers the QR's contents, once) and `DELETE /phones/<id>`, and `GET`/`PUT /phones/relay`. `POST /phones` answers the phone with `code`, the text of the QR code, once. None of it is offered through the MCP.
 
 ## The snapshot
 
@@ -121,7 +121,7 @@ JSON, built from the same server code as the web interface, with `schema: 1` and
 
 | Part | Holds |
 |---|---|
-| `server` | Its name, its version, `made_at` and the counter. |
+| `server` | Its name (the address people reach it by), its version (`v` and three numbers), `made_at`, the counter and `left_out`, the list of parts dropped to fit (see below), empty when none. |
 | `inbox` | What the first screen shows: Needs you, Soon, Snoozed and Not watched, each issue with its short id, title, service, machine, state, since-time, count, whether it is snoozed or seen, and whether its alert is held for the night. |
 | `machines` | Each with its state, last-seen time, its vitals (processor, memory, each disk), planned downtime now and the next scheduled window. |
 | `services` | Each with its machine, kind, state, version, environment, its checks with their last result and note, and the last 24 hourly points of the chart its row shows. |
@@ -129,7 +129,15 @@ JSON, built from the same server code as the web interface, with `schema: 1` and
 | `jobs` | Each with its schedule, last run, last good run and next expected run. |
 | `logs` | For each service with an open issue, its last 20 log lines, as the Logs page shows them. |
 
-It holds no keys, no people's destinations and no settings. Log lines travel as they were stored, with whatever customer and job details they carry.
+Every part is what the API answers with, as JSON: `inbox` as `GET /inbox`, each of `machines` as `GET /machines/<id>`, each of `services` as `GET /services/<id>` with the one addition `chart`, each of `issues` as `GET /issues/<id>` for every open or snoozed issue, and `jobs` as the items of `GET /jobs`. Where this table and the API differ, the table says so:
+
+- `chart` is `{"metric": "<name or null>", "values": [24 numbers or nulls]}`: the first of the service's own numbers by name, as 24 hourly averages ending now. A service with no numbers has a null metric and 24 nulls.
+- An issue's `history` and `notes` are cut to the last 20.
+- `logs` is an object keyed by service id, for each service with an open issue, of its last 20 lines as `{"t", "level", "msg"}`; an empty list when it has none.
+- A job's `last_run` has no `tail` (the job's output).
+- When the snapshot would pass 1.5 MB compressed, `logs` becomes empty and, if that is not enough, `chart` is dropped from every service; `server.left_out` names what was dropped, in that order.
+
+It holds no keys, no people's destinations and no settings: a service's `routing`, `restart` and `keep_messages`, a machine's `silent` and `thresholds`, and the `config` of every check are removed, as is any field named like a key, token, password or secret. Log lines travel as they were stored, with whatever customer and job details they carry. `spec/phone-cases/snapshot.json` is a snapshot made by `server/priv/phone_snapshot.exs` from the sample estate.
 
 ## The apps
 

@@ -89,7 +89,11 @@ defmodule DokkitWeb.ParityTest do
       "acme_now" => {:owner, ["POST /api/v1/certificate/renew"]},
       "full" => @view,
       "full_typed" => @view,
-      "full_token" => @session
+      "full_token" => @session,
+      "relay_save" => {:owner, ["PUT /api/v1/phones/relay"]},
+      "phone_add" => {:owner, ["POST /api/v1/phones"]},
+      "phone_remove" => {:owner, ["DELETE /api/v1/phones/:id"]},
+      "phone_hide" => @view
     },
     "FoundLive" => %{
       "sweep" =>

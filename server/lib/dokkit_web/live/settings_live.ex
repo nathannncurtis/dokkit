@@ -1,6 +1,7 @@
 defmodule DokkitWeb.SettingsLive do
   use DokkitWeb, :live_view
-  alias Dokkit.{Accounts, Keys}
+  alias Dokkit.{Accounts, Keys, Phones}
+  alias DokkitWeb.ApiController
 
   @key_cols "--cols:minmax(0,1.4fr) 110px 150px 150px 96px;--ncols:minmax(140px,1fr) 96px 124px 124px 88px;--minw:640px"
   @roles [{"Member", "member"}, {"Viewer", "viewer"}, {"Owner", "owner"}]
@@ -19,7 +20,10 @@ defmodule DokkitWeb.SettingsLive do
          cert_n: 0,
          acme_result: nil,
          acme_busy: false,
-         acme_n: 0
+         acme_n: 0,
+         relay_result: nil,
+         phone_error: nil,
+         phone_new: nil
        )
      )}
   end
@@ -35,6 +39,50 @@ defmodule DokkitWeb.SettingsLive do
 
     {:noreply, load(assign(socket, acme_busy: false, acme_result: result))}
   end
+
+  def handle_info({:hide_phone, slot}, socket) do
+    case socket.assigns.phone_new do
+      %{slot: ^slot} -> {:noreply, assign(socket, phone_new: nil)}
+      _ -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("relay_save", %{"relay" => r}, socket) do
+    owner(socket, fn ->
+      case ApiController.save_relay(r) do
+        {:error, _, text} -> assign(socket, relay_result: {:error, text})
+        %{result: text, uploaded: ok} ->
+          assign(socket, relay_result: {if(ok, do: :ok, else: :error), text})
+      end
+    end)
+  end
+
+  def handle_event("phone_add", %{"phone" => p}, socket) do
+    owner(socket, fn ->
+      case Phones.add(p["name"]) do
+        {:ok, phone, code} ->
+          Process.send_after(self(), {:hide_phone, phone.slot}, :timer.seconds(Phones.pair_life()))
+          qr = code |> EQRCode.encode() |> EQRCode.svg(width: 240)
+
+          assign(socket,
+            phone_error: nil,
+            phone_new: %{slot: phone.slot, name: phone.name, code: code, qr: qr}
+          )
+
+        {:error, text} ->
+          assign(socket, phone_error: text)
+      end
+    end)
+  end
+
+  def handle_event("phone_remove", %{"id" => id}, socket) do
+    owner(socket, fn ->
+      Phones.remove(id)
+      assign(socket, phone_new: nil, phone_error: nil)
+    end)
+  end
+
+  def handle_event("phone_hide", _, socket), do: {:noreply, assign(socket, phone_new: nil)}
 
   def handle_event("add", %{"person" => p}, socket) do
     owner(socket, fn ->
@@ -181,6 +229,8 @@ defmodule DokkitWeb.SettingsLive do
       releases: Dokkit.Releases.list(),
       certificates: Dokkit.Certificate.view(),
       acme: Dokkit.Acme.view(),
+      relay: Phones.relay_view(),
+      phones: Phones.list(),
       archives: (dir && Dokkit.Logs.archives(dir)) || []
     )
   end
@@ -467,6 +517,126 @@ defmodule DokkitWeb.SettingsLive do
                 <button class="btn primary" type="submit">Save</button>
               </span>
             </span>
+          </form>
+        </div>
+
+        <div :if={@owner} class="card" id="phones">
+          <h2>Phones<span class="cnt">{length(@phones)}</span></h2>
+
+          <p class="lead">
+            A phone shows what needs attention and the state of every machine and service, read only. This server sends a sealed snapshot to a relay you run, and each phone fetches its own copy from there.
+          </p>
+
+          <form
+            style="display:grid; gap:12px; padding:12px 16px 0"
+            phx-submit="relay_save"
+            id="relay-form"
+          >
+            <label style="display:grid; gap:6px">
+              Relay address
+              <input
+                class="inp"
+                name="relay[address]"
+                value={@relay.address}
+                placeholder="https://relay.example.com"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+
+            <label style="display:grid; gap:6px">
+              Mailbox
+              <input
+                class="inp"
+                name="relay[mailbox]"
+                value={@relay.mailbox}
+                placeholder="the 32 characters after /m/"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+
+            <label style="display:grid; gap:6px">
+              Upload key
+              <input
+                class="inp"
+                type="password"
+                name="relay[key]"
+                placeholder={@relay.key}
+                autocomplete="new-password"
+              />
+            </label>
+
+            <p class="lead" style="margin:0">
+              Saving uploads one snapshot to the relay. Phones stay paired only when the mailbox is the same one; with a different mailbox the {length(@phones)} phones listed below are removed and each is paired again.
+            </p>
+
+            <span class="foot" style="padding-inline:16px; margin-inline:-16px">
+              <span :if={@relay.last_error} class="bad" id="relay-error">
+                {@relay.last_error}
+              </span>
+              <span
+                :if={@relay_result}
+                class={elem(@relay_result, 0) == :error && "bad"}
+                role="status"
+                id="relay-result"
+              >
+                {elem(@relay_result, 1)}
+              </span>
+
+              <span class="end"><button class="btn primary" type="submit">Save</button></span>
+            </span>
+          </form>
+
+          <div :if={@phone_new} class="once" id="phone-new">
+            <b>{@phone_new.name}</b>
+            <div class="qr" id="phone-qr">{Phoenix.HTML.raw(@phone_new.qr)}</div>
+            <span class="mono" id="phone-code" style="overflow-wrap:anywhere">{@phone_new.code}</span>
+            <button class="btn sm" type="button" data-copy="#phone-code">Copy</button>
+            <button class="btn sm" type="button" phx-click="phone_hide">Done</button>
+          </div>
+
+          <p :if={@phone_new} class="lead" style="padding-top: 0">
+            Scan this in the app, or paste the text. It is shown only now and goes away after two minutes.
+          </p>
+
+          <div
+            :for={p <- @phones}
+            class="li slim"
+            style="--cols: minmax(0,1fr) auto"
+            id={"phone-#{p.id}"}
+          >
+            <div>
+              <div class="ti"><span>{p.name}</span></div>
+
+              <div class="sub">
+                Added {at(p.inserted_at)}, {if p.last_fetch_at,
+                  do: "last fetched " <> at(p.last_fetch_at),
+                  else: "not fetched yet"}
+              </div>
+            </div>
+
+            <button
+              class="btn sm"
+              type="button"
+              phx-click="phone_remove"
+              phx-value-id={p.id}
+              data-confirm={"Remove #{p.name}? It stops getting snapshots at once."}
+            >
+              Remove
+            </button>
+          </div>
+
+          <p :if={@phone_error} class="lead bad" role="alert" id="phone-error">{@phone_error}</p>
+
+          <form class="foot" phx-submit="phone_add" id="phone-form">
+            <input
+              class="inp"
+              name="phone[name]"
+              placeholder="Work iPhone"
+              aria-label="Name of the phone"
+              required
+            /> <span class="end"><button class="btn primary" type="submit">Add a phone</button></span>
           </form>
         </div>
 

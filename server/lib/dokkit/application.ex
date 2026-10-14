@@ -12,7 +12,7 @@ defmodule Dokkit.Application do
     children =
       [Dokkit.Repo, Dokkit.RateLimit, {Phoenix.PubSub, name: Dokkit.PubSub}, DokkitWeb.Endpoint] ++
         ipv6_listener(Application.get_env(:dokkit, DokkitWeb.Endpoint, [])) ++
-        if watch, do: [Dokkit.Alerts, Dokkit.Watch], else: []
+        if watch, do: [Dokkit.Alerts, Dokkit.Phones.Sender, Dokkit.Watch], else: []
 
     with {:ok, pid} <-
            Supervisor.start_link(children, strategy: :one_for_one, name: Dokkit.Supervisor) do

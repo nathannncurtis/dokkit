@@ -7661,6 +7661,597 @@
         ]
       }
     },
+    "/api/v1/phones": {
+      "get": {
+        "operationId": "listPhones",
+        "summary": "List phones",
+        "tags": [
+          "Admin"
+        ],
+        "description": "The phones paired to read this server through its relay. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.",
+        "responses": {
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The phones.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "added_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "last_fetch_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time",
+                            "description": "When the relay last handed this phone its snapshot, as the relay told the last upload."
+                          }
+                        }
+                      }
+                    },
+                    "next": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Always null for now. Lists are not paged yet."
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                      "name": "Work iPhone",
+                      "added_at": "2026-10-13T09:00:00Z",
+                      "last_fetch_at": null
+                    }
+                  ],
+                  "next": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      },
+      "post": {
+        "operationId": "addPhone",
+        "summary": "Pair a phone",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Makes a phone with its own key and slot, and uploads at once. The answer holds `code`, the text a QR code carries, shown once: it holds the fetch token and the phone's key. The relay must be set first. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Up to 60 characters."
+                  }
+                }
+              },
+              "example": {
+                "name": "Work iPhone"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The phone, with its code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "added_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "last_fetch_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time",
+                          "description": "When the relay last handed this phone its snapshot, as the relay told the last upload."
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "`dokkit-phone:1:` and base64url of the pairing JSON."
+                        }
+                      }
+                    }
+                  ]
+                },
+                "example": {
+                  "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                  "name": "Work iPhone",
+                  "added_at": "2026-10-13T09:00:00Z",
+                  "last_fetch_at": null,
+                  "code": "dokkit-phone:1:eyJyZWxheSI6Imh0dHBzOi8vcmVsYXkuZXhhbXBsZS5jb20ifQ"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The body does not fit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_phone",
+                    "message": "Set the relay first."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/phones/relay": {
+      "get": {
+        "operationId": "getPhoneRelay",
+        "summary": "The relay",
+        "tags": [
+          "Admin"
+        ],
+        "description": "The relay phones are served through. The upload key is only set or not set. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.",
+        "responses": {
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The relay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "address": {
+                      "type": "string"
+                    },
+                    "mailbox": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string",
+                      "enum": [
+                        "set",
+                        "not set"
+                      ],
+                      "description": "The upload key is never shown."
+                    },
+                    "last_good_upload": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    },
+                    "last_error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "The relay's answer to the last upload, while uploads are failing."
+                    }
+                  }
+                },
+                "example": {
+                  "address": "https://relay.example.com",
+                  "mailbox": "92bea4d52a1d53f0c8111edf39e26a89",
+                  "key": "set",
+                  "last_good_upload": "2026-10-13T09:01:00Z",
+                  "last_error": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "operationId": "setPhoneRelay",
+        "summary": "Set the relay",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Saves the relay, then makes one upload and says whether the relay took it. `address` may end in `/m/<mailbox>`, as `dokkit relay add` prints it. A key left out stays. A different mailbox removes every phone; the same one keeps them. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "address": {
+                    "type": "string",
+                    "description": "https only."
+                  },
+                  "mailbox": {
+                    "type": "string",
+                    "description": "32 lower-case hex characters."
+                  },
+                  "key": {
+                    "type": "string",
+                    "description": "The `dkr_` upload key."
+                  }
+                }
+              },
+              "example": {
+                "address": "https://relay.example.com",
+                "mailbox": "92bea4d52a1d53f0c8111edf39e26a89",
+                "key": "dkr_..."
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The relay, and what the upload did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "address": {
+                          "type": "string"
+                        },
+                        "mailbox": {
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string",
+                          "enum": [
+                            "set",
+                            "not set"
+                          ],
+                          "description": "The upload key is never shown."
+                        },
+                        "last_good_upload": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time"
+                        },
+                        "last_error": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "The relay's answer to the last upload, while uploads are failing."
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "uploaded": {
+                          "type": "boolean"
+                        },
+                        "result": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "example": {
+                  "address": "https://relay.example.com",
+                  "mailbox": "92bea4d52a1d53f0c8111edf39e26a89",
+                  "key": "set",
+                  "last_good_upload": "2026-10-13T09:01:00Z",
+                  "last_error": null,
+                  "uploaded": true,
+                  "result": "The relay took the snapshot."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The body does not fit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_relay",
+                    "message": "The address must start with https://."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/phones/{id}": {
+      "delete": {
+        "operationId": "removePhone",
+        "summary": "Remove a phone",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Removes a phone and uploads at once without its slot, so its token stops working. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the phone.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Removed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such phone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
     "/api/v1/users": {
       "get": {
         "operationId": "listUsers",

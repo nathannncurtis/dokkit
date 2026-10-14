@@ -327,6 +327,39 @@ defmodule DokkitWeb.ApiController do
 
   defp texts?(params, keys), do: Enum.all?(keys, &is_binary(params[&1] || ""))
 
+  def phones(conn, _),
+    do: json(conn, %{items: Enum.map(Dokkit.Phones.list(), &Dokkit.Phones.view/1), next: nil})
+
+  def new_phone(params) do
+    case Dokkit.Phones.add(params["name"]) do
+      {:ok, phone, code} -> phone |> Dokkit.Phones.view() |> Map.put(:code, code)
+      {:error, why} -> {:error, "bad_phone", why}
+    end
+  end
+
+  def drop_phone(id), do: if(Dokkit.Phones.remove(id) == :ok, do: %{ok: true}, else: not_found())
+
+  def add_phone(conn, params), do: reply(conn, new_phone(params))
+  def remove_phone(conn, %{"id" => id}), do: reply(conn, drop_phone(id))
+
+  def get_relay(conn, _), do: json(conn, Dokkit.Phones.relay_view())
+
+  @doc "Saves the relay, makes one upload, and answers the relay as it is with the words for what the upload did."
+  def save_relay(params) do
+    case Dokkit.Phones.save_relay(params) do
+      {:ok, _} ->
+        result = Dokkit.Phones.upload(force: true)
+
+        Dokkit.Phones.relay_view()
+        |> Map.merge(%{uploaded: result == :ok, result: Dokkit.Phones.words(result)})
+
+      {:error, why} ->
+        {:error, "bad_relay", why}
+    end
+  end
+
+  def put_relay(conn, params), do: reply(conn, save_relay(params))
+
   def alert_settings(conn, _), do: reply(conn, Dokkit.Alerts.view())
 
   def save_alerts(params) do
@@ -641,7 +674,7 @@ defmodule DokkitWeb.ApiController do
   # changes something.
   def needs(method, path) do
     case {method, Enum.at(path, 2), List.last(path)} do
-      {_, area, _} when area in ["keys", "users", "update-all"] -> "admin"
+      {_, area, _} when area in ["keys", "users", "update-all", "phones"] -> "admin"
       {"GET", "certificate", "settings"} -> "admin"
       {"GET", "logs", _} -> "read-logs"
       {"GET", _, _} -> "read"

@@ -138,6 +138,11 @@ defmodule DokkitWeb.Router do
     post "/keys", ApiController, :add_key
     delete "/keys/:id", ApiController, :revoke_key
     get "/users", ApiController, :users
+    get "/phones", ApiController, :phones
+    post "/phones", ApiController, :add_phone
+    get "/phones/relay", ApiController, :get_relay
+    put "/phones/relay", ApiController, :put_relay
+    delete "/phones/:id", ApiController, :remove_phone
     post "/users", ApiController, :add_user
     delete "/users/:id", ApiController, :remove_user
     get "/machines/:id", ApiController, :machine

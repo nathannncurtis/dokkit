@@ -368,3 +368,16 @@ defmodule Dokkit.Batch do
     timestamps(updated_at: false)
   end
 end
+
+defmodule Dokkit.Phone do
+  use Dokkit.Schema
+
+  schema "phones" do
+    field :name, :string
+    field :slot, :string
+    field :token_hash, :binary
+    field :key, :binary
+    field :last_fetch_at, :utc_datetime_usec
+    timestamps(updated_at: false)
+  end
+end

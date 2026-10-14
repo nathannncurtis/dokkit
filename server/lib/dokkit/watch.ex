@@ -45,6 +45,7 @@ defmodule Dokkit.Watch do
           fn -> Task.start(fn -> Dokkit.Acme.tick(now) end) end,
           fn -> if archive && now.minute == 0, do: Dokkit.Logs.archive(archive) end,
           fn -> Issues.changed() end,
+          fn -> Dokkit.Phones.Sender.tick() end,
           fn ->
             today = Date.utc_today()
             Enum.each([today, Date.shift(today, month: 1)], &Dokkit.Logs.ensure_partition/1)
