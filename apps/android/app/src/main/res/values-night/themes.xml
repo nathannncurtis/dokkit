@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Dokkit" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#FF0F0F11</item>
+        <item name="android:windowBackground">#FF1E1917</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>

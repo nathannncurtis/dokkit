@@ -33,13 +33,13 @@ class Palette(
 
 private val light = Palette(
     bg = Color(0xFFFAFAFA), panel = Color(0xFFFFFFFF), line = Color(0xFFE6E6EA), ink = Color(0xFF18181B),
-    mute = Color(0xFF6B6B76), chip = Color(0xFFF0F0F3), brand = Color(0xFF6D4AFF), brandInk = Color(0xFFFFFFFF),
+    mute = Color(0xFF6B6B76), chip = Color(0xFFF0F0F3), brand = Color(0xFF0F766E), brandInk = Color(0xFFFFFFFF),
     ok = Color(0xFF147A3A), warn = Color(0xFFA14A08), bad = Color(0xFFC81E1E),
 )
 
 private val dark = Palette(
-    bg = Color(0xFF0F0F11), panel = Color(0xFF17171A), line = Color(0xFF2A2A2F), ink = Color(0xFFF4F4F5),
-    mute = Color(0xFFA1A1AA), chip = Color(0xFF29292E), brand = Color(0xFFA899FF), brandInk = Color(0xFF12101F),
+    bg = Color(0xFF1E1917), panel = Color(0xFF27201D), line = Color(0xFF40342F), ink = Color(0xFFF7F1EC),
+    mute = Color(0xFFB9A99E), chip = Color(0xFF3A2F2A), brand = Color(0xFFFF9A4D), brandInk = Color(0xFF2A1203),
     ok = Color(0xFF4ADE80), warn = Color(0xFFFBBF24), bad = Color(0xFFF87171),
 )
 
