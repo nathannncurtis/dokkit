@@ -82,7 +82,7 @@ class SnapshotTest {
         assertNull(leftOutText(snap))
         assertEquals("Log lines were left out of this snapshot to keep it small.", leftOutText(decode("""{"server":{"left_out":["logs"]}}""")))
         val empty = Home.build(decode("{}"), now)
-        assertEquals(TopBox.Fine("0 of 0 machines up · 0 things running"), empty.top)
+        assertEquals(TopBox.Fine("0 of 0 machines up Â· 0 things running"), empty.top)
         assertTrue(empty.hardware.isEmpty() && empty.groups.isEmpty())
     }
 
