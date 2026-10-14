@@ -33,7 +33,7 @@ The relay holds only what it cannot open.
 
 - Each phone has one key: 32 random bytes made by the server at pairing. The server keeps it (encrypted with the server's own secret, like other stored secrets) and the phone keeps it in the system key store (Keychain on iOS, Keystore on Android), set so it is not included in backups and is not readable while the phone is locked before first unlock.
 - For each snapshot the server makes a fresh 32-byte content key, compresses the snapshot JSON with gzip, and encrypts it with AES-256-GCM under the content key with a random 12-byte nonce.
-- For each phone it encrypts the content key with AES-256-GCM under that phone's key, with its own random nonce. The additional data for both encryptions is the mailbox id, the slot id and the snapshot's counter, so a sealed part cannot be moved to another mailbox, slot or time.
+- For each phone it encrypts the content key with AES-256-GCM under that phone's key, with its own random nonce. Each encryption carries additional data that names the mailbox and the snapshot's counter, and the wrapped key's also names the slot, so a sealed part cannot be moved to another mailbox, slot or time.
 - A phone opens its own wrapped content key, then the body. A body that does not open is treated as no snapshot. The relay has no key, so it cannot read a snapshot or make one a phone will accept.
 - Every snapshot carries a counter that only goes up. A phone refuses a snapshot whose counter is lower than the newest it has opened, so an old one cannot be played back to it.
 
@@ -88,6 +88,19 @@ Everything else answers `404`. A mailbox takes at most 4 uploads a minute and a 
 A slot that is not in the newest envelope no longer exists: its token stops working at that upload.
 
 The relay keeps one envelope per mailbox, in a file, and its own access log (time, mailbox, slot, status). It keeps no history of snapshots.
+
+### The exact bytes
+
+`spec/phone-cases/sealing.json` holds fixed keys and nonces and what they must produce; the server, the relay and both apps are tested against it. `spec/phone-cases/snapshot.json` is an example snapshot of an invented estate.
+
+- A mailbox id and a slot id are 16 random bytes in lower-case hex. Keys and nonces travel as standard base64 with padding.
+- An upload key and a fetch token are made like every other key (`api.md`): the prefix, 30 characters from `0-9A-Za-z`, then 6 characters that are the CRC-32 of those 30 written in base 62 with that alphabet, padded on the left with `0`.
+- `token_sha256` is the SHA-256 of the whole token text, in lower-case hex.
+- The snapshot is UTF-8 JSON, compressed with gzip, then encrypted. An AES-256-GCM result is the ciphertext followed by its 16-byte tag.
+- The additional data is UTF-8 text: `dokkit-phone-v1|<mailbox>|body|<counter>` for the body and `dokkit-phone-v1|<mailbox>|<slot>|<counter>` for a wrapped key, the counter in decimal.
+- `GET /m/<mailbox>/<slot>` answers `{"schema": 1, "counter": n, "made_at": "...", "slot_nonce": "...", "key": "...", "nonce": "...", "body": "..."}`: the slot's own nonce and wrapped key, then the body's nonce and the body.
+- The QR code is the text `dokkit-phone:1:` followed by base64url, without padding, of the JSON `{"relay": "https://...", "mailbox": "...", "slot": "...", "token": "dkf_...", "key": "<base64>", "name": "<the server's name>"}`.
+- Keys travel as `Authorization: Bearer <key>`.
 
 ## The server
 
