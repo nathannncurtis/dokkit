@@ -35,6 +35,34 @@ defmodule DokkitWeb.ApiControllerTest do
     assert %{"services" => _, "machines" => _} = body["fine"]
   end
 
+  test "a machine answers with its last update request", %{read: read, all: all} do
+    m = Dokkit.Repo.insert!(%Dokkit.Machine{name: "vault", kind: :enrolled})
+    assert %{"last_nudge" => nil} = json_response(call(:get, "/machines/#{m.id}", read), 200)
+
+    now = DateTime.utc_now()
+
+    Dokkit.Repo.insert!(%Dokkit.WorkRun{
+      machine_id: m.id,
+      name: "dokkit:nudge",
+      state: :refused,
+      started_at: now,
+      finished_at: now,
+      output: "Access is denied"
+    })
+
+    assert %{
+             "last_nudge" =>
+               %{"state" => "refused", "asked_at" => _, "answered_at" => answered} =
+                 nudge
+           } = json_response(call(:get, "/machines/#{m.id}", read), 200)
+
+    assert answered
+    refute Map.has_key?(nudge, "output")
+
+    assert %{"last_nudge" => %{"output" => "Access is denied"}} =
+             json_response(call(:get, "/machines/#{m.id}", all), 200)
+  end
+
   test "a read token reads everything but log contents, and cannot act", %{job: job, read: read} do
     assert %{"needs_you" => [issue], "snoozed" => []} =
              json_response(call(:get, "/inbox", read), 200)

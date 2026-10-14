@@ -60,6 +60,29 @@ defmodule Dokkit.Work do
            do: queue(%WorkRun{machine_id: machine_id, name: @nudge, by: "update"})
   end
 
+  @doc """
+  The newest nudge for a machine: when it was asked, how it ended and what the machine said, or
+  nil. A nudge nobody took in a day is `expired`.
+  """
+  def last_nudge(machine_id) do
+    run =
+      Repo.one(
+        from r in WorkRun,
+          where: r.machine_id == ^machine_id and r.name == @nudge,
+          order_by: [desc: r.inserted_at],
+          limit: 1
+      )
+
+    run &&
+      %{
+        asked_at: run.inserted_at,
+        state:
+          if(run.state == :refused and is_nil(run.started_at), do: :expired, else: run.state),
+        answered_at: run.finished_at,
+        output: run.output
+      }
+  end
+
   @doc "Queues a run that sends an iMessage from this Mac. It is offered only to this machine."
   def imessage(machine_id, to, text, alert_id \\ nil) do
     queue(%WorkRun{

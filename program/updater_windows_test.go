@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/xml"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -141,5 +142,16 @@ func TestSecondRunCannotTakeTheLock(t *testing.T) {
 		t.Fatal(err)
 	} else {
 		r2()
+	}
+}
+
+func TestPokeThatSchtasksRefusesCarriesItsExitAndOutput(t *testing.T) {
+	old := runTool
+	defer func() { runTool = old }()
+	runTool = func(string, ...string) (string, error) {
+		return "ERROR: Access is denied.\r\n", errors.New("exit status 1")
+	}
+	if _, err := realPoke(); err == nil || err.Error() != "schtasks: exit status 1 ERROR: Access is denied." {
+		t.Fatalf("%v", err)
 	}
 }

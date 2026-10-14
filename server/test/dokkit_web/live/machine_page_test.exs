@@ -109,6 +109,44 @@ defmodule DokkitWeb.MachinePageTest do
     assert has_element?(view, "#updating h1", "Updating to v1.1.0")
   end
 
+  test "the card shows the last update request in each state", %{conn: conn, m: m} do
+    {:ok, view, _} = live(conn, "/machines/#{m.id}")
+    refute has_element?(view, "#nudge")
+
+    now = DateTime.utc_now()
+
+    show = fn attrs ->
+      Repo.delete_all(Dokkit.WorkRun)
+      Repo.insert!(struct(Dokkit.WorkRun, [machine_id: m.id, name: "dokkit:nudge"] ++ attrs))
+      {:ok, view, _} = live(conn, "/machines/#{m.id}")
+      view |> element("#nudge") |> render()
+    end
+
+    assert show.(state: :queued) =~ "still queued"
+    assert show.(state: :running, started_at: now) =~ "taken, no answer yet"
+
+    assert show.(
+             state: :ok,
+             started_at: now,
+             finished_at: now,
+             output: "Started the updater task.\n"
+           ) =~ ~r/done, answered .*\. Started the updater task\./s
+
+    assert show.(
+             state: :refused,
+             started_at: now,
+             finished_at: now,
+             output:
+               "Could not ask the updater to check: schtasks: exit status 1 ERROR: Access is denied."
+           ) =~ "refused"
+
+    assert show.(state: :fail, started_at: now, finished_at: now, output: "boom") =~
+             ~r/failed, answered .*\. boom/s
+
+    assert show.(state: :refused, finished_at: now, output: "The machine did not take this run.") =~
+             "expired"
+  end
+
   test "the sidebar and Everything link to the machine page, old anchors still exist", %{
     conn: conn,
     m: m

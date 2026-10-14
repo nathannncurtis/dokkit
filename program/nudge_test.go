@@ -10,9 +10,16 @@ import (
 )
 
 func nudgeWith(t *testing.T, poke func() (string, error)) []string {
-	old := pokeUpdater
+	got, _ := nudgeLogged(t, poke)
+	return got
+}
+
+func nudgeLogged(t *testing.T, poke func() (string, error)) ([]string, []string) {
+	old, oldLog := pokeUpdater, nudgeLog
 	pokeUpdater = poke
-	defer func() { pokeUpdater = old }()
+	var logged []string
+	nudgeLog = func(said string) { logged = append(logged, said) }
+	defer func() { pokeUpdater, nudgeLog = old, oldLog }()
 	var got []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -20,7 +27,7 @@ func nudgeWith(t *testing.T, poke func() (string, error)) []string {
 	}))
 	defer srv.Close()
 	(&client{url: srv.URL, key: "k"}).nudge("r1")
-	return got
+	return got, logged
 }
 
 func TestNudgeAnswersDoneAfterPoking(t *testing.T) {
@@ -41,5 +48,21 @@ func TestNudgeThatCannotPokeGivesTheReason(t *testing.T) {
 	got := nudgeWith(t, func() (string, error) { return "", errors.New("Access is denied") })
 	if len(got) != 1 || !strings.Contains(got[0], `{"refused":"Could not ask the updater to check: Access is denied"}`) {
 		t.Fatalf("%q", got)
+	}
+}
+
+func TestNudgeLogsEachOutcome(t *testing.T) {
+	_, logged := nudgeLogged(t, func() (string, error) { return "Started the updater task.\n", nil })
+	if len(logged) != 1 || !strings.Contains(logged[0], "Started the updater task") {
+		t.Fatalf("%q", logged)
+	}
+	_, logged = nudgeLogged(t, func() (string, error) { return "", errNoNudge })
+	if len(logged) != 1 || !strings.Contains(logged[0], "next scheduled check") {
+		t.Fatalf("%q", logged)
+	}
+	got, logged := nudgeLogged(t, func() (string, error) { return "", errors.New("schtasks: exit status 1 ERROR: Access is denied.") })
+	want := "Could not ask the updater to check: schtasks: exit status 1 ERROR: Access is denied."
+	if len(logged) != 1 || logged[0] != want || len(got) != 1 || !strings.Contains(got[0], want) {
+		t.Fatalf("%q %q", logged, got)
 	}
 }

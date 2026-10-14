@@ -143,7 +143,8 @@ defmodule DokkitWeb.MachineLive do
       zone: Dokkit.QuietSchedules.zone_label(config, now),
       defaults: config,
       routes: Alerts.channels(),
-      scan: Dokkit.Found.scans()[machine.id]
+      scan: Dokkit.Found.scans()[machine.id],
+      nudge: Dokkit.Work.last_nudge(machine.id)
     )
   end
 
@@ -212,6 +213,13 @@ defmodule DokkitWeb.MachineLive do
   end
 
   defp since(issue), do: "#{Issue.short_id(issue)}, since #{at(issue.since)} UTC"
+
+  defp nudge_state(:queued), do: "still queued"
+  defp nudge_state(:running), do: "taken, no answer yet"
+  defp nudge_state(:ok), do: "done"
+  defp nudge_state(:fail), do: "failed"
+  defp nudge_state(:refused), do: "refused"
+  defp nudge_state(:expired), do: "expired, the machine never took it"
 
   defp snoozed?(issue),
     do:
@@ -423,6 +431,14 @@ defmodule DokkitWeb.MachineLive do
               
               <dd :if={@machine.wanted_version} class="mono">{@machine.wanted_version}</dd>
             </dl>
+            
+            <div :if={@nudge} class="foot" id="nudge">
+              <span class={["st", @nudge.state in [:fail, :refused, :expired] && "warn"]}>
+                Last update request {at(@nudge.asked_at)} UTC: {nudge_state(@nudge.state)}{if @nudge.answered_at,
+                  do: ", answered " <> at(@nudge.answered_at) <> " UTC"}{if @nudge.output != "",
+                  do: ". " <> String.trim(@nudge.output)}
+              </span>
+            </div>
             
             <div
               :if={Releases.outcome(@machine) || (@current_user.role == :owner and @movable)}

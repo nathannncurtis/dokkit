@@ -11,5 +11,5 @@ func realPoke() (string, error) {
 	if out, err := runTool("schtasks.exe", "/run", "/tn", taskName); err != nil {
 		return "", fmt.Errorf("schtasks: %v %s", err, strings.TrimSpace(out))
 	}
-	return "Asked the updater to check now.\n", nil
+	return "Started the updater task.\n", nil
 }
