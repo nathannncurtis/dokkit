@@ -9,13 +9,15 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     CODE_SIGN_STYLE: Automatic
-    DEVELOPMENT_TEAM: ""
 targets:
   Dokkit:
     type: application
     platform: iOS
     sources:
       - Dokkit
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
     dependencies:
       - package: DokkitKit
         product: DokkitKit
@@ -23,7 +25,6 @@ targets:
         product: DokkitUI
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.dokkit.phone
         INFOPLIST_FILE: Dokkit/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         MARKETING_VERSION: "0.1.0"
