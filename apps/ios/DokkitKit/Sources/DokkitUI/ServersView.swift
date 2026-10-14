@@ -22,10 +22,10 @@ struct ServersView: View {
                             }
                         }
                     }
-                    Button { model.addingServer = true } label: {
+                    Button { model.pasteOnly = false; model.addingServer = true } label: {
                         Label("Add a server", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity, minHeight: 44)
                     }
-                    .buttonStyle(.borderedProminent).tint(Theme.brand)
+                    .buttonStyle(PrimaryButtonStyle())
                 }
                 .padding(16)
             }
@@ -33,7 +33,6 @@ struct ServersView: View {
             .refreshable { await model.refresh() }
         }
         .navigationTitle("Servers")
-        .sheet(isPresented: Binding(get: { model.addingServer }, set: { model.addingServer = $0 })) { AddServerSheet(model: model, scanner: scanner) }
         .confirmationDialog(
             "Remove \(model.removing?.name ?? "this server") from this phone?", isPresented: Binding(get: { model.removing != nil }, set: { if !$0 { model.removing = nil } }),
             titleVisibility: .visible
@@ -88,12 +87,14 @@ struct AddServerSheet: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Scan the QR code in the Dokkit web interface under Settings, Phones, Add a phone. It is shown once.")
                         .font(.subheadline).foregroundStyle(Theme.mute)
-                    scanner { code in Task { await submit(code) } }
-                        .frame(height: 300).clipShape(RoundedRectangle(cornerRadius: 10))
+                    if !model.pasteOnly {
+                        scanner { code in Task { await submit(code) } }
+                            .frame(height: 300).clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
                     if let error = model.addError {
                         Label(error, systemImage: "exclamationmark.triangle.fill").font(.subheadline).foregroundStyle(Theme.warn)
                     }
-                    Text("Or paste the code").font(.footnote.weight(.semibold))
+                    Text(model.pasteOnly ? "Paste the code" : "Or paste the code").font(.footnote.weight(.semibold))
                     TextField("dokkit-phone:1:...", text: Binding(get: { model.pasted }, set: { model.pasted = $0 }), axis: .vertical)
                         .font(.system(.footnote, design: .monospaced))
                         .textFieldStyle(.roundedBorder).autocorrectionDisabled()
@@ -107,6 +108,7 @@ struct AddServerSheet: View {
             .navigationTitle("Add a server")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.frame(minHeight: 44) } }
         }
+        .tint(Theme.brand)
     }
 
     private func submit(_ code: String) async {

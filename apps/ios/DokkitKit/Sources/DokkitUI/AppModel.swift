@@ -8,7 +8,10 @@ public final class AppModel {
     public private(set) var states: [String: ServerState] = [:]
     public private(set) var refreshing = false
     public var selectedID: String?
+    public private(set) var loaded = false
     var openMachines: [String: Bool] = [:]
+    var openMore: [String: Bool] = [:]
+    var pasteOnly = false
     var addingServer = false
     var removing: PairedServer?
     var addError: String?
@@ -24,6 +27,7 @@ public final class AppModel {
     public func load() async {
         servers = (try? await refresher.store.servers()) ?? []
         for s in servers where states[s.id] == nil { states[s.id] = await refresher.load(s.id) }
+        loaded = true
     }
 
     public func refresh() async {

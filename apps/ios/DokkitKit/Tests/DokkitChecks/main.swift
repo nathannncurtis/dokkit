@@ -23,13 +23,20 @@ await run("SealingTests.counterRule") { try await SealingTests().counterRule() }
 await run("SealingTests.gzipRejectsGarbage") { try await SealingTests().gzipRejectsGarbage() }
 await run("SnapshotTests.decodesWithoutLoss") { try await SnapshotTests().decodesWithoutLoss() }
 await run("SnapshotTests.toleratesUnknownFieldsAndValues") { try await SnapshotTests().toleratesUnknownFieldsAndValues() }
-await run("SnapshotTests.needsYouScreen") { try await SnapshotTests().needsYouScreen() }
-await run("SnapshotTests.everythingScreen") { try await SnapshotTests().everythingScreen() }
 await run("SnapshotTests.serviceScreen") { try await SnapshotTests().serviceScreen() }
 await run("SnapshotTests.chartDrawsFromValues") { try await SnapshotTests().chartDrawsFromValues() }
 await run("SnapshotTests.realChartsDecode") { try await SnapshotTests().realChartsDecode() }
-await run("SnapshotTests.vitalsAreShown") { try await SnapshotTests().vitalsAreShown() }
 await run("SnapshotTests.ageTextAndWarning") { try await SnapshotTests().ageTextAndWarning() }
+await run("HomeTests.fixtureHome") { try await HomeTests().fixtureHome() }
+await run("HomeTests.fineBox") { try await HomeTests().fineBox() }
+await run("HomeTests.attentionBox") { try await HomeTests().attentionBox() }
+await run("HomeTests.meters") { try await HomeTests().meters() }
+await run("HomeTests.openedList") { try await HomeTests().openedList() }
+await run("HomeTests.groupsAndKinds") { try await HomeTests().groupsAndKinds() }
+await run("HomeTests.countLines") { try await HomeTests().countLines() }
+await run("HomeTests.hiddenThings") { try await HomeTests().hiddenThings() }
+await run("HomeTests.sorting") { try await HomeTests().sorting() }
+await run("HomeTests.downtimeAndStatus") { try await HomeTests().downtimeAndStatus() }
 
 print("\(assertions) assertions, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

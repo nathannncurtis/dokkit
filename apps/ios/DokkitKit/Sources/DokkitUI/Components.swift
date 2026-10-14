@@ -3,15 +3,19 @@ import DokkitKit
 
 struct StateMark: View {
     let level: Level
+    var word: String?
+    var showsWord = true
     @ScaledMetric(relativeTo: .body) private var size = 11
 
     var body: some View {
         HStack(spacing: 6) {
             shape.frame(width: size, height: size)
-            Text(level.word).font(.caption.weight(.medium)).foregroundStyle(Theme.color(level))
+            if showsWord {
+                Text(word ?? level.word).font(.caption.weight(.medium)).foregroundStyle(Theme.color(level))
+            }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("State \(level.word)")
+        .accessibilityLabel("State \(word ?? level.word)")
     }
 
     @ViewBuilder private var shape: some View {

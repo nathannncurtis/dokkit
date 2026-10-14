@@ -46,6 +46,7 @@ enum Theme {
     static let mute = Color(light: 0x6b6b76, dark: 0xb9a99e)
     static let chip = Color(light: 0xf0f0f3, dark: 0x3a2f2a)
     static let brand = Color(light: 0x0f766e, dark: 0xff9a4d)
+    static let brandInk = Color(light: 0xffffff, dark: 0x2a1203)
     static let ok = Color(light: 0x147a3a, dark: 0x4ade80)
     static let warn = Color(light: 0xa14a08, dark: 0xfbbf24)
     static let bad = Color(light: 0xc81e1e, dark: 0xf87171)
