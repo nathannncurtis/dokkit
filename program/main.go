@@ -215,7 +215,7 @@ func wantsHelp(args []string) bool {
 }
 
 // toServer is how every request to the Dokkit server travels. Checks of other things do not use it.
-var toServer http.RoundTripper = http.DefaultTransport
+var toServer http.RoundTripper = newLink(nil, defaultLinkLimits)
 
 // pinTo makes the server's certificate the only thing trusted: the one with this fingerprint
 // and no other, whatever name or authority it carries. With no pin, the usual checks apply.
@@ -223,9 +223,12 @@ func pinTo(pin string) {
 	if pin == "" {
 		return
 	}
+	toServer = newLink(pinConfig(pin), defaultLinkLimits)
+}
+
+func pinConfig(pin string) *tls.Config {
 	want := strings.ToLower(strings.TrimPrefix(pin, "sha256:"))
-	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.TLSClientConfig = &tls.Config{
+	return &tls.Config{
 		InsecureSkipVerify: true,
 		VerifyPeerCertificate: func(certificates [][]byte, _ [][]*x509.Certificate) error {
 			if len(certificates) > 0 {
@@ -236,7 +239,6 @@ func pinTo(pin string) {
 			return errPinMismatch
 		},
 	}
-	toServer = t
 }
 
 type client struct {
