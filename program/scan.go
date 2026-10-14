@@ -516,6 +516,8 @@ func (c *client) work() {
 			c.imessage(job.Run, job.To, job.Text)
 		case scanWork:
 			c.lookAgain(job.Run)
+		case nudgeWork:
+			c.nudge(job.Run)
 		default:
 			c.postResult("/api/v1/work/"+job.Run+"/result", []byte(`{"refused":"This program does not run that."}`))
 		}

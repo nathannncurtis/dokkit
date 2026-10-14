@@ -6,9 +6,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
-	"encoding/json"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestCompareVersions(t *testing.T) {
@@ -157,7 +158,7 @@ func newRig(t *testing.T, hostsServer bool) *rig {
 	os.MkdirAll(filepath.Join(r.dir, "prog"), 0o700)
 	os.WriteFile(filepath.Join(r.dir, "up", "u.exe"), []byte("v1.0.0"), 0o700)
 	os.WriteFile(filepath.Join(r.dir, "prog", "dokkit.exe"), []byte("v1.0.0"), 0o700)
-	oldWhere, oldOps, oldLoad, oldVer, oldRetry := where, ops, loadClient, version, retryFor
+	oldWhere, oldOps, oldLoad, oldVer, oldRetry, oldGap := where, ops, loadClient, version, retryFor, minGap
 	where = layout{data: data, updaterExe: filepath.Join(r.dir, "up", "u.exe"), programExe: filepath.Join(r.dir, "prog", "dokkit.exe"),
 		serverBin: filepath.Join(r.dir, "nosuch", "dokkit.bat"), serverEnv: filepath.Join(r.dir, "settings.env")}
 	if hostsServer {
@@ -165,7 +166,7 @@ func newRig(t *testing.T, hostsServer bool) *rig {
 		os.WriteFile(where.serverBin, nil, 0o600)
 		os.WriteFile(where.serverEnv, []byte("A=1\nPORT=8443\n"), 0o600)
 	}
-	version, retryFor = "v1.0.0", 0
+	version, retryFor, minGap = "v1.0.0", 0, 0
 	ops = hostOps{
 		admin: func() bool { return true },
 		lock:  func(string) (func(), error) { return func() {}, nil },
@@ -200,7 +201,9 @@ func newRig(t *testing.T, hostsServer bool) *rig {
 			return devVersion
 		},
 	}
-	t.Cleanup(func() { where, ops, loadClient, version, retryFor = oldWhere, oldOps, oldLoad, oldVer, oldRetry })
+	t.Cleanup(func() {
+		where, ops, loadClient, version, retryFor, minGap = oldWhere, oldOps, oldLoad, oldVer, oldRetry, oldGap
+	})
 	r.srv = httptest.NewServer(http.HandlerFunc(r.handle))
 	t.Cleanup(r.srv.Close)
 	loadClient = func() (*client, error) { return &client{url: r.srv.URL, key: "dkm_test"}, nil }
@@ -277,6 +280,26 @@ func TestNothingWanted(t *testing.T) {
 	}
 	if !strings.Contains(r.read(filepath.Join(where.data, "updater.log")), "nothing wanted") {
 		t.Fatal("the outcome is not in the log")
+	}
+}
+
+func TestARunRightAfterAnotherJustExits(t *testing.T) {
+	r := newRig(t, false)
+	minGap = 30 * time.Second
+	scheduled := 0
+	ops.schedule = func() { scheduled++ }
+	if updaterRun() != 0 || r.query == "" || scheduled != 1 {
+		t.Fatalf("the first run did not ask or refresh the schedule: %q %d", r.query, scheduled)
+	}
+	r.query = ""
+	if updaterRun() != 0 || r.query != "" || scheduled != 1 {
+		t.Fatalf("a run within %v of the last one asked the server: %q %d", minGap, r.query, scheduled)
+	}
+	st, _ := readState()
+	st.Ran = time.Now().Add(-31 * time.Second).UTC().Format(time.RFC3339Nano)
+	saveState(st)
+	if updaterRun() != 0 || r.query == "" || scheduled != 2 {
+		t.Fatalf("a run after the gap was skipped: %q %d", r.query, scheduled)
 	}
 }
 

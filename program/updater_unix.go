@@ -66,8 +66,9 @@ func realLayout() layout {
 
 func realHost() hostOps {
 	return hostOps{
-		admin: func() bool { return os.Geteuid() == 0 },
-		lock:  lockFile,
+		admin:    func() bool { return os.Geteuid() == 0 },
+		lock:     lockFile,
+		schedule: refreshSchedule,
 		// A running file is replaced by renaming, so the restart is the only stop there is.
 		stopService: func(string) error { return nil },
 		startService: func(string) error {
@@ -422,6 +423,7 @@ func updaterRehearse(dir string) int {
 	}
 	ops = realHost()
 	ops.admin = func() bool { return true }
+	ops.schedule = nil
 	ops.startService = func(string) error { logf("rehearsal: would restart the program"); return nil }
 	ops.versionOf = func(string) string { return devVersion }
 	loadClient = load

@@ -3,11 +3,56 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestSystemdUnitsAreBroughtToTheCurrentOnesOnce(t *testing.T) {
+	dir := t.TempDir()
+	oldS, oldT, oldP, oldRun, oldCfg := timerServicePath, timerUnitPath, pathUnitPath, runCmd, upConfigPath
+	defer func() {
+		timerServicePath, timerUnitPath, pathUnitPath, runCmd, upConfigPath = oldS, oldT, oldP, oldRun, oldCfg
+	}()
+	timerServicePath, timerUnitPath, pathUnitPath = filepath.Join(dir, "u.service"), filepath.Join(dir, "u.timer"), filepath.Join(dir, "u.path")
+	upConfigPath = filepath.Join(dir, "config.json")
+	cfg := me()
+	cfg.Method, cfg.Program = methodSystemUnit, "/usr/local/bin/dokkit"
+	os.WriteFile(upConfigPath, cfg.encode(), 0o644)
+	useNudgeFile(t)
+	exe := "/usr/local/lib/dokkit-updater/dokkit"
+	os.WriteFile(timerServicePath, []byte(timerService(exe)), 0o644)
+	os.WriteFile(timerUnitPath, []byte(timerUnit()), 0o644)
+
+	var calls []string
+	active := "inactive"
+	runCmd = func(name string, args ...string) ([]byte, error) {
+		calls = append(calls, name+" "+strings.Join(args, " "))
+		if args[0] == "is-active" {
+			return []byte(active), errors.New("exit status 3")
+		}
+		if args[0] == "enable" {
+			active = "active"
+		}
+		return nil, nil
+	}
+	changed, err := syncUnits(exe)
+	if err != nil || len(changed) != 1 || changed[0] != "u.path" {
+		t.Fatalf("an old install should gain only the path unit: %v %v", changed, err)
+	}
+	if b, _ := os.ReadFile(pathUnitPath); string(b) != pathUnit() {
+		t.Fatalf("%s", b)
+	}
+	if got := strings.Join(calls, "|"); !strings.Contains(got, "systemctl daemon-reload") || !strings.Contains(got, "systemctl enable --now dokkit-updater.path") {
+		t.Fatalf("%s", got)
+	}
+	calls = nil
+	if changed, err := syncUnits(exe); err != nil || len(changed) != 0 || strings.Contains(strings.Join(calls, "|"), "daemon-reload") || strings.Contains(strings.Join(calls, "|"), "enable") {
+		t.Fatalf("a current install was touched: %v %v %q", changed, err, calls)
+	}
+}
 
 func TestQnapCrontabIsEditedLoadedAndRestored(t *testing.T) {
 	old, oldRun := qnapCrontab, runCmd

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -37,8 +39,9 @@ func realLayout() layout {
 
 func realHost() hostOps {
 	return hostOps{
-		admin: func() bool { return windows.GetCurrentProcessToken().IsElevated() },
-		lock:  lockFile,
+		admin:    func() bool { return windows.GetCurrentProcessToken().IsElevated() },
+		lock:     lockFile,
+		schedule: upgradeTask,
 		stopService: func(name string) error {
 			return withService(name, func(s *mgr.Service) error {
 				if st, err := s.Query(); err == nil && st.State == svc.Stopped {
@@ -160,12 +163,34 @@ func updaterSteps(dir string) [][]string {
 	}
 }
 
+// The task's security descriptor: the system account and administrators have full control, and
+// Local Service, which the program runs as, may read and start the task but not change it.
+const taskSDDL = "D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;GRGX;;;LS)"
+
+const markHere = "@schedule@"
+
+// taskMarker names this exact task text. It is in the task's description, so a task that carries it is current.
+func taskMarker(exe string) string {
+	sum := sha256.Sum256([]byte(taskTemplate(exe)))
+	return "schedule " + hex.EncodeToString(sum[:6])
+}
+
 // taskXML is the scheduled task: the system account, highest rights, every five minutes and at start-up.
 func taskXML(exe string) []byte {
+	s := strings.Replace(taskTemplate(exe), markHere, taskMarker(exe), 1)
+	u := utf16.Encode([]rune(s))
+	b := []byte{0xFF, 0xFE}
+	for _, c := range u {
+		b = append(b, byte(c), byte(c>>8))
+	}
+	return b
+}
+
+func taskTemplate(exe string) string {
 	esc := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(`"` + exe + `"`)
-	s := `<?xml version="1.0" encoding="UTF-16"?>
+	return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo><Description>Installs the Dokkit releases a person approved. Makes outbound requests only.</Description></RegistrationInfo>
+  <RegistrationInfo><SecurityDescriptor>` + taskSDDL + `</SecurityDescriptor><Description>Installs the Dokkit releases a person approved. Makes outbound requests only. ` + markHere + `</Description></RegistrationInfo>
   <Triggers>
     <TimeTrigger><Repetition><Interval>PT5M</Interval></Repetition><StartBoundary>2026-01-01T00:00:00</StartBoundary><Enabled>true</Enabled></TimeTrigger>
     <BootTrigger><Enabled>true</Enabled></BootTrigger>
@@ -182,12 +207,30 @@ func taskXML(exe string) []byte {
   <Actions Context="Author"><Exec><Command>` + esc + `</Command><Arguments>updater run</Arguments></Exec></Actions>
 </Task>
 `
-	u := utf16.Encode([]rune(s))
-	b := []byte{0xFF, 0xFE}
-	for _, c := range u {
-		b = append(b, byte(c), byte(c>>8))
+}
+
+func registerTask(exe string) error {
+	xmlFile := filepath.Join(where.work(), "task.xml")
+	if err := os.WriteFile(xmlFile, taskXML(exe), 0o600); err != nil {
+		return err
 	}
-	return b
+	if out, err := runTool("schtasks.exe", "/create", "/tn", taskName, "/xml", xmlFile, "/f"); err != nil {
+		return fmt.Errorf("schtasks could not register the task: %v\n%s", err, out)
+	}
+	return nil
+}
+
+// upgradeTask registers the task again when the installed one is not the current text, so
+// a machine that got the updater long ago gets what a newer updater needs. A missing task is left missing.
+func upgradeTask() {
+	out, err := runTool("schtasks.exe", "/query", "/tn", taskName, "/xml")
+	if err != nil || strings.Contains(out, taskMarker(where.updaterExe)) {
+		return
+	}
+	logf("the updater's task is out of date; registering it again")
+	if err := registerTask(where.updaterExe); err != nil {
+		logf("could not register the updater's task again: %v", err)
+	}
 }
 
 func updaterInstall() int {
@@ -265,14 +308,7 @@ func installUpdater() error {
 			return err
 		}
 	}
-	xmlFile := filepath.Join(where.work(), "task.xml")
-	if err := os.WriteFile(xmlFile, taskXML(where.updaterExe), 0o600); err != nil {
-		return err
-	}
-	if out, err := runTool("schtasks.exe", "/create", "/tn", taskName, "/xml", xmlFile, "/f"); err != nil {
-		return fmt.Errorf("schtasks could not register the task: %v\n%s", err, out)
-	}
-	return nil
+	return registerTask(where.updaterExe)
 }
 
 func updaterUninstall() int {

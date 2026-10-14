@@ -10,6 +10,8 @@ import (
 func realLayout() layout { return layout{} }
 func realHost() hostOps  { return hostOps{} }
 
+func realPoke() (string, error) { return "", errNoNudge }
+
 func keepOwner(tmp, ref string) error { return nil }
 
 func syncDir(string) {}

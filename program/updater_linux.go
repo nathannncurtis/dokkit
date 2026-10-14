@@ -14,11 +14,12 @@ import (
 	"syscall"
 )
 
-const (
+const volumeFolder = ".dokkit-updater"
+
+var (
 	timerServicePath = "/etc/systemd/system/" + timerName + ".service"
 	timerUnitPath    = "/etc/systemd/system/" + timerName + ".timer"
-
-	volumeFolder = ".dokkit-updater"
+	pathUnitPath     = "/etc/systemd/system/" + timerName + ".path"
 )
 
 var qnapCrontab = "/etc/config/crontab"
@@ -137,18 +138,13 @@ func systemdRunning() bool {
 
 func installTimer(exe string) (string, error) {
 	if systemdRunning() {
-		if err := os.WriteFile(timerServicePath, []byte(timerService(exe)), 0o644); err != nil {
+		if _, err := syncUnits(exe); err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(timerUnitPath, []byte(timerUnit()), 0o644); err != nil {
+		if err := systemctl("enable", "--now", timerName+".timer"); err != nil {
 			return "", err
 		}
-		for _, args := range [][]string{{"daemon-reload"}, {"enable", "--now", timerName + ".timer"}} {
-			if err := systemctl(args...); err != nil {
-				return "", err
-			}
-		}
-		return fmt.Sprintf("the systemd timer %s.timer, every five minutes (%s and %s)", timerName, timerUnitPath, timerServicePath), nil
+		return fmt.Sprintf("the systemd timer %s.timer, every five minutes, and %s.path, when the program asks (in %s)", timerName, timerName, filepath.Dir(timerUnitPath)), nil
 	}
 	where, _, err := editCrontab(func(tab string) string { return addCron(tab, cronLine(exe)) })
 	if err != nil {
@@ -157,11 +153,56 @@ func installTimer(exe string) (string, error) {
 	return "a root crontab line in " + where + ", every five minutes", nil
 }
 
+// syncUnits makes the three units the current text and the path unit enabled, and returns the files it changed.
+func syncUnits(exe string) (changed []string, err error) {
+	c, err := readUpConfig()
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureNudge(c); err != nil {
+		return nil, err
+	}
+	for _, u := range []struct{ path, want string }{{timerServicePath, timerService(exe)}, {timerUnitPath, timerUnit()}, {pathUnitPath, pathUnit()}} {
+		did, err := writeIfChanged(u.path, u.want)
+		if err != nil {
+			return changed, err
+		}
+		if did {
+			changed = append(changed, filepath.Base(u.path))
+		}
+	}
+	if len(changed) > 0 {
+		if err := systemctl("daemon-reload"); err != nil {
+			return changed, err
+		}
+	}
+	if out, _ := runCmd("systemctl", "is-active", pathUnitName); len(changed) > 0 || strings.TrimSpace(string(out)) != "active" {
+		return changed, systemctl("enable", "--now", pathUnitName)
+	}
+	return changed, nil
+}
+
+// refreshSchedule brings a systemd updater installed before the nudge to the current units. The
+// running job is not touched: a daemon-reload leaves a running service alone.
+func refreshSchedule() {
+	if !systemdRunning() || !exists(timerUnitPath) {
+		return
+	}
+	changed, err := syncUnits(where.updaterExe)
+	if len(changed) > 0 {
+		logf("the updater's schedule was out of date; wrote %s", strings.Join(changed, ", "))
+	}
+	if err != nil {
+		logf("could not bring the updater's schedule up to date: %v", err)
+	}
+}
+
 func removeTimer() (string, error) {
 	var gone []string
-	if exists(timerUnitPath) || exists(timerServicePath) {
+	if exists(timerUnitPath) || exists(timerServicePath) || exists(pathUnitPath) {
+		runCmd("systemctl", "disable", "--now", pathUnitName)
 		runCmd("systemctl", "disable", "--now", timerName+".timer")
-		for _, p := range []string{timerUnitPath, timerServicePath} {
+		for _, p := range []string{pathUnitPath, timerUnitPath, timerServicePath} {
 			if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 				return "", err
 			}

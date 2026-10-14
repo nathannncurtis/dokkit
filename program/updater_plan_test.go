@@ -202,6 +202,31 @@ func TestUnitTexts(t *testing.T) {
 	}
 }
 
+func TestNudgeWatchedByThePathUnitAndThePlist(t *testing.T) {
+	p := pathUnit()
+	for _, w := range []string{"PathChanged=/var/lib/dokkit-nudge/now", "Unit=dokkit-updater.service", "WantedBy=paths.target"} {
+		if !strings.Contains(p, w) {
+			t.Errorf("path unit lacks %s: %s", w, p)
+		}
+	}
+	plist := launchdPlist("/Library/Application Support/DokkitUpdater/dokkit")
+	for _, w := range []string{"<key>WatchPaths</key>", "<string>/var/db/dokkit-nudge/now</string>", "<key>StartInterval</key><integer>300</integer>"} {
+		if !strings.Contains(plist, w) {
+			t.Errorf("plist lacks %s", w)
+		}
+	}
+	if strings.Contains(timerUnit(), "Path") || strings.Contains(timerService("/x"), "nudge") {
+		t.Error("the timer and the service are unchanged by the nudge")
+	}
+}
+
+func TestLaunchdReloadRunsApartFromTheJobWaitingForItToEnd(t *testing.T) {
+	argv := launchdReload("/Library/LaunchDaemons/com.dokkit.updater.plist")
+	if argv[0] != "/bin/sh" || !strings.HasPrefix(argv[2], "sleep ") || !strings.Contains(argv[2], "bootout system/com.dokkit.updater") || argv[len(argv)-1] != "/Library/LaunchDaemons/com.dokkit.updater.plist" {
+		t.Fatalf("%q", argv)
+	}
+}
+
 func TestCrontabEdits(t *testing.T) {
 	line := cronLine("/usr/local/lib/dokkit-updater/dokkit")
 	if line != "*/5 * * * * /usr/local/lib/dokkit-updater/dokkit updater run >/dev/null 2>&1 # dokkit-updater" {

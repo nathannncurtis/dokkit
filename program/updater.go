@@ -30,6 +30,7 @@ type hostOps struct {
 	installer                 func(ctx context.Context, script string) (string, error)
 	portUp                    func(port string) bool
 	versionOf                 func(exe string) string
+	schedule                  func() // makes the updater's own task, units or plist the current ones; nil in a rehearsal
 }
 
 var (
@@ -39,6 +40,7 @@ var (
 	loadClient     = load
 	runLimit       = 45 * time.Minute
 	retryFor       = time.Minute
+	minGap         = 30 * time.Second
 	programService = "dokkit"
 	devVersion     = "v0.0.0-dev"
 	serverZip      = "dokkit-windows-x64.zip"
@@ -54,6 +56,7 @@ type outcome struct {
 type state struct {
 	Server  string   `json:"server,omitempty"` // the installed server's version
 	Checked string   `json:"checked,omitempty"`
+	Ran     string   `json:"ran,omitempty"` // when the last run ended
 	LastAt  string   `json:"last_at,omitempty"`
 	Last    *outcome `json:"last,omitempty"`
 	Unsent  *outcome `json:"unsent,omitempty"` // a result the server has not taken yet
@@ -116,6 +119,11 @@ func updaterRun() int {
 		return 0
 	}
 	defer release()
+	if st, err := readState(); err == nil {
+		if at, err := time.Parse(time.RFC3339Nano, st.Ran); err == nil && time.Since(at) < minGap {
+			return 0
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), runLimit)
 	defer cancel()
 	c, err := loadClient()
@@ -123,7 +131,15 @@ func updaterRun() int {
 		logf("cannot read the program's configuration: %v", err)
 		return 1
 	}
-	return updateOnce(ctx, c)
+	code := updateOnce(ctx, c)
+	if st, err := readState(); err == nil {
+		st.Ran = now()
+		saveState(st)
+	}
+	if ops.schedule != nil {
+		ops.schedule()
+	}
+	return code
 }
 
 func (st state) serverVersion() string {

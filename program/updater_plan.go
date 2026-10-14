@@ -17,6 +17,7 @@ const (
 	methodProcess     = "process"
 
 	timerName    = "dokkit-updater"
+	pathUnitName = timerName + ".path"
 	launchdLabel = "com.dokkit.updater"
 	cronMarker   = "# dokkit-updater"
 )
@@ -288,6 +289,19 @@ func timerUnit() string {
 	return "[Unit]\nDescription=Dokkit updater, every five minutes\n\n[Timer]\nOnBootSec=1min\nOnActiveSec=1min\nOnUnitInactiveSec=5min\n\n[Install]\nWantedBy=timers.target\n"
 }
 
+// nudgeFileFor is the file the program writes to ask for a check now. Its folder belongs to the
+// program's account; the updater's own folders are closed to that account.
+func nudgeFileFor(goos string) string {
+	if goos == "darwin" {
+		return "/var/db/dokkit-nudge/now"
+	}
+	return "/var/lib/dokkit-nudge/now"
+}
+
+func pathUnit() string {
+	return "[Unit]\nDescription=Dokkit updater, when the program asks\n\n[Path]\nPathChanged=" + nudgeFileFor("linux") + "\nUnit=" + timerName + ".service\n\n[Install]\nWantedBy=paths.target\n"
+}
+
 func launchdPlist(exe string) string {
 	esc := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(exe)
 	return `<?xml version="1.0" encoding="UTF-8"?>
@@ -298,12 +312,20 @@ func launchdPlist(exe string) string {
   <key>ProgramArguments</key>
   <array><string>` + esc + `</string><string>updater</string><string>run</string></array>
   <key>StartInterval</key><integer>300</integer>
+  <key>WatchPaths</key>
+  <array><string>` + nudgeFileFor("darwin") + `</string></array>
   <key>AbandonProcessGroup</key><true/>
   <key>StandardOutPath</key><string>/dev/null</string>
   <key>StandardErrorPath</key><string>/dev/null</string>
 </dict>
 </plist>
 `
+}
+
+// launchdReload is run by a helper that outlives the job: booting a job out stops its running
+// process, and the updater is that process. The helper waits for the run to end first.
+func launchdReload(plist string) []string {
+	return []string{"/bin/sh", "-c", `sleep 3; launchctl bootout system/` + launchdLabel + `; launchctl bootstrap system "$1" || { sleep 5; launchctl bootstrap system "$1"; }`, "sh", plist}
 }
 
 // mountOf is the mount point that holds file: the longest one that is a folder above it.

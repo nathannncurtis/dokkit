@@ -11,6 +11,7 @@ defmodule Dokkit.Work do
   @imessage "dokkit:imessage"
   @update "dokkit:update"
   @scan "dokkit:scan"
+  @nudge "dokkit:nudge"
 
   @doc "The version of the program this server holds for machines to fetch, or nil."
   def program_version do
@@ -46,6 +47,18 @@ defmodule Dokkit.Work do
 
   @doc "Asks a machine to look itself over again and send what it finds. Takes no parameters."
   def scan(machine_id, by), do: queue(%WorkRun{machine_id: machine_id, name: @scan, by: by})
+
+  @doc """
+  Tells a connected program to start its machine's updater now. It carries no version and
+  no parameters; the updater asks for what to install. One waiting nudge is enough.
+  """
+  def nudge(machine_id) do
+    unless Repo.exists?(
+             from r in WorkRun,
+               where: r.machine_id == ^machine_id and r.name == @nudge and r.state == :queued
+           ),
+           do: queue(%WorkRun{machine_id: machine_id, name: @nudge, by: "update"})
+  end
 
   @doc "Queues a run that sends an iMessage from this Mac. It is offered only to this machine."
   def imessage(machine_id, to, text, alert_id \\ nil) do

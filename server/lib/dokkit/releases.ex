@@ -121,17 +121,23 @@ defmodule Dokkit.Releases do
   def outcome(_), do: nil
 
   defp set(query, version) do
-    Repo.update_all(query,
-      set: [
-        wanted_version: version,
-        update_started_at: DateTime.utc_now(),
-        update_asked_at: nil,
-        update_version: nil,
-        update_ok: nil,
-        update_note: nil,
-        update_at: nil
-      ]
-    )
+    result =
+      Repo.update_all(query,
+        set: [
+          wanted_version: version,
+          update_started_at: DateTime.utc_now(),
+          update_asked_at: nil,
+          update_version: nil,
+          update_ok: nil,
+          update_note: nil,
+          update_at: nil
+        ]
+      )
+
+    for id <- Repo.all(from m in subquery(query), where: m.has_updater, select: m.id),
+        do: Dokkit.Work.nudge(id)
+
+    result
   end
 
   @parts [program_version: "program", server_version: "server", updater_version: "updater"]

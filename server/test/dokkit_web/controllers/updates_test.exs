@@ -5,7 +5,9 @@ defmodule DokkitWeb.UpdatesTest do
   alias Dokkit.{Keys, Machine, Releases, Repo, User}
 
   setup do
-    dir = Path.join(System.tmp_dir!(), "dokkit-rel-#{Base.encode16(:crypto.strong_rand_bytes(6))}")
+    dir =
+      Path.join(System.tmp_dir!(), "dokkit-rel-#{Base.encode16(:crypto.strong_rand_bytes(6))}")
+
     old = Application.get_env(:dokkit, :releases)
     Application.put_env(:dokkit, :releases, dir)
 
@@ -297,6 +299,33 @@ defmodule DokkitWeb.UpdatesTest do
     test "without a version the older fetch still answers", %{machine: m, admin: admin} do
       assert %{"error" => %{"code" => "no_program"}} =
                json_response(call(:post, "/machines/#{m.id}/update", admin, %{}), 422)
+    end
+
+    test "approving nudges each machine with an updater once, and a connected program gets it", %{
+      machine: m,
+      admin: admin,
+      mkey: mkey
+    } do
+      other = Repo.insert!(%Machine{name: "other", kind: :enrolled})
+      Repo.update_all(from(x in Machine, where: x.id == ^m.id), set: [has_updater: true])
+      hold(admin, "v1.1.0")
+
+      nudges = fn id ->
+        Repo.all(from r in Dokkit.WorkRun, where: r.machine_id == ^id, select: r.name)
+      end
+
+      call(:post, "/machines/#{other.id}/update", admin, %{version: "v1.1.0"})
+      assert nudges.(other.id) == []
+
+      call(:post, "/update-all", admin, %{version: "v1.1.0"})
+      call(:post, "/machines/#{m.id}/update", admin, %{version: "v1.1.0"})
+      assert nudges.(m.id) == ["dokkit:nudge"]
+      assert nudges.(other.id) == []
+
+      run = Repo.one!(from r in Dokkit.WorkRun, where: r.machine_id == ^m.id).id
+
+      assert %{"run" => ^run, "task" => "dokkit:nudge"} =
+               json_response(call(:get, "/work?wait=0", mkey), 200)
     end
 
     test "the tools list releases and approve", %{admin: admin, machine: m, read: read} do

@@ -5,8 +5,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 const (
@@ -43,6 +45,13 @@ func findWatchers() ([]watchProc, error) {
 }
 
 func installTimer(exe string) (string, error) {
+	c, err := readUpConfig()
+	if err != nil {
+		return "", err
+	}
+	if err := ensureNudge(c); err != nil {
+		return "", err
+	}
 	if err := os.WriteFile(daemonPlist, []byte(launchdPlist(exe)), 0o644); err != nil {
 		return "", err
 	}
@@ -54,6 +63,31 @@ func installTimer(exe string) (string, error) {
 		return "", fmt.Errorf("launchctl could not load %s: %v %s", daemonPlist, err, out)
 	}
 	return fmt.Sprintf("the LaunchDaemon %s (%s), every five minutes", launchdLabel, daemonPlist), nil
+}
+
+// refreshSchedule rewrites an older plist and has a helper load it once this run has ended.
+func refreshSchedule() {
+	if !exists(daemonPlist) {
+		return
+	}
+	c, err := readUpConfig()
+	if err == nil {
+		err = ensureNudge(c)
+	}
+	did := false
+	if err == nil {
+		did, err = writeIfChanged(daemonPlist, launchdPlist(where.updaterExe))
+	}
+	if err == nil && did {
+		logf("the updater's plist was out of date; wrote it and the job is loaded again when this run ends")
+		argv := launchdReload(daemonPlist)
+		cmd := exec.Command(argv[0], argv[1:]...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		err = cmd.Start()
+	}
+	if err != nil {
+		logf("could not bring the updater's schedule up to date: %v", err)
+	}
 }
 
 func removeTimer() (string, error) {

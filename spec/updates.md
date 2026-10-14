@@ -65,13 +65,34 @@ It uses the program's own address, machine key and certificate pin, from the pro
 
 A file it has fetched lives in a folder only administrators and the system account can write. Nothing in it is run before its hash is checked against the signed list.
 
+## Starting a check early
+
+The five-minute check stays everywhere. On top of it, setting a wanted version on a machine that has an updater (Update, Update all) queues the built-in work `dokkit:nudge` for that machine, one at a time per machine, so a connected program takes it within seconds. It carries no version and no parameters: the program asks its machine's updater to check now, answers done (or refuses with the reason it could not), and the updater asks the server what to install as always. Nothing with administrator or root rights listens on a port, and the server still cannot make a machine run anything but an approved, signed release.
+
+- **Windows:** the program starts the scheduled task **Dokkit updater** (`schtasks /run /tn "Dokkit updater"`). The task's security descriptor is `D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;GRGX;;;LS)`: the system account and administrators keep full control, and Local Service, which the program runs as, may read and start the task but not change it.
+- **Linux with systemd:** a root unit `dokkit-updater.path` has `PathChanged=/var/lib/dokkit-nudge/now` and `Unit=dokkit-updater.service`. The program writes that file. The folder `/var/lib/dokkit-nudge` is owned by the program's account (mode 0700) and is the only place that account can write for this; the updater's own folders stay closed to it. The updater only creates the folder and the file when they are missing, and never opens a link in it.
+- **macOS:** the LaunchDaemon `com.dokkit.updater` has `WatchPaths` on `/var/db/dokkit-nudge/now`, a folder owned the same way. The program writes that file.
+- **Cron (including a QNAP):** there is no nudge. The program answers that the machine updates on its next scheduled check.
+- **The 30-second rule:** a run that starts less than 30 seconds after the last run ended does nothing and exits, so a stream of nudges cannot make the updater spin.
+
+## The updater keeps its own schedule current
+
+A machine's task, units or plist were written by whichever updater installed them. At the end of every run (it has full rights) the updater checks they are the current ones and, if not, writes the current ones. Nothing is changed when they match, and it writes one log line when it does change something. A rehearsal never does this. A missing task or unit is not recreated: that is an uninstall.
+
+- **Windows:** the task's description carries a marker made from the hash of the task text. When the task read back with `schtasks /query /xml` lacks the current marker, the updater registers the task again from the current XML (`schtasks /create /xml /f`).
+- **systemd:** the service, timer and path units are compared with the current text; any that differ are written, then `systemctl daemon-reload`, and `dokkit-updater.path` is enabled and started. A reload leaves the running job alone. The nudge folder is made if missing.
+- **macOS:** the plist is compared and, if different, written. Loading it again stops the job that is running, which is the updater, so a helper process started in its own session does that after the run has ended (`launchctl bootout`, then `bootstrap`, with one retry). The plist keeps `AbandonProcessGroup`, so the helper outlives the job.
+- **Cron:** nothing to change.
+
+A machine whose updater is older than this one is brought forward by the ordinary five-minute check: once approved to the first version that has this, its updater replaces itself and, on its next run, brings the schedule up to date. Nobody visits the machine.
+
 ## On Windows
 
 `dokkit updater install`, from an administrator prompt, once:
 
 - copies the program to `Program Files\DokkitUpdater\dokkit-updater.exe`;
 - makes `ProgramData\DokkitUpdater`, for administrators and the system account only, for its state, its log and fetched files;
-- registers a scheduled task, **Dokkit updater**, that runs `dokkit-updater.exe updater run` as the system account every five minutes and at start-up. It is not a service and listens on nothing;
+- registers a scheduled task, **Dokkit updater**, that runs `dokkit-updater.exe updater run` as the system account every five minutes and at start-up, and that Local Service may start (see Starting a check early). It is not a service and listens on nothing;
 - runs it once and prints what it found.
 
 `dokkit updater install` needs the program's service installed first (`dokkit service install`): the updater takes the server address and key from it, and without it the command changes nothing and says so.
@@ -88,8 +109,8 @@ A file it has fetched lives in a folder only administrators and the system accou
 - It checks the program's configuration (`DOKKIT_CONFIG` of the running process, else the account's own) holds an address and key. The updater reads that file, as root, each run; it keeps no copy of the key.
 - It copies the program to a folder only root can change, `/usr/local/lib/dokkit-updater/dokkit` on Linux and `/Library/Application Support/DokkitUpdater/dokkit` on macOS, and writes `config.json` beside it: the program's file, the account that runs it, how it is kept (`system-unit`, `user-unit`, `launch-agent` or `process`), the unit or label, its configuration and spool, and any of `DOKKIT_CONFIG`, `DOKKIT_SPOOL`, `DOKKIT_SPOOL_MB`, `DOKKIT_FOLDERS`, `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` that process had (read from the process on Linux only; on macOS the account own folders are assumed). That file is writable by root only and holds no key. The updater's state, log and fetched files are in `/var/lib/dokkit-updater` (Linux) or `/var/db/dokkit-updater` (macOS), mode 0700. It refuses a folder of those names that root does not own, that others can write, or that holds anything the updater did not put there.
 - It sets up a timer that runs `updater run` as root every five minutes, and says which and where:
-  - where systemd is running: `dokkit-updater.service` (one-shot) and `dokkit-updater.timer` in `/etc/systemd/system`, started a minute after boot and five minutes after each run ends;
-  - on macOS: the LaunchDaemon `com.dokkit.updater` in `/Library/LaunchDaemons`, `StartInterval` 300;
+  - where systemd is running: `dokkit-updater.service` (one-shot) and `dokkit-updater.timer` in `/etc/systemd/system`, started a minute after boot and five minutes after each run ends, and `dokkit-updater.path`, which starts the service when the program writes the nudge file;
+  - on macOS: the LaunchDaemon `com.dokkit.updater` in `/Library/LaunchDaemons`, `StartInterval` 300 and `WatchPaths` on the nudge file;
   - otherwise: a line ending `# dokkit-updater` in root's crontab. Where `/etc/config/crontab` exists (QNAP), that file is edited and loaded with `crontab /etc/config/crontab`. `crond` is not restarted: it rereads what is loaded, and QNAP's `crond.sh restart` rewrites and reorders the other lines of that file.
 - It runs one check and prints what it found.
 
@@ -110,7 +131,7 @@ A file it has fetched lives in a folder only administrators and the system accou
 
 A plain background program is started by `dokkit watch --background`, which takes a lock in the spool and holds it until the new process appears in `status.json`. The updater and a start script run from cron by the same minute therefore cannot start two.
 
-`dokkit updater status` prints the versions, what the updater looks after and how, the last check and the last result (the last two to root only). `dokkit updater uninstall`, as root, removes the timer (the units, the plist or the crontab line), the updater's copy of the program and `config.json`. Its state and log are left. `dokkit updater rehearse <folder>` does one real check into a folder of its own, restarts nothing and sends no result; it needs no root.
+`dokkit updater status` prints the versions, what the updater looks after and how, the last check and the last result (the last two to root only). `dokkit updater uninstall`, as root, removes the timer (the units, the plist or the crontab line), the updater's copy of the program and `config.json`. Its state, log and nudge folder are left. `dokkit updater rehearse <folder>` does one real check into a folder of its own, restarts nothing and sends no result; it needs no root.
 
 ## What a takeover can do
 

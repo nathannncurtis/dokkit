@@ -199,7 +199,7 @@ GET /work?wait=50
 {"run": "<id>", "task": "dokkit:update"}
 ```
 
-The server asks for two things and nothing else. `dokkit:update` asks the program to fetch the newer copy the server holds. There are no arguments, so the server cannot shape what the program does. `dokkit:imessage` is offered only to the Mac chosen for iMessage and carries two more fields:
+The server asks for a few things and nothing else. `dokkit:update` asks the program to fetch the newer copy the server holds. `dokkit:nudge` asks the program to start its machine's updater now; the server queues it when it sets a wanted version on a machine that has an updater. `dokkit:scan` asks it to look the machine over again. Neither has arguments, so the server cannot shape what the program does. `dokkit:imessage` is offered only to the Mac chosen for iMessage and carries two more fields:
 
 ```json
 {"run": "<id>", "task": "dokkit:imessage", "to": ["+15555550100", "someone@example.com"], "text": "Upload portal is down (web-01, DOK-12)"}
