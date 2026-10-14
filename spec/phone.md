@@ -1,6 +1,6 @@
 # The phone app
 
-A read-only view of a Dokkit server on an iPhone or an Android phone, for a server that is not on the internet. Nothing here is built yet. This is the contract to build against.
+A read-only view of a Dokkit server on an iPhone or an Android phone, for a server that is not on the internet. The relay, the server's part and both apps are built against this contract, and each release carries the two apps unsigned (`dokkit-ios-unsigned.ipa`, `dokkit-android-unsigned.apk`) for whoever installs them to sign.
 
 ## What it is and is not
 
@@ -167,6 +167,7 @@ Rules for both:
 - The last snapshot of each server is kept on the phone, encrypted by the system, and removed when the server is removed from the app.
 - Opening the app, and returning to it from the background, asks for the phone's own unlock (Face ID, fingerprint or passcode). While the app is not in front its screen is covered.
 - Portrait only.
+- Permissions: the network and the camera, and on Android the two the system unlock prompt needs (`USE_BIOMETRIC`, `USE_FINGERPRINT`). Nothing else.
 - Colours are the web interface's defaults: its light theme with the teal accent, and the Ember dark base with the orange accent. The icon is the web interface's own.
 - No account, no analytics, no crash reporting to a third party, no network request to anything but the paired relays.
 - Light and dark, following the phone, in the product's own colours.
