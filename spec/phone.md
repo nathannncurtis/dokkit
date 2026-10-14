@@ -47,8 +47,7 @@ Only primitives every platform ships are used: AES-256-GCM and a random source. 
 |---|---|
 | `dokkit relay add <name>` | Makes a mailbox. Prints its address and its upload key, once. The name is only a label on the relay's host. |
 | `dokkit relay list`, `dokkit relay remove <name>` | Shows the mailboxes with the time of the last upload and each slot's last fetch; removes one and its file. |
-| `dokkit relay serve --name relay.example.com` | Serves on 443 with a certificate it gets and renews itself from Let's Encrypt for that name. |
-| `dokkit relay serve --http 127.0.0.1:8080` | Serves plain HTTP for a reverse proxy that already has the certificate. |
+| `dokkit relay serve --http 127.0.0.1:8080` | Serves plain HTTP for a reverse proxy on the same host, which holds the certificate and speaks HTTPS to the server and the phones. |
 
 Mailboxes exist only when made on the relay's host. There is no sign-up call.
 

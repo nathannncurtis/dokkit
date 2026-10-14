@@ -26,6 +26,8 @@ One Go binary, `dokkit`. The same file is the command-line tool and the thing th
 | | `dokkit startup on`, `off` | Starts `dokkit watch --background` each time this person signs in. No administrator. Windows only. |
 | | `dokkit service install`, `uninstall`, `update`, `start`, `stop` | Runs as a service on Windows, Linux (systemd) or macOS. Needs an administrator, or root, once. |
 | | `dokkit updater install`, `uninstall`, `run`, `status`, `rehearse <folder>` | A separate updater that moves the program, and the server on the machine that hosts it, to a signed release approved in the interface. See `updates.md`. |
+| Relay | `dokkit relay add <name>`, `list`, `remove <name>` | Makes, shows and removes the mailboxes of a phone relay on this host (`DOKKIT_RELAY_DIR`, else `relay` in the configuration folder). `add` prints the mailbox address and its upload key once. See `phone.md`. |
+| | `dokkit relay serve --http <address>` | Serves the relay on plain HTTP for a reverse proxy. The one mode that listens on a port; `dokkit watch` and the service never start it. |
 
 ## Three levels
 

@@ -45,6 +45,10 @@ dokkit folder add|remove <path>
 dokkit folder list
 dokkit imessage on|off|status
 dokkit imessage test <recipient> [words...]
+dokkit relay add <name>
+dokkit relay list
+dokkit relay remove <name>
+dokkit relay serve --http <address>
 dokkit doctor
 dokkit service install|uninstall|update|start|stop
 dokkit updater install|uninstall|run|status|rehearse <folder>
@@ -108,6 +112,9 @@ func cli(args []string) int {
 	}
 	if args[0] == "import" {
 		return importCommand(args[1:])
+	}
+	if args[0] == "relay" {
+		return relayCommand(args[1:])
 	}
 	if args[0] == "imessage" {
 		return imessageCommand(args[1:])
