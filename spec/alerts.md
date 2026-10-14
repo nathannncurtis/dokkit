@@ -53,6 +53,10 @@ One night is set for the whole server on the Alerts page: a start hour, an end h
 
 Each service has a switch, "Wake me at night for this", on by default. When it is off and an alert for that service would go out during the night, Dokkit holds it and sends it when the night ends, if the issue is still open. An issue that closed in the meantime sends nothing. A held alert is a row in the database, so it survives a restart, and the once-a-minute sweep sends it. Whether an alert is held follows the server's clock when the report arrives, never the time the sender wrote. The first screen says "Held until 07:00 PDT" for it, in the night's own clock (or "07:00 UTC+2" while only an offset is set). Turning the switch on sends what is held for that service, except for an issue that is snoozed or seen. Turning the switch back on sends what is held for that service at once. The daily digest is not held. Each alert of an issue is held on its own.
 
+## What an issue keeps
+
+An issue that opens about a machine's memory or processor, or about a stopped service (a `windows-service`, `systemd` or `process` check going down), keeps the top 10 processes by memory and by processor from the machine's newest process list, when that list is under 5 minutes old; it is copied once, when the issue opens, and never updated.
+
 ## Recovery
 
 An issue closes itself after as many good results in a row as it takes to open: 3 for a check unless that check was given another number. A job, a beat, a disk forecast and the checks of Dokkit's own row open on one bad result and close on one good result. The page it raised is resolved automatically.

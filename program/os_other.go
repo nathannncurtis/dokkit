@@ -114,7 +114,11 @@ func cpuTimes() (idle, total uint64, ok bool) {
 	if err != nil {
 		return 0, 0, false
 	}
-	line, _, _ := strings.Cut(string(b), "\n")
+	return parseCPULine(string(b))
+}
+
+func parseCPULine(stat string) (idle, total uint64, ok bool) {
+	line, _, _ := strings.Cut(stat, "\n")
 	for i, f := range strings.Fields(line) {
 		n, _ := strconv.ParseUint(f, 10, 64)
 		total += n

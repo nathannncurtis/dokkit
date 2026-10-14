@@ -32,6 +32,8 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `rules` | `read` | Lists the alert rules. |
 | `proposals` | `read` | Lists what Dokkit found and a person may accept or dismiss, each with `origin` and `why`. Leaves out the operating system's own things unless `system` is true. Always answers `{"items": [...], "next": ..., "hidden": {"total": n, "machines": {"<machine name>": n}}}`, where `hidden` counts what was left out. |
 | `series` | `read` | Shows numbers over time for a service (`id`), or for a machine's own disks, memory and processor (`machine`). |
+| `processes` | `read` | Shows a machine's newest process list (`machine` is its id or name): `sort`, `q`, `pid`, `limit`. |
+| `process_history` | `read` | Shows the top 10 processes by memory or processor kept for a machine over up to 24 hours: `kind`, `from`, `to`. |
 | `day` | `read` | Shows the last 24 hours in half hours: for each machine whether something was down, needed a look, or nothing happened, or it was not heard from, and the issues that opened. |
 | `releases` | `read` | Lists the program releases the server holds and whether each is complete. |
 | `certificate` | `read` | Shows the certificates the server serves itself. |
@@ -103,4 +105,4 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 
 ## Built so far
 
-`POST /mcp` with a user token: every tool in the table, 68 in all (23 `read`, 2 `read-logs`, 14 `act`, 29 `admin`), one for each call of the API a token can make. Making a full-control token, pairing and removing phones (`/phones`) and the browser's own sign-in have no tool: they are Settings and the browser only. A tool the token may not use is not listed.
+`POST /mcp` with a user token: every tool in the table, 70 in all (25 `read`, 2 `read-logs`, 14 `act`, 29 `admin`), one for each call of the API a token can make. Making a full-control token, pairing and removing phones (`/phones`) and the browser's own sign-in have no tool: they are Settings and the browser only. A tool the token may not use is not listed.

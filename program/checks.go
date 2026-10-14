@@ -647,6 +647,7 @@ type watcher struct {
 	told     map[string]bool // blocked folders already written to the log
 
 	statsBusy, statsReady atomic.Bool
+	procsBusy             atomic.Bool
 	statsNoted            map[string]time.Time
 }
 
@@ -850,6 +851,7 @@ func (c *client) watch() int {
 			w.refresh()
 			c.beat(w.versions())
 			w.statsSoon()
+			w.processesSoon()
 			ran++
 		}
 		if w.statsReady.Swap(false) {
