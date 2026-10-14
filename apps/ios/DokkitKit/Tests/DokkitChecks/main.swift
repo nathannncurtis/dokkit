@@ -26,6 +26,8 @@ await run("SnapshotTests.toleratesUnknownFieldsAndValues") { try await SnapshotT
 await run("SnapshotTests.needsYouScreen") { try await SnapshotTests().needsYouScreen() }
 await run("SnapshotTests.everythingScreen") { try await SnapshotTests().everythingScreen() }
 await run("SnapshotTests.serviceScreen") { try await SnapshotTests().serviceScreen() }
+await run("SnapshotTests.chartDrawsFromValues") { try await SnapshotTests().chartDrawsFromValues() }
+await run("SnapshotTests.realChartsDecode") { try await SnapshotTests().realChartsDecode() }
 await run("SnapshotTests.vitalsAreShown") { try await SnapshotTests().vitalsAreShown() }
 await run("SnapshotTests.ageTextAndWarning") { try await SnapshotTests().ageTextAndWarning() }
 

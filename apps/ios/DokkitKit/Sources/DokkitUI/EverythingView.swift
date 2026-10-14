@@ -60,12 +60,14 @@ struct ServiceLine: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(row.name).font(.body).foregroundStyle(Theme.ink).multilineTextAlignment(.leading)
                 StateMark(level: row.level)
-                let meta = [row.kind == "service" ? nil : row.kind, row.version, row.environment].compactMap { $0 }
+                let kind: String? = row.kind == "service" ? nil : row.kind
+                let candidates: [String?] = [kind, row.version, row.environment]
+                let meta: [String] = candidates.compactMap { $0 }
                 if !meta.isEmpty { Text(meta.joined(separator: " · ")).font(.footnote).foregroundStyle(Theme.mute) }
                 if let n = row.note, row.level.rank > 0 { Text(n).font(.footnote).foregroundStyle(Theme.mute).multilineTextAlignment(.leading) }
             }
             Spacer(minLength: 8)
-            if row.chart.count > 1 { Spark(values: row.chart).frame(width: 64) }
+            if row.chart.contains(where: { $0 != nil }) { Spark(values: row.chart).frame(width: 64) }
             Image(systemName: "chevron.right").font(.footnote).foregroundStyle(Theme.mute).accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)

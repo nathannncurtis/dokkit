@@ -68,7 +68,14 @@ enum Gzip {
         if flags & 2 != 0 { i += 2 }
         guard i < b.count - 8 else { return nil }
         let raw = Array(b[i..<(b.count - 8)])
-        let word = { (at: Int) in (0..<4).reduce(UInt32(0)) { $0 | UInt32(b[b.count - 8 + at + $1]) << UInt32(8 * $1) } }
+        func word(_ at: Int) -> UInt32 {
+            var v: UInt32 = 0
+            for k in 0..<4 {
+                let byte: UInt32 = UInt32(b[b.count - 8 + at + k])
+                v |= byte << UInt32(8 * k)
+            }
+            return v
+        }
         var cap = max(raw.count * 8, 4096)
         while cap <= limit {
             var out = [UInt8](repeating: 0, count: cap)

@@ -24,7 +24,7 @@ struct NeedsYouView: View {
                         if i > 0 { RowDivider() }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(row.name).font(.body.weight(.medium))
-                            Text([row.machine, row.kind, row.saw].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                            Text(Self.line(row))
                                 .font(.footnote).foregroundStyle(Theme.mute)
                         }
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 8)
@@ -36,6 +36,13 @@ struct NeedsYouView: View {
                 Text(fine.prefix(1).uppercased() + fine.dropFirst() + ".").font(.footnote).foregroundStyle(Theme.mute)
             }
         }
+    }
+}
+
+extension NeedsYouView {
+    static func line(_ row: NotWatchedRow) -> String {
+        let all: [String?] = [row.machine, row.kind, row.saw]
+        return all.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
 
@@ -52,7 +59,8 @@ struct IssueRowView: View {
             }
             Text(row.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink).multilineTextAlignment(.leading)
             if let note = row.note { Text(note).font(.subheadline).foregroundStyle(Theme.mute).multilineTextAlignment(.leading) }
-            let meta = [row.serviceName, row.machine.isEmpty ? nil : row.machine, row.since, row.count].compactMap { $0 }
+            let candidates: [String?] = [row.serviceName, row.machine, row.since, row.count]
+            let meta: [String] = candidates.compactMap { $0 }.filter { !$0.isEmpty }
             if !meta.isEmpty { Text(meta.joined(separator: " · ")).font(.footnote).foregroundStyle(Theme.mute) }
             if !row.flags.isEmpty {
                 HStack { ForEach(row.flags, id: \.self) { Tag(text: $0) } }

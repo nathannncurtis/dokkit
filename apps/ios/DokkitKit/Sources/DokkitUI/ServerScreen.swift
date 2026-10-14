@@ -20,6 +20,9 @@ struct ServerScreen<Content: View>: View {
                     } else {
                         AgeBanner(freshness: Freshness.make(madeAt: state.madeAt, hasSnapshot: state.snapshot != nil, problem: state.problem, now: ctx.date))
                         if let snap = state.snapshot {
+                            if let lo = leftOutText(snap) {
+                                Label(lo, systemImage: "scissors").font(.footnote).foregroundStyle(Theme.mute).frame(maxWidth: .infinity, alignment: .leading)
+                            }
                             content(snap, ctx.date)
                         } else {
                             Notice(

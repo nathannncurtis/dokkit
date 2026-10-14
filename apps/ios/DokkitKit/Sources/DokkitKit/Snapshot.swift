@@ -30,7 +30,8 @@ public struct ServerInfo: Codable, Sendable, Equatable {
     public var version: String?
     public var madeAt: Date?
     public var counter: Int?
-    enum CodingKeys: String, CodingKey { case name, version, madeAt = "made_at", counter }
+    public var leftOut: [String]?
+    enum CodingKeys: String, CodingKey { case name, version, madeAt = "made_at", counter, leftOut = "left_out" }
 }
 
 public struct Inbox: Codable, Sendable, Equatable {
@@ -113,28 +114,9 @@ public struct Check: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey { case name, type, state, note, checkedAt = "checked_at" }
 }
 
-public struct ChartPoint: Codable, Sendable, Equatable {
-    public var value: Double?
-    public var state: String?
-
-    public init(value: Double?, state: String? = nil) { (self.value, self.state) = (value, state) }
-
-    public init(from decoder: Decoder) throws {
-        if let n = try? decoder.singleValueContainer().decode(Double.self) {
-            self.init(value: n)
-            return
-        }
-        let c = try decoder.container(keyedBy: Keys.self)
-        let v = try [Keys.value, .v, .avg, .y].lazy.compactMap { try c.decodeIfPresent(Double.self, forKey: $0) }.first
-        self.init(value: v, state: try c.decodeIfPresent(String.self, forKey: .state))
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var c = encoder.singleValueContainer()
-        try c.encode(value)
-    }
-
-    private enum Keys: String, CodingKey { case value, v, avg, y, state }
+public struct Chart: Codable, Sendable, Equatable {
+    public var metric: String?
+    public var values: [Double?]?
 }
 
 public struct Service: Codable, Sendable, Equatable {
@@ -148,7 +130,7 @@ public struct Service: Codable, Sendable, Equatable {
     public var note: String?
     public var checks: [Check]?
     public var openIssue: Issue?
-    public var chart: [ChartPoint]?
+    public var chart: Chart?
     enum CodingKeys: String, CodingKey {
         case id, machine, name, kind, state, version, environment, note, checks, openIssue = "open_issue", chart
     }

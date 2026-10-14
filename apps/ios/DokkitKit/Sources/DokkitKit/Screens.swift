@@ -74,6 +74,20 @@ extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
+public func leftOutText(_ s: Snapshot) -> String? {
+    guard let parts = s.server?.leftOut, !parts.isEmpty else { return nil }
+    let names: [String] = parts.map { part in
+        switch part {
+        case "logs": return "Log lines"
+        case "issues": return "Issue histories"
+        case "jobs": return "Jobs"
+        case "services": return "Service details"
+        default: return part.prefix(1).uppercased() + part.dropFirst()
+        }
+    }
+    return names.joined(separator: ", ") + " were left out of this snapshot to keep it small."
+}
+
 public func shortTime(_ d: Date) -> String { d.formatted(date: .abbreviated, time: .shortened) }
 
 public struct IssueRow: Identifiable, Equatable, Sendable {
@@ -124,7 +138,7 @@ public struct ServiceRow: Identifiable, Equatable, Sendable {
     public var version: String?
     public var environment: String?
     public var note: String?
-    public var chart: [Double]
+    public var chart: [Double?]
 }
 
 public struct MachineRow: Identifiable, Equatable, Sendable {
@@ -171,7 +185,7 @@ public struct ServiceScreen: Equatable, Sendable {
     public var checks: [CheckRow]
     public var issue: IssueRow?
     public var history: [HistoryRow]
-    public var chart: [Double]
+    public var chart: [Double?]
     public var job: [[String]]
     public var logs: [LogRow]
 }
@@ -181,9 +195,9 @@ public enum Screens {
         let names = serviceNames(s)
         let box = s.inbox
         func rows(_ l: [Issue]?) -> [IssueRow] { (l ?? []).map { issueRow($0, names: names, now: now) } }
-        let sections = [
-            ("Needs you", rows(box?.needsYou)), ("Soon", rows(box?.soon)), ("Snoozed", rows(box?.snoozed)),
-        ].filter { !$0.1.isEmpty }.map { NeedsYouScreen.Section(title: $0.0, rows: $0.1) }
+        var sections: [NeedsYouScreen.Section] = []
+        let groups: [(String, [IssueRow])] = [("Needs you", rows(box?.needsYou)), ("Soon", rows(box?.soon)), ("Snoozed", rows(box?.snoozed))]
+        for (title, list) in groups where !list.isEmpty { sections.append(NeedsYouScreen.Section(title: title, rows: list)) }
         let notWatched = (box?.notWatched ?? []).map {
             NotWatchedRow(
                 id: $0.id ?? UUID().uuidString, name: $0.detail?.label ?? $0.name ?? "Unnamed",
@@ -191,8 +205,10 @@ public enum Screens {
         }
         var fine: String?
         if let f = box?.fine, f.services != nil || f.machines != nil {
-            fine = [f.services.map { "\($0) service\($0 == 1 ? "" : "s")" }, f.machines.map { "\($0) machine\($0 == 1 ? "" : "s")" }]
-                .compactMap { $0 }.joined(separator: " and ") + " fine"
+            var parts: [String] = []
+            if let n = f.services { parts.append("\(n) service\(n == 1 ? "" : "s")") }
+            if let n = f.machines { parts.append("\(n) machine\(n == 1 ? "" : "s")") }
+            fine = parts.joined(separator: " and ") + " fine"
         }
         return NeedsYouScreen(
             sections: sections, notWatched: notWatched, fine: fine,
@@ -207,7 +223,7 @@ public enum Screens {
                 return ServiceRow(
                     id: svc.id, name: svc.name ?? "Unnamed", level: Level(svc.state ?? full.state), kind: svc.kind ?? full.kind ?? "service",
                     version: svc.version ?? full.version, environment: envTag(svc.environment ?? full.environment),
-                    note: svc.note ?? full.note, chart: (full.chart ?? []).compactMap(\.value))
+                    note: svc.note ?? full.note, chart: full.chart?.values ?? [])
             }.sorted(by: worse)
             let worst = services.map(\.level).max { $0.rank < $1.rank } ?? .ok
             var notice: String?
@@ -217,10 +233,15 @@ public enum Screens {
                 notice = "Planned downtime" + (w.until.map { " until \(shortTime($0))" } ?? "")
             }
             let next = (m.schedules ?? []).compactMap { sc in (sc.next ?? sc.at).map { ($0, sc) } }.min { $0.0 < $1.0 }
+            var nextText: String?
+            if let next {
+                nextText = "Next planned downtime " + shortTime(next.0)
+                if let reason = next.1.reason { nextText = (nextText ?? "") + ", " + reason }
+            }
             return MachineRow(
                 id: m.id, name: m.name ?? "Unnamed", os: m.os, level: m.down == true ? .down : worst, notice: notice,
                 vitals: vitals(m.vitals ?? [:]),
-                nextWindow: next.map { "Next planned downtime \(shortTime($0.0))" + ($0.1.reason.map { ", \($0)" } ?? "") },
+                nextWindow: nextText,
                 services: services)
         }.sorted {
             $0.level.rank != $1.level.rank ? $0.level.rank > $1.level.rank : $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
@@ -228,9 +249,9 @@ public enum Screens {
     }
 
     public static func service(_ s: Snapshot, id: String, now: Date) -> ServiceScreen? {
-        let all = (s.services ?? []) + (s.machines ?? []).flatMap { $0.services ?? [] }
-        guard let svc = all.first(where: { $0.id == id }) else { return nil }
-        let full = (s.services ?? []).first { $0.id == id } ?? svc
+        let top: Service? = (s.services ?? []).first { $0.id == id }
+        let nested: Service? = (s.machines ?? []).flatMap { $0.services ?? [] }.first { $0.id == id }
+        guard let full = top ?? nested else { return nil }
         let names = serviceNames(s)
         let open = full.openIssue ?? (s.issues ?? []).first { $0.service == id && $0.closedAt == nil }
         let detail = (s.issues ?? []).first { $0.id == open?.id } ?? open
@@ -243,7 +264,7 @@ public enum Screens {
             },
             issue: open.map { issueRow($0, names: names, now: now) },
             history: (detail?.history ?? []).map(historyRow),
-            chart: (full.chart ?? []).compactMap(\.value),
+            chart: full.chart?.values ?? [],
             job: job.map(jobLines) ?? [],
             logs: ((s.logs ?? [:])[id] ?? []).map {
                 LogRow(time: $0.t.map { $0.formatted(date: .omitted, time: .standard) } ?? "--:--:--", level: $0.level ?? "info", message: $0.msg ?? "", isError: $0.level == "error")
@@ -252,7 +273,8 @@ public enum Screens {
 
     private static func serviceNames(_ s: Snapshot) -> [String: String] {
         var out: [String: String] = [:]
-        for svc in (s.machines ?? []).flatMap({ $0.services ?? [] }) + (s.services ?? []) { out[svc.id] = svc.name }
+        for m in s.machines ?? [] { for svc in m.services ?? [] { out[svc.id] = svc.name } }
+        for svc in s.services ?? [] { out[svc.id] = svc.name }
         return out
     }
 
@@ -260,7 +282,11 @@ public enum Screens {
         var flags: [String] = []
         if let until = i.snoozedUntil, until > now { flags.append("Snoozed until \(shortTime(until))") }
         if i.acknowledgedAt != nil { flags.append("Seen") }
-        if i.alert?.status == "held" { flags.append("Alert held for the night" + (i.alert?.until.map { " until \(shortTime($0))" } ?? "")) }
+        if i.alert?.status == "held" {
+            var text = "Alert held for the night"
+            if let until = i.alert?.until { text += " until " + shortTime(until) }
+            flags.append(text)
+        }
         return IssueRow(
             id: i.id, shortId: i.shortId ?? "", title: i.title ?? "Untitled", level: Level(i.state), machine: i.machine ?? "",
             serviceName: i.service.flatMap { names[$0] }, serviceID: i.service,

@@ -24,7 +24,9 @@ private struct ServiceBody: View {
             VStack(alignment: .leading, spacing: 8) {
                 StateMark(level: v.level)
                 if let n = v.note { Text(n).font(.subheadline).foregroundStyle(Theme.mute) }
-                let meta = [v.kind, v.version.map { "version \($0)" }, v.environment].compactMap { $0 }
+                let version: String? = v.version.map { "version \($0)" }
+                let candidates: [String?] = [v.kind, version, v.environment]
+                let meta: [String] = candidates.compactMap { $0 }
                 if !meta.isEmpty { Text(meta.joined(separator: " · ")).font(.footnote).foregroundStyle(Theme.mute) }
             }
             .frame(maxWidth: .infinity, alignment: .leading).padding(16)
@@ -71,7 +73,7 @@ private struct ServiceBody: View {
                 }
             }
         }
-        if v.chart.count > 1 {
+        if v.chart.contains(where: { $0 != nil }) {
             Card(title: "Last 24 hours") { Spark(values: v.chart).frame(height: 56).padding(16) }
         }
         if !v.logs.isEmpty {

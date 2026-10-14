@@ -53,21 +53,25 @@ struct RowDivider: View {
 }
 
 struct Spark: View {
-    let values: [Double]
+    let values: [Double?]
 
     var body: some View {
+        let present: [Double] = values.compactMap { $0 }
         Canvas { ctx, size in
-            guard let hi = values.max(), hi > 0 else { return }
-            let w = size.width / CGFloat(values.count)
-            for (i, v) in values.enumerated() {
-                let h = max(2, size.height * CGFloat(v / hi))
-                ctx.fill(Path(CGRect(x: CGFloat(i) * w + 0.5, y: size.height - h, width: max(1, w - 1), height: h)), with: .color(Theme.mute.opacity(0.6)))
+            let hi: Double = present.max() ?? 0
+            guard hi > 0, !values.isEmpty else { return }
+            let w: CGFloat = size.width / CGFloat(values.count)
+            for (i, item) in values.enumerated() {
+                guard let v = item else { continue }
+                let h: CGFloat = max(2, size.height * CGFloat(v / hi))
+                let rect = CGRect(x: CGFloat(i) * w + 0.5, y: size.height - h, width: max(1, w - 1), height: h)
+                ctx.fill(Path(rect), with: .color(Theme.mute.opacity(0.6)))
             }
         }
         .frame(height: 28)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Chart of the last \(values.count) hours")
-        .accessibilityValue(values.last.map { "latest \(Int($0.rounded()))" } ?? "")
+        .accessibilityValue(present.last.map { "latest \(Int($0.rounded()))" } ?? "")
     }
 }
 
@@ -102,6 +106,11 @@ struct Notice: View {
 struct AgeBanner: View {
     let freshness: Freshness
 
+    private var label: String {
+        let prefix = freshness.isWarning ? "Warning. " : ""
+        return prefix + freshness.text + ". " + (freshness.detail ?? "")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Label(freshness.text, systemImage: freshness.isWarning ? "exclamationmark.triangle.fill" : "clock")
@@ -115,6 +124,6 @@ struct AgeBanner: View {
         .padding(12)
         .background(freshness.isWarning ? Theme.warn.opacity(0.15) : Theme.chip, in: RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(freshness.isWarning ? "Warning. \(freshness.text). \(freshness.detail ?? "")" : "\(freshness.text). \(freshness.detail ?? "")")
+        .accessibilityLabel(label)
     }
 }

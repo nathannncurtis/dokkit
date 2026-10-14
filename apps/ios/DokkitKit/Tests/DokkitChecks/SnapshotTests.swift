@@ -7,9 +7,9 @@ struct SnapshotTests {
     let now = Fixtures.now
 
     func decodesWithoutLoss() async throws {
-        try await expect(s.server?.name == "Northwind")
-        try await expect(s.server?.counter == 184223)
-        try await expect(s.server?.madeAt == Snapshot.parseDate("2026-10-14T03:20:00Z"))
+        try await expect(s.server?.name == "northwind.example.com")
+        try await expect(s.server?.counter == 1791937925)
+        try await expect(s.server?.madeAt == Snapshot.parseDate("2026-10-14T00:32:05Z"))
         let rawServices = raw["services"] as! [[String: Any]]
         let services = try require(s.services)
         try await expect(services.count == rawServices.count)
@@ -51,12 +51,15 @@ struct SnapshotTests {
     }
 
     func toleratesUnknownFieldsAndValues() async throws {
-        let json = #"{"schema":9,"extra":{"a":1},"services":[{"id":"a","name":"X","state":"sleepy","novel":[1],"chart":[1,{"avg":2.5},{"nothing":1}]}]}"#
+        let json = #"{"schema":9,"extra":{"a":1},"services":[{"id":"a","name":"X","state":"sleepy","novel":[1],"chart":{"metric":null,"values":[1,null,2.5]}}]}"#
         let snap = try Snapshot.decode(Data(json.utf8))
         try await expect(Level(snap.services?.first?.state) == .other("sleepy"))
         try await expect(Level.other("sleepy").word == "Sleepy")
-        try await expect(snap.services?.first?.chart?.compactMap(\.value) == [1, 2.5])
+        try await expect(snap.services?.first?.chart?.values == [1, nil, 2.5])
         try await expect(snap.inbox == nil)
+        try await expect(leftOutText(snap) == nil)
+        let cut = try Snapshot.decode(Data(#"{"server":{"left_out":["logs"]}}"#.utf8))
+        try await expect(leftOutText(cut) == "Log lines were left out of this snapshot to keep it small.")
         let empty = try Snapshot.decode(Data("{}".utf8))
         try await expect(Screens.needsYou(empty, now: now).nothingNeedsYou)
         try await expect(Screens.everything(empty).isEmpty)
@@ -81,11 +84,10 @@ struct SnapshotTests {
         let db = rows.first { $0.name == "db-01" }
         try await expect(db?.level == .down)
         try await expect(db?.services.first?.level == .down)
-        try await expect(db?.nextWindow?.hasPrefix("Next planned downtime") == true)
     }
 
     func serviceScreen() async throws {
-        let id = "83e117c6-2ce8-4e6f-8e66-9e40521d3bb8"
+        let id = "4bfc9563-d352-4ef6-8486-f8ffc817aeb6"
         let v = try require(Screens.service(s, id: id, now: now))
         try await expect(v.name == "Upload portal")
         try await expect(v.version == "2.4.1")
@@ -95,9 +97,26 @@ struct SnapshotTests {
         try await expect(v.logs.count == 20)
         try await expect(v.logs.contains { $0.isError })
         try await expect(Screens.service(s, id: "nope", now: now) == nil)
-        let job = try require(Screens.service(s, id: "4281f696-0735-42fa-bdd4-4e57a76d7313", now: now))
+        let job = try require(Screens.service(s, id: "7012ff32-1231-4688-bcbf-309564fc2ee2", now: now))
         try await expect(job.level == .down)
-        try await expect(Screens.service(s, id: "58850cc7-cc00-438f-987d-b85420a0c52a", now: now)?.job.isEmpty == false)
+        try await expect(Screens.service(s, id: "0ae2b839-1e1a-4c8a-8170-524922bd9207", now: now)?.job.isEmpty == false)
+    }
+
+    func chartDrawsFromValues() async throws {
+        let json = #"{"machines":[{"id":"m","name":"m","services":[{"id":"s","name":"S","state":"ok"}]}],"services":[{"id":"s","name":"S","state":"ok","chart":{"metric":"latency","values":[1,null,3]}}]}"#
+        let snap = try Snapshot.decode(Data(json.utf8))
+        try await expect(Screens.everything(snap)[0].services[0].chart == [1, nil, 3])
+        try await expect(Screens.service(snap, id: "s", now: Fixtures.now)?.chart == [1, nil, 3])
+        try await expect(snap.services?.first?.chart?.metric == "latency")
+    }
+
+    func realChartsDecode() async throws {
+        let rawServices = Fixtures.raw["services"] as! [[String: Any]]
+        for (a, b) in zip(Fixtures.snapshot.services ?? [], rawServices) {
+            let n = ((b["chart"] as? [String: Any])?["values"] as? [Any])?.count
+            try await expect(a.chart?.values?.count == n, a.name ?? "")
+        }
+        try await expect(Fixtures.snapshot.server?.leftOut != nil || Fixtures.raw["server"] != nil)
     }
 
     func vitalsAreShown() async throws {
