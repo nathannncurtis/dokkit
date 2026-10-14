@@ -10,12 +10,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf16"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
+	"golang.org/x/sys/windows/svc/eventlog"
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
@@ -178,9 +181,19 @@ func updaterSteps(dir string) [][]string {
 	}
 }
 
-// The task's security descriptor: the system account and administrators have full control, and
-// Local Service, which the program runs as, may read and start the task but not change it.
-const taskSDDL = "D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;GRGX;;;LS)"
+const eventKey = `SYSTEM\CurrentControlSet\Services\EventLog\Application\` + eventSource
+
+var registerSource = func() error {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, eventKey, registry.QUERY_VALUE)
+	if err == nil {
+		k.Close()
+		return nil
+	}
+	return eventlog.InstallAsEventCreate(eventSource, eventlog.Info)
+}
+
+// eventQuery matches the entry the program writes to ask for a check.
+var eventQuery = "*[System[Provider[@Name='" + eventSource + "'] and EventID=" + strconv.Itoa(eventID) + "]]"
 
 const markHere = "@schedule@"
 
@@ -190,7 +203,7 @@ func taskMarker(exe string) string {
 	return "schedule " + hex.EncodeToString(sum[:6])
 }
 
-// taskXML is the scheduled task: the system account, highest rights, every five minutes and at start-up.
+// taskXML is the scheduled task: the system account, highest rights, every five minutes, at start-up and when the program asks.
 func taskXML(exe string) []byte {
 	s := strings.Replace(taskTemplate(exe), markHere, taskMarker(exe), 1)
 	u := utf16.Encode([]rune(s))
@@ -201,14 +214,21 @@ func taskXML(exe string) []byte {
 	return b
 }
 
+var subscription = xmlEscape(`<QueryList><Query Id="0" Path="Application"><Select Path="Application">` + eventQuery + `</Select></Query></QueryList>`)
+
+func xmlEscape(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
+}
+
 func taskTemplate(exe string) string {
 	esc := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(`"` + exe + `"`)
 	return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo><SecurityDescriptor>` + taskSDDL + `</SecurityDescriptor><Description>Installs the Dokkit releases a person approved. Makes outbound requests only. ` + markHere + `</Description></RegistrationInfo>
+  <RegistrationInfo><Description>Installs the Dokkit releases a person approved. Makes outbound requests only. ` + markHere + `</Description></RegistrationInfo>
   <Triggers>
     <TimeTrigger><Repetition><Interval>PT5M</Interval></Repetition><StartBoundary>2026-01-01T00:00:00</StartBoundary><Enabled>true</Enabled></TimeTrigger>
     <BootTrigger><Enabled>true</Enabled></BootTrigger>
+    <EventTrigger><Enabled>true</Enabled><Subscription>` + subscription + `</Subscription></EventTrigger>
   </Triggers>
   <Principals><Principal id="Author"><UserId>S-1-5-18</UserId><RunLevel>HighestAvailable</RunLevel></Principal></Principals>
   <Settings>
@@ -225,6 +245,9 @@ func taskTemplate(exe string) string {
 }
 
 func registerTask(exe string) error {
+	if err := registerSource(); err != nil {
+		return fmt.Errorf("could not register the %s event source: %v", eventSource, err)
+	}
 	xmlFile := filepath.Join(where.work(), "task.xml")
 	if err := os.WriteFile(xmlFile, taskXML(exe), 0o600); err != nil {
 		return err
@@ -336,6 +359,7 @@ func updaterUninstall() int {
 			return 1
 		}
 	}
+	eventlog.Remove(eventSource)
 	for _, p := range []string{where.updaterExe, where.updaterExe + ".previous"} {
 		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 			fmt.Fprintf(os.Stderr, "dokkit: could not remove %s: %v\n", p, err)

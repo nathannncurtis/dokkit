@@ -1,15 +1,28 @@
 package main
 
 import (
-	"fmt"
-	"strings"
+	"golang.org/x/sys/windows/svc/eventlog"
 )
 
-// realPoke starts the updater's scheduled task. The task's security descriptor lets Local
-// Service start it and nothing more.
-func realPoke() (string, error) {
-	if out, err := runTool("schtasks.exe", "/run", "/tn", taskName); err != nil {
-		return "", fmt.Errorf("schtasks: %v %s", err, strings.TrimSpace(out))
+const (
+	eventSource = "Dokkit"
+	eventID     = 100
+	eventText   = "Update requested"
+)
+
+var writeEvent = func() error {
+	l, err := eventlog.Open(eventSource)
+	if err != nil {
+		return err
 	}
-	return "Started the updater task.\n", nil
+	defer l.Close()
+	return l.Info(eventID, eventText)
+}
+
+// realPoke writes an entry to the Application log. The updater's task has an event trigger for it.
+func realPoke() (string, error) {
+	if err := writeEvent(); err != nil {
+		return "", err
+	}
+	return "Asked the updater to check now (event written).\n", nil
 }
