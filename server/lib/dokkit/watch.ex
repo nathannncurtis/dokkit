@@ -43,7 +43,7 @@ defmodule Dokkit.Watch do
           fn -> Dokkit.Digest.tick(now, Dokkit.Alerts.config()) end,
           fn -> Dokkit.Self.tick(now, Dokkit.Alerts.config(), booted) end,
           fn -> Task.start(fn -> Dokkit.Acme.tick(now) end) end,
-          fn -> if archive && now.minute == 0, do: Dokkit.Logs.archive(archive) end,
+          fn -> if now.minute == 0, do: Dokkit.Logs.archive(archive) end,
           fn -> Issues.changed() end,
           fn -> Dokkit.Phones.Sender.tick() end,
           fn ->

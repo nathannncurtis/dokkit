@@ -22,6 +22,8 @@ defmodule DokkitWeb.SettingsLive do
          acme_busy: false,
          acme_n: 0,
          relay_result: nil,
+         ret_result: nil,
+         ret_n: 0,
          phone_error: nil,
          phone_new: nil
        )
@@ -201,6 +203,20 @@ defmodule DokkitWeb.SettingsLive do
     end
   end
 
+  def handle_event("retention_change", %{"retention" => r}, socket),
+    do: {:noreply, retention(socket, r)}
+
+  def handle_event("retention_save", %{"retention" => r}, socket) do
+    socket = assign(socket, ret_n: socket.assigns.ret_n + 1)
+
+    owner(socket, fn ->
+      case Dokkit.Logs.save_retention(r) do
+        {:ok, _} -> assign(socket, ret_result: {:ok, "Saved"})
+        {:error, text} -> assign(socket, ret_result: {:error, text})
+      end
+    end)
+  end
+
   def handle_event("certificate_remove", _, socket) do
     owner(socket, fn ->
       case Dokkit.Certificate.delete() do
@@ -220,8 +236,50 @@ defmodule DokkitWeb.SettingsLive do
     {:noreply, load(socket)}
   end
 
+  defp retention(socket, draft) do
+    saved = Dokkit.Logs.retention()
+    draft = Map.merge(%{"months" => to_string(saved["months"]), "action" => saved["action"]}, draft)
+
+    older =
+      with {n, ""} when n in 1..120 <- Integer.parse(draft["months"]),
+           do: length(Dokkit.Logs.older(n))
+
+    what = if draft["action"] == "delete", do: "deleted", else: "archived"
+
+    note =
+      case older do
+        0 -> "No month is older than that, so nothing will be #{what} on the next sweep."
+        1 -> "The oldest month will be #{what} on the next sweep."
+        n when is_integer(n) -> "The #{n} oldest months will be #{what} on the next sweep."
+        _ -> "Months is a whole number from 1 to 120."
+      end
+
+    months = Dokkit.Logs.months()
+    files = socket.assigns[:archives] || []
+    size = Float.round(Enum.sum(Enum.map(files, & &1.size)) / 1_048_576, 1)
+
+    oldest =
+      case months do
+        [{_, y, m} | _] -> ", the oldest #{y}-#{m}"
+        _ -> ""
+      end
+
+    assign(socket,
+      ret: draft,
+      ret_note: note,
+      ret_stats:
+        "#{length(months)} months in the database#{oldest}. #{length(files)} archived files, #{size} MB."
+    )
+  end
+
   defp load(socket) do
     dir = Application.get_env(:dokkit, :archive)
+
+    socket =
+      retention(
+        assign(socket, archives: (dir && Dokkit.Logs.archives(dir)) || []),
+        socket.assigns[:ret] || %{}
+      )
 
     assign(socket,
       people: Accounts.list(),
@@ -739,10 +797,77 @@ defmodule DokkitWeb.SettingsLive do
           </form>
         </div>
 
+        <div :if={@owner} class="card" id="log-retention">
+          <h2>Logs</h2>
+
+          <form
+            style="display:grid; gap:12px; padding:12px 16px 0"
+            phx-change="retention_change"
+            phx-submit="retention_save"
+            id={"retention-form-#{@ret_n}"}
+          >
+            <p class="lead" style="margin:0">
+              {@ret_stats}
+            </p>
+
+            <label style="display:grid; gap:6px">
+              Months that stay live
+              <input
+                class="inp"
+                type="number"
+                name="retention[months]"
+                value={@ret["months"]}
+                min="1"
+                max="120"
+                step="1"
+              />
+            </label>
+
+            <label style="display:grid; gap:6px">
+              A month older than that is
+              <select class="inp" name="retention[action]">
+                <option value="archive" selected={@ret["action"] == "archive"}>
+                  Archived to a file
+                </option>
+                <option value="delete" selected={@ret["action"] == "delete"}>Deleted</option>
+              </select>
+            </label>
+
+            <label :if={@ret["action"] == "delete"}>
+              <input
+                type="checkbox"
+                name="retention[confirm]"
+                value="true"
+                checked={@ret["confirm"] == "true"}
+              /> I understand old logs will be deleted, not archived
+            </label>
+
+            <p class="lead" style="margin:0" id="retention-note">
+              {@ret_note} Archived files that already exist stay, and can still be loaded back.
+            </p>
+
+            <span class="foot" style="padding-inline:16px; margin-inline:-16px">
+              <span
+                :if={@ret_result}
+                class={elem(@ret_result, 0) == :error && "bad"}
+                role="status"
+                id="retention-result"
+              >
+                {elem(@ret_result, 1)}
+              </span>
+              <span class="end">
+                <button class="btn primary" type="submit">Save</button>
+              </span>
+            </span>
+          </form>
+        </div>
+
         <div :if={@archives != []} class="card">
           <h2>Archived logs<span class="cnt">{length(@archives)}</span></h2>
 
-          <p class="lead">Months older than a year. One loaded back can be searched for a week.</p>
+          <p class="lead">
+            Months past the live limit. One loaded back can be searched for a week.
+          </p>
 
           <div
             :for={a <- @archives}

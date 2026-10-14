@@ -1,6 +1,7 @@
 defmodule DokkitWeb.ApiController do
   @moduledoc "The read and act calls of spec/api.md, for a user token."
   use DokkitWeb, :controller
+  require Logger
   alias Dokkit.{Issues, Keys, Read}
 
   plug :token
@@ -602,6 +603,76 @@ defmodule DokkitWeb.ApiController do
 
   def restore_archive(conn, %{"name" => name}), do: reply(conn, restore_month(name))
 
+  def save_log_retention(params) do
+    case Dokkit.Logs.save_retention(params) do
+      {:ok, _} -> Dokkit.Logs.retention_view()
+      {:error, why} -> {:error, "bad_settings", why}
+    end
+  end
+
+  def get_log_retention(conn, _), do: json(conn, Dokkit.Logs.retention_view())
+  def put_log_retention(conn, params), do: reply(conn, save_log_retention(params))
+
+  def move_logs(conn, params), do: reply(conn, move_service_logs(params))
+
+  def move_service_logs(%{"id" => id} = p) do
+    with %{} = from <- Dokkit.Estate.service(id),
+         {:ok, to} <- target(p["to"], from),
+         {:ok, filter} <- move_filter(p),
+         {:ok, range} <- move_range(p) do
+      opts = filter ++ range
+      dry = p["dry"] in [true, "true"]
+      n = Dokkit.Logs.move(from.id, to.id, [dry: dry] ++ opts)
+
+      if dry do
+        %{would_move: n}
+      else
+        Logger.info("Moved #{n} log lines from service #{from.id} to #{to.id}: #{inspect(opts)}")
+        %{moved: n}
+      end
+    else
+      nil -> not_found()
+      {:error, _, _} = error -> error
+    end
+  end
+
+  defp target(to, from) do
+    with true <- is_binary(to) || {:error, "bad_move", "to is a service id."},
+         %{} = service <- Dokkit.Estate.service(to) || not_found(),
+         true <- service.id != from.id || {:error, "bad_move", "to must be another service."} do
+      {:ok, service}
+    end
+  end
+
+  defp move_filter(%{"field" => field, "values" => values})
+       when is_binary(field) and is_list(values) do
+    if field =~ ~r/\A[A-Za-z0-9_]+\z/ and length(values) <= 200 and
+         Enum.all?(values, &is_binary/1),
+       do: {:ok, [field: field, values: values]},
+       else: {:error, "bad_move", "field is letters, digits and _; values are at most 200 texts."}
+  end
+
+  defp move_filter(p) when not is_map_key(p, "field") and not is_map_key(p, "values"),
+    do: {:ok, []}
+
+  defp move_filter(_), do: {:error, "bad_move", "field and values go together."}
+
+  defp move_range(p) do
+    Enum.reduce_while([{"from", :from}, {"until", :until}], {:ok, []}, fn {key, opt},
+                                                                          {:ok, acc} ->
+      case p[key] do
+        nil ->
+          {:cont, {:ok, acc}}
+
+        text ->
+          case is_binary(text) && DateTime.from_iso8601(text) do
+            {:ok, at, _} -> {:cont, {:ok, [{opt, at} | acc]}}
+            _ -> {:halt, {:error, "bad_time", "#{key} must be a time, in RFC 3339."}}
+          end
+      end
+    end)
+  end
+
   defp one(conn, nil), do: missing(conn)
   defp one(conn, {:error, _, _} = error), do: reply(conn, error)
   defp one(conn, thing), do: json(conn, clean(conn, thing))
@@ -681,11 +752,12 @@ defmodule DokkitWeb.ApiController do
     case {method, Enum.at(path, 2), List.last(path)} do
       {_, area, _} when area in ["keys", "users", "update-all", "phones"] -> "admin"
       {"GET", "certificate", "settings"} -> "admin"
+      {_, "logs", "retention"} -> "admin"
       {"GET", "logs", _} -> "read-logs"
       {"GET", _, _} -> "read"
       {_, area, _} when area in ["rules", "alerts", "releases", "certificate"] -> "admin"
       {"POST", area, area} when area in ["jobs", "apps", "dependencies"] -> "admin"
-      {_, _, last} -> if last in ~w(checks restart update restore), do: "admin", else: "act"
+      {_, _, last} -> if last in ~w(checks restart update restore move), do: "admin", else: "act"
     end
   end
 

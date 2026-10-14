@@ -87,7 +87,7 @@ go build -o dokkit.exe .
 - The Windows installer offers to set up its own Postgres or to use one that is already there.
 - It calls an outside address every minute, so something outside can page when it goes quiet.
 - Running it is covered in `docs/running.md`.
-- Logs are kept live for 12 months. Each older month is archived as one compressed file and can be loaded back.
+- Logs are kept live for 12 months by default; it is a setting (1 to 120 months). Each older month is archived as one compressed file and can be loaded back, or deleted if that is chosen.
 - Its own usernames and passwords. Reachable on the local network and over a private overlay network, never exposed publicly.
 - Light and dark themes, both supported.
 

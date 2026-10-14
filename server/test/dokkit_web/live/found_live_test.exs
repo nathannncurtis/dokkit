@@ -51,6 +51,13 @@ defmodule DokkitWeb.FoundLiveTest do
     assert html =~ "2 system hidden"
   end
 
+  test "the list is the hook that keeps the chosen machine in view", %{conn: conn} do
+    seed()
+    {:ok, view, _} = live(conn, "/found?machine=small-box")
+    assert has_element?(view, "#machine-list[phx-hook=MachineKeys]")
+    assert has_element?(view, "#machine-list a[aria-current=true][tabindex='0']", "small-box")
+  end
+
   test "a machine is chosen by the link and the choice survives a reload", %{conn: conn} do
     seed()
     {:ok, view, _} = live(conn, "/found?machine=small-box")

@@ -96,6 +96,8 @@ defmodule DokkitWeb.ParityTest do
       "certificate_remove" => {:owner, ["DELETE /api/v1/certificate"]},
       "acme_save" => {:owner, ["PUT /api/v1/certificate/settings"]},
       "acme_now" => {:owner, ["POST /api/v1/certificate/renew"]},
+      "retention_save" => {:owner, ["PUT /api/v1/logs/retention"]},
+      "retention_change" => @view,
       "full" => @view,
       "full_typed" => @view,
       "full_token" => @session,

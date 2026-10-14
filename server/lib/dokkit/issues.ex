@@ -216,7 +216,7 @@ defmodule Dokkit.Issues do
           notes: planned_note(m, now)
         })
 
-      Dokkit.Alerts.plan(issue, nil)
+      Dokkit.Alerts.plan(issue, nil, now)
     end
 
     back =

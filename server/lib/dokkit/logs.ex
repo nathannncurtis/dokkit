@@ -110,6 +110,53 @@ defmodule Dokkit.Logs do
     Repo.all(query)
   end
 
+  @move_batch 20_000
+
+  @doc """
+  Moves the lines of service `from` to service `to`, in batches of 20,000 so no statement runs
+  long. `opts`: `field` and `values` (only lines whose `fields[field]` is one of them), `from` and
+  `until` (a time range, `until` exclusive), `dry` (count only). Returns the number of lines.
+  """
+  def move(from, to, opts \\ []) do
+    base =
+      Enum.reduce(opts, from(l in Log, where: l.service_id == ^from), fn
+        {:field, field}, q ->
+          values = opts[:values]
+
+          where(
+            q,
+            [l],
+            fragment("?->>?", l.fields, type(^field, :string)) in type(^values, {:array, :string})
+          )
+
+        {:from, at}, q ->
+          where(q, [l], l.at >= ^at)
+
+        {:until, at}, q ->
+          where(q, [l], l.at < ^at)
+
+        _, q ->
+          q
+      end)
+
+    if opts[:dry] do
+      Repo.aggregate(base, :count, timeout: 120_000)
+    else
+      machine = Repo.one(from s in Dokkit.Service, where: s.id == ^to, select: s.machine_id)
+      set = if machine, do: [service_id: to, machine_id: machine], else: [service_id: to]
+      move_batches(base, set, 0)
+    end
+  end
+
+  defp move_batches(base, set, total) do
+    ids = from l in base, select: l.id, limit: @move_batch
+
+    {n, _} =
+      Repo.update_all(from(l in Log, where: l.id in subquery(ids)), [set: set], timeout: 120_000)
+
+    if n == 0, do: total, else: move_batches(base, set, total + n)
+  end
+
   @doc "Makes the month's partition for a line, or for a date, if it is not there yet."
   def ensure_partition(%{} = line, now),
     do: ensure_partition(time(line["t"] || line["@t"] || line["at"], now))
@@ -130,55 +177,120 @@ defmodule Dokkit.Logs do
     end
   end
 
-  @keep_months 12
+  @defaults %{"months" => 12, "action" => "archive"}
+
+  def retention do
+    saved = (Repo.get(Dokkit.Setting, "log_retention") || %Dokkit.Setting{value: %{}}).value
+    Map.merge(@defaults, saved)
+  end
+
+  @doc "Saves how many months stay live (1 to 120) and what happens to an older month. Deleting needs `confirm`."
+  def save_retention(params) do
+    current = retention()
+    months = Map.get(params, "months", current["months"])
+    months = if is_binary(months), do: Integer.parse(String.trim(months)), else: {months, ""}
+    action = Map.get(params, "action", current["action"])
+
+    cond do
+      not match?({n, ""} when is_integer(n) and n in 1..120, months) ->
+        {:error, "months is a whole number from 1 to 120."}
+
+      action not in ~w(archive delete) ->
+        {:error, "action is archive or delete."}
+
+      action == "delete" and params["confirm"] not in [true, "true"] ->
+        {:error, "Deleting old logs needs confirm: true. Deleted logs are not archived."}
+
+      true ->
+        new = %{"months" => elem(months, 0), "action" => action}
+
+        Repo.insert!(%Dokkit.Setting{key: "log_retention", value: new},
+          on_conflict: {:replace, [:value, :updated_at]},
+          conflict_target: :key
+        )
+
+        {:ok, new}
+    end
+  end
+
+  def retention_view do
+    r = retention()
+    Map.put(r, "older", length(older(r["months"])))
+  end
+
+  @doc "The months in the database, oldest first, as `{table, year, month}`."
+  def months do
+    Repo.query!("""
+    SELECT c.relname FROM pg_inherits i
+    JOIN pg_class c ON c.oid = i.inhrelid JOIN pg_class p ON p.oid = i.inhparent
+    WHERE p.relname = 'logs' ORDER BY 1
+    """).rows
+    |> Enum.flat_map(fn [name] ->
+      case Regex.run(~r/^logs_y(\d{4})m(\d{2})$/, name) do
+        [_, year, month] -> [{name, year, month}]
+        _ -> []
+      end
+    end)
+  end
+
+  @doc "The months that are older than `keep` months before `today`'s month."
+  def older(keep, today \\ Date.utc_today()) do
+    cutoff = Date.shift(Date.beginning_of_month(today), month: -keep)
+
+    Enum.filter(months(), fn {_, year, month} ->
+      Date.compare(Date.new!(String.to_integer(year), String.to_integer(month), 1), cutoff) == :lt
+    end)
+  end
 
   @doc """
-  Writes each month older than a year to one compressed file in `dir` and drops it from the
-  database. Returns the files written. A month is read whole into memory to be written.
+  Writes each month older than the live limit to one compressed file in `dir` and drops it from
+  the database, or only drops it when the setting is `delete`. Returns the files written, or
+  the dropped tables when deleting. A month is read whole into memory to be written.
   """
   def archive(dir, today \\ Date.utc_today()) do
-    cutoff = Date.shift(Date.beginning_of_month(today), month: -@keep_months)
-
+    %{"months" => keep, "action" => action} = retention()
     back = restored()
     held = for {name, until} <- back, until > DateTime.utc_now(), do: name
 
-    months =
-      Repo.query!("""
-      SELECT c.relname FROM pg_inherits i
-      JOIN pg_class c ON c.oid = i.inhrelid JOIN pg_class p ON p.oid = i.inhparent
-      WHERE p.relname = 'logs' ORDER BY 1
-      """).rows
-
-    for [name] <- months,
-        [_, year, month] <- [Regex.run(~r/^logs_y(\d{4})m(\d{2})$/, name)],
+    for {name, year, month} <- older(keep, today),
         key = {String.to_integer(year), String.to_integer(month)},
-        Date.compare(Date.new!(elem(key, 0), elem(key, 1), 1), cutoff) == :lt,
-        "logs-#{year}-#{month}" not in held do
-      File.mkdir_p!(dir)
-      path = Path.join(dir, "logs-#{year}-#{month}.ndjson.gz")
-
-      # A month that came back from its file is only dropped; any other month is written out
-      # first, under a free name. Written as .part first so a half file is never an archive.
-      path =
-        if "logs-#{year}-#{month}" in Map.keys(back) and File.exists?(path) do
-          path
-        else
-          %{rows: rows} =
-            Repo.query!("SELECT row_to_json(l)::text FROM #{name} l ORDER BY l.at", [],
-              timeout: :infinity
-            )
-
-          path = free(path)
-          File.write!(path <> ".part", :zlib.gzip(Enum.map_join(rows, "
-", &hd/1)))
-          File.rename!(path <> ".part", path)
-          path
-        end
-
-      Repo.query!("DROP TABLE #{name}")
-      :persistent_term.erase({__MODULE__, key})
-      path
+        "logs-#{year}-#{month}" not in held,
+        action == "delete" or is_binary(dir) do
+      if action == "delete" do
+        Repo.query!("DROP TABLE #{name}")
+        :persistent_term.erase({__MODULE__, key})
+        name
+      else
+        archive_month(dir, back, name, year, month, key)
+      end
     end
+  end
+
+  defp archive_month(dir, back, name, year, month, key) do
+    File.mkdir_p!(dir)
+    path = Path.join(dir, "logs-#{year}-#{month}.ndjson.gz")
+
+    # A month that came back from its file is only dropped; any other month is written out
+    # first, under a free name. Written as .part first so a half file is never an archive.
+    path =
+      if "logs-#{year}-#{month}" in Map.keys(back) and File.exists?(path) do
+        path
+      else
+        %{rows: rows} =
+          Repo.query!("SELECT row_to_json(l)::text FROM #{name} l ORDER BY l.at", [],
+            timeout: :infinity
+          )
+
+        path = free(path)
+        File.write!(path <> ".part", :zlib.gzip(Enum.map_join(rows, "
+", &hd/1)))
+        File.rename!(path <> ".part", path)
+        path
+      end
+
+    Repo.query!("DROP TABLE #{name}")
+    :persistent_term.erase({__MODULE__, key})
+    path
   end
 
   defp free(path, n \\ 1) do

@@ -10104,6 +10104,197 @@
         ]
       }
     },
+    "/api/v1/logs/retention": {
+      "get": {
+        "operationId": "getLogRetention",
+        "summary": "How long log lines stay live",
+        "tags": [
+          "Admin"
+        ],
+        "description": "`months` is how many months stay live, `action` is what happens to an older month (`archive` or `delete`), and `older` is how many months are older than the limit now and will be handled by the next hourly sweep. Takes a user token (`dku_`) with the `admin` scope.",
+        "responses": {
+          "200": {
+            "description": "The setting.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "months": {
+                      "type": "integer"
+                    },
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "archive",
+                        "delete"
+                      ]
+                    },
+                    "older": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "months": 12,
+                  "action": "archive",
+                  "older": 0
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "operationId": "setLogRetention",
+        "summary": "Change how long log lines stay live",
+        "tags": [
+          "Admin"
+        ],
+        "description": "`months` is a whole number from 1 to 120. With `action` `delete` an older month is dropped without a file, and `confirm` must be `true`. The change acts on the next sweep, not in this call. Archive files that already exist stay and can still be loaded back. A setting left out stays as it was. Takes a user token (`dku_`) with the `admin` scope.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "months": {
+                    "type": "integer"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "archive",
+                      "delete"
+                    ]
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "example": {
+                "months": 6,
+                "action": "delete",
+                "confirm": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The setting after the change, as in the GET.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "months": 6,
+                  "action": "delete",
+                  "older": 2
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A setting is not right. The message says which.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_settings",
+                    "message": "months is a whole number from 1 to 120."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
     "/api/v1/logs/archives/{name}/restore": {
       "post": {
         "operationId": "restoreArchive",
@@ -10202,6 +10393,169 @@
             ]
           }
         ]
+      }
+    },
+    "/api/v1/services/{id}/logs/move": {
+      "post": {
+        "operationId": "moveLogs",
+        "summary": "Move log lines to another service",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Moves the log lines of a service to another service, across all monthly partitions and in batches of 20,000, and answers when done. Lines can be picked by the value of one of their fields and by time. The moved lines take the target service's machine. With dry=true nothing changes and the answer counts the lines that would move. Takes a user token (`dku_`) with the `admin` scope. Not offered through MCP.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The service the lines are taken from.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "dry",
+            "in": "query",
+            "description": "true to count without moving.",
+            "schema": {
+              "type": "boolean"
+            },
+            "required": false
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "string",
+                    "description": "The service the lines go to."
+                  },
+                  "field": {
+                    "type": "string",
+                    "description": "A field name in the line's fields: letters, digits and _."
+                  },
+                  "values": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 200,
+                    "description": "Lines whose field is one of these move. Goes with field."
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "RFC 3339; lines at or after this time."
+                  },
+                  "until": {
+                    "type": "string",
+                    "description": "RFC 3339; lines before this time."
+                  }
+                },
+                "required": [
+                  "to"
+                ]
+              },
+              "example": {
+                "to": "7f0c2f0e-0000-4000-8000-000000000000",
+                "field": "app_name",
+                "values": [
+                  "Records Finder"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Moved, or counted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "moved": {
+                      "type": "integer"
+                    },
+                    "would_move": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "moved": 104211
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Same service, bad field or values, or a bad time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_move",
+                    "message": "to must be another service."
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/releases": {

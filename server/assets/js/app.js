@@ -11,6 +11,7 @@ const hooks = {
   },
   MachineKeys: {
     mounted() {
+      this.reveal()
       this.el.addEventListener("keydown", (e) => {
         const items = [...this.el.querySelectorAll("[role=option]")]
         let i = items.findIndex((x) => x.getAttribute("aria-current") === "true")
@@ -23,6 +24,12 @@ const hooks = {
         items[i].click()
         items[i].focus()
       })
+    },
+    updated() { this.reveal() },
+    reveal() {
+      const chosen = this.el.querySelector("[aria-current=true]")
+      if (chosen && chosen.id !== this.shown) chosen.scrollIntoView({block: "nearest"})
+      this.shown = chosen && chosen.id
     }
   }
 }

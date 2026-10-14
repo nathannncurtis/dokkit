@@ -194,7 +194,10 @@ defmodule DokkitWeb.Router do
     get "/alerts/suggestions", ApiController, :suggestions
     post "/alerts/suggestions/:id/accept", ApiController, :accept_suggestion
     post "/alerts/suggestions/:id/dismiss", ApiController, :dismiss_suggestion
+    get "/logs/retention", ApiController, :get_log_retention
+    put "/logs/retention", ApiController, :put_log_retention
     get "/logs/archives", ApiController, :archives
     post "/logs/archives/:name/restore", ApiController, :restore_archive
+    post "/services/:id/logs/move", ApiController, :move_logs
   end
 end
