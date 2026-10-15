@@ -6,8 +6,10 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"syscall"
 )
 
 var nudgeFile = nudgeFileFor(runtime.GOOS)
@@ -17,12 +19,31 @@ var nudgeFile = nudgeFileFor(runtime.GOOS)
 func realPoke() (string, error) {
 	err := os.WriteFile(nudgeFile, []byte(now()+"\n"), 0o600)
 	if errors.Is(err, fs.ErrNotExist) {
-		return "", errNoNudge
+		return startCronUpdater()
 	}
 	if err != nil {
 		return "", err
 	}
 	return "Asked the updater to check now.\n", nil
+}
+
+var cronUpdaterExe = func() string { return "" }
+
+var isRoot = func() bool { return os.Geteuid() == 0 }
+
+// Setsid: the updater restarts this program and must outlive it.
+var startCronUpdater = func() (string, error) {
+	exe := cronUpdaterExe()
+	if exe == "" || !isRoot() {
+		return "", errNoNudge
+	}
+	cmd := exec.Command(exe, "updater", "run")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+	go cmd.Wait()
+	return "Started the updater to check now.\n", nil
 }
 
 // ensureNudge gives the program's account a folder of its own to write the nudge file in. It

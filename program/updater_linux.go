@@ -37,7 +37,21 @@ func locateUpdater() (dir, data string) {
 	return "/usr/local/lib/dokkit-updater", "/var/lib/dokkit-updater"
 }
 
-func init() { placeUpdater = placeOnVolume }
+func init() {
+	placeUpdater = placeOnVolume
+	cronUpdaterExe = rootCronExe
+}
+
+func rootCronExe() string {
+	if b, err := os.ReadFile(qnapCrontab); err == nil {
+		return cronExe(string(b))
+	}
+	if _, err := exec.LookPath("crontab"); err != nil {
+		return ""
+	}
+	out, _ := runCmd("crontab", "-l")
+	return cronExe(string(out))
+}
 
 func placeOnVolume(c upConfig) error {
 	if !exists(qnapCrontab) || systemdRunning() {

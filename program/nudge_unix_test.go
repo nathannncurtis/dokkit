@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 )
 
 func useNudgeFile(t *testing.T) string {
@@ -34,8 +35,15 @@ func TestPokeWritesTheNudgeFile(t *testing.T) {
 	}
 }
 
+func useCron(t *testing.T, exe string, root bool) {
+	oldExe, oldRoot := cronUpdaterExe, isRoot
+	cronUpdaterExe, isRoot = func() string { return exe }, func() bool { return root }
+	t.Cleanup(func() { cronUpdaterExe, isRoot = oldExe, oldRoot })
+}
+
 func TestPokeWhereTheUpdaterMadeNoFolderPokesNothing(t *testing.T) {
 	f := useNudgeFile(t)
+	useCron(t, "", true)
 	if _, err := realPoke(); !errors.Is(err, errNoNudge) {
 		t.Fatalf("%v", err)
 	}
@@ -86,4 +94,26 @@ func TestWriteIfChangedWritesOnlyADifference(t *testing.T) {
 	if did, _ := writeIfChanged(p, "b"); !did {
 		t.Fatal("a different text was not written")
 	}
+}
+
+func TestPokeStartsACronUpdaterWhenTheProgramIsRoot(t *testing.T) {
+	useNudgeFile(t)
+	dir := t.TempDir()
+	mark := filepath.Join(dir, "ran")
+	exe := filepath.Join(dir, "updater")
+	os.WriteFile(exe, []byte("#!/bin/sh\necho \"$@\" > "+mark+"\n"), 0o700)
+	useCron(t, exe, false)
+	if _, err := realPoke(); !errors.Is(err, errNoNudge) {
+		t.Fatalf("a program that is not root started the updater: %v", err)
+	}
+	useCron(t, exe, true)
+	if said, err := realPoke(); err != nil || !strings.Contains(said, "Started") {
+		t.Fatalf("%q %v", said, err)
+	}
+	for end := time.Now().Add(5 * time.Second); time.Now().Before(end); time.Sleep(50 * time.Millisecond) {
+		if b, _ := os.ReadFile(mark); string(b) == "updater run\n" {
+			return
+		}
+	}
+	t.Fatal("the updater was not run with updater run")
 }
