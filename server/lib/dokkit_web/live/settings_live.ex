@@ -52,9 +52,7 @@ defmodule DokkitWeb.SettingsLive do
   def handle_event("relay_save", %{"relay" => r}, socket) do
     owner(socket, fn ->
       case ApiController.save_relay(r) do
-        {:error, _, text} ->
-          assign(socket, relay_result: {:error, text})
-
+        {:error, _, text} -> assign(socket, relay_result: {:error, text})
         %{result: text, uploaded: ok} ->
           assign(socket, relay_result: {if(ok, do: :ok, else: :error), text})
       end
@@ -65,12 +63,7 @@ defmodule DokkitWeb.SettingsLive do
     owner(socket, fn ->
       case Phones.add(p["name"]) do
         {:ok, phone, code} ->
-          Process.send_after(
-            self(),
-            {:hide_phone, phone.slot},
-            :timer.seconds(Phones.pair_life())
-          )
-
+          Process.send_after(self(), {:hide_phone, phone.slot}, :timer.seconds(Phones.pair_life()))
           qr = code |> EQRCode.encode() |> EQRCode.svg(width: 240)
 
           assign(socket,
@@ -245,9 +238,7 @@ defmodule DokkitWeb.SettingsLive do
 
   defp retention(socket, draft) do
     saved = Dokkit.Logs.retention()
-
-    draft =
-      Map.merge(%{"months" => to_string(saved["months"]), "action" => saved["action"]}, draft)
+    draft = Map.merge(%{"months" => to_string(saved["months"]), "action" => saved["action"]}, draft)
 
     older =
       with {n, ""} when n in 1..120 <- Integer.parse(draft["months"]),
@@ -635,9 +626,7 @@ defmodule DokkitWeb.SettingsLive do
             </label>
 
             <p class="lead" style="margin:0">
-              Saving uploads one snapshot to the relay. Phones stay paired only when the mailbox is the same one; with a different mailbox the {length(
-                @phones
-              )} phones listed below are removed and each is paired again.
+              Saving uploads one snapshot to the relay. Phones stay paired only when the mailbox is the same one; with a different mailbox the {length(@phones)} phones listed below are removed and each is paired again.
             </p>
 
             <span class="foot" style="padding-inline:16px; margin-inline:-16px">

@@ -124,14 +124,13 @@ defmodule DokkitWeb.EverythingLive do
           <span class="end">
             <button class="btn sm" type="button" phx-click="dismiss_update">Dismiss</button>
           </span>
-          
           <ul>
             <li :for={m <- @shell.failed}>
               <.link navigate={~p"/machines/#{m.id}"}>{m.name}</.link>: {m.note}
             </li>
           </ul>
         </div>
-        
+
         <form :if={@dep_open} class="card" id="dependency-form" phx-submit="dependency">
           <h2>Add a dependency</h2>
           
@@ -212,20 +211,17 @@ defmodule DokkitWeb.EverythingLive do
             <div class="mg" role="group" aria-labelledby={"mh-#{m.id}"}>
               <div class="grp" id={"m-#{m.id}"}>
                 <span id={"mh-#{m.id}"} style="display:flex; align-items:center; gap:8px"><span
-                  :if={@planned[m.id] && m.id not in @down}
-                  class="lvl away"
-                  role="img"
-                  aria-label="Planned downtime"
-                ></span><.lvl
-                  :if={!@planned[m.id] || m.id in @down}
-                  state={if m.id in @down, do: :down, else: worst(m.services)}
-                /><.link navigate={home(m)}>{m.name}</.link></span>
+                    :if={@planned[m.id] && m.id not in @down}
+                    class="lvl away"
+                    role="img"
+                    aria-label="Planned downtime"
+                  ></span><.lvl
+                    :if={!@planned[m.id] || m.id in @down}
+                    state={if m.id in @down, do: :down, else: worst(m.services)}
+                  /><.link navigate={home(m)}>{m.name}</.link></span>
                 <span :if={m.os} class="mute" style="font-weight:400">{m.os}</span>
                 <span class="end">
-                  <span :if={@planned[m.id]} class="tag">Planned downtime until {Calendar.strftime(
-                    @planned[m.id].until,
-                    "%H:%M"
-                  )} UTC</span>
+                  <span :if={@planned[m.id]} class="tag">Planned downtime until {Calendar.strftime(@planned[m.id].until, "%H:%M")} UTC</span>
                   <span :if={m.id in @down} class="tag warn">Stopped reporting {at(m.last_seen_at)} UTC</span>
                   <span :if={count(m.services, :bad) > 0} class="tag warn">{need(
                     count(m.services, :bad)
@@ -248,15 +244,14 @@ defmodule DokkitWeb.EverythingLive do
                 planned={@planned[m.id]}
                 disabled={@current_user.role == :viewer}
               />
+
               <div :if={m.has_updater} class="foot" id={"upd-#{m.id}"}>
                 <span class="mono">
                   Program {m.program_version || "unknown"}{m.hosts_server &&
                     " / Server #{m.server_version || "unknown"}"}
                 </span>
                 
-                <span :if={Dokkit.Releases.outcome(m)} class={["st", m.update_ok == false && "warn"]}>{Dokkit.Releases.outcome(
-                  m
-                )}</span>
+                <span :if={Dokkit.Releases.outcome(m)} class={["st", m.update_ok == false && "warn"]}>{Dokkit.Releases.outcome(m)}</span>
                 <span class="end">
                   <button
                     :if={@current_user.role == :owner and Dokkit.Releases.movable?(m, @held)}

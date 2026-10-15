@@ -355,8 +355,7 @@ defmodule Dokkit.Acme do
             else: {:error, "The certificate authority refused: " <> detail(resp)}
 
         {:error, e} ->
-          {:error,
-           "The certificate authority could not be reached: #{String.slice(Exception.message(e), 0, 200)}"}
+          {:error, "The certificate authority could not be reached: #{String.slice(Exception.message(e), 0, 200)}"}
       end
     end
   end
@@ -373,8 +372,7 @@ defmodule Dokkit.Acme do
         end
 
       {:error, e} ->
-        {:error,
-         "The certificate authority could not be reached: #{String.slice(Exception.message(e), 0, 200)}"}
+        {:error, "The certificate authority could not be reached: #{String.slice(Exception.message(e), 0, 200)}"}
     end
   end
 
