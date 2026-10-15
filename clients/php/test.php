@@ -91,6 +91,17 @@ if ($cut !== 2) {
 $error = fn () => Dokkit::capture(new RuntimeException('x'));
 $kept = fn () => count((new ReflectionProperty('Dokkit', 'errors'))->getValue());
 $status = __DIR__ . '/out/status.txt';
+$reset();
+file_put_contents($status, '500');
+$error();
+$error();
+Dokkit::flush();
+if ($kept() !== 2 || substr_count($got(), '/api/v1/errors') !== 1) {
+    $bad[] = 'a failed error post did not stop the rest and keep them';
+}
+for ($i = 0; $i < 4 && $kept(); $i++) {
+    Dokkit::flush();
+}
 Dokkit::$dropped = 0;
 $reset();
 file_put_contents($status, '500');

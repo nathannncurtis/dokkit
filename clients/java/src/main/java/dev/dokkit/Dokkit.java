@@ -90,7 +90,7 @@ public final class Dokkit {
             }, "dokkit");
             sender.setDaemon(true);
             sender.start();
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> { flush(); flush(); }));
+            Runtime.getRuntime().addShutdownHook(new Thread(Dokkit::exitFlush));
             if (version != null && announceVersion) add(line("deploy", "version", version));
         } catch (Exception e) {
             http = null;
@@ -212,8 +212,7 @@ public final class Dokkit {
         Thread.UncaughtExceptionHandler before = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
             capture(error, false);
-            flush();
-            flush();
+            exitFlush();
             if (before != null) before.uncaughtException(thread, error);
         });
     }
@@ -243,6 +242,14 @@ public final class Dokkit {
     private static boolean ours(String logger) {
         return logger != null && (logger.startsWith("jdk.httpclient") || logger.startsWith("jdk.internal.httpclient")
                 || logger.startsWith("java.net.http") || logger.startsWith("dev.dokkit"));
+    }
+
+    // The app is exiting: two passes so a failed batch gets its retry, and never more than 5 seconds.
+    private static void exitFlush() {
+        Thread t = new Thread(() -> { flush(); flush(); }, "dokkit-exit");
+        t.setDaemon(true);
+        t.start();
+        try { t.join(5000); } catch (InterruptedException e) { }
     }
 
     /** Sends what is waiting. Called for you when the app exits. */

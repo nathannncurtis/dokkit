@@ -20,6 +20,7 @@ public enum Dokkit {
     private static var lineBytes = 0
     private static var errors: [[String: Any]] = []
     private static var retry: [Batch] = []
+    private static var sendingErrors = false
     private static let queueBytes = 4 << 20
     private static let lineLimit = 65536
     private static let stamp = ISO8601DateFormatter()
@@ -214,8 +215,20 @@ public enum Dokkit {
             lineBytes = 0
             errors = []
             retry = []
+            sendingErrors = false
             droppedCount = 0
         }
+    }
+
+    private static func makeRequest(_ batch: Batch, _ url: String, _ key: String) -> URLRequest? {
+        guard let url = URL(string: url + batch.path) else { return nil }
+        var request = URLRequest(url: url, timeoutInterval: 10)
+        request.httpMethod = "POST"
+        request.httpBody = batch.body
+        request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
+        request.setValue(batch.kind, forHTTPHeaderField: "Content-Type")
+        request.setValue(batch.id, forHTTPHeaderField: "Dokkit-Batch")
+        return request
     }
 
     // Runs on the queue. A failed log batch gets one more try; a failed error report is kept, up to 100. What is lost is counted. The app is never told.
@@ -223,24 +236,17 @@ public enum Dokkit {
         guard let on = on else { return }
         let done = DispatchGroup()
         func post(_ batch: Batch) {
-            guard let url = URL(string: on.url + batch.path) else {
+            guard let request = makeRequest(batch, on.url, on.key) else {
                 droppedCount += batch.count
                 return
             }
-            var request = URLRequest(url: url, timeoutInterval: 10)
-            request.httpMethod = "POST"
-            request.httpBody = batch.body
-            request.setValue("Bearer " + on.key, forHTTPHeaderField: "Authorization")
-            request.setValue(batch.kind, forHTTPHeaderField: "Content-Type")
-            request.setValue(batch.id, forHTTPHeaderField: "Dokkit-Batch")
             done.enter()
             URLSession.shared.dataTask(with: request) { _, response, _ in
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 599
                 if status >= 400 {
                     queue.async {
                         var batch = batch
-                        let kept = batch.path == "/api/v1/report" ? batch.tries == 0 : retry.filter { $0.path == batch.path }.count < 100
-                        if (status >= 500 || status == 429) && kept {
+                        if (status >= 500 || status == 429) && batch.tries == 0 {
                             batch.tries = 1
                             retry.append(batch)
                         } else {
@@ -254,13 +260,38 @@ public enum Dokkit {
         let again = retry
         retry = []
         again.forEach(post)
-        // At most ten errors a tick; the rest wait for the next one.
-        for error in errors.prefix(10) {
-            if let body = try? JSONSerialization.data(withJSONObject: error) {
-                post(Batch(path: "/api/v1/errors", body: body, kind: "application/json", count: 1))
+        // Error reports go one at a time, at most ten a tick, and stop at the first the server did not answer for.
+        if !sendingErrors && !errors.isEmpty {
+            let pending = Array(errors.prefix(10))
+            errors.removeFirst(pending.count)
+            sendingErrors = true
+            done.enter()
+            DispatchQueue.global().async {
+                var left = pending[...]
+                var lost = 0
+                while let error = left.first {
+                    var status = 400
+                    if let body = try? JSONSerialization.data(withJSONObject: error),
+                       let request = makeRequest(Batch(path: "/api/v1/errors", body: body, kind: "application/json", count: 1), on.url, on.key) {
+                        let answered = DispatchSemaphore(value: 0)
+                        URLSession.shared.dataTask(with: request) { _, response, _ in
+                            status = (response as? HTTPURLResponse)?.statusCode ?? 599
+                            answered.signal()
+                        }.resume()
+                        answered.wait()
+                    }
+                    if status >= 500 || status == 429 { break }
+                    if status >= 400 { lost += 1 }
+                    left.removeFirst()
+                }
+                queue.async {
+                    errors = Array((Array(left) + errors).prefix(100))
+                    droppedCount += lost
+                    sendingErrors = false
+                }
+                done.leave()
             }
         }
-        errors.removeFirst(min(10, errors.count))
         while !lines.isEmpty {
             let batch = Array(lines.prefix(500))
             lines.removeFirst(batch.count)

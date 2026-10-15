@@ -159,15 +159,20 @@ final class Dokkit
         }
         $pending = self::$errors;
         self::$errors = [];
+        $retried = 0;
         foreach ($pending as $i => $error) {
             $result = self::post('/api/v1/errors', self::encode($error), 'application/json', self::uuid());
-            if ($result === 'failed' && $i >= self::$retried) {
-                self::$errors[] = $error;
-            } elseif ($result !== 'ok') {
+            if ($result === 'failed') {
+                $retried = $i >= self::$retried ? 1 : 0;
+                self::$dropped += 1 - $retried;
+                self::$errors = array_slice($pending, $i + 1 - $retried);
+                break;
+            }
+            if ($result !== 'ok') {
                 self::$dropped++;
             }
         }
-        self::$retried = count(self::$errors);
+        self::$retried = $retried;
         while (self::$lines) {
             $batch = array_splice(self::$lines, 0, 500);
             self::$bytes -= array_sum(array_map('strlen', $batch));

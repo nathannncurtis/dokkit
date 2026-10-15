@@ -151,6 +151,17 @@ public class Test {
         boolean guarded = (boolean) safe.invoke(null, "https://dokkit.example") && (boolean) safe.invoke(null, "http://localhost:80")
                 && !(boolean) safe.invoke(null, "http://dokkit.example") && !(boolean) safe.invoke(null, "http://127.evil.example");
 
+        long droppedBefore = Dokkit.dropped();
+        java.net.ServerSocket silent = new java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"));
+        httpField.set(null, null);
+        Dokkit.start("7.7.7", "http://127.0.0.1:" + silent.getLocalPort() + "/", "dka_test", false);
+        Dokkit.log("info", "to a server that never answers");
+        java.lang.reflect.Method exitFlush = Dokkit.class.getDeclaredMethod("exitFlush");
+        exitFlush.setAccessible(true);
+        long began = System.nanoTime();
+        exitFlush.invoke(null);
+        double exitSeconds = (System.nanoTime() - began) / 1e9;
+
         String all = String.join("\n", got);
         String[] want = {
             "/api/v1/report {\"type\":\"deploy\"", "\"type\":\"beat\"", "\"every_seconds\":30", "\"state\":\"degraded\",\"value\":14.0",
@@ -174,7 +185,8 @@ public class Test {
         if (!guarded) missing.add("http to another machine refused");
         if (fed < 1 || fed > 3) missing.add("one app line is one to three posts, got " + fed);
         if (all.split("one app line", -1).length != 2) missing.add("the app line once");
-        if (Dokkit.dropped() != 0) missing.add("nothing dropped, got " + Dokkit.dropped());
+        if (droppedBefore != 0) missing.add("nothing dropped, got " + droppedBefore);
+        if (exitSeconds > 6) missing.add("the exit flush waits at most 5 seconds, took " + exitSeconds);
         if (!missing.isEmpty() || all.contains("4411") || all.contains("BAD KEY") || all.contains("ignored") || all.contains("from the sender")) {
             System.out.println("FAIL\nmissing: " + missing + "\n" + all);
             System.exit(1);

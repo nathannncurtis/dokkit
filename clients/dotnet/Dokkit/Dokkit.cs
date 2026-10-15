@@ -66,7 +66,7 @@ namespace Dokkit
                 client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + key);
                 http = client;
                 new Thread(Run) { IsBackground = true, Name = "dokkit" }.Start();
-                AppDomain.CurrentDomain.ProcessExit += (s, e) => Flush();
+                AppDomain.CurrentDomain.ProcessExit += (s, e) => ExitFlush();
                 if (version != null && announceVersion) Add(Line("deploy", "version", version));
             }
             catch { http = null; }
@@ -147,7 +147,15 @@ namespace Dokkit
 
         /// <summary>Also reports errors nothing caught.</summary>
         public static void CatchUnhandled() =>
-            AppDomain.CurrentDomain.UnhandledException += (s, e) => { Capture(e.ExceptionObject as Exception, false); Flush(); };
+            AppDomain.CurrentDomain.UnhandledException += (s, e) => { Capture(e.ExceptionObject as Exception, false); ExitFlush(); };
+
+        // The app is exiting: never hold it more than 5 seconds.
+        static void ExitFlush()
+        {
+            var t = new Thread(Flush) { IsBackground = true, Name = "dokkit-exit" };
+            t.Start();
+            t.Join(5000);
+        }
 
         /// <summary>Sends what is waiting. Called for you when the app exits.</summary>
         public static void Flush()

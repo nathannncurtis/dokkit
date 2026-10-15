@@ -108,6 +108,16 @@ var safe = typeof(Dokkit.Client).GetMethod("Safe", System.Reflection.BindingFlag
 bool Safe(string url) => (bool)safe.Invoke(null, new object[] { url })!;
 var guarded = Safe("https://dokkit.example") && Safe("http://localhost:80") && !Safe("http://dokkit.example");
 
+var droppedBefore = Dokkit.Client.Dropped;
+var silent = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+silent.Start();
+started.SetValue(null, null);
+Dokkit.Client.Start(url: "http://127.0.0.1:" + ((System.Net.IPEndPoint)silent.LocalEndpoint).Port, key: "dka_test", announceVersion: false);
+Dokkit.Client.Log("info", "to a server that never answers");
+var exitWatch = System.Diagnostics.Stopwatch.StartNew();
+typeof(Dokkit.Client).GetMethod("ExitFlush", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, null);
+var exitSeconds = exitWatch.Elapsed.TotalSeconds;
+
 var isOwn = typeof(Dokkit.Client).GetMethod("IsOwn", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
 bool Own(System.Reflection.Assembly a, string? p) => (bool)isOwn.Invoke(null, new object?[] { a, p })!;
 var lib = typeof(Dokkit.Client).Assembly;
@@ -134,7 +144,8 @@ if (!quiet) missing.Add("announceVersion false sends no deploy line");
 if (!devOk) missing.Add("dev environment on log, beat and job lines");
 if (!prodOk) missing.Add("production adds no environment");
 if (!guarded) missing.Add("http to another machine refused");
-if (Dokkit.Client.Dropped != 0) missing.Add("nothing dropped, got " + Dokkit.Client.Dropped);
+if (droppedBefore != 0) missing.Add("nothing dropped, got " + droppedBefore);
+if (exitSeconds > 6) missing.Add("the exit flush waits at most 5 seconds, took " + exitSeconds);
 if (missing.Count > 0 || all.Contains("4411") || all.Contains("BAD KEY") || all.Contains("ignored") || all.Contains("from the sender") || all.Contains("too quiet"))
 {
     Console.WriteLine("FAIL\nmissing: " + string.Join(" | ", missing) + "\n" + all);

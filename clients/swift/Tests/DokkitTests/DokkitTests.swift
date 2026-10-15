@@ -107,6 +107,20 @@ final class DokkitTests: XCTestCase {
         XCTAssertEqual(Dokkit.dropped, 0)
     }
 
+    func testKeptErrorsGoOneAtATimeAndStopAtTheFirstFailure() {
+        Fake.reset(["/api/v1/errors": [503, 503]])
+        start()
+        Dokkit.capture(Boom())
+        Dokkit.capture(Boom())
+        Dokkit.flush()
+        XCTAssertEqual(Fake.paths("/api/v1/errors").count, 1)
+        Dokkit.flush()
+        XCTAssertEqual(Fake.paths("/api/v1/errors").count, 2)
+        Dokkit.flush()
+        XCTAssertEqual(Fake.paths("/api/v1/errors").count, 4)
+        XCTAssertEqual(Dokkit.dropped, 0)
+    }
+
     func testErrorPostRefusedWith4xxIsDroppedAndCounted() {
         Fake.reset(["/api/v1/errors": [400]])
         start()
