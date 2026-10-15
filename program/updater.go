@@ -367,16 +367,35 @@ func (c *client) fetch(ctx context.Context, version, name string, to io.Writer) 
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		return fmt.Errorf("could not fetch %s: the server answered %d", name, res.StatusCode)
+		return fmt.Errorf("could not fetch %s: %w", name, answered(res.StatusCode))
 	}
 	_, err = io.Copy(to, io.LimitReader(res.Body, 300<<20))
 	return err
 }
 
+type answered int
+
+func (a answered) Error() string { return fmt.Sprintf("the server answered %d", int(a)) }
+
 func fetchBytes(ctx context.Context, c *client, version, name string) ([]byte, error) {
 	var b strings.Builder
-	err := c.fetch(ctx, version, name, &b)
+	err := fetchRetrying(ctx, c, version, name, func() io.Writer { b.Reset(); return &b })
 	return []byte(b.String()), err
+}
+
+// fetchRetrying starts the file again from the top for a minute, since the server may be
+// restarting into this same release.
+func fetchRetrying(ctx context.Context, c *client, version, name string, fresh func() io.Writer) error {
+	deadline := time.Now().Add(retryFor)
+	for {
+		err := c.fetch(ctx, version, name, fresh())
+		var code answered
+		if err == nil || ctx.Err() != nil || time.Now().After(deadline) || errors.As(err, &code) && code < 500 {
+			return err
+		}
+		logf("fetching %s failed, trying again: %v", name, err)
+		time.Sleep(5 * time.Second)
+	}
 }
 
 // download fetches a file into work and keeps it only if its hash is the signed one.
@@ -390,7 +409,12 @@ func download(ctx context.Context, c *client, version, name, hash string) (strin
 		return "", err
 	}
 	h := sha256.New()
-	err = c.fetch(ctx, version, name, io.MultiWriter(f, h))
+	err = fetchRetrying(ctx, c, version, name, func() io.Writer {
+		f.Truncate(0)
+		f.Seek(0, io.SeekStart)
+		h.Reset()
+		return io.MultiWriter(f, h)
+	})
 	f.Close()
 	if err != nil {
 		return "", err

@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -144,6 +145,7 @@ type rig struct {
 	results  []outcome
 	failPost bool
 	failPosts int
+	cutFiles  int
 	failPS   bool
 	noStart  string // a program file content that will not start
 	calls    []string
@@ -244,6 +246,15 @@ func (r *rig) handle(w http.ResponseWriter, q *http.Request) {
 			return
 		}
 		if c, ok := r.files[ver][name]; ok {
+			if r.cutFiles > 0 && strings.HasPrefix(name, "dokkit-") {
+				r.cutFiles--
+				w.Header().Set("Content-Length", strconv.Itoa(len(c)+100))
+				w.Write(c)
+				w.(http.Flusher).Flush()
+				conn, _, _ := w.(http.Hijacker).Hijack()
+				conn.Close()
+				return
+			}
 			w.Write(c)
 			return
 		}
@@ -309,6 +320,18 @@ func TestAResultIsRetriedWhileTheServerRestarts(t *testing.T) {
 	r.wanted, r.failPosts, retryFor = "v1.1.0", 1, 10*time.Second
 	if code := updaterRun(); code != 0 || len(r.results) != 1 || !r.results[0].OK {
 		t.Fatalf("%d %+v", code, r.results)
+	}
+}
+
+func TestADownloadCutByAServerRestartStartsAgain(t *testing.T) {
+	r := newRig(t, false)
+	r.publish("v1.1.0", nil)
+	r.wanted, r.cutFiles, retryFor = "v1.1.0", 1, 10*time.Second
+	if code := updaterRun(); code != 0 || len(r.results) != 1 || !r.results[0].OK {
+		t.Fatalf("%d %+v", code, r.results)
+	}
+	if r.cutFiles != 0 {
+		t.Fatal("the download was never cut")
 	}
 }
 

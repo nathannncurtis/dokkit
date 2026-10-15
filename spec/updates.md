@@ -61,6 +61,8 @@ It uses the program's own address, machine key and certificate pin, from the pro
    - **the server**, on the machine that runs it: `dokkit-windows-x64.zip`. It is unpacked into the updater's own folder and its `install.ps1` is run with no arguments, which upgrades in place. It is done when the server answers again.
    - **the program**: `dokkit-<os>-<arch>` (with `.exe` on Windows). The service is stopped, the file replaced, the service started, and it is done when the service is running. If it does not start, the old file is put back and started. On Linux and macOS the file is replaced first and the program restarted (see below).
    - **the updater itself**, last: the same program file, copied over the updater's own copy.
+   A download cut off or refused with a 5xx (the server may be restarting into the same release) starts again from the top every 5 seconds for a minute before the update counts as failed.
+
 5. Reports the result, trying again every 5 seconds for a minute while the server is not answering (it may be restarting into the same release). A result that still cannot be sent is kept and sent on the next run.
 
 A file it has fetched lives in a folder only administrators and the system account can write. Nothing in it is run before its hash is checked against the signed list.
