@@ -4,7 +4,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -158,5 +160,71 @@ func TestADeclarationWithoutSchemaSaysWhatToDo(t *testing.T) {
 	os.WriteFile(file, []byte("[service]\nid = \"app\"\n"), 0o600)
 	if _, err := readDeclaration(file); err == nil || err.Error() != "add schema = 1 as the first line." {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestAProcessWithALongNameIsCountedWithoutCommandHas(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the long-name cut is a Linux and macOS one")
+	}
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skip(err)
+	}
+	b, _ := os.ReadFile(sleep)
+	long := filepath.Join(t.TempDir(), "dokkit-long-process-name")
+	os.WriteFile(long, b, 0o755)
+	cmd := exec.Command(long, "5")
+	if err := cmd.Start(); err != nil {
+		t.Skip(err)
+	}
+	defer cmd.Process.Kill()
+	time.Sleep(200 * time.Millisecond)
+	if n, err := processCount("dokkit-long-process-name", ""); err != nil || n != 1 {
+		t.Fatalf("%d %v", n, err)
+	}
+}
+
+func TestChecksAddedInTheInterfaceKeepTheirSettingsAndTheirTime(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"items":[
+			{"service":"s","name":"workers","type":"process","config":{"name":"python","command_has":"worker.py","at_least":3,"every":"10m"}},
+			{"service":"s","name":"web","type":"http","config":{"url":"http://localhost:1/","status":[401,"200-299"]}},
+			{"service":"s","name":"cert","type":"expiry","config":{"date_from":"localhost:443"}}]}`))
+	}))
+	defer srv.Close()
+	w := &watcher{c: &client{url: srv.URL, key: "k", spool: t.TempDir(), http: &http.Client{}}}
+	w.pull()
+	got := map[string]check{}
+	for _, d := range w.added {
+		got[d.Check[0].name] = d.Check[0]
+	}
+	if c := got["workers"]; c.CommandHas != "worker.py" || c.AtLeast != 3 {
+		t.Fatalf("%+v", c)
+	}
+	if c := got["cert"]; c.DateFrom != "localhost:443" {
+		t.Fatalf("%+v", c)
+	}
+	if r, err := statusRanges(got["web"].Status); err != nil || len(r) != 2 || r[0] != [2]int{401, 401} {
+		t.Fatalf("%v %v", r, err)
+	}
+	if _, err := statusRanges(float64(401.5)); err == nil {
+		t.Fatal("a fraction is not a status")
+	}
+	at := time.Now()
+	w.tick(at)
+	w.pull()
+	for _, d := range w.added {
+		if c := d.Check[0]; c.name == "workers" && !c.next.Equal(at.Add(10*time.Minute)) {
+			t.Fatalf("pulling again ran it early: %v", c.next)
+		}
+	}
+}
+
+func TestAFilePathIsNotACertificateAddress(t *testing.T) {
+	for from, want := range map[string]string{`C:\apps\x.txt`: "", "C:x.txt": "", "host:8443": "host:8443", "https://host": "host:443"} {
+		if got := (&check{DateFrom: from}).certAddr(); got != want {
+			t.Errorf("%q gave %q", from, got)
+		}
 	}
 }

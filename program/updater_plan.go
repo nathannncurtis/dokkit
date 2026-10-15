@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -302,8 +303,18 @@ func pathUnit() string {
 	return "[Unit]\nDescription=Dokkit updater, when the program asks\n\n[Path]\nPathChanged=" + nudgeFileFor("linux") + "\nUnit=" + timerName + ".service\n\n[Install]\nWantedBy=paths.target\n"
 }
 
+func xmlEscape(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
+}
+
+func sameFile(a, b string) bool {
+	x, err1 := os.Stat(a)
+	y, err2 := os.Stat(b)
+	return err1 == nil && err2 == nil && os.SameFile(x, y)
+}
+
 func launchdPlist(exe string) string {
-	esc := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(exe)
+	esc := xmlEscape(exe)
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">

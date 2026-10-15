@@ -51,18 +51,3 @@ func imagePath(pid uint32) string {
 	}
 	return ""
 }
-
-// handleImagePath is the call that is refused for other accounts' processes, kept to show the difference.
-func handleImagePath(pid uint32) string {
-	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
-	if err != nil {
-		return ""
-	}
-	defer windows.CloseHandle(h)
-	buf := make([]uint16, 32768)
-	n := uint32(len(buf))
-	if windows.QueryFullProcessImageName(h, 0, &buf[0], &n) != nil {
-		return ""
-	}
-	return windows.UTF16ToString(buf[:n])
-}

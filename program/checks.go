@@ -46,9 +46,9 @@ type check struct {
 	Type, Name, URL, Host string
 	Port                  int
 	Every, Timeout, Slow  string
-	DateFrom              string `toml:"date_from"`
-	CommandHas            string `toml:"command_has"`
-	AtLeast               int    `toml:"at_least"`
+	DateFrom              string `toml:"date_from" json:"date_from"`
+	CommandHas            string `toml:"command_has" json:"command_has"`
+	AtLeast               int    `toml:"at_least" json:"at_least"`
 	Status                any
 	name, dir             string
 	next                  time.Time
@@ -254,8 +254,10 @@ func (c *check) certAddr() string {
 			from += ":443"
 		}
 	}
-	if _, _, err := net.SplitHostPort(from); err == nil {
-		return from
+	if _, port, err := net.SplitHostPort(from); err == nil {
+		if _, err := strconv.Atoi(port); err == nil {
+			return from
+		}
 	}
 	return ""
 }
@@ -472,32 +474,7 @@ func processResult(n, atLeast int) result {
 }
 
 // processCount is how many processes match, and an error when none do.
-func processCount(name, has string) (int, error) {
-	if has != "" {
-		return processWithText(name, has)
-	}
-	if runtime.GOOS == "windows" {
-		out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq "+name, "/NH", "/FO", "CSV").Output()
-		if err != nil {
-			return 0, cannotTell{"this account may not list processes"}
-		}
-		n := 0
-		for _, l := range strings.Split(strings.ToLower(string(out)), "\n") {
-			if strings.HasPrefix(strings.TrimSpace(l), strings.ToLower(`"`+name+`"`)) {
-				n++
-			}
-		}
-		if n == 0 {
-			return 0, errors.New("not running")
-		}
-		return n, nil
-	}
-	out, err := exec.Command("pgrep", "-x", name).Output()
-	if n := len(strings.Fields(string(out))); err == nil && n > 0 {
-		return n, nil
-	}
-	return 0, errors.New("not running")
-}
+func processCount(name, has string) (int, error) { return processWithText(name, has) }
 
 func serviceRunning(name string) error {
 	if runtime.GOOS != "windows" {
@@ -732,12 +709,17 @@ func (w *watcher) pull() {
 	if status, err := w.c.call("GET", "/api/v1/checks", "", nil, &a); err != nil || status != 200 {
 		return
 	}
+	old := map[[2]string]time.Time{}
+	for _, d := range w.added {
+		old[[2]string{d.Service.ID, d.Check[0].name}] = d.Check[0].next
+	}
 	w.added = nil
 	for _, item := range a.Items {
 		var c check
 		b, _ := json.Marshal(item.Config)
 		json.Unmarshal(b, &c)
 		c.Type, c.name = item.Type, item.Name
+		c.next = old[[2]string{item.Service, item.Name}]
 		// Only a service this machine's own configuration names is ever started, and only
 		// addresses on this machine, or named there, are reached.
 		listed := slices.ContainsFunc(w.c.restartable, func(n string) bool { return c.unitKey(n) == c.unitKey(c.Name) })

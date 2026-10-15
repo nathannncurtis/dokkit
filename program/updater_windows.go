@@ -216,12 +216,8 @@ func taskXML(exe string) []byte {
 
 var subscription = xmlEscape(`<QueryList><Query Id="0" Path="Application"><Select Path="Application">` + eventQuery + `</Select></Query></QueryList>`)
 
-func xmlEscape(s string) string {
-	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
-}
-
 func taskTemplate(exe string) string {
-	esc := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(`"` + exe + `"`)
+	esc := xmlEscape(`"` + exe + `"`)
 	return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo><Description>Installs the Dokkit releases a person approved. Makes outbound requests only. ` + markHere + `</Description></RegistrationInfo>

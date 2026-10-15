@@ -167,6 +167,8 @@ func needAdmin(what string) int {
 // sendResults is false in a rehearsal.
 var sendResults = true
 
+// postResult is false when the result should be sent again later. A 4xx answer will not change
+// by sending it again, so it is dropped.
 func postResult(c *client, r outcome) bool {
 	if !sendResults {
 		return true
@@ -177,6 +179,10 @@ func postResult(c *client, r outcome) bool {
 	for {
 		code, err := c.call("POST", "/api/v1/update/result", "application/json", b, nil)
 		if err == nil && code >= 200 && code < 300 {
+			return true
+		}
+		if err == nil && code >= 400 && code < 500 {
+			logf("the server refused the result for %s (%d); it is not sent again", r.Version, code)
 			return true
 		}
 		if time.Now().After(deadline) {
@@ -355,13 +361,15 @@ func clearWork() {
 	}
 }
 
+var fetchTimeout = 15 * time.Minute
+
 func (c *client) fetch(ctx context.Context, version, name string, to io.Writer) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.url+"/api/v1/releases/"+url.PathEscape(version)+"/"+url.PathEscape(name), nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.key)
-	res, err := (&http.Client{Transport: toServer}).Do(req)
+	res, err := (&http.Client{Timeout: fetchTimeout, Transport: toServer}).Do(req)
 	if err != nil {
 		return fmt.Errorf("could not fetch %s: %w", name, err)
 	}

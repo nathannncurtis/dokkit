@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -145,6 +146,8 @@ type rig struct {
 	results  []outcome
 	failPost bool
 	failPosts int
+	refusePosts int
+	posts     int
 	cutFiles  int
 	failPS   bool
 	noStart  string // a program file content that will not start
@@ -225,6 +228,11 @@ func (r *rig) handle(w http.ResponseWriter, q *http.Request) {
 		}
 		fmt.Fprintf(w, `{"version":%q}`, r.wanted)
 	case q.URL.Path == "/api/v1/update/result":
+		r.posts++
+		if r.refusePosts > 0 {
+			w.WriteHeader(401)
+			return
+		}
 		if r.failPost || r.failPosts > 0 {
 			r.failPosts--
 			w.WriteHeader(503)
@@ -487,6 +495,68 @@ func TestResultThatCannotBePostedGoesNextRun(t *testing.T) {
 	}
 	if st, _ := readState(); st.Unsent != nil {
 		t.Fatal("still unsent")
+	}
+}
+
+func TestAProgramThatCannotBePlacedLeavesTheOldOneRunning(t *testing.T) {
+	r := newRig(t, false)
+	if err := installProgram(filepath.Join(r.dir, "missing")); err == nil {
+		t.Fatal("a file that was never there was installed")
+	}
+	if r.read(where.programExe) != "v1.0.0" {
+		t.Fatal("the old program was not kept")
+	}
+	if got := strings.Join(r.calls, ","); got != "stop,start v1.0.0" {
+		t.Fatal(got)
+	}
+}
+
+func TestAnUpdaterThatCannotBePlacedIsPutBack(t *testing.T) {
+	r := newRig(t, false)
+	if err := swapSelf(filepath.Join(r.dir, "missing"), where.updaterExe); err == nil {
+		t.Fatal("a file that was never there was installed")
+	}
+	if r.read(where.updaterExe) != "v1.0.0" || exists(where.updaterExe+".previous") {
+		t.Fatal("the old updater was not put back")
+	}
+}
+
+func TestAResultTheServerRefusesIsDroppedAtOnce(t *testing.T) {
+	r := newRig(t, false)
+	r.publish("v1.1.0", nil)
+	r.wanted, r.refusePosts, retryFor = "v1.1.0", 1, 10*time.Second
+	start := time.Now()
+	updaterRun()
+	if r.posts != 1 || time.Since(start) > 5*time.Second {
+		t.Fatalf("a 4xx answer was tried again: %d posts", r.posts)
+	}
+	if st, _ := readState(); st.Unsent != nil {
+		t.Fatal("a refused result stays to be sent again")
+	}
+}
+
+func TestAStalledDownloadGivesUp(t *testing.T) {
+	stall := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		w.Write([]byte("x"))
+		w.(http.Flusher).Flush()
+		<-stall
+	}))
+	defer srv.Close()
+	defer close(stall)
+	old := fetchTimeout
+	fetchTimeout = 200 * time.Millisecond
+	defer func() { fetchTimeout = old }()
+	done := make(chan error, 1)
+	go func() { done <- (&client{url: srv.URL}).fetch(context.Background(), "v1.1.0", "x", io.Discard) }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("a stalled download was taken as whole")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a stalled download never gave up")
 	}
 }
 

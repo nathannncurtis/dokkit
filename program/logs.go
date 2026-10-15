@@ -113,7 +113,7 @@ func (c *client) sendLog(service, path string, positions map[string]int64) bool 
 			raw = raw[:i]
 		}
 		used += len(raw) + 1
-		if raw = bytes.TrimSpace(raw); len(raw) == 0 {
+		if raw = bytes.TrimSpace(bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf"))); len(raw) == 0 {
 			continue
 		}
 		var l map[string]any

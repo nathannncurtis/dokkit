@@ -466,3 +466,40 @@ func TestTheSystemsRecordOfATaskIsReadAsARun(t *testing.T) {
 		t.Fatalf("%+v", tr)
 	}
 }
+
+func TestARunStillGoingIsNotReadAsARun(t *testing.T) {
+	csv := []string{
+		`"HostName","TaskName","Next Run Time","Status","Logon Mode","Last Run Time","Last Result"`,
+		`"HOST","\Long","N/A","Running","Interactive only","10/11/2026 4:55:01 PM","267009"`,
+	}
+	if run, ok := parseTaskRecord(csv, `\Long`); ok {
+		t.Fatalf("%+v", run)
+	}
+	timer := map[string]string{"LastTriggerUSec": "Sun 2026-10-11 03:10:02 UTC"}
+	for _, state := range []string{"activating", "active", "deactivating"} {
+		if run, ok := parseTimerRecord(timer, map[string]string{"ActiveState": state, "Result": "success"}); ok {
+			t.Fatalf("%s: %+v", state, run)
+		}
+	}
+	if _, ok := parseTimerRecord(timer, map[string]string{"ActiveState": "inactive", "Result": "success"}); !ok {
+		t.Fatal("a finished run is read")
+	}
+}
+
+func TestSecretsInACommandAreMasked(t *testing.T) {
+	for in, want := range map[string]string{
+		"PGPASSWORD=hunter2 pg_dump db":                     "PGPASSWORD=*** pg_dump db",
+		"MYSQL_PWD=hunter2 mysqldump db":                    "MYSQL_PWD=*** mysqldump db",
+		"AWS_SECRET_ACCESS_KEY=abc aws s3 sync . s3://b":    "AWS_SECRET_ACCESS_KEY=*** aws s3 sync . s3://b",
+		"DB_TOKEN=abc ./run":                                "DB_TOKEN=*** ./run",
+		"mysqldump -uroot -phunter2 db":                     "mysqldump -uroot -p*** db",
+		"curl https://user:hunter2@example.com/x":           "curl https://user:***@example.com/x",
+		`curl -H "Authorization: Bearer abc.def" https://x`: `curl -H "Authorization: Bearer ***" https://x`,
+		"backup.sh --password hunter2":                      "backup.sh --password ***",
+		"docker run -p8080:80 -v /srv:/srv nginx":           "docker run -p8080:80 -v /srv:/srv nginx",
+	} {
+		if got := shown(in); got != want {
+			t.Errorf("%q gave %q", in, got)
+		}
+	}
+}

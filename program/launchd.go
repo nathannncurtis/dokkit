@@ -24,7 +24,7 @@ var agentLabel = regexp.MustCompile(`<key>Label</key>\s*<string>([^<]+)</string>
 // daemonPlistFor is the LaunchDaemon that runs watch from the installed copy at exe as the
 // dokkit account, with the service's configuration and spool.
 func daemonPlistFor(exe string) string {
-	esc := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace
+	esc := xmlEscape
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -74,6 +75,10 @@ func statusRanges(v any) ([][2]int, error) {
 		switch x := x.(type) {
 		case int64:
 			if x >= 100 && x <= 599 {
+				return [2]int{int(x), int(x)}, nil
+			}
+		case float64:
+			if x == math.Trunc(x) && x >= 100 && x <= 599 {
 				return [2]int{int(x), int(x)}, nil
 			}
 		case string:

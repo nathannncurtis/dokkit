@@ -64,6 +64,25 @@ func TestProgramPathThatIsALinkIsNotCopiedOrReplaced(t *testing.T) {
 	}
 }
 
+func TestAHardLinkPutInPlaceOfTheNewFileIsLeftAlone(t *testing.T) {
+	dir := t.TempDir()
+	secret := filepath.Join(dir, "sudoers")
+	os.WriteFile(secret, []byte("root only"), 0o440)
+	os.Chmod(secret, 0o440)
+	ref := filepath.Join(dir, "dokkit")
+	os.WriteFile(ref, []byte("old"), 0o755)
+	tmp := ref + ".new"
+	if err := os.Link(secret, tmp); err != nil {
+		t.Fatal(err)
+	}
+	if err := keepOwner(tmp, ref); err == nil {
+		t.Fatal("a hard link was taken as the new file")
+	}
+	if fi, _ := os.Stat(secret); fi.Mode().Perm() != 0o440 {
+		t.Fatalf("the link's target was changed: %v", fi.Mode())
+	}
+}
+
 func TestSecondRunIsRefusedByTheLock(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "run.lock")
 	release, err := lockFile(p)

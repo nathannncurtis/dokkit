@@ -86,20 +86,20 @@ func realHost() hostOps {
 	}
 }
 
-func sameFile(a, b string) bool {
-	x, err1 := os.Stat(a)
-	y, err2 := os.Stat(b)
-	return err1 == nil && err2 == nil && os.SameFile(x, y)
-}
-
 // keepOwner gives a new file the owner and mode of the one it will replace, or 0755 when there
-// is none. It works on the open file, so a link put in its place is not followed.
+// is none. It works on the open file, so a link put in its place is not followed, and it refuses
+// a file with other names or another owner, so a hard link put in its place is not changed.
 func keepOwner(tmp, ref string) error {
 	f, err := os.OpenFile(tmp, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
+	if own, err := f.Stat(); err != nil {
+		return err
+	} else if st, ok := own.Sys().(*syscall.Stat_t); !ok || st.Nlink != 1 || int(st.Uid) != os.Geteuid() {
+		return fmt.Errorf("%s is not the file this updater just wrote, so it was left alone", tmp)
+	}
 	fi, err := os.Stat(ref)
 	if err != nil {
 		return f.Chmod(0o755)

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -92,7 +93,7 @@ var readRecord = func(item recordItem) (systemRun, bool) {
 		if len(timer) == 0 {
 			return systemRun{}, false
 		}
-		service := showBlocks(output("systemctl", "show", "-p", "Id", "-p", "Result", "-p", "ExecMainStatus", "-p", "ExecMainStartTimestamp", "-p", "ExecMainExitTimestamp", timer[0]["Unit"]))
+		service := showBlocks(output("systemctl", "show", "-p", "Id", "-p", "Result", "-p", "ActiveState", "-p", "ExecMainStatus", "-p", "ExecMainStartTimestamp", "-p", "ExecMainExitTimestamp", timer[0]["Unit"]))
 		one := map[string]string{}
 		if len(service) > 0 {
 			one = service[0]
@@ -118,6 +119,9 @@ func parseTaskRecord(lines []string, unit string) (systemRun, bool) {
 		when, code := row[cols["Last Run Time"]], row[cols["Last Result"]]
 		at, result := windowsLast(when, code)
 		n, err := strconv.ParseInt(strings.TrimSpace(code), 10, 64)
+		if n == stillRunning {
+			return systemRun{}, false
+		}
 		if at == "" || err != nil {
 			return systemRun{signature: when + "|" + code}, true
 		}
@@ -132,6 +136,9 @@ func parseTaskRecord(lines []string, unit string) (systemRun, bool) {
 }
 
 func parseTimerRecord(timer, service map[string]string) (systemRun, bool) {
+	if slices.Contains([]string{"activating", "active", "deactivating"}, service["ActiveState"]) {
+		return systemRun{}, false
+	}
 	at := systemdWhen(timer["LastTriggerUSec"])
 	if at == "" {
 		return systemRun{signature: "never"}, true

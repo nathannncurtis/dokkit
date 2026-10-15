@@ -275,7 +275,18 @@ func takeService(args []string) ([]string, string) {
 // writeFile replaces a file whole, so a reader never sees half of it.
 func writeFile(path string, b []byte) error {
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(b)
+	if err == nil {
+		err = f.Sync()
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)

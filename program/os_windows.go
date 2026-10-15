@@ -499,12 +499,6 @@ func pidAlive(pid int) bool {
 	return windows.GetExitCodeProcess(h, &code) == nil && code == 259
 }
 
-func sameFile(a, b string) bool {
-	x, err1 := os.Stat(a)
-	y, err2 := os.Stat(b)
-	return err1 == nil && err2 == nil && os.SameFile(x, y)
-}
-
 func copyFile(from, to string) error {
 	in, err := os.Open(from)
 	if err != nil {

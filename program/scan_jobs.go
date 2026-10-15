@@ -71,10 +71,22 @@ func nameJobs(jobs []found) []found {
 	return jobs
 }
 
-var secretWords = regexp.MustCompile(`(?i)((?:--?|\b)(?:pass\w*|secret|token|api[_-]?key)[= ])\S+`)
+var (
+	secretWords  = regexp.MustCompile(`(?i)([\w-]*(?:pass|pwd|secret|token|api[_-]?key)\w*[= ])\S+`)
+	secretInURL  = regexp.MustCompile(`(://[^/\s:@]+:)[^/\s@]+@`)
+	secretBearer = regexp.MustCompile(`(?i)(\bbearer )[^\s"']+`)
+	mysqlLike    = regexp.MustCompile(`(?i)\b(?:mysql|mariadb)`)
+	mysqlPass    = regexp.MustCompile(`(\s-p)\S+`)
+)
 
 func shown(command string) string {
-	command = secretWords.ReplaceAllString(strings.Join(strings.Fields(command), " "), "${1}***")
+	command = strings.Join(strings.Fields(command), " ")
+	if mysqlLike.MatchString(command) {
+		command = mysqlPass.ReplaceAllString(command, "${1}***")
+	}
+	command = secretWords.ReplaceAllString(command, "${1}***")
+	command = secretInURL.ReplaceAllString(command, "${1}***@")
+	command = secretBearer.ReplaceAllString(command, "${1}***")
 	if len(command) > 300 {
 		command = strings.ToValidUTF8(command[:300], "") + "..."
 	}
@@ -83,7 +95,10 @@ func shown(command string) string {
 
 // Windows Task Scheduler.
 
-const neverRan = 267011
+const (
+	neverRan     = 267011
+	stillRunning = 267009
+)
 
 // parseSchtasks reads the output of schtasks /query /fo csv /v. Microsoft's own tasks, and
 // tasks that are turned off, are left out.
@@ -135,7 +150,7 @@ func windowsLast(when, code string) (string, string) {
 	switch n {
 	case neverRan:
 		return "", "has not run yet"
-	case 267009:
+	case stillRunning:
 		return "", "running"
 	}
 	at := ""

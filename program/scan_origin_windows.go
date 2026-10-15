@@ -26,19 +26,11 @@ func winServiceFacts(name string) (image, real string) {
 	return image, real
 }
 
-// processPath is the program file of a process this account may ask about, or "".
+// processPath is the program file of a process, read without opening it so other accounts' processes have one too.
 func processPath(pid uint32) string {
-	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
-	if err != nil {
-		return ""
-	}
-	defer windows.CloseHandle(h)
-	buf := make([]uint16, 1024)
-	n := uint32(len(buf))
-	if windows.QueryFullProcessImageName(h, 0, &buf[0], &n) != nil {
-		return ""
-	}
-	return windows.UTF16ToString(buf[:n])
+	d := &driveMap{build: queryDrives}
+	d.refresh()
+	return d.dos(imagePath(pid))
 }
 
 func parentPids() map[uint32]uint32 {
