@@ -170,7 +170,6 @@ if (-not $PSScriptRoot -or -not (Test-Path (Join-Path $PSScriptRoot 'bin\dokkit.
 }
 
 $service = 'dokkit_dokkit'
-$fixed = 'dokkit-server'
 $database = 'dokkit-postgres'
 $databasePort = 54329
 $folder = Join-Path $env:ProgramData 'Dokkit'
@@ -233,14 +232,6 @@ function Copy-Changed([string]$From, [string]$Into) {
         Copy-Item $file.FullName $target -Force
     }
 }
-# The server's services: the fixed name, and the names the wrapper made up in older installs
-# (dokkit and 16 hex digits), when they run a wrapper from this install. Nothing else.
-function Get-OwnServices($Services, [string]$Root) {
-    @($Services | Where-Object {
-        $_.Name -match '^(dokkit-server|dokkit[0-9a-f]{16})$' -and
-        ($_.PathName -replace '^"?([^"]*?\.exe)"?.*$', '$1') -like (Join-Path $Root 'erts-*\bin\erlsrv.exe')
-    })
-}
 function Test-Ok([string]$What) {
     if ($LASTEXITCODE -ne 0) { throw "$What failed." }
 }
@@ -275,7 +266,7 @@ $values['DOKKIT_LOG_DIR'] = $logs
 $restartService = $false
 $restartDatabase = $false
 try {
-    if (Get-OwnServices (Get-CimInstance Win32_Service) $To) {
+    if (Get-Service $service -ErrorAction SilentlyContinue) {
         Write-Host 'Stopping the service.'
         & (Get-Erlsrv) stop $service | Out-Null
         $restartService = $upgrade
@@ -420,32 +411,16 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'The database could not be brought up to date. The service was left stopped.' }
 
     # The registration holds this version's paths, so it is made again every time.
-    $old = Get-OwnServices (Get-CimInstance Win32_Service) $To
-    if ($old) { & (Get-Erlsrv) remove $service | Out-Null }
-    foreach ($left in @(Get-OwnServices (Get-CimInstance Win32_Service) $To)) {
-        & sc.exe stop $left.Name | Out-Null
-        & sc.exe delete $left.Name | Out-Null
-    }
+    if (Get-Service $service -ErrorAction SilentlyContinue) { & (Get-Erlsrv) remove $service | Out-Null }
     & (Join-Path $To 'bin\dokkit.bat') install
     if ($LASTEXITCODE -ne 0) { throw 'The service could not be registered.' }
     # The wrapper keeps the cookie in this key, which every user can read until it is locked.
     $key = Get-ChildItem 'HKLM:\SOFTWARE\Ericsson\Erlang\ErlSrv' -ErrorAction Stop |
         ForEach-Object { Join-Path $_.PSPath $service } | Where-Object { Test-Path $_ } | Select-Object -First 1
     if (-not $key) { throw 'The registry key of the service is not where it was expected.' }
-    # The wrapper names the Windows service dokkit plus 16 hex digits, new on every install. It is
-    # made again under $fixed, which the wrapper is then told is its own name, and the made-up one goes.
-    $made = (Get-ItemProperty $key).InternalServiceName
-    if (-not $made) { throw "The wrapper did not record the service's own name in $key." }
-    $real = $fixed
-    # A removed service stays until every handle to it is closed.
-    for ($i = 0; $i -lt 30 -and (Get-Service $fixed -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 1 }
-    if (Get-Service $fixed -ErrorAction SilentlyContinue) { throw "The old $fixed service is still being removed. Close the Services window and run this again." }
-    $image =(Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$made").ImagePath
-    $said = & sc.exe create $fixed binPath= $image start= auto obj= 'NT AUTHORITY\LocalService' password= '""' DisplayName= 'Dokkit server'
-    if ($LASTEXITCODE -ne 0) { throw "The service could not be made under the name ${fixed}: $said" }
-    Set-ItemProperty $key InternalServiceName $fixed
-    $said = & sc.exe delete $made
-    if ($LASTEXITCODE -ne 0) { throw "The service $made could not be removed: $said" }
+    # Windows knows the service by a name the wrapper made up; $service is only what it shows.
+    $real = (Get-ItemProperty $key).InternalServiceName
+    if (-not $real) { throw "The wrapper did not record the service's own name in $key." }
     # It is registered as the system account and never started as it.
     $said = & sc.exe config $real obj= 'NT AUTHORITY\LocalService' password= '""' start= auto
     if ($LASTEXITCODE -ne 0) { throw "Making the service run as Local Service failed: $said" }
@@ -491,10 +466,7 @@ try {
 }
 catch {
     if ($restartDatabase) { try { Start-Service $database } catch { } }
-    if ($restartService) {
-        try { & (Get-Erlsrv) start $service | Out-Null } catch { }
-        foreach ($own in @(Get-OwnServices (Get-CimInstance Win32_Service) $To)) { Start-Service $own.Name -ErrorAction SilentlyContinue }
-    }
+    if ($restartService) { try { & (Get-Erlsrv) start $service | Out-Null } catch { } }
     throw
 }
 
