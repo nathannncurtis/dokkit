@@ -172,8 +172,18 @@ func postResult(c *client, r outcome) bool {
 		return true
 	}
 	b, _ := json.Marshal(r)
-	code, err := c.call("POST", "/api/v1/update/result", "application/json", b, nil)
-	return err == nil && code >= 200 && code < 300
+	// the server may be restarting into this same release
+	deadline := time.Now().Add(retryFor)
+	for {
+		code, err := c.call("POST", "/api/v1/update/result", "application/json", b, nil)
+		if err == nil && code >= 200 && code < 300 {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(5 * time.Second)
+	}
 }
 
 func updateOnce(ctx context.Context, c *client) int {

@@ -143,6 +143,7 @@ type rig struct {
 	sums     map[string][]byte            // overrides the list served for a version
 	results  []outcome
 	failPost bool
+	failPosts int
 	failPS   bool
 	noStart  string // a program file content that will not start
 	calls    []string
@@ -222,7 +223,8 @@ func (r *rig) handle(w http.ResponseWriter, q *http.Request) {
 		}
 		fmt.Fprintf(w, `{"version":%q}`, r.wanted)
 	case q.URL.Path == "/api/v1/update/result":
-		if r.failPost {
+		if r.failPost || r.failPosts > 0 {
+			r.failPosts--
 			w.WriteHeader(503)
 			return
 		}
@@ -298,6 +300,15 @@ func TestARunRightAfterAnotherWaitsOutTheGapThenChecks(t *testing.T) {
 	}
 	if waited := time.Since(start); waited < 200*time.Millisecond {
 		t.Fatalf("it asked after %v, inside the %v gap", waited, minGap)
+	}
+}
+
+func TestAResultIsRetriedWhileTheServerRestarts(t *testing.T) {
+	r := newRig(t, false)
+	r.publish("v1.1.0", nil)
+	r.wanted, r.failPosts, retryFor = "v1.1.0", 1, 10*time.Second
+	if code := updaterRun(); code != 0 || len(r.results) != 1 || !r.results[0].OK {
+		t.Fatalf("%d %+v", code, r.results)
 	}
 }
 
