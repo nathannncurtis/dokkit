@@ -213,6 +213,17 @@ defmodule Dokkit.AlertsTest do
     assert [%Alert{status: :sent}] = Repo.all(Alert)
   end
 
+  test "a snoozed issue that reopens does not send its skipped alert", %{key: key} do
+    Alerts.save(%{"pagerduty_key" => "R0UTE"})
+    Intake.ping(key, "backup", "fail", nil, "")
+    [issue] = Repo.all(Dokkit.Issue)
+    Issues.snooze([issue.id], 3600)
+    Intake.ping(key, "backup", "ok", nil, "")
+    Intake.ping(key, "backup", "fail", nil, "")
+    assert [%Alert{status: :skipped}] = Repo.all(Alert)
+    assert Alerts.deliver_pending() == 0
+  end
+
   test "mail needs TLS, and port 465 is TLS from the start" do
     opts = Dokkit.Mail.smtp_options("mail.example", %{"smtp_port" => "587"})
     assert opts[:tls] == :always

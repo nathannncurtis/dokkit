@@ -38,11 +38,11 @@ defmodule Dokkit.Numbers do
     declared? = Enum.any?(all, &(&1.source == :file and is_number(limit_of.(&1))))
 
     for check <- all,
-        is_nil(service) or check.service_id == service.id,
-        limit = limit_of.(check),
-        is_number(limit) do
+        is_nil(service) or check.service_id == service.id do
+      limit = limit_of.(check)
+
       # A declared threshold replaces the built-in one, which then reads as fine.
-      if value > limit and not (declared? and check.source != :file),
+      if is_number(limit) and value > limit and not (declared? and check.source != :file),
         do:
           Issues.record(check, over_state(check, value),
             at: at,
@@ -162,11 +162,7 @@ defmodule Dokkit.Numbers do
   A disk over its limit says in its note when it will be full, if that is within 60 days.
   """
   def forecast(now \\ DateTime.utc_now()) do
-    limit =
-      case Float.parse(Dokkit.Alerts.config()["disk_limit"] || "") do
-        {n, _} -> n
-        :error -> nil
-      end
+    limit = machine_limit("disk_limit")
 
     middle = DateTime.add(now, -div(7 * 86_400, 2))
 

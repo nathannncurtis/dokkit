@@ -17,7 +17,7 @@ defmodule Dokkit.Acme do
   ## Settings
 
   def settings do
-    (Repo.get(Setting, @settings) || %Setting{value: %{}}).value
+    Setting.get(@settings)
   end
 
   def directory(s \\ settings()), do: filled(s["acme_directory"]) || @directory
@@ -57,16 +57,9 @@ defmodule Dokkit.Acme do
             {k, v}, acc -> Map.put(acc, k, String.trim(v))
           end)
 
-        put(@settings, new)
+        Setting.put(@settings, new)
         {:ok, view()}
     end
-  end
-
-  defp put(key, value) do
-    Repo.insert!(%Setting{key: key, value: value},
-      on_conflict: {:replace, [:value, :updated_at]},
-      conflict_target: :key
-    )
   end
 
   defp filled(text), do: if(is_binary(text) and String.trim(text) != "", do: String.trim(text))
@@ -85,13 +78,13 @@ defmodule Dokkit.Acme do
 
   defp record(now, ok, note) do
     at = DateTime.to_iso8601(now)
-    put(@renewal, %{"at" => at, "checked" => at, "ok" => ok, "note" => note})
+    Setting.put(@renewal, %{"at" => at, "checked" => at, "ok" => ok, "note" => note})
     {if(ok, do: :ok, else: :error), note}
   end
 
   defp checked(now) do
-    old = (Repo.get(Setting, @renewal) || %Setting{value: %{}}).value
-    put(@renewal, Map.put(old, "checked", DateTime.to_iso8601(now)))
+    old = Setting.get(@renewal)
+    Setting.put(@renewal, Map.put(old, "checked", DateTime.to_iso8601(now)))
   end
 
   ## When it runs
@@ -108,7 +101,7 @@ defmodule Dokkit.Acme do
   end
 
   defp due_for_check?(now) do
-    last = (Repo.get(Setting, @renewal) || %Setting{value: %{}}).value
+    last = Setting.get(@renewal)
 
     case last["checked"] || last["at"] do
       nil -> true
@@ -355,7 +348,8 @@ defmodule Dokkit.Acme do
             else: {:error, "The certificate authority refused: " <> detail(resp)}
 
         {:error, e} ->
-          {:error, "The certificate authority could not be reached: #{String.slice(Exception.message(e), 0, 200)}"}
+          {:error,
+           "The certificate authority could not be reached: #{String.slice(Exception.message(e), 0, 200)}"}
       end
     end
   end
@@ -372,7 +366,8 @@ defmodule Dokkit.Acme do
         end
 
       {:error, e} ->
-        {:error, "The certificate authority could not be reached: #{String.slice(Exception.message(e), 0, 200)}"}
+        {:error,
+         "The certificate authority could not be reached: #{String.slice(Exception.message(e), 0, 200)}"}
     end
   end
 

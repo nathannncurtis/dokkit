@@ -116,7 +116,7 @@ defmodule Dokkit.Alerts do
   def smtp_ports, do: @smtp_ports
 
   def config do
-    Map.merge(@defaults, unblank((Repo.get(Setting, "alerts") || %Setting{value: %{}}).value))
+    Map.merge(@defaults, unblank(Setting.get("alerts")))
   end
 
   # A blank value falls back to its default; a blank limit switches that limit off.
@@ -161,10 +161,7 @@ defmodule Dokkit.Alerts do
       |> Map.merge(Map.new(gone, &{&1, ""}))
       |> unblank()
 
-    Repo.insert!(%Setting{key: "alerts", value: new},
-      on_conflict: {:replace, [:value, :updated_at]},
-      conflict_target: :key
-    )
+    Setting.put("alerts", new)
 
     new
   end
@@ -407,7 +404,7 @@ defmodule Dokkit.Alerts do
 
   @doc "Rules, first match first. A service's own routing comes before them, the two defaults after."
   def rules do
-    for r <- (Repo.get(Setting, "rules") || %Setting{value: %{}}).value["list"] || [],
+    for r <- Setting.get("rules")["list"] || [],
         do: Map.put(r, "channels", split(r["channel"]))
   end
 
@@ -494,7 +491,7 @@ defmodule Dokkit.Alerts do
   """
   def suggestions do
     dismissed =
-      (Repo.get(Setting, "suggestions") || %Setting{value: %{}}).value["dismissed"] || []
+      Setting.get("suggestions")["dismissed"] || []
 
     since = DateTime.add(DateTime.utc_now(), -30 * 86_400)
 
@@ -523,12 +520,9 @@ defmodule Dokkit.Alerts do
 
   def dismiss_suggestion(issue_id) do
     with %Issue{} = i <- Enum.find(suggestions(), &(&1.id == issue_id)) do
-      old = (Repo.get(Setting, "suggestions") || %Setting{value: %{}}).value["dismissed"] || []
+      old = Setting.get("suggestions")["dismissed"] || []
 
-      Repo.insert!(%Setting{key: "suggestions", value: %{"dismissed" => [i.service_id | old]}},
-        on_conflict: {:replace, [:value, :updated_at]},
-        conflict_target: :key
-      )
+      Setting.put("suggestions", %{"dismissed" => [i.service_id | old]})
     end
   end
 
@@ -567,10 +561,7 @@ defmodule Dokkit.Alerts do
   end
 
   defp save_rules(list) do
-    Repo.insert!(%Setting{key: "rules", value: %{"list" => list}},
-      on_conflict: {:replace, [:value, :updated_at]},
-      conflict_target: :key
-    )
+    Setting.put("rules", %{"list" => list})
 
     list
   end
@@ -730,9 +721,11 @@ defmodule Dokkit.Alerts do
     held = Repo.preload(issue, :service).service |> holds?("page", now)
     live = is_nil(issue.acknowledged_at) and not snoozed?(issue, now)
 
-    Repo.update_all(from(a in Alert, where: a.issue_id == ^id and a.status == :skipped),
-      set: [status: :pending, attempts: 0, error: nil]
-    )
+    if live,
+      do:
+        Repo.update_all(from(a in Alert, where: a.issue_id == ^id and a.status == :skipped),
+          set: [status: :pending, attempts: 0, error: nil]
+        )
 
     Repo.update_all(
       from(a in Alert, where: a.issue_id == ^id and a.status == :closing and a.attempts == 0),
@@ -1096,10 +1089,7 @@ defmodule Dokkit.Alerts do
   defp remember_imessage(machine_id) do
     value = %{"machine" => machine_id, "at" => DateTime.to_iso8601(DateTime.utc_now())}
 
-    Repo.insert!(%Setting{key: "imessage_ok", value: value},
-      on_conflict: {:replace, [:value, :updated_at]},
-      conflict_target: :key
-    )
+    Setting.put("imessage_ok", value)
   end
 
   @doc """
@@ -1108,7 +1098,7 @@ defmodule Dokkit.Alerts do
   """
   def imessage_status(config \\ config()) do
     mac = imessage_mac(config)
-    ok = (Repo.get(Setting, "imessage_ok") || %Setting{value: %{}}).value
+    ok = Setting.get("imessage_ok")
 
     cond do
       config["imessage_machine"] in [nil, ""] ->

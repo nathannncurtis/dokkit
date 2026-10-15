@@ -33,19 +33,21 @@ defmodule Dokkit.Envelope do
   end
 
   # An item is a header line and a payload, which is either as long as the header says or one line.
-  defp items(""), do: []
+  defp items(text, left \\ 100)
+  defp items("", _), do: []
+  defp items(_, 0), do: []
 
-  defp items(text) do
+  defp items(text, left) do
     {head, rest} = line(text)
 
     case Jason.decode(head) do
       {:ok, %{"length" => n} = item} when is_integer(n) and n >= 0 and byte_size(rest) >= n ->
         <<payload::binary-size(^n), rest::binary>> = rest
-        [{item["type"], payload} | items(String.replace_prefix(rest, "\n", ""))]
+        [{item["type"], payload} | items(String.replace_prefix(rest, "\n", ""), left - 1)]
 
       {:ok, %{} = item} ->
         {payload, rest} = line(rest)
-        [{item["type"], payload} | items(rest)]
+        [{item["type"], payload} | items(rest, left - 1)]
 
       _ ->
         []
@@ -93,12 +95,13 @@ defmodule Dokkit.Envelope do
 
   defp tags(_), do: %{}
 
-  defp at(seconds) when is_number(seconds) do
+  defp at(seconds) when is_number(seconds) and abs(seconds) < 1.0e11 do
     case DateTime.from_unix(trunc(seconds * 1000), :millisecond) do
       {:ok, at} -> DateTime.to_iso8601(at)
       _ -> nil
     end
   end
 
+  defp at(seconds) when is_number(seconds), do: nil
   defp at(text), do: text
 end

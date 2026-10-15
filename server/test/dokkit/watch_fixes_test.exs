@@ -125,6 +125,47 @@ defmodule Dokkit.WatchFixesTest do
     assert Repo.get(Machine, m2.id)
   end
 
+  test "prune drops runs past 90 days but keeps each check's newest and newest good run" do
+    now = DateTime.utc_now()
+    {m, _, c} = job("wf-runs", "nightly", %{})
+    ago = &DateTime.add(now, -&1 * 86_400)
+
+    run =
+      &Repo.insert!(%JobRun{
+        check_id: c.id,
+        run: Ecto.UUID.generate(),
+        result: &1,
+        started_at: &2,
+        finished_at: &2
+      })
+
+    old_good = run.(:ok, ago.(200))
+    last_good = run.(:ok, ago.(150))
+    old_fail = run.(:fail, ago.(120))
+    newest = run.(:fail, ago.(100))
+
+    work =
+      &Repo.insert!(%Dokkit.WorkRun{
+        machine_id: m.id,
+        name: "dokkit:scan",
+        state: &1,
+        inserted_at: &2
+      })
+
+    old_work = work.(:ok, ago.(200))
+    kept_work = work.(:ok, ago.(100))
+    queued = work.(:queued, ago.(300))
+
+    Watch.prune(now)
+    assert Repo.get(JobRun, old_good.id) == nil
+    assert Repo.get(JobRun, last_good.id)
+    assert Repo.get(JobRun, old_fail.id) == nil
+    assert Repo.get(JobRun, newest.id)
+    assert Repo.get(Dokkit.WorkRun, old_work.id) == nil
+    assert Repo.get(Dokkit.WorkRun, kept_work.id)
+    assert Repo.get(Dokkit.WorkRun, queued.id)
+  end
+
   test "an issue held back while the machine was down is alerted when it returns" do
     now = DateTime.utc_now()
     {m, s, c} = job("wf-h", "held", %{})
@@ -143,6 +184,25 @@ defmodule Dokkit.WatchFixesTest do
     Repo.update_all(from(x in Machine, where: x.id == ^m.id), set: [last_seen_at: now])
     Issues.machines_sweep(now)
     assert [_] = Repo.all(from a in Alert, where: a.issue_id == ^issue.id)
+  end
+
+  test "an issue snoozed while the machine was down is not alerted when it returns" do
+    now = DateTime.utc_now()
+    {m, s, c} = job("wf-sn", "held", %{})
+    Dokkit.Alerts.save(%{"down" => "push"})
+    Repo.update_all(from(x in Service, where: x.id == ^s.id), set: [route_down: "push"])
+
+    Repo.update_all(from(x in Machine, where: x.id == ^m.id),
+      set: [last_seen_at: DateTime.add(now, -600)]
+    )
+
+    Issues.machines_sweep(now)
+    Issues.record(c, :down, at: now)
+    issue = Repo.get_by!(Issue, check_id: c.id)
+    Issues.snooze([issue.id], 3600)
+    Repo.update_all(from(x in Machine, where: x.id == ^m.id), set: [last_seen_at: now])
+    Issues.machines_sweep(now)
+    assert Repo.all(from a in Alert, where: a.issue_id == ^issue.id) == []
   end
 
   test "a returning machine alerts only what opened during the outage and is not acknowledged" do

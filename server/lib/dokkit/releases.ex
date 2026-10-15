@@ -179,10 +179,17 @@ defmodule Dokkit.Releases do
 
     if is_nil(note) or (is_binary(note) and String.length(note) <= 2000) do
       change =
-        [update_version: version, update_ok: ok, update_note: note, update_at: DateTime.utc_now()] ++
-          if(ok, do: [wanted_version: nil], else: [])
+        [update_version: version, update_ok: ok, update_note: note, update_at: DateTime.utc_now()]
 
       Repo.update_all(from(m in Machine, where: m.id == ^machine_id), set: change)
+
+      if ok,
+        do:
+          Repo.update_all(
+            from(m in Machine, where: m.id == ^machine_id and m.wanted_version == ^version),
+            set: [wanted_version: nil]
+          )
+
       Dokkit.Issues.changed(false)
       :ok
     else

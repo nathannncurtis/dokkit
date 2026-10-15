@@ -327,6 +327,15 @@ defmodule Dokkit.Setting do
     field :value, :map
     timestamps(type: :utc_datetime_usec)
   end
+
+  def get(key), do: (Dokkit.Repo.get(__MODULE__, key) || %__MODULE__{value: %{}}).value
+
+  def put(key, value) do
+    Dokkit.Repo.insert!(%__MODULE__{key: key, value: value},
+      on_conflict: {:replace, [:value, :updated_at]},
+      conflict_target: :key
+    )
+  end
 end
 
 defmodule Dokkit.QuietWindow do

@@ -155,7 +155,7 @@ defmodule Dokkit.Estate do
   def add_job(params) do
     machine = String.trim(params["machine"] || "")
     name = String.trim(params["name"] || "")
-    slug = name |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-") |> String.trim("-")
+    slug = Dokkit.Found.slug(name)
 
     config =
       for k <- ~w(schedule grace max_runtime),
@@ -216,7 +216,7 @@ defmodule Dokkit.Estate do
   """
   def add_app(params) do
     name = String.trim(params["name"] || "")
-    slug = name |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-") |> String.trim("-")
+    slug = Dokkit.Found.slug(name)
 
     if slug == "" do
       {:error, "An app needs a name."}
@@ -243,7 +243,7 @@ defmodule Dokkit.Estate do
   """
   def add_dependency(params) do
     name = String.trim(params["name"] || "")
-    slug = name |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-") |> String.trim("-")
+    slug = Dokkit.Found.slug(name)
     machine = String.trim(params["machine"] || "")
 
     with true <- slug != "" or {:error, "A dependency needs a name."},

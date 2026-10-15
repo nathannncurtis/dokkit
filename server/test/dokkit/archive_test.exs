@@ -61,6 +61,54 @@ defmodule Dokkit.ArchiveTest do
     assert Repo.aggregate(Log, :count) == 0
   end
 
+  defp old_line(machine, at, msg) do
+    Logs.ensure_partition(at)
+
+    Repo.insert_all(Log, [
+      %{
+        at: at,
+        received_at: at,
+        level: "info",
+        msg: msg,
+        fields: %{},
+        cut: false,
+        machine_id: machine.id
+      }
+    ])
+  end
+
+  @tag :tmp_dir
+  test "lines that come for a month after its loaded-back copy is dropped are archived", %{
+    tmp_dir: dir
+  } do
+    machine = Repo.insert!(%Machine{name: "vault-late"})
+    at = ~U[2020-04-15 10:00:00.000000Z]
+    old_line(machine, at, "first")
+    assert [path] = Logs.archive(dir, ~D[2026-10-06])
+    assert Logs.restore(path) == 1
+    Dokkit.Setting.put("restored", %{"logs-2020-04" => "2020-01-01T00:00:00Z"})
+    assert [^path] = Logs.archive(dir, ~D[2026-10-06])
+    assert Dokkit.Setting.get("restored") == %{}
+
+    old_line(machine, at, "late")
+    assert [late] = Logs.archive(dir, ~D[2026-10-06])
+    assert Path.basename(late) == "logs-2020-04.2.ndjson.gz"
+    assert :zlib.gunzip(File.read!(late)) =~ "late"
+  end
+
+  @tag :tmp_dir
+  test "a loaded-back second archive of a month holds the month", %{tmp_dir: dir} do
+    machine = Repo.insert!(%Machine{name: "vault-two"})
+    at = ~U[2020-05-15 10:00:00.000000Z]
+    File.write!(Path.join(dir, "logs-2020-05.ndjson.gz"), :zlib.gzip(""))
+    old_line(machine, at, "second")
+    assert [path] = Logs.archive(dir, ~D[2026-10-06])
+    assert Path.basename(path) == "logs-2020-05.2.ndjson.gz"
+    assert Logs.restore(path) == 1
+    assert Logs.archive(dir, ~D[2026-10-06]) == []
+    assert Repo.aggregate(Log, :count) == 1
+  end
+
   @tag :tmp_dir
   test "a restore that fails part way leaves no note and no rows", %{tmp_dir: dir} do
     machine = Repo.insert!(%Machine{name: "vault-fail"})

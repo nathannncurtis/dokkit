@@ -43,7 +43,7 @@ defmodule Dokkit.Watch do
           fn -> Dokkit.Digest.tick(now, Dokkit.Alerts.config()) end,
           fn -> Dokkit.Self.tick(now, Dokkit.Alerts.config(), booted) end,
           fn -> Task.start(fn -> Dokkit.Acme.tick(now) end) end,
-          fn -> if now.minute == 0, do: Dokkit.Logs.archive(archive) end,
+          fn -> if now.minute == 0, do: Task.start(fn -> Dokkit.Logs.archive(archive) end) end,
           fn -> Issues.changed() end,
           fn -> Dokkit.Phones.Sender.tick() end,
           fn ->
@@ -66,8 +66,9 @@ defmodule Dokkit.Watch do
 
   @keep_batches_hours 24
   @keep_hosts_days 30
+  @keep_runs_days 90
 
-  @doc "Drops numbers past their keep time, spent batch ids, and app hosts never seen again."
+  @doc "Drops numbers past their keep time, spent batch ids, app hosts never seen again, and old job and work runs."
   def prune(now) do
     Dokkit.Numbers.prune(now)
     Dokkit.Slots.prune(now)
@@ -85,16 +86,42 @@ defmodule Dokkit.Watch do
           m.kind == :seen and m.last_seen_at < ^DateTime.add(now, -@keep_hosts_days * 86_400) and
             not exists(from s in Dokkit.Service, where: s.machine_id == parent_as(:machine).id)
     )
-  end
 
-  @doc "Sweeps jobs, beats and machines once the VM has been up long enough for machines to report."
-  def sweep_quiet(started, now \\ DateTime.utc_now()) do
-    if settled?(started, now) do
-      sweep(now)
-      Issues.machines_sweep(now)
-    else
-      0
-    end
+    runs_before = DateTime.add(now, -@keep_runs_days * 86_400)
+
+    # Each check keeps its newest run and newest good run: the Jobs page and "did not run" read them.
+    keep_jobs =
+      from r in JobRun,
+        distinct: r.check_id,
+        order_by: [r.check_id, desc: coalesce(r.started_at, r.finished_at), desc: r.id],
+        select: r.id
+
+    keep_good =
+      from r in JobRun,
+        where: r.result == :ok and not is_nil(r.finished_at),
+        distinct: r.check_id,
+        order_by: [r.check_id, desc: r.finished_at],
+        select: r.id
+
+    Repo.delete_all(
+      from r in JobRun,
+        where:
+          coalesce(r.finished_at, r.started_at) < ^runs_before and
+            r.id not in subquery(keep_jobs) and r.id not in subquery(keep_good)
+    )
+
+    keep_work =
+      from r in Dokkit.WorkRun,
+        distinct: [r.machine_id, r.name],
+        order_by: [r.machine_id, r.name, desc: r.inserted_at],
+        select: r.id
+
+    Repo.delete_all(
+      from r in Dokkit.WorkRun,
+        where:
+          r.state not in [:queued, :running] and r.inserted_at < ^runs_before and
+            r.id not in subquery(keep_work)
+    )
   end
 
   @doc "Returns how many jobs and beats it flagged."

@@ -17,11 +17,13 @@ defmodule Dokkit.Intake do
   @events ~w(start progress ok fail)
 
   def report(%Key{} = key, batch_id, body, now \\ DateTime.utc_now()) do
-    lines = String.split(body, "\n", trim: true)
+    {lines, rest} =
+      body |> String.split("\n", parts: @max_lines + 1, trim: true) |> Enum.split(@max_lines)
+
     stored = batch_id && Repo.get_by(Batch, id: batch_id, key_id: key.id)
 
     cond do
-      length(lines) > @max_lines ->
+      rest != [] and String.trim(hd(rest), "\n") != "" ->
         {:error, :too_large}
 
       stored ->
@@ -74,6 +76,9 @@ defmodule Dokkit.Intake do
               Repo.insert!(struct!(Machine, [name: name] ++ attrs))
 
             %Machine{kind: :enrolled} when not replace ->
+              Repo.rollback(:taken)
+
+            %Machine{kind: kind} when kind not in [:seen, :enrolled] ->
               Repo.rollback(:taken)
 
             machine ->

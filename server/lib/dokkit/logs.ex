@@ -1,7 +1,7 @@
 defmodule Dokkit.Logs do
   @moduledoc "Log lines. Stored one partition per month; see spec/log-lines.md."
   import Ecto.Query
-  alias Dokkit.{Log, Repo}
+  alias Dokkit.{Log, Repo, Setting}
 
   @levels ~w(trace debug info warn error fatal)
   @clef for {names, level} <- [
@@ -210,7 +210,7 @@ defmodule Dokkit.Logs do
   @defaults %{"months" => 12, "action" => "archive"}
 
   def retention do
-    saved = (Repo.get(Dokkit.Setting, "log_retention") || %Dokkit.Setting{value: %{}}).value
+    saved = Setting.get("log_retention")
     Map.merge(@defaults, saved)
   end
 
@@ -234,10 +234,7 @@ defmodule Dokkit.Logs do
       true ->
         new = %{"months" => elem(months, 0), "action" => action}
 
-        Repo.insert!(%Dokkit.Setting{key: "log_retention", value: new},
-          on_conflict: {:replace, [:value, :updated_at]},
-          conflict_target: :key
-        )
+        Setting.put("log_retention", new)
 
         {:ok, new}
     end
@@ -275,12 +272,14 @@ defmodule Dokkit.Logs do
   @doc """
   Writes each month older than the live limit to one compressed file in `dir` and drops it from
   the database, or only drops it when the setting is `delete`. Returns the files written, or
-  the dropped tables when deleting. A month is read whole into memory to be written.
+  the dropped tables when deleting.
   """
   def archive(dir, today \\ Date.utc_today()) do
     %{"months" => keep, "action" => action} = retention()
     back = restored()
-    held = for {name, until} <- back, until > DateTime.utc_now(), do: name
+
+    held =
+      for {name, until} <- back, DateTime.after?(until, DateTime.utc_now()), do: month_of(name)
 
     for {name, year, month} <- older(keep, today),
         key = {String.to_integer(year), String.to_integer(month)},
@@ -302,26 +301,52 @@ defmodule Dokkit.Logs do
 
     # A month that came back from its file is only dropped; any other month is written out
     # first, under a free name. Written as .part first so a half file is never an archive.
+    month = "logs-#{year}-#{month}"
+    back_names = Enum.map(Map.keys(back), &month_of/1)
+
     path =
-      if "logs-#{year}-#{month}" in Map.keys(back) and File.exists?(path) do
+      if month in back_names and File.exists?(path) do
         path
       else
-        %{rows: rows} =
-          Repo.query!("SELECT row_to_json(l)::text FROM #{name} l ORDER BY l.at", [],
-            timeout: :infinity
-          )
-
         path = free(path)
-        File.write!(path <> ".part", :zlib.gzip(Enum.map_join(rows, "
-", &hd/1)))
+        write_month(name, path <> ".part")
         File.rename!(path <> ".part", path)
         path
       end
 
     Repo.query!("DROP TABLE #{name}")
     :persistent_term.erase({__MODULE__, key})
+
+    if month in back_names,
+      do:
+        save_restored(
+          for {k, v} <- back, month_of(k) != month, into: %{}, do: {k, DateTime.to_iso8601(v)}
+        )
+
     path
   end
+
+  defp write_month(name, part) do
+    sql = "SELECT row_to_json(l)::text FROM #{name} l ORDER BY l.at"
+
+    {:ok, _} =
+      Repo.transaction(
+        fn ->
+          File.open!(part, [:write, :compressed], fn file ->
+            Ecto.Adapters.SQL.stream(Repo, sql, [], max_rows: 1000)
+            |> Stream.flat_map(& &1.rows)
+            |> Enum.reduce("", fn [line], sep ->
+              IO.binwrite(file, [sep, line])
+              "\n"
+            end)
+          end)
+        end,
+        timeout: :infinity
+      )
+  end
+
+  # A month archived twice is "logs-2026-03.2"; holds and loads go by the month.
+  defp month_of(name), do: String.replace(name, ~r/\.\d+$/, "")
 
   defp free(path, n \\ 1) do
     next = if n == 1, do: path, else: String.replace_suffix(path, ".ndjson.gz", ".#{n}.ndjson.gz")
@@ -333,7 +358,7 @@ defmodule Dokkit.Logs do
   # Months loaded back, each with the time it may be archived again.
   defp restored do
     for {name, until} <-
-          (Repo.get(Dokkit.Setting, "restored") || %Dokkit.Setting{value: %{}}).value,
+          Setting.get("restored"),
         {:ok, until, _} <- [DateTime.from_iso8601(until)],
         into: %{},
         do: {name, until}
@@ -409,10 +434,7 @@ defmodule Dokkit.Logs do
   end
 
   defp save_restored(value) do
-    Repo.insert!(%Dokkit.Setting{key: "restored", value: value},
-      on_conflict: {:replace, [:value, :updated_at]},
-      conflict_target: :key
-    )
+    Setting.put("restored", value)
   end
 
   defp rows(path) do

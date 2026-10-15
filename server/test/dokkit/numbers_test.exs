@@ -104,6 +104,23 @@ defmodule Dokkit.NumbersTest do
     assert Issues.open_list() == []
   end
 
+  test "an open disk issue closes once its limit is blanked" do
+    m = Repo.insert!(%Machine{name: "blanked", kind: :enrolled})
+    Dokkit.Alerts.save(%{"disk_limit" => "90"})
+
+    read = fn ->
+      Dokkit.Numbers.record(m.id, nil, "disk.used_percent.E", 95, DateTime.utc_now())
+    end
+
+    for _ <- 1..4, do: read.()
+    assert [_] = Issues.open_list() |> Enum.filter(&(&1.machine_id == m.id))
+
+    Dokkit.Alerts.save(%{"disk_limit" => ""})
+    for _ <- 1..3, do: read.()
+    assert [] = Issues.open_list() |> Enum.filter(&(&1.machine_id == m.id))
+    Dokkit.Alerts.save(%{"disk_limit" => "90"})
+  end
+
   describe "a file threshold and the built-in limit" do
     defp declared(machine, limit) do
       m = Repo.insert!(%Machine{name: machine, kind: :enrolled})

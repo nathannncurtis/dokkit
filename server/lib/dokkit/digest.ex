@@ -12,7 +12,7 @@ defmodule Dokkit.Digest do
   def tick(now, config) do
     here = Dokkit.Alerts.zone_now(now, config)
     today = Date.to_iso8601(DateTime.to_date(here))
-    state = (Repo.get(Setting, "digest") || %Setting{value: %{}}).value
+    state = Setting.get("digest")
 
     cond do
       state["sent"] == today -> :not_yet
@@ -68,10 +68,7 @@ defmodule Dokkit.Digest do
   end
 
   defp remember(value) do
-    Repo.insert!(%Setting{key: "digest", value: value},
-      on_conflict: {:replace, [:value, :updated_at]},
-      conflict_target: :key
-    )
+    Setting.put("digest", value)
   end
 
   @doc """

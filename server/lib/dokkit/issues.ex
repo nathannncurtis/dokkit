@@ -238,7 +238,8 @@ defmodule Dokkit.Issues do
           left_join: a in assoc(i, :alerts),
           where:
             i.machine_id in ^Enum.map(back, & &1.machine_id) and i.kind != "machine" and
-              is_nil(i.closed_at) and is_nil(i.acknowledged_at) and is_nil(a.id),
+              is_nil(i.closed_at) and is_nil(i.acknowledged_at) and is_nil(a.id) and
+              (is_nil(i.snoozed_until) or i.snoozed_until <= ^now),
           preload: :service
       )
 

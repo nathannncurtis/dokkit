@@ -177,6 +177,7 @@ defmodule DokkitWeb.SessionController do
   # Behind a proxy every request comes from the proxy, so the address it appended is used.
   defp address(conn) do
     with true <- Application.get_env(:dokkit, :behind_proxy, false),
+         true <- loopback?(conn.remote_ip),
          [list | _] <- get_req_header(conn, "x-forwarded-for"),
          last = list |> String.split(",") |> List.last() |> String.trim(),
          {:ok, ip} <- :inet.parse_address(String.to_charlist(last)) do
@@ -185,4 +186,9 @@ defmodule DokkitWeb.SessionController do
       _ -> conn.remote_ip
     end
   end
+
+  defp loopback?({127, _, _, _}), do: true
+  defp loopback?({0, 0, 0, 0, 0, 0, 0, 1}), do: true
+  defp loopback?({0, 0, 0, 0, 0, 0xFFFF, 0x7F00, _}), do: true
+  defp loopback?(_), do: false
 end
