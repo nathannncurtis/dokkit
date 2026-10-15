@@ -271,7 +271,7 @@ defmodule DokkitWeb.FoundLive do
           <h1 tabindex="-1">
             Found<span :if={@stats != []} class="cnt" title="Waiting, all machines">{@total}</span>
           </h1>
-
+          
           <form class="end" id="system-form" phx-change="system">
             <span class="tag">{if @system, do: "System shown", else: "#{@hidden} system hidden"}</span>
             <label class="mute" style="display: flex; align-items: center; gap: 8px">
@@ -281,21 +281,21 @@ defmodule DokkitWeb.FoundLive do
             </label>
           </form>
         </div>
-
+        
         <p class="lead">
           Pick a machine, then watch what is worth watching. Nothing is watched until you do.
         </p>
-
+        
         <div :if={@stats == []} class="body">
           <div class="card" id="no-machines">
             <div class="empty"><.ic name="desktop" />No machine has joined yet.</div>
           </div>
         </div>
-
+        
         <div :if={@stats != []} class={["fnd-grid", @picked && "picked"]}>
           <div class="card fnd-list">
             <h2>Machines<span class="cnt">{length(@stats)}</span></h2>
-
+            
             <div
               class="fnd-sc"
               id="machine-list"
@@ -319,7 +319,7 @@ defmodule DokkitWeb.FoundLive do
                   <span :if={s.machine.os}>{@os[s.machine.os] || s.machine.os}</span>
                   <span :if={s.hidden > 0}>{s.hidden} system hidden</span>
                 </span>
-
+                
                 <div
                   class="seg3"
                   title={"#{count(s.shown, "yours")} yours, #{count(s.shown, "software")} software, #{count(s.shown, "system")} system"}
@@ -330,7 +330,7 @@ defmodule DokkitWeb.FoundLive do
               </.link>
             </div>
           </div>
-
+          
           <.panel
             :if={@current}
             stat={@current}
@@ -378,7 +378,7 @@ defmodule DokkitWeb.FoundLive do
         <.link patch={found_path(@system, nil)} class="btn sm ghost fnd-back">
           <.ic name="caret-left" />Machines
         </.link>
-        <.ic name={@os_icon[@m.os] || "desktop"} /> <span class="nm">{@m.name}</span>
+         <.ic name={@os_icon[@m.os] || "desktop"} /> <span class="nm">{@m.name}</span>
         <span :if={@m.os} class="tag">{@os[@m.os] || @m.os}</span>
         <span class="sum">{summary(@stat, @system)}</span>
         <span class="end">
@@ -391,7 +391,7 @@ defmodule DokkitWeb.FoundLive do
           >
             <.ic name="note" />Scan notes<span class="cnt">{length(@notes)}</span>
           </button>
-
+          
           <button
             class="btn sm"
             type="button"
@@ -403,18 +403,18 @@ defmodule DokkitWeb.FoundLive do
           </button>
         </span>
       </h2>
-
+      
       <div :if={@says} class="fnd-says">{@says}</div>
-
+      
       <div :if={@notes_open} class="fnd-notes">
         <p :for={n <- @notes} class="lead">{n}</p>
       </div>
-
+      
       <div class="fnd-bar" role="toolbar" aria-label="Selection">
         <span class="sel">
           {if @none, do: "None selected", else: "#{MapSet.size(@selected)} selected"}
         </span>
-
+        
         <button
           class="btn sm primary"
           type="button"
@@ -425,7 +425,7 @@ defmodule DokkitWeb.FoundLive do
         >
           <.ic name="plus" />Watch selected
         </button>
-
+        
         <button
           class="btn sm"
           type="button"
@@ -436,7 +436,7 @@ defmodule DokkitWeb.FoundLive do
         >
           Dismiss selected
         </button>
-
+        
         <button
           class="btn sm ghost"
           type="button"
@@ -446,7 +446,7 @@ defmodule DokkitWeb.FoundLive do
           Clear
         </button>
       </div>
-
+      
       <div class="fnd-sc" id={"findings-#{@m.id}"}>
         <div :if={@stat.shown == []} class="empty" id="panel-empty">
           <%= cond do %>
@@ -461,7 +461,7 @@ defmodule DokkitWeb.FoundLive do
               <.ic name="check-circle" />Nothing is waiting on {@m.name}. Whatever it found is watched or dismissed.
           <% end %>
         </div>
-
+        
         <%= for {kind, title, icon} <- @sections, rows = Enum.filter(@stat.shown, &(&1.kind == kind)), rows != [] do %>
           <% open = open?(@opened, @m.name, kind, @stat.shown) %>
           <div class={["fnd-sec", open && "open"]} id={"sec-#{@m.id}-#{kind}"}>
@@ -477,7 +477,7 @@ defmodule DokkitWeb.FoundLive do
                   rows
                 )}</span>
               </button>
-              <span class="brk">{breakdown(rows)}</span>
+               <span class="brk">{breakdown(rows)}</span>
               <span class="end">
                 <button
                   class="btn sm primary"
@@ -489,7 +489,7 @@ defmodule DokkitWeb.FoundLive do
                 >
                   Watch all {length(rows)}
                 </button>
-
+                
                 <button
                   class="btn sm"
                   type="button"
@@ -502,7 +502,7 @@ defmodule DokkitWeb.FoundLive do
                 </button>
               </span>
             </div>
-
+            
             <div :if={open}>
               <%= for {o, label, hint} <- @origins, part = Enum.filter(rows, &(&1.origin == o)), part != [] do %>
                 <% {all?, some?} = group_state(part, @selected) %>
@@ -521,7 +521,7 @@ defmodule DokkitWeb.FoundLive do
                   /> <span>{label}<span class="mute"> · {hint}</span></span>
                   <span class="cnt">{length(part)}</span>
                 </div>
-
+                
                 <.found_row
                   :for={f <- part}
                   f={f}
@@ -572,16 +572,16 @@ defmodule DokkitWeb.FoundLive do
             <.ic name={if MapSet.member?(@more, @f.id), do: "caret-up", else: "caret-down"} />
           </button>
         </div>
-
+        
         <div class="mute sm-why" title={@f.why}>{@f.why}</div>
       </div>
-
+      
       <div class="mute det" title={@f.detail["saw"]}>
         <div>{@f.detail["saw"]}</div>
-
+        
         <div :if={@f.kind == "job" and last_run(@f) != ""} class="sub">{last_run(@f)}</div>
       </div>
-      <span class="mute why" title={@f.why}>{@f.why}</span>
+       <span class="mute why" title={@f.why}>{@f.why}</span>
       <div class="act">
         <button
           class="btn sm primary"
@@ -594,7 +594,7 @@ defmodule DokkitWeb.FoundLive do
         >
           Watch
         </button>
-
+        
         <button
           class="btn sm"
           type="button"
@@ -615,27 +615,27 @@ defmodule DokkitWeb.FoundLive do
           {job_how(@f.detail["source"])}, schedule <code>{@f.detail["schedule"]}</code>
           (read as UTC). {@f.detail["schedule_note"]}
         </div>
-
+        
         <div :if={!@f.detail["schedule"]}>
           No schedule Dokkit can read: {@f.detail["schedule_note"]} A run that fails is noticed; a run that does not happen is not.
         </div>
-
+        
         <div :if={@f.detail["last_run"] || @f.detail["last_result"]}>
           Last run {@f.detail["last_run"] || "not recorded"}, result {@f.detail["last_result"] ||
             "not recorded"}.
         </div>
-
+        
         <div :if={@f.detail["command"]}>
           It runs, for you to recognise it, not to be run by Dokkit:
           <code>{@f.detail["command"]}</code>
         </div>
-
+        
         <div :if={watched_from_record?(@f)}>
           <strong>Watched from this machine's own record.</strong>
           Once watched, the program on this machine reads when it last ran and how it ended, and reports each new run. Nothing about the job changes.
           It waits for its next run before it can be judged.
         </div>
-
+        
         <div :if={!watched_from_record?(@f)}>
           <strong>Needs the wrapper.</strong>
           Once watched, it waits for its first report. Wrap its command so each run is reported:

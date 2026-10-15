@@ -252,7 +252,7 @@ defmodule DokkitWeb.MachineLive do
       <div class="crumb">
         <.link navigate={~p"/all"}>Everything</.link><.ic name="caret-right" /><span>{@machine.name}</span>
       </div>
-      
+
       <div class="head">
         <h1 tabindex="-1">
           <span
@@ -265,7 +265,7 @@ defmodule DokkitWeb.MachineLive do
             state={if @down, do: :down, else: if(@attention > 0, do: :degraded, else: :ok)}
           /> {@machine.name}
         </h1>
-        
+
         <div class="end">
           <button
             :if={@machine.kind == :enrolled}
@@ -279,7 +279,7 @@ defmodule DokkitWeb.MachineLive do
           </button>
         </div>
       </div>
-      
+
       <div class="filters" style="padding-top:10px">
         <span class={["tag", @down && "warn", !@down && "ok"]}>{if @down, do: "Down", else: "Up"}</span>
         <span class="st">
@@ -287,16 +287,16 @@ defmodule DokkitWeb.MachineLive do
             do: "Last reported #{at(@machine.last_seen_at)} UTC",
             else: "Has not reported yet"}
         </span>
-         <span :if={@machine.os} class="st">{@machine.os}</span>
+        <span :if={@machine.os} class="st">{@machine.os}</span>
         <span class={["tag", @attention > 0 && "warn"]}>
           {if @attention == 0, do: "Nothing needs a look", else: "#{@attention} need a look"}
         </span>
-        
+
         <span :if={@scan} class="st" role="status">{if @scan.state == :ok,
           do: "Looked at #{at(@scan.finished_at)} UTC.",
           else: DokkitWeb.FoundLive.scan_says(@scan)}</span>
       </div>
-      
+
       <div class="body rail">
         <div class="col">
           <div class="card" id="meters">
@@ -305,11 +305,11 @@ defmodule DokkitWeb.MachineLive do
                 do: "No readings in the last 10 minutes",
                 else: "Latest readings"}</span>
             </h2>
-            
+
             <p :if={@vitals == %{}} class="lead">
               Processor, memory and disks appear here once the machine reports them.
             </p>
-            
+
             <div
               :for={{label, v} <- meters(@vitals)}
               class="li slim"
@@ -320,7 +320,7 @@ defmodule DokkitWeb.MachineLive do
               <span class="mono r">{round(v)}%<span :if={v >= 90}> high</span></span>
             </div>
           </div>
-           <MachineCards.history history={@history} range={@range} ranges={@ranges} />
+          <MachineCards.history history={@history} range={@range} ranges={@ranges} />
           <MachineCards.processes
             procs={@procs}
             procs_q={@procs_q}
@@ -332,20 +332,20 @@ defmodule DokkitWeb.MachineLive do
             <h2>
               What runs on it<span class="end">{length(Enum.flat_map(@services, &elem(&1, 1)))} watched</span>
             </h2>
-            
+
             <p :if={@services == []} class="lead">Nothing is being watched on this machine yet.</p>
-            
+
             <%= for {heading, list} <- @services do %>
               <div class="grp bare">{heading}</div>
-              
+
               <.link :for={s <- list} class="li slim cols-all pc" navigate={~p"/s/#{s.id}"}>
                 <div class="ti"><.lvl state={s.state} /><span>{s.name}</span></div>
-                 <span class="mono mute">{s.version}</span> <span class="mute">{kind(s.kind)}</span>
+                <span class="mono mute">{s.version}</span> <span class="mute">{kind(s.kind)}</span>
                 <span class={["tag", s.state in [:degraded, :down] && "warn"]}>{s.note || say(s.state)}</span>
                 <.ic name="caret-right" />
               </.link>
             <% end %>
-            
+
             <div :if={@machine.kind == :enrolled} class="foot">
               <span>Things on it that are not watched are listed on Found.</span>
               <span class="end">
@@ -355,10 +355,10 @@ defmodule DokkitWeb.MachineLive do
               </span>
             </div>
           </div>
-          
+
           <div class="card" id="downtime">
             <h2>Planned downtime</h2>
-            
+
             <DokkitWeb.QuietBand.band
               machine={@machine.id}
               planned={@planned}
@@ -374,12 +374,12 @@ defmodule DokkitWeb.MachineLive do
               disabled={@current_user.role == :viewer}
             />
           </div>
-          
+
           <div class="card" id="issues">
             <h2>Open issues<span :if={@issues != []} class="cnt">{length(@issues)}</span></h2>
-            
+
             <p :if={@issues == []} class="lead">Nothing is open on this machine.</p>
-            
+
             <%= for i <- @issues do %>
               <.link
                 :if={i.service_id}
@@ -391,47 +391,53 @@ defmodule DokkitWeb.MachineLive do
                   <div class="ti">
                     <span class={["lvl", if(i.state == :down, do: "bad", else: "warn")]}></span><span>{i.title}</span>
                   </div>
-                   <span class="st">{since(i)}{if snoozed?(i), do: ", snoozed"}</span>
+                  <span class="st">{since(i)}{if snoozed?(i), do: ", snoozed"}</span>
                 </div>
-                 <.ic name="caret-right" />
+                <.ic name="caret-right" />
               </.link>
-              
+
               <div :if={!i.service_id} class="li slim" style="--cols: minmax(0,1fr)">
                 <div>
                   <div class="ti">
                     <span class={["lvl", if(i.state == :down, do: "bad", else: "warn")]}></span><span>{i.title}</span>
                   </div>
-                   <span class="st">{since(i)}{if snoozed?(i), do: ", snoozed"}</span>
+                  <span class="st">{since(i)}{if snoozed?(i), do: ", snoozed"}</span>
                 </div>
               </div>
             <% end %>
           </div>
         </div>
-        
+
         <div class="col">
           <div class="card" id="versions">
             <h2>Program versions</h2>
-            
+
             <dl class="kv">
               <dt>Program</dt>
-              
+
               <dd class="mono">{@machine.program_version || "Unknown"}</dd>
-              
+
               <dt>Updater</dt>
-              
+
               <dd class="mono">
                 {(@machine.has_updater && (@machine.updater_version || "Unknown")) || "None"}
               </dd>
-              
+
+              <dt :if={@machine.updater_checked_at}>Updater last checked</dt>
+
+              <dd :if={@machine.updater_checked_at} class="mono">
+                {Calendar.strftime(@machine.updater_checked_at, "%b %-d %H:%M:%S")} UTC
+              </dd>
+
               <dt :if={@machine.hosts_server}>Server</dt>
-              
+
               <dd :if={@machine.hosts_server} class="mono">{@machine.server_version || "Unknown"}</dd>
-              
+
               <dt :if={@machine.wanted_version}>Update pending</dt>
-              
+
               <dd :if={@machine.wanted_version} class="mono">{@machine.wanted_version}</dd>
             </dl>
-            
+
             <div :if={@nudge} class="foot" id="nudge">
               <span class={["st", @nudge.state in [:fail, :refused, :expired] && "warn"]}>
                 Last update request {at(@nudge.asked_at)} UTC: {nudge_state(@nudge.state)}{if @nudge.answered_at,
@@ -439,7 +445,7 @@ defmodule DokkitWeb.MachineLive do
                   do: ". " <> String.trim(@nudge.output)}
               </span>
             </div>
-            
+
             <div
               :if={Releases.outcome(@machine) || (@current_user.role == :owner and @movable)}
               class="foot"
@@ -451,7 +457,7 @@ defmodule DokkitWeb.MachineLive do
               >
                 {Releases.outcome(@machine)}
               </span>
-              
+
               <span class="end">
                 <button
                   :if={@current_user.role == :owner and @movable}
@@ -464,13 +470,13 @@ defmodule DokkitWeb.MachineLive do
               </span>
             </div>
           </div>
-          
+
           <form class="card" id="silent-form" phx-submit="silent">
             <h2>If this machine stops reporting</h2>
-            
+
             <dl class="kv">
               <dt>Tell</dt>
-              
+
               <dd>
                 <ChannelPick.pick
                   name="silent[down]"
@@ -481,9 +487,9 @@ defmodule DokkitWeb.MachineLive do
                   disabled={@current_user.role == :viewer}
                 />
               </dd>
-              
+
               <dt>At night</dt>
-              
+
               <dd>
                 <input type="hidden" name="silent[night]" value="false" />
                 <label>
@@ -495,11 +501,11 @@ defmodule DokkitWeb.MachineLive do
                     disabled={@current_user.role == :viewer}
                   /> Wake me at night for this
                 </label>
-                
+
                 <span class="hint">Off holds the alert until the night ends, if the machine is still quiet.</span>
               </dd>
             </dl>
-            
+
             <div class="foot">
               <span :if={@silent_saved} role="status">Saved.</span>
               <span class="end">

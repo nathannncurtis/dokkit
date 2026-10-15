@@ -161,6 +161,8 @@ defmodule DokkitWeb.UpdatesTest do
                updater_version: "v1.0.0"
              } = m
 
+      assert DateTime.diff(DateTime.utc_now(), m.updater_checked_at) < 5
+
       assert response(ask(mkey, %{"server" => "v0.9.0"}), 204)
       assert %{hosts_server: true, server_version: "v0.9.0"} = reload(m)
     end

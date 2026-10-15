@@ -156,7 +156,9 @@ defmodule DokkitWeb.ServiceLive do
     ~H"""
     <Layouts.app active={:all} shell={@shell} user={@current_user}>
       <div class="crumb">
-        <.link navigate={~p"/all"}>Everything</.link><.ic name="caret-right" /><.link navigate={machine_path(@service.machine)}>{@service.machine.name}</.link><.ic name="caret-right" /><span>{@service.name}</span>
+        <.link navigate={~p"/all"}>Everything</.link><.ic name="caret-right" /><.link navigate={
+          machine_path(@service.machine)
+        }>{@service.machine.name}</.link><.ic name="caret-right" /><span>{@service.name}</span>
       </div>
       
       <div class="head">
@@ -173,6 +175,7 @@ defmodule DokkitWeb.ServiceLive do
           >
             <.ic name="desktop" />{@service.machine.name}
           </.link>
+          
           <.link class="btn" navigate={~p"/logs?#{[s: @service.id]}"}><.ic name="scroll" />Logs</.link>
           <button :if={@issue && !@issue.acknowledged_at} class="btn" type="button" phx-click="seen">
             <.ic name="eye" />Mark as seen
@@ -214,20 +217,32 @@ defmodule DokkitWeb.ServiceLive do
               disabled={@current_user.role == :viewer}
             />
           </div>
-
+          
           <div :if={@issue && @issue.processes} class="card" id="at-the-time">
-            <h2>At the time<span class="end">{String.slice(@issue.processes["at"], 0, 16) |> String.replace("T", " ")} UTC</span></h2>
-
+            <h2>
+              At the time<span class="end">{String.slice(@issue.processes["at"], 0, 16)
+              |> String.replace("T", " ")} UTC</span>
+            </h2>
+            
             <div class="li slim" style="--cols: 90px minmax(0,1fr)">
               <span class="mute">Most memory</span>
-              <span class="mono">{DokkitWeb.MachineCards.top_line(@issue.processes["top_memory"], "memory", 5)}</span>
+              <span class="mono">{DokkitWeb.MachineCards.top_line(
+                @issue.processes["top_memory"],
+                "memory",
+                5
+              )}</span>
             </div>
+            
             <div class="li slim" style="--cols: 90px minmax(0,1fr)">
               <span class="mute">Most processor</span>
-              <span class="mono">{DokkitWeb.MachineCards.top_line(@issue.processes["top_cpu"], "cpu", 5)}</span>
+              <span class="mono">{DokkitWeb.MachineCards.top_line(
+                @issue.processes["top_cpu"],
+                "cpu",
+                5
+              )}</span>
             </div>
           </div>
-
+          
           <div :if={@issue} class="card">
             <h2>Notes<span :if={@issue.notes != []} class="cnt">{length(@issue.notes)}</span></h2>
             
@@ -288,6 +303,7 @@ defmodule DokkitWeb.ServiceLive do
                   c.source == :file
                 }> · from dokkit.toml</span>
               </span>
+              
               <span style="grid-column: 1 / -1">
                 <WhoPick.pick
                   scope="check"
@@ -483,51 +499,50 @@ defmodule DokkitWeb.ServiceLive do
           
           <div class="card">
             <h2>Who hears about it</h2>
-
+            
             <form phx-change="route" id="route-form">
+              <dl class="kv">
+                <dt>{if @job, do: "If a run fails", else: "If it stops"}</dt>
+                
+                <dd>
+                  <ChannelPick.pick
+                    name="route[down]"
+                    value={@service.route_down}
+                    options={@routes}
+                    label={if @job, do: "If a run fails", else: "If it stops"}
+                    blank={"As set on Alerts (#{names(@routes, @defaults["down"])})"}
+                  />
+                </dd>
+                
+                <dt :if={!@job}>If it degrades</dt>
+                
+                <dd :if={!@job}>
+                  <ChannelPick.pick
+                    name="route[degraded]"
+                    value={@service.route_degraded}
+                    options={@routes}
+                    label="If it degrades"
+                    blank={"As set on Alerts (#{names(@routes, @defaults["degraded"])})"}
+                  />
+                </dd>
+                
+                <dt>At night</dt>
+                
+                <dd>
+                  <input type="hidden" name="route[night]" value="false" />
+                  <label>
+                    <input type="checkbox" name="route[night]" value="true" checked={@service.night} />
+                    Wake me at night for this
+                  </label>
+                  
+                  <span class="hint">Off holds its alerts until the night ends, if the issue is still open.</span>
+                </dd>
+              </dl>
+            </form>
             
             <dl class="kv">
-              <dt>{if @job, do: "If a run fails", else: "If it stops"}</dt>
-              
-              <dd>
-                <ChannelPick.pick
-                  name="route[down]"
-                  value={@service.route_down}
-                  options={@routes}
-                  label={if @job, do: "If a run fails", else: "If it stops"}
-                  blank={"As set on Alerts (#{names(@routes, @defaults["down"])})"}
-                />
-              </dd>
-              
-              <dt :if={!@job}>If it degrades</dt>
-              
-              <dd :if={!@job}>
-                <ChannelPick.pick
-                  name="route[degraded]"
-                  value={@service.route_degraded}
-                  options={@routes}
-                  label="If it degrades"
-                  blank={"As set on Alerts (#{names(@routes, @defaults["degraded"])})"}
-                />
-              </dd>
-              
-              <dt>At night</dt>
-              
-              <dd>
-                <input type="hidden" name="route[night]" value="false" />
-                <label>
-                  <input type="checkbox" name="route[night]" value="true" checked={@service.night} />
-                  Wake me at night for this
-                </label>
-                
-                <span class="hint">Off holds its alerts until the night ends, if the issue is still open.</span>
-              </dd>
-            </dl>
-            </form>
-
-            <dl class="kv">
               <dt>Told</dt>
-
+              
               <dd>
                 <WhoPick.pick
                   scope="service"
@@ -536,8 +551,7 @@ defmodule DokkitWeb.ServiceLive do
                   who={@who}
                   above="Told as the rule or the default says."
                   disabled={@current_user.role != :owner}
-                />
-                <span :if={@current_user.role != :owner} class="hint">An owner changes this.</span>
+                /> <span :if={@current_user.role != :owner} class="hint">An owner changes this.</span>
               </dd>
             </dl>
           </div>
@@ -558,8 +572,13 @@ defmodule DokkitWeb.ServiceLive do
 
   defp names(routes, value) do
     case Alerts.split(value) do
-      [] -> "Nobody"
-      list -> Enum.map_join(list, " and ", fn c -> Enum.find_value(routes, fn {t, v} -> v == c && t end) end)
+      [] ->
+        "Nobody"
+
+      list ->
+        Enum.map_join(list, " and ", fn c ->
+          Enum.find_value(routes, fn {t, v} -> v == c && t end)
+        end)
     end
   end
 

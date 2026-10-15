@@ -206,6 +206,7 @@ defmodule Dokkit.Read do
         silent: silent(Dokkit.Estate.machine(id)),
         schedules: Dokkit.QuietSchedules.list(id),
         last_nudge: Dokkit.Work.last_nudge(id),
+        updater_checked_at: Dokkit.Estate.machine(id).updater_checked_at,
         downtime_history: Enum.map(Dokkit.Quiet.history(id), &Dokkit.Quiet.view/1),
         metrics: Dokkit.Numbers.machine_latest(id),
         services: services(%{"machine" => id}),
