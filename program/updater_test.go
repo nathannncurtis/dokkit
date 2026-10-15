@@ -149,6 +149,7 @@ type rig struct {
 	refusePosts int
 	posts     int
 	cutFiles  int
+	serverStarts int
 	failPS   bool
 	noStart  string // a program file content that will not start
 	calls    []string
@@ -188,6 +189,7 @@ func newRig(t *testing.T, hostsServer bool) *rig {
 			}
 			return nil
 		},
+		startServer: func() { r.serverStarts++ },
 		installer: func(_ context.Context, script string) (string, error) {
 			r.calls = append(r.calls, "install.ps1")
 			if _, err := os.Stat(script); err != nil {
@@ -414,6 +416,9 @@ func TestServerInstallerFailureStopsEverything(t *testing.T) {
 	if st, _ := readState(); st.Server != "" {
 		t.Fatal("a failed server install was recorded")
 	}
+	if r.serverStarts != 1 {
+		t.Fatalf("the server was started %d times after its installer failed", r.serverStarts)
+	}
 }
 
 func TestServerThatDoesNotAnswerIsAFailure(t *testing.T) {
@@ -421,8 +426,8 @@ func TestServerThatDoesNotAnswerIsAFailure(t *testing.T) {
 	r.publish("v1.1.0", map[string][]byte{serverZip: r.serverZip()})
 	r.wanted, r.port = "v1.1.0", false
 	updaterRun()
-	if r.results[0].OK || !strings.Contains(r.results[0].Note, "does not answer on port 8443") {
-		t.Fatalf("%+v", r.results)
+	if r.results[0].OK || !strings.Contains(r.results[0].Note, "does not answer on port 8443") || r.serverStarts != 1 {
+		t.Fatalf("%d %+v", r.serverStarts, r.results)
 	}
 }
 

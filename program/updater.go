@@ -32,6 +32,7 @@ type hostOps struct {
 	versionOf                 func(exe string) string
 	schedule                  func() // makes the updater's own task, units or plist the current ones; nil in a rehearsal
 	tasks                     func() // leaves the list of scheduled tasks for the program to read; Windows only
+	startServer               func() // starts the server's service after a failed install; Windows only
 }
 
 var (
@@ -451,12 +452,21 @@ func installServer(ctx context.Context, zipFile, want string) error {
 	}
 	out, err := ops.installer(ctx, filepath.Join(dir, "install.ps1"))
 	if err != nil {
+		startServerAgain()
 		return fmt.Errorf("the server's installer failed (%v). The end of its output: %s", err, tail(out, 1500))
 	}
 	if !ops.portUp(serverPort()) {
+		startServerAgain()
 		return fmt.Errorf("the server's installer finished but the server does not answer on port %s. The end of its output: %s", serverPort(), tail(out, 1500))
 	}
 	return nil
+}
+
+// A failed install must not leave the server down: nothing else could bring it back.
+func startServerAgain() {
+	if ops.startServer != nil {
+		ops.startServer()
+	}
 }
 
 // safeJoin is where a zip entry goes, or an error when it would land outside dest.

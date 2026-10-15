@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -67,6 +68,7 @@ func realHost() hostOps {
 				return waitState(s, svc.Running, 30*time.Second)
 			})
 		},
+		startServer: startServerServices,
 		installer: func(ctx context.Context, script string) (string, error) {
 			ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 			defer cancel()
@@ -107,6 +109,39 @@ func publishTasks() {
 	})
 	if err != nil {
 		logf("%v", err)
+	}
+}
+
+var serverService = regexp.MustCompile(`^(dokkit-server|dokkit[0-9a-f]{16})$`)
+
+// startServerServices starts the server's own Windows services: the fixed name, or a name Erlang's
+// wrapper made up, when it runs the wrapper from the server's install folder.
+func startServerServices() {
+	m, err := mgr.Connect()
+	if err != nil {
+		logf("could not open the service manager to start the server again: %v", err)
+		return
+	}
+	defer m.Disconnect()
+	names, _ := m.ListServices()
+	root := strings.ToLower(filepath.Join(os.Getenv("ProgramFiles"), "Dokkit") + `\erts-`)
+	for _, name := range names {
+		if !serverService.MatchString(name) {
+			continue
+		}
+		s, err := m.OpenService(name)
+		if err != nil {
+			continue
+		}
+		c, err := s.Config()
+		if err == nil && strings.Contains(strings.ToLower(c.BinaryPathName), root) {
+			if err := s.Start(); err != nil && !errors.Is(err, windows.ERROR_SERVICE_ALREADY_RUNNING) {
+				logf("could not start the server's service %s again: %v", name, err)
+			} else {
+				logf("started the server's service %s again", name)
+			}
+		}
+		s.Close()
 	}
 }
 

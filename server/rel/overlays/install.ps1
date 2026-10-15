@@ -441,7 +441,7 @@ try {
     for ($i = 0; $i -lt 30 -and (Get-Service $fixed -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 1 }
     if (Get-Service $fixed -ErrorAction SilentlyContinue) { throw "The old $fixed service is still being removed. Close the Services window and run this again." }
     $image =(Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$made").ImagePath
-    $said = & sc.exe create $fixed binPath= $image start= auto obj= 'NT AUTHORITY\LocalService' password= '""' DisplayName= 'Dokkit'
+    $said = & sc.exe create $fixed binPath= $image start= auto obj= 'NT AUTHORITY\LocalService' password= '""' DisplayName= 'Dokkit server'
     if ($LASTEXITCODE -ne 0) { throw "The service could not be made under the name ${fixed}: $said" }
     Set-ItemProperty $key InternalServiceName $fixed
     $said = & sc.exe delete $made
@@ -491,7 +491,10 @@ try {
 }
 catch {
     if ($restartDatabase) { try { Start-Service $database } catch { } }
-    if ($restartService) { try { & (Get-Erlsrv) start $service | Out-Null } catch { } }
+    if ($restartService) {
+        try { & (Get-Erlsrv) start $service | Out-Null } catch { }
+        foreach ($own in @(Get-OwnServices (Get-CimInstance Win32_Service) $To)) { Start-Service $own.Name -ErrorAction SilentlyContinue }
+    }
     throw
 }
 
