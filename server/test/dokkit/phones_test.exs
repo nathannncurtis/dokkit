@@ -373,6 +373,42 @@ defmodule Dokkit.PhonesTest do
       assert Phones.list() == []
     end
 
+    test "a different address pairs each phone again and sends an empty envelope" do
+      {:ok, _, _} = Phones.add("one")
+      flush()
+
+      assert {:ok, _} =
+               Phones.save_relay(%{
+                 "address" => "https://relay2.example.test",
+                 "mailbox" => @mailbox,
+                 "key" => ""
+               })
+
+      assert_received {:put, _, _, _, %{"slots" => empty}}
+      assert empty == %{}
+      assert Phones.list() == []
+      assert Phones.relay()["address"] == "https://relay2.example.test"
+    end
+
+    test "the sender skips an unchanged snapshot until it is two minutes old" do
+      alias Dokkit.Phones.Sender
+      {:ok, _, _} = Phones.add("one")
+      flush()
+
+      sent = Sender.upload_changed(nil, 0)
+      assert_received {:put, _, _, _, _}
+      assert Sender.upload_changed(sent, 1_000) == sent
+      refute_received {:put, _, _, _, _}
+
+      {:ok, _} = Estate.add_job(%{"name" => "Nightly backup", "machine" => "nas"})
+      changed = Sender.upload_changed(sent, 2_000)
+      assert_received {:put, _, _, _, _}
+      assert changed != sent
+
+      assert Sender.upload_changed(changed, 2_000 + 120_000) != changed
+      assert_received {:put, _, _, _, _}
+    end
+
     test "a relay address must be https, a mailbox 32 hex characters, a key a relay upload key" do
       assert {:error, _} =
                Phones.save_relay(%{

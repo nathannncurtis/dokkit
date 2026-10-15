@@ -31,7 +31,7 @@ defmodule Dokkit.Phones do
     }
   end
 
-  @doc "Saves the relay. A key left blank stays. With a different mailbox the phones are removed, and the old mailbox is told."
+  @doc "Saves the relay. A key left blank stays. With a different address or mailbox the phones are removed, and the old mailbox is told."
   def save_relay(params) do
     old = relay()
     address = text(params["address"])
@@ -60,8 +60,9 @@ defmodule Dokkit.Phones do
              do: :ok,
              else: {:error, "The upload key is the dkr_ key dokkit relay add printed."}
            ) do
-      if mailbox != old["mailbox"] and Repo.delete_all(Phone) |> elem(0) > 0,
-        do: upload(force: true)
+      if (address != old["address"] or mailbox != old["mailbox"]) and
+           Repo.delete_all(Phone) |> elem(0) > 0,
+         do: upload(force: true)
 
       put("phone_relay", %{"address" => address, "mailbox" => mailbox, "key" => key})
       {:ok, relay_view()}
@@ -295,12 +296,6 @@ defmodule Dokkit.Phones do
     end
   end
 
-  defp get(key), do: (Repo.get(Setting, key) || %Setting{value: %{}}).value
-
-  defp put(key, value) do
-    Repo.insert!(%Setting{key: key, value: value},
-      on_conflict: {:replace, [:value, :updated_at]},
-      conflict_target: :key
-    )
-  end
+  defp get(key), do: Setting.get(key)
+  defp put(key, value), do: Setting.put(key, value)
 end

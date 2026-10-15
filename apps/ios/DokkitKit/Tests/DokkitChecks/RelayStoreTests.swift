@@ -12,6 +12,9 @@ final class Stub: URLProtocol, @unchecked Sendable {
         Stub.seen.append(request)
         let (code, headers, body) = Stub.handler!(request)
         let r = HTTPURLResponse(url: request.url!, statusCode: code, httpVersion: "HTTP/1.1", headerFields: headers)!
+        if let to = headers["Location"].flatMap(URL.init(string:)) {
+            client?.urlProtocol(self, wasRedirectedTo: URLRequest(url: to), redirectResponse: r)
+        }
         client?.urlProtocol(self, didReceive: r, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: body)
         client?.urlProtocolDidFinishLoading(self)
@@ -60,6 +63,16 @@ struct RelayTests {
         await expectThrows(RelayError.status(503)) { try await c.fetch(phone.pairing, etag: nil) }
         c = Stub.client { _ in (200, [:], Data("nope".utf8)) }
         await expectThrows(RelayError.badAnswer) { try await c.fetch(phone.pairing, etag: nil) }
+    }
+
+    func refusesRedirect() async throws {
+        let c = Stub.client { r in
+            r.url?.host == "relay.example.com" ? (302, ["Location": "https://elsewhere.example.com/x"], Data()) : (200, [:], Data())
+        }
+        let followed: Bool
+        do { _ = try await c.fetch(phone.pairing, etag: nil); followed = true } catch { followed = false }
+        try await expect(!followed)
+        try await expect(Stub.seen.count == 1, "the token went to \(Stub.seen.last?.url?.host ?? "")")
     }
 
     func refusesPlainHTTP() async throws {

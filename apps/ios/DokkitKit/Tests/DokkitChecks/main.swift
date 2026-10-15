@@ -6,6 +6,7 @@ await run("RelayTests.notModified") { try await RelayTests().notModified() }
 await run("RelayTests.notFound") { try await RelayTests().notFound() }
 await run("RelayTests.rateLimited") { try await RelayTests().rateLimited() }
 await run("RelayTests.otherStatusAndBadBody") { try await RelayTests().otherStatusAndBadBody() }
+await run("RelayTests.refusesRedirect") { try await RelayTests().refusesRedirect() }
 await run("RelayTests.refusesPlainHTTP") { try await RelayTests().refusesPlainHTTP() }
 await run("RelayTests.refresherOpensKeepsAndRefusesReplay") { try await RelayTests().refresherOpensKeepsAndRefusesReplay() }
 await run("RelayTests.refresherTreatsBrokenBodyAsNoSnapshot") { try await RelayTests().refresherTreatsBrokenBodyAsNoSnapshot() }

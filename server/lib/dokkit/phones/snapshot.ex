@@ -9,6 +9,20 @@ defmodule Dokkit.Phones.Snapshot do
 
   def json(counter, now, opts \\ []), do: counter |> build(now, opts) |> Jason.encode!()
 
+  @doc "Changes when what a phone would see changes: the snapshot without its counter and time, the phones and the relay."
+  def fingerprint do
+    doc =
+      0 |> build(DateTime.utc_now()) |> update_in(["server"], &Map.drop(&1, ~w(counter made_at)))
+
+    r = Dokkit.Phones.relay()
+    slots = Enum.map(Dokkit.Phones.list(), & &1.slot)
+
+    :crypto.hash(
+      :sha256,
+      :erlang.term_to_binary({doc, slots, r["address"], r["mailbox"], r["key"]}, [:deterministic])
+    )
+  end
+
   @doc "The snapshot as a map with text keys. Logs, then charts, are left out when it would pass 1.5 MB compressed."
   def build(counter, now, opts \\ []) do
     max = Keyword.get(opts, :max, @max_gzip)

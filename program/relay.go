@@ -23,7 +23,7 @@ import (
 
 const (
 	relayMaxBody     = 2 << 20
-	relayUploadsMin  = 4
+	relayUploadsMin  = 12
 	relayFetchesMin  = 30
 	base62           = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 	relayNotFoundMsg = "No such mailbox, slot or token."
@@ -120,24 +120,6 @@ func validID(s string) bool {
 	return true
 }
 
-func writeFileAtomic(path string, data []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
-	if err != nil {
-		return err
-	}
-	_, err = f.Write(data)
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err == nil {
-		err = os.Rename(f.Name(), path)
-	}
-	if err != nil {
-		os.Remove(f.Name())
-	}
-	return err
-}
-
 func (s *relayServer) readMailbox(id string) (*relayMailbox, error) {
 	b, err := os.ReadFile(filepath.Join(s.dir, id, "mailbox.json"))
 	if err != nil {
@@ -149,7 +131,7 @@ func (s *relayServer) readMailbox(id string) (*relayMailbox, error) {
 
 func (s *relayServer) writeMailbox(id string, m *relayMailbox) error {
 	b, _ := json.MarshalIndent(m, "", "  ")
-	return writeFileAtomic(filepath.Join(s.dir, id, "mailbox.json"), b)
+	return writeFile(filepath.Join(s.dir, id, "mailbox.json"), b)
 }
 
 func (s *relayServer) mailboxes() (map[string]*relayMailbox, error) {
@@ -326,7 +308,7 @@ func (s *relayServer) upload(w http.ResponseWriter, r *http.Request, id string) 
 		}
 	}
 	m.LastFetch, m.LastUpload = fetched, &now
-	if err := writeFileAtomic(filepath.Join(s.dir, id, "envelope.json"), body); err != nil {
+	if err := writeFile(filepath.Join(s.dir, id, "envelope.json"), body); err != nil {
 		relayError(w, 500, "store_failed", "The envelope could not be stored.")
 		return
 	}

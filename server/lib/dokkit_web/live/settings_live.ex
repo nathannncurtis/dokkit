@@ -626,7 +626,7 @@ defmodule DokkitWeb.SettingsLive do
             </label>
 
             <p class="lead" style="margin:0">
-              Saving uploads one snapshot to the relay. Phones stay paired only when the mailbox is the same one; with a different mailbox the {length(@phones)} phones listed below are removed and each is paired again.
+              Saving uploads one snapshot to the relay. Phones stay paired only when the address and the mailbox are the same; with a different one the {length(@phones)} phones listed below are removed and each is paired again.
             </p>
 
             <span class="foot" style="padding-inline:16px; margin-inline:-16px">

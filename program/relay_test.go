@@ -222,14 +222,14 @@ func TestRelayLimits(t *testing.T) {
 	clock := time.Date(2026, 10, 14, 3, 0, 0, 0, time.UTC)
 	s.now = func() time.Time { return clock }
 	url := ts.URL + "/m/" + c.Mailbox
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 12; i++ {
 		if code, _, _ := relayDo(t, "PUT", url, c.UploadKey, withCounter(t, c.Envelope, 10+i, "")); code != 200 {
 			t.Fatalf("upload %d answered %d", i, code)
 		}
 	}
-	code, _, h := relayDo(t, "PUT", url, c.UploadKey, withCounter(t, c.Envelope, 20, ""))
+	code, _, h := relayDo(t, "PUT", url, c.UploadKey, withCounter(t, c.Envelope, 30, ""))
 	if code != 429 || h.Get("Retry-After") == "" {
-		t.Fatalf("fifth upload answered %d", code)
+		t.Fatalf("thirteenth upload answered %d", code)
 	}
 	p := c.Phones[0]
 	for i := 0; i < 30; i++ {
@@ -253,7 +253,7 @@ func TestRelayLimits(t *testing.T) {
 func TestRelayAtomicWrite(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "f.json")
 	for _, v := range []string{"one", "two"} {
-		if err := writeFileAtomic(p, []byte(v)); err != nil {
+		if err := writeFile(p, []byte(v)); err != nil {
 			t.Fatal(err)
 		}
 		if b, _ := os.ReadFile(p); string(b) != v {

@@ -47,7 +47,7 @@ public struct RelayClient: Sendable {
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         if let etag { req.setValue(etag, forHTTPHeaderField: "If-None-Match") }
         let data: Data, response: URLResponse
-        do { (data, response) = try await session.data(for: req) } catch { throw RelayError.network(error.localizedDescription) }
+        do { (data, response) = try await session.data(for: req, delegate: NoRedirect()) } catch { throw RelayError.network(error.localizedDescription) }
         guard let http = response as? HTTPURLResponse else { throw RelayError.badAnswer }
         switch http.statusCode {
         case 200:
@@ -58,5 +58,12 @@ public struct RelayClient: Sendable {
         case 429: throw RelayError.rateLimited(retryAfter: http.value(forHTTPHeaderField: "Retry-After").flatMap { Int($0) })
         case let n: throw RelayError.status(n)
         }
+    }
+}
+
+// The fetch token must not follow a redirect to another host; a 3xx comes back as .status(n).
+final class NoRedirect: NSObject, URLSessionTaskDelegate, Sendable {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest) async -> URLRequest? {
+        nil
     }
 }

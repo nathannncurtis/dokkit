@@ -5,6 +5,8 @@ defmodule Dokkit.Phones.Sender do
 
   @quiet 3_000
   @gap 20_000
+  # Phones warn when the snapshot is five minutes old, so an unchanged one still goes out this often.
+  @refresh 120_000
 
   def start_link(_), do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
 
@@ -12,7 +14,7 @@ defmodule Dokkit.Phones.Sender do
 
   def init(_) do
     Dokkit.Issues.subscribe()
-    {:ok, %{timer: nil, last: nil}}
+    {:ok, %{timer: nil, last: nil, sent: nil}}
   end
 
   def handle_cast(:tick, state), do: {:noreply, send_now(state)}
@@ -28,13 +30,26 @@ defmodule Dokkit.Phones.Sender do
   defp send_now(%{timer: timer} = state) do
     if timer, do: Process.cancel_timer(timer)
 
-    try do
-      Dokkit.Phones.upload()
-    rescue
-      e -> Logger.error("Phone upload failed: " <> Exception.message(e))
-    end
+    sent =
+      try do
+        upload_changed(state.sent, now())
+      rescue
+        e ->
+          Logger.error("Phone upload failed: " <> Exception.message(e))
+          nil
+      end
 
-    %{state | timer: nil, last: now()}
+    %{state | timer: nil, last: now(), sent: sent}
+  end
+
+  @doc "Uploads unless the snapshot is the one last taken by the relay less than two minutes ago. Returns what to pass next time."
+  def upload_changed(sent, at) do
+    print = Dokkit.Phones.Snapshot.fingerprint()
+
+    case sent do
+      {^print, sent_at} when at - sent_at < @refresh -> sent
+      _ -> if Dokkit.Phones.upload() == :ok, do: {print, at}
+    end
   end
 
   defp now, do: System.monotonic_time(:millisecond)
