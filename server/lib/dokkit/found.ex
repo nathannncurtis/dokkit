@@ -11,8 +11,8 @@ defmodule Dokkit.Found do
   @runs ~w(http tcp process windows-service systemd)a
   @from_record ~w(task-scheduler systemd-timer)
   @origins ~w(system software yours)
-  @own ~r/^(dokkit|dokkit_dokkit|dokkit-updater|dokkit-postgres|dokkit[0-9a-f]{16})$/
-  @own_watched ~r/^(dokkit[0-9a-f]{16}|dokkit-postgres)$/
+  @own ~r/^(dokkit|dokkit_dokkit|dokkit-server|dokkit-updater|dokkit-postgres|dokkit[0-9a-f]{16})$/
+  @own_watched ~r/^(dokkit-server|dokkit[0-9a-f]{16}|dokkit-postgres)$/
 
   @doc "Takes a proposal file. Only what can be watched is kept: running services, listening ports, scheduled jobs, containers that publish a port and sites with an address."
   def propose(machine_id, %{"found" => %{} = found} = body) do

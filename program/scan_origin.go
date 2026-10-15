@@ -40,7 +40,7 @@ func rank(origin string) int {
 
 var (
 	ownWinFolder  = regexp.MustCompile(`(?i)\\(program files|programdata)\\dokkit(program|updater)?\\`)
-	ownWinService = regexp.MustCompile(`^(dokkit|dokkit_dokkit|dokkit-postgres|dokkit[0-9a-f]{16})$`)
+	ownWinService = regexp.MustCompile(`^(dokkit|dokkit_dokkit|dokkit-server|dokkit-postgres|dokkit[0-9a-f]{16})$`)
 	ownUnits      = map[string]bool{unitName: true, timerName + ".service": true, timerName + ".timer": true}
 	ownLabels     = map[string]bool{macLabel: true, launchdLabel: true}
 )

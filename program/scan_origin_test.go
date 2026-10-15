@@ -70,6 +70,7 @@ func TestWindowsServiceOrigins(t *testing.T) {
 		{"dokkit-postgres", `C:\Program Files\Dokkit\pg\bin\pg_ctl.exe`, "", "dokkit", "Dokkit itself"},
 		{"dokkit0123456789abcdef", `"C:\Program Files\Dokkit\erts-15.2\bin\erlsrv.exe"`, "", "dokkit", "Dokkit itself"},
 		{"dokkit_dokkit", "", "", "dokkit", "Dokkit itself"},
+		{"dokkit-server", `"C:\Program Files\Dokkit\erts-15.2\bin\erlsrv.exe"`, "", "dokkit", "Dokkit itself"},
 		{"dokkit-lookalike", `C:\Apps\lookalike\svc.exe`, "", "yours", "outside Windows"},
 		{"ErlangApp", `"C:\Program Files\Contoso\erts-15.2\bin\erlsrv.exe"`, "", "software", "Installed under"},
 		{"Mystery", "", "", "yours", "not known"},

@@ -34,6 +34,7 @@ defmodule Dokkit.FoundOwnTest do
             "state" => "running"
           },
           %{"name" => "dokkit-postgres", "state" => "running"},
+          %{"name" => "dokkit-server", "display" => "Dokkit", "state" => "running"},
           %{
             "name" => "Gone",
             "display" => "Elsewhere",
