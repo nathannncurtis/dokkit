@@ -85,6 +85,27 @@ defmodule DokkitWeb.ApiController do
 
   def add_key(conn, p), do: reply(conn, make_key(p, conn.assigns.key))
 
+  def add_script(conn, params), do: reply(conn, new_add_script(params))
+
+  @doc "The one script that adds a Windows machine, holding a new enrolment token that lasts 24 hours."
+  def new_add_script(params) do
+    name = String.trim(to_string(params["name"] || ""))
+    {token, key} = Keys.mint_enrol(if(name == "", do: "Add script", else: name), 24 * 3600)
+
+    case Dokkit.AddScript.windows(
+           if(name == "", do: "machine", else: name),
+           token,
+           key.expires_at
+         ) do
+      {:ok, file, text} ->
+        %{file: file, script: text, token_id: key.id}
+
+      :no_release ->
+        Keys.revoke(key.id)
+        {:error, "no_release", "The server holds no complete release to install."}
+    end
+  end
+
   def drop_key(id) do
     Keys.revoke(id)
     %{ok: true}
@@ -797,7 +818,7 @@ defmodule DokkitWeb.ApiController do
   # changes something.
   def needs(method, path) do
     case {method, Enum.at(path, 2), List.last(path)} do
-      {_, area, _} when area in ["keys", "users", "update-all", "phones"] ->
+      {_, area, _} when area in ["keys", "users", "update-all", "phones", "add-script"] ->
         "admin"
 
       {"GET", "certificate", "settings"} ->

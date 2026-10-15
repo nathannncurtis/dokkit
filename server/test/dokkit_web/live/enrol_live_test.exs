@@ -3,17 +3,18 @@ defmodule DokkitWeb.EnrolLiveTest do
   import Phoenix.LiveViewTest
 
   test "the page shows how to get the dokkit program", %{conn: conn} do
-    {:ok, _view, html} = live(signed_in(conn), "/machines/new")
-    assert html =~ "curl -fsSL https://dokkit.dev/get.sh | sh"
-    assert html =~ "irm https://dokkit.dev/get.ps1 | iex"
+    {:ok, view, html} = live(signed_in(conn), "/machines/new")
     refute html =~ "dokkit enrol"
+    html = view |> form("#token-form", os: "linux") |> render_change()
+    assert html =~ "curl -fsSL https://dokkit.dev/get.sh | sh"
   end
 
   test "a token comes with the commands for how the machine will run, a copy button and a countdown",
        %{conn: conn} do
     {:ok, view, _} = live(signed_in(conn), "/machines/new")
 
-    html = view |> form("#token-form", mode: "service") |> render_submit()
+    view |> form("#token-form", os: "linux") |> render_change()
+    html = view |> form("#token-form", os: "linux", mode: "service") |> render_submit()
     assert html =~ ~r/dokkit enrol \S+ dke_\w{36}\ndokkit service install/
     assert html =~ ~r/id="enrol-line-1"[^>]*>dokkit enrol/
     assert html =~ ~r/id="enrol-line-2"[^>]*>dokkit service install/
@@ -24,7 +25,7 @@ defmodule DokkitWeb.EnrolLiveTest do
     assert html =~ ~r/runs out in (4 h 0|3 h 59)/
     assert html =~ "dokkit folder add"
 
-    html = view |> form("#token-form", mode: "login") |> render_change()
+    html = view |> form("#token-form", os: "linux", mode: "login") |> render_change()
     assert html =~ ~r/dke_\w{36}\ndokkit watch/
     refute html =~ "dokkit service install"
   end
@@ -32,7 +33,7 @@ defmodule DokkitWeb.EnrolLiveTest do
   test "a token made for a name carries it, and the page shows the machine when it enrols",
        %{conn: conn} do
     {:ok, view, _} = live(signed_in(conn), "/machines/new")
-    html = view |> form("#token-form", name: "front-desk") |> render_submit()
+    html = view |> form("#token-form", os: "linux", name: "front-desk") |> render_submit()
     [token] = Regex.run(~r/dke_\w{36}/, html)
     assert {:ok, %{label: "front-desk"}} = Dokkit.Keys.verify(token, :enrol)
 
@@ -48,7 +49,7 @@ defmodule DokkitWeb.EnrolLiveTest do
     {:ok, view, _} = live(signed_in(conn), "/machines/new")
     refute render(view) =~ "Tokens waiting"
 
-    html = view |> form("#token-form", name: "back-room") |> render_submit()
+    html = view |> form("#token-form", os: "linux", name: "back-room") |> render_submit()
     [token] = Regex.run(~r/dke_\w{36}/, html)
     assert html =~ "Tokens waiting"
     assert html =~ ~r/id="waiting-[^"]+".*back-room/s
@@ -64,7 +65,7 @@ defmodule DokkitWeb.EnrolLiveTest do
   test "the page names the machine a token became, even when the host is named otherwise",
        %{conn: conn} do
     {:ok, view, _} = live(signed_in(conn), "/machines/new")
-    html = view |> form("#token-form", name: "") |> render_submit()
+    html = view |> form("#token-form", os: "linux", name: "") |> render_submit()
     [token] = Regex.run(~r/dke_\w{36}/, html)
     {:ok, key} = Dokkit.Keys.verify(token, :enrol)
 

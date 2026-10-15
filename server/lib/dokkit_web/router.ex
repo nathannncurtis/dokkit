@@ -140,6 +140,7 @@ defmodule DokkitWeb.Router do
     get "/rules", ApiController, :rules
     get "/keys", ApiController, :keys
     post "/keys", ApiController, :add_key
+    post "/add-script", ApiController, :add_script
     delete "/keys/:id", ApiController, :revoke_key
     get "/users", ApiController, :users
     get "/phones", ApiController, :phones

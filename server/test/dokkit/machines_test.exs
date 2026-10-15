@@ -10,7 +10,7 @@ defmodule Dokkit.MachinesTest do
 
   test "a machine enrols once, reports, goes quiet, and comes back", %{conn: conn} do
     {:ok, view, _} = live(signed_in(conn), "/machines/new")
-    html = render_click(view, "token")
+    html = render_click(view, "token", %{"os" => "linux"})
     [token] = Regex.run(~r/dke_\w+/, html)
 
     body = %{token: token, hostname: "press01", os: "windows", arch: "amd64", dokkit: "0.1.0"}

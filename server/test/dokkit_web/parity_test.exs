@@ -53,7 +53,7 @@ defmodule DokkitWeb.ParityTest do
       "scan" => {:member, ["POST /api/v1/machines/:id/scan"]}
     },
     "EnrolLive" => %{
-      "token" => {:owner, ["POST /api/v1/keys"]},
+      "token" => {:owner, ["POST /api/v1/keys", "POST /api/v1/add-script"]},
       "revoke" => {:owner, ["DELETE /api/v1/keys/:id"]},
       "form" => @view
     },

@@ -108,11 +108,17 @@ defmodule DokkitWeb.McpControllerTest do
       for r <- Phoenix.Router.routes(DokkitWeb.Router),
           r.plug == DokkitWeb.ApiController,
           not String.starts_with?(r.path, "/api/v1/phones"),
-          r.plug_opts not in [:move_logs, :delete_logs, :get_log_retention, :put_log_retention],
+          r.plug_opts not in [
+            :move_logs,
+            :delete_logs,
+            :get_log_retention,
+            :put_log_retention,
+            :add_script
+          ],
           do: r.plug_opts
 
-    # Phones are paired in Settings and by the API, and log lines are moved by the API, not
-    # through an AI tool.
+    # Phones are paired in Settings and by the API, and log lines are moved and add scripts made
+    # by the API, not through an AI tool.
     # update_machine shares POST /machines/:id/update with update_program, and series
     # serves both series routes: one tool more and one less.
     assert length(Enum.uniq(calls)) == length(@everything)

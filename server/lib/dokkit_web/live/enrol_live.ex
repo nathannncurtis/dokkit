@@ -3,6 +3,7 @@ defmodule DokkitWeb.EnrolLive do
   alias Dokkit.{Key, Keys, Repo}
 
   @tick 5_000
+  @script_life 24 * 3600
   @cols "--cols:minmax(0,1.4fr) 110px 150px 150px 96px;--minw:640px"
 
   def mount(_params, _session, socket) do
@@ -15,6 +16,9 @@ defmodule DokkitWeb.EnrolLive do
        key: nil,
        machine: nil,
        mode: "service",
+       os: "windows",
+       script: nil,
+       failed: nil,
        name: "",
        now: DateTime.utc_now(),
        waiting: Keys.waiting()
@@ -34,13 +38,37 @@ defmodule DokkitWeb.EnrolLive do
     if socket.assigns.current_user.role == :owner do
       socket = shape(socket, params)
       name = socket.assigns.name
+      label = if(name == "", do: "Made by #{socket.assigns.current_user.name}", else: name)
 
-      {token, key} =
-        Keys.mint_enrol(
-          if(name == "", do: "Made by #{socket.assigns.current_user.name}", else: name)
-        )
+      if socket.assigns.os == "windows" do
+        {token, key} = Keys.mint_enrol(label, @script_life)
 
-      {:noreply, refresh(assign(socket, token: token, key: key, machine: nil))}
+        case Dokkit.AddScript.windows(
+               if(name == "", do: "machine", else: name),
+               token,
+               key.expires_at
+             ) do
+          {:ok, file, text} ->
+            {:noreply,
+             socket
+             |> assign(token: nil, key: key, machine: nil, script: file, failed: nil)
+             |> push_event("download", %{file: file, text: text})
+             |> refresh()}
+
+          :no_release ->
+            Keys.revoke(key.id)
+
+            {:noreply,
+             assign(socket,
+               script: nil,
+               key: nil,
+               failed: "The server holds no complete release to install. Upload one first."
+             )}
+        end
+      else
+        {token, key} = Keys.mint_enrol(label)
+        {:noreply, refresh(assign(socket, token: token, key: key, machine: nil, script: nil))}
+      end
     else
       {:noreply, socket}
     end
@@ -58,6 +86,7 @@ defmodule DokkitWeb.EnrolLive do
     do:
       assign(socket,
         mode: if(params["mode"] == "login", do: "login", else: "service"),
+        os: if(params["os"] in ~w(linux macos), do: params["os"], else: "windows"),
         name: String.trim(params["name"] || "")
       )
 
@@ -104,18 +133,18 @@ defmodule DokkitWeb.EnrolLive do
         <h1 tabindex="-1">Add a machine</h1>
       </div>
       <div class="body set">
-        <div class="card">
+        <div :if={@os != "windows"} class="card">
           <h2>1. Get the program on the machine</h2>
           <p class="lead">
             Skip this if the machine already has the dokkit program. On Linux or macOS:
           </p>
           <pre class="logbox" id="get-unix">curl -fsSL https://dokkit.dev/get.sh | sh</pre>
-          <p class="lead">On Windows, in PowerShell:</p>
-          <pre class="logbox" id="get-windows">irm https://dokkit.dev/get.ps1 | iex</pre>
         </div>
 
         <div class="card">
-          <h2>2. Make a one-use token for it</h2>
+          <h2>
+            {if @os == "windows", do: "Get the script for it", else: "2. Make a one-use token for it"}
+          </h2>
           <p :if={@current_user.role != :owner} class="lead">
             Only the owner can make a token.
           </p>
@@ -132,6 +161,20 @@ defmodule DokkitWeb.EnrolLive do
                 />
               </label>
               <label>
+                System
+                <span :for={
+                  {value, label} <- [{"windows", "Windows"}, {"linux", "Linux"}, {"macos", "macOS"}]
+                }>
+                  <input
+                    type="radio"
+                    name="os"
+                    value={value}
+                    checked={@os == value}
+                    disabled={@current_user.role != :owner}
+                  /> {label}
+                </span>
+              </label>
+              <label :if={@os != "windows"}>
                 How it will run
                 <span>
                   <input
@@ -154,14 +197,63 @@ defmodule DokkitWeb.EnrolLive do
               </label>
             </div>
             <div class="foot">
-              <span>The token works once and runs out in 4 hours.</span>
+              <span :if={@os == "windows"}>
+                One file to run on the machine as administrator. It holds a token that works once and runs out in 24 hours.
+              </span>
+              <span :if={@os != "windows"}>The token works once and runs out in 4 hours.</span>
               <span class="end">
-                <button class="btn primary" type="submit" disabled={@current_user.role != :owner}>
+                <button
+                  :if={@os == "windows"}
+                  class="btn primary"
+                  type="submit"
+                  disabled={@current_user.role != :owner}
+                >
+                  {if @script, do: "Download another script", else: "Download the script"}
+                </button>
+                <button
+                  :if={@os != "windows"}
+                  class="btn primary"
+                  type="submit"
+                  disabled={@current_user.role != :owner}
+                >
                   {if @token, do: "Make another token", else: "Make a token"}
                 </button>
               </span>
             </div>
           </form>
+        </div>
+
+        <div :if={@failed} class="card">
+          <p class="lead">{@failed}</p>
+        </div>
+
+        <div :if={@script && @key} class="card" id="script-card">
+          <h2>Run it on the machine</h2>
+          <p class="lead">
+            Move <code>{@script}</code>
+            to the machine, open PowerShell as administrator in its folder and run:
+          </p>
+          <div class="once">
+            <pre class="mono" id="script-line" style="margin: 0; white-space: pre-wrap">{"powershell -ExecutionPolicy Bypass -File .\\" <> @script}</pre>
+            <button class="btn sm" type="button" data-copy="#script-line">Copy</button>
+          </div>
+          <p class="lead">
+            It fetches the program from this server, checks its signature, enrols the machine, installs the
+            service and the updater, checks it reports, then offers to delete itself.
+          </p>
+          <div class="foot" id="script-state">
+            <span :if={@machine}>
+              <.ic name="check-circle" />
+              <.link navigate={~p"/machines/#{@machine.id}"}>{@machine.name}</.link> is in.
+            </span>
+            <span :if={!@machine and @key.revoked_at}>The script's token was revoked. Download another.</span>
+            <span :if={!@machine and !@key.revoked_at and Keys.left(@key, @now)}>
+              Waiting for the machine. The script's token runs out in {Keys.left(@key, @now)}.
+            </span>
+            <span :if={!@machine and !@key.revoked_at and !Keys.left(@key, @now)}>
+              The script's token has run out. Download another.
+            </span>
+          </div>
         </div>
 
         <div :if={@token} class="card" id="enrol-card">

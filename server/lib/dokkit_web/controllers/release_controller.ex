@@ -71,13 +71,17 @@ defmodule DokkitWeb.ReleaseController do
     do:
       fail(conn, 422, "bad_name", "A name is letters, digits, dots, dashes and underscores only.")
 
-  # A machine key fetches a file; everything else is a user token with the scope the call needs.
+  # A machine key, or an enrolment token not yet used, fetches a file; everything else is a user token with the scope the call needs.
   defp auth(%{private: %{phoenix_action: :show}} = conn, _) do
     with ["Bearer " <> text] <- get_req_header(conn, "authorization"),
-         {:ok, _} <- Keys.verify(text, :machine) do
+         {:ok, %{kind: kind} = key} when kind == :machine or is_nil(key.used_at) <-
+           Keys.verify(text, [:machine, :enrol]) do
       conn
     else
-      _ -> conn |> fail(401, "bad_key", "Needs a machine key.") |> halt()
+      _ ->
+        conn
+        |> fail(401, "bad_key", "Needs a machine key or an unused enrolment token.")
+        |> halt()
     end
   end
 

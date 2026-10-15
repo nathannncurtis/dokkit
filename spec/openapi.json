@@ -7515,6 +7515,124 @@
         ]
       }
     },
+    "/api/v1/add-script": {
+      "post": {
+        "operationId": "addScript",
+        "summary": "Make the script that adds a Windows machine",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Makes a one-use enrolment token that lasts 24 hours and returns a PowerShell script holding it, the server address, the certificate fingerprint when one is needed, and the newest complete release. Run on the machine as administrator, the script fetches the program from this server with the token, checks the release signature and the file's checksum, enrols, installs the service and the updater, checks it reports and offers to delete itself. Takes a user token (`dku_`) with the `admin` scope.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "What to call the machine; the token is labelled with it and the file named after it."
+                  }
+                }
+              },
+              "example": {
+                "name": "reception"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The key, shown once.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "key": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                  "key": "dku_7Hq2pXz4Yc9VnB1aQw3E"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The body does not fit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "kind is user with label and scopes, app with service, or enrol."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/keys": {
       "get": {
         "operationId": "listKeys",

@@ -47,3 +47,11 @@ document.addEventListener("click", (e) => {
     setTimeout(() => (button.textContent = label), 2000)
   })
 })
+
+window.addEventListener("phx:download", ({detail}) => {
+  const a = document.createElement("a")
+  a.href = URL.createObjectURL(new Blob([detail.text], {type: "text/plain"}))
+  a.download = detail.file
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+})
