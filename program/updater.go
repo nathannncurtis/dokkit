@@ -121,8 +121,9 @@ func updaterRun() int {
 	}
 	defer release()
 	if st, err := readState(); err == nil {
+		// a nudge can land seconds after a timed check; it waits out the gap instead of being dropped
 		if at, err := time.Parse(time.RFC3339Nano, st.Ran); err == nil && time.Since(at) < minGap {
-			return 0
+			time.Sleep(minGap - time.Since(at))
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), runLimit)

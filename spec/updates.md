@@ -73,7 +73,7 @@ The five-minute check stays everywhere. On top of it, setting a wanted version o
 - **Linux with systemd:** a root unit `dokkit-updater.path` has `PathChanged=/var/lib/dokkit-nudge/now` and `Unit=dokkit-updater.service`. The program writes that file. The folder `/var/lib/dokkit-nudge` is owned by the program's account (mode 0700) and is the only place that account can write for this; the updater's own folders stay closed to it. The updater only creates the folder and the file when they are missing, and never opens a link in it.
 - **macOS:** the LaunchDaemon `com.dokkit.updater` has `WatchPaths` on `/var/db/dokkit-nudge/now`, a folder owned the same way. The program writes that file.
 - **Cron (including a QNAP):** there is no nudge. The program answers that the machine updates on its next scheduled check.
-- **The 30-second rule:** a run that starts less than 30 seconds after the last run ended does nothing and exits, so a stream of nudges cannot make the updater spin.
+- **The 30-second rule:** a run that starts less than 30 seconds after the last run ended waits until the 30 seconds are up and then checks, so a stream of nudges makes at most one check every 30 seconds, and a nudge that lands just after a timed check is not lost.
 
 ## The updater keeps its own schedule current
 

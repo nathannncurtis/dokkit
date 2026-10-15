@@ -283,23 +283,21 @@ func TestNothingWanted(t *testing.T) {
 	}
 }
 
-func TestARunRightAfterAnotherJustExits(t *testing.T) {
+func TestARunRightAfterAnotherWaitsOutTheGapThenChecks(t *testing.T) {
 	r := newRig(t, false)
-	minGap = 30 * time.Second
+	minGap = 300 * time.Millisecond
 	scheduled := 0
 	ops.schedule = func() { scheduled++ }
 	if updaterRun() != 0 || r.query == "" || scheduled != 1 {
 		t.Fatalf("the first run did not ask or refresh the schedule: %q %d", r.query, scheduled)
 	}
 	r.query = ""
-	if updaterRun() != 0 || r.query != "" || scheduled != 1 {
-		t.Fatalf("a run within %v of the last one asked the server: %q %d", minGap, r.query, scheduled)
-	}
-	st, _ := readState()
-	st.Ran = time.Now().Add(-31 * time.Second).UTC().Format(time.RFC3339Nano)
-	saveState(st)
+	start := time.Now()
 	if updaterRun() != 0 || r.query == "" || scheduled != 2 {
-		t.Fatalf("a run after the gap was skipped: %q %d", r.query, scheduled)
+		t.Fatalf("a run right after another was dropped: %q %d", r.query, scheduled)
+	}
+	if waited := time.Since(start); waited < 200*time.Millisecond {
+		t.Fatalf("it asked after %v, inside the %v gap", waited, minGap)
 	}
 }
 
