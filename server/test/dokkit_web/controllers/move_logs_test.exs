@@ -82,6 +82,18 @@ defmodule DokkitWeb.MoveLogsTest do
     assert count(from) == 0
   end
 
+  test "q moves the lines whose message contains the text", %{from: from, to: to, admin: admin} do
+    lines(from, [{@jan, "A"}, {@jan, "A"}, {@feb, "A"}])
+    [first | _] = Repo.all(from l in Log, where: l.service_id == ^from.id, select: l.id)
+    Repo.update_all(from(l in Log, where: l.id == ^first), set: [msg: "[Records Finder | rlee] done"])
+    body = %{to: to.id, q: "[Records Finder |"}
+    assert %{"moved" => 1} = json_response(move(admin, from.id, body), 200)
+    assert count(from) == 2
+    assert code(move(admin, from.id, %{to: to.id, q: 5}), 422) == "bad_move"
+  end
+
+  defp code(conn, status), do: json_response(conn, status)["error"]["code"]
+
   test "a time range limits the move", %{from: from, to: to, admin: admin} do
     lines(from, [{@jan, "A"}, {@feb, "A"}])
     body = %{to: to.id, from: "2026-10-01T00:00:00Z", until: "2026-11-01T00:00:00Z"}

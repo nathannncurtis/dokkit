@@ -619,8 +619,10 @@ defmodule DokkitWeb.ApiController do
     with %{} = from <- Dokkit.Estate.service(id),
          {:ok, to} <- target(p["to"], from),
          {:ok, filter} <- move_filter(p),
-         {:ok, range} <- move_range(p) do
-      opts = filter ++ range
+         {:ok, range} <- move_range(p),
+         {:ok, text} <- delete_text(p, "bad_move"),
+         {:ok, level} <- delete_level(p, "bad_move") do
+      opts = filter ++ range ++ text ++ level
       dry = p["dry"] in [true, "true"]
       n = Dokkit.Logs.move(from.id, to.id, [dry: dry] ++ opts)
 
@@ -661,19 +663,23 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
-  defp delete_text(%{"q" => q}) when is_binary(q),
+  defp delete_text(p, code \\ "bad_delete")
+
+  defp delete_text(%{"q" => q}, _) when is_binary(q),
     do: {:ok, if(String.trim(q) == "", do: [], else: [q: String.trim(q)])}
 
-  defp delete_text(p) when not is_map_key(p, "q"), do: {:ok, []}
-  defp delete_text(_), do: {:error, "bad_delete", "q is a text."}
+  defp delete_text(p, _) when not is_map_key(p, "q"), do: {:ok, []}
+  defp delete_text(_, code), do: {:error, code, "q is a text."}
 
-  defp delete_level(%{"level" => level}) do
+  defp delete_level(p, code \\ "bad_delete")
+
+  defp delete_level(%{"level" => level}, code) do
     if level in Dokkit.Logs.levels(),
       do: {:ok, [level: level]},
-      else: {:error, "bad_delete", "level is one of #{Enum.join(Dokkit.Logs.levels(), ", ")}."}
+      else: {:error, code, "level is one of #{Enum.join(Dokkit.Logs.levels(), ", ")}."}
   end
 
-  defp delete_level(_), do: {:ok, []}
+  defp delete_level(_, _), do: {:ok, []}
 
   defp target(to, from) do
     with true <- is_binary(to) || {:error, "bad_move", "to is a service id."},
