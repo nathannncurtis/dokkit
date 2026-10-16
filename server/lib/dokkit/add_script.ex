@@ -37,6 +37,9 @@ defmodule Dokkit.AddScript do
     end
   end
 
+  @doc "The one line that fetches and runs the script from this server."
+  def command(token), do: "irm #{Dokkit.Certificate.url()}/add/#{token} | iex"
+
   defp fill(text, values) do
     Enum.reduce(values, text, fn {k, v}, acc ->
       String.replace(acc, "@@#{k}@@", String.replace(to_string(v), "'", "''"))

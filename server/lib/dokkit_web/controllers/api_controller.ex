@@ -98,7 +98,7 @@ defmodule DokkitWeb.ApiController do
            key.expires_at
          ) do
       {:ok, file, text} ->
-        %{file: file, script: text, token_id: key.id}
+        %{command: Dokkit.AddScript.command(token), file: file, script: text, token_id: key.id}
 
       :no_release ->
         Keys.revoke(key.id)

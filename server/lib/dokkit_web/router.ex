@@ -92,6 +92,10 @@ defmodule DokkitWeb.Router do
     options "/in/:key/job/:name/:event", IntakeController, :ping
   end
 
+  scope "/", DokkitWeb do
+    get "/add/:token", AddController, :show
+  end
+
   scope "/api/v1", DokkitWeb do
     pipe_through :api
 

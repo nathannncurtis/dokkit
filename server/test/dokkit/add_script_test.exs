@@ -77,22 +77,38 @@ defmodule Dokkit.AddScriptTest do
     assert json_response(fetch(user, "SHA256SUMS"), 401)
   end
 
-  test "the page gives Windows a script to download and waits for the machine", %{conn: conn} do
+  test "the page gives Windows one line to paste, and the script as a file to click", %{
+    conn: conn
+  } do
     {:ok, view, html} = live(signed_in(conn), "/machines/new")
-    assert html =~ "Download the script"
+    assert html =~ "Make the command"
     refute html =~ "get.ps1"
 
     html = view |> form("#token-form", os: "windows", name: "reception") |> render_submit()
-    assert_push_event(view, "download", %{file: "dokkit-add-reception.ps1", text: text})
-    assert text =~ "$version = 'v0.1.10'"
-    assert html =~ "powershell -ExecutionPolicy Bypass -File .\\dokkit-add-reception.ps1"
+    [_, token] = Regex.run(~r{irm \S+/add/(dke_\w+) \| iex}, html)
+    assert html =~ ~s(download="dokkit-add-reception.ps1")
+    [_, b64] = Regex.run(~r{href="data:text/plain;base64,([^"]+)"}, html)
+    assert Base.decode64!(b64) =~ "$token = '#{token}'"
     assert html =~ "Waiting for the machine"
     assert html =~ ~r/(23 h 59|24 h 0)/
 
-    [_, token] = Regex.run(~r/\$token = '([^']+)'/, text)
     {:ok, _} = Dokkit.Intake.enrol(token, %{"hostname" => "reception", "os" => "windows"})
     send(view.pid, :tick)
     assert render(view) =~ ~r/reception<\/a> is in/
+  end
+
+  test "the line's address hands out the script while its token is unused, and nothing after" do
+    {token, _} = Keys.mint_enrol("lab-3", 3600)
+    conn = get(build_conn(), "/add/#{token}")
+    assert response(conn, 200) =~ "$token = '#{token}'"
+    assert response_content_type(conn, :text)
+    assert response(conn, 200) =~ "dokkit-add-lab-3.ps1"
+
+    {:ok, _} = Dokkit.Intake.enrol(token, %{"hostname" => "lab-3", "os" => "windows"})
+    assert response(get(build_conn(), "/add/#{token}"), 404) =~ "Make a new one"
+    {user, _} = Keys.mint(:user, %{scopes: ["admin"]})
+    assert response(get(build_conn(), "/add/#{user}"), 404)
+    assert response(get(build_conn(), "/add/nonsense"), 404)
   end
 
   test "the API makes the same script, for admin tokens only" do

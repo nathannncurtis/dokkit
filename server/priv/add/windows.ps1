@@ -1,10 +1,12 @@
 # Adds this Windows machine to Dokkit at @@SERVER@@ as @@NAME@@.
-# Run it from a PowerShell opened as administrator:
+# Run it from a PowerShell opened as administrator, either as one line:
+#     irm @@SERVER@@/add/@@TOKEN@@ | iex
+# or saved as a file:
 #     powershell -ExecutionPolicy Bypass -File .\@@FILE@@
-# -Check downloads and checks the program and changes nothing, with no administrator needed.
+# -Check (file only) downloads and checks the program and changes nothing, with no administrator needed.
 # The token in it works once and runs out at @@EXPIRES@@ UTC.
 param([switch]$Check)
-& {
+try { & {
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
@@ -17,7 +19,7 @@ $releaseKey = '@@RELEASE_KEY@@'
 
 @@ED25519@@
 
-function Stop-Here([string]$Why) { Write-Host ''; Write-Host "Stopped: $Why" -ForegroundColor Red; exit 1 }
+function Stop-Here([string]$Why) { throw $Why }
 
 if ($pin) {
     if (-not ('DokkitPin' -as [type])) {
@@ -38,7 +40,8 @@ public static class DokkitPin {
 
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $Check -and -not $admin) {
-    Stop-Here "this needs a PowerShell opened as administrator. Open one and run: powershell -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    if ($PSCommandPath) { Stop-Here "this needs a PowerShell opened as administrator. Open one and run: powershell -ExecutionPolicy Bypass -File `"$PSCommandPath`"" }
+    Stop-Here 'this needs a PowerShell opened as administrator. Open one and paste the line again.'
 }
 
 $installed = Join-Path $env:ProgramFiles 'DokkitProgram\dokkit.exe'
@@ -115,4 +118,8 @@ if ($PSCommandPath -and (Test-Path $PSCommandPath)) {
     $answer = Read-Host 'Delete this script? [Y/n]'
     if ($answer -notmatch '^[nN]') { Remove-Item $PSCommandPath -Force; Write-Host 'Deleted.' }
 }
+} } catch {
+    Write-Host ''
+    Write-Host "Stopped: $($_.Exception.Message)" -ForegroundColor Red
+    if ($PSCommandPath) { exit 1 }
 }

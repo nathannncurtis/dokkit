@@ -18,6 +18,8 @@ defmodule DokkitWeb.EnrolLive do
        mode: "service",
        os: "windows",
        script: nil,
+       script_text: nil,
+       command: nil,
        failed: nil,
        name: "",
        now: DateTime.utc_now(),
@@ -51,8 +53,15 @@ defmodule DokkitWeb.EnrolLive do
           {:ok, file, text} ->
             {:noreply,
              socket
-             |> assign(token: nil, key: key, machine: nil, script: file, failed: nil)
-             |> push_event("download", %{file: file, text: text})
+             |> assign(
+               token: nil,
+               key: key,
+               machine: nil,
+               script: file,
+               script_text: text,
+               command: Dokkit.AddScript.command(token),
+               failed: nil
+             )
              |> refresh()}
 
           :no_release ->
@@ -198,7 +207,7 @@ defmodule DokkitWeb.EnrolLive do
             </div>
             <div class="foot">
               <span :if={@os == "windows"}>
-                One file to run on the machine as administrator. It holds a token that works once and runs out in 24 hours.
+                One line to paste on the machine, in PowerShell opened as administrator. It works once and runs out in 24 hours.
               </span>
               <span :if={@os != "windows"}>The token works once and runs out in 4 hours.</span>
               <span class="end">
@@ -208,7 +217,7 @@ defmodule DokkitWeb.EnrolLive do
                   type="submit"
                   disabled={@current_user.role != :owner}
                 >
-                  {if @script, do: "Download another script", else: "Download the script"}
+                  {if @script, do: "Make another", else: "Make the command"}
                 </button>
                 <button
                   :if={@os != "windows"}
@@ -228,18 +237,23 @@ defmodule DokkitWeb.EnrolLive do
         </div>
 
         <div :if={@script && @key} class="card" id="script-card">
-          <h2>Run it on the machine</h2>
-          <p class="lead">
-            Move <code>{@script}</code>
-            to the machine, open PowerShell as administrator in its folder and run:
-          </p>
+          <h2>Paste this on the machine</h2>
+          <p class="lead">In PowerShell opened as administrator:</p>
           <div class="once">
-            <pre class="mono" id="script-line" style="margin: 0; white-space: pre-wrap">{"powershell -ExecutionPolicy Bypass -File .\\" <> @script}</pre>
+            <pre class="mono" id="script-line" style="margin: 0; white-space: pre-wrap">{@command}</pre>
             <button class="btn sm" type="button" data-copy="#script-line">Copy</button>
           </div>
           <p class="lead">
             It fetches the program from this server, checks its signature, enrols the machine, installs the
-            service and the updater, checks it reports, then offers to delete itself.
+            service and the updater, and checks it reports. Where the line cannot be used,
+            <a
+              id="script-file"
+              download={@script}
+              href={"data:text/plain;base64," <> Base.encode64(@script_text)}
+            >download it as a file</a>
+            and run <code>{"powershell -ExecutionPolicy Bypass -File .\\" <> @script}</code>
+            there;
+            it offers to delete itself at the end.
           </p>
           <div class="foot" id="script-state">
             <span :if={@machine}>
