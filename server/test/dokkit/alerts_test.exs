@@ -174,6 +174,11 @@ defmodule Dokkit.AlertsTest do
     assert %{state: :ok} = Repo.get_by!(Service, slug: "dokkit")
   end
 
+  test "the self-check asks the database over its own connection, not the shared pool" do
+    assert {:ok, bytes} = Dokkit.Self.database_size()
+    assert bytes > 0
+  end
+
   test "a failed alert waits a minute before it is tried again" do
     machine = Repo.insert!(%Machine{name: "alerts-retry-box"})
 

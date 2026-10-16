@@ -9,9 +9,41 @@ defmodule Dokkit.Self do
 
   def tick(now, config, booted \\ nil) do
     url = config["heartbeat_url"]
+    size = database_size()
     # A database that does not answer cannot record it, so the outside call stops instead.
-    if url not in [nil, ""] and match?({:ok, _}, Repo.query("SELECT 1")), do: beat(url)
-    row(now, booted, config)
+    if url not in [nil, ""] and match?({:ok, _}, size), do: beat(url)
+    row(now, booted, config, size)
+  end
+
+  @doc """
+  The database's size in bytes, asked over a connection of its own, so a busy or stuck pool is
+  not mistaken for a database that does not answer.
+  """
+  def database_size do
+    task =
+      Task.async(fn ->
+        Process.flag(:trap_exit, true)
+
+        try do
+          opts =
+            Repo.config()
+            |> Keyword.delete(:pool)
+            |> Keyword.merge(pool_size: 1, sync_connect: true, backoff_type: :stop)
+
+          with {:ok, pid} <- Postgrex.start_link(opts) do
+            result = Postgrex.query(pid, "SELECT pg_database_size(current_database())", [])
+            GenServer.stop(pid)
+            result
+          end
+        rescue
+          e -> {:error, e}
+        end
+      end)
+
+    case Task.yield(task, 20_000) || Task.shutdown(task, :brutal_kill) do
+      {:ok, {:ok, %{rows: [[bytes]]}}} -> {:ok, bytes}
+      _ -> :error
+    end
   end
 
   defp beat(url) do
@@ -31,7 +63,7 @@ defmodule Dokkit.Self do
   end
 
   # The database answering and its size. A full disk shows here before it stops intake.
-  defp row(now, booted, config) do
+  defp row(now, booted, config, size) do
     machine =
       Repo.get_by(Machine, name: "Dokkit") || Repo.insert!(%Machine{name: "Dokkit", kind: :group})
 
@@ -52,8 +84,8 @@ defmodule Dokkit.Self do
         else:
           Repo.update!(Ecto.Changeset.change(service, route_down: down, route_degraded: degraded))
 
-    case Repo.query("SELECT pg_database_size(current_database())") do
-      {:ok, %{rows: [[bytes]]}} ->
+    case size do
+      {:ok, bytes} ->
         mb = bytes / 1_048_576
         Dokkit.Numbers.record(machine.id, service, "database.size_mb", mb, now)
         Issues.record(check(service, "database"), :ok, at: now, value: mb)
