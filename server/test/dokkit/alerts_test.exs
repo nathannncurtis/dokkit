@@ -1,5 +1,6 @@
 defmodule Dokkit.AlertsTest do
   use Dokkit.DataCase, async: false
+  import Ecto.Query
   alias Dokkit.{Alert, Alerts, Intake, Issues, Keys, Machine, Repo, Service}
 
   setup do
@@ -172,6 +173,30 @@ defmodule Dokkit.AlertsTest do
     Repo.update_all(Dokkit.Machine, set: [last_seen_at: now])
     Dokkit.Self.tick(now, %{})
     assert %{state: :ok} = Repo.get_by!(Service, slug: "dokkit")
+  end
+
+  test "the database is down only after three minutes in a row without an answer" do
+    Application.put_env(:dokkit, :database_probe, fn -> :error end)
+    on_exit(fn -> Application.delete_env(:dokkit, :database_probe) end)
+    now = DateTime.utc_now()
+    :persistent_term.put({Dokkit.Self, :database_failed}, 0)
+
+    database = fn ->
+      Repo.one(from c in Dokkit.Check, where: c.name == "database", select: c.state)
+    end
+
+    Dokkit.Self.tick(now, %{})
+    Dokkit.Self.tick(DateTime.add(now, 60), %{})
+    refute database.() == :down
+    Dokkit.Self.tick(DateTime.add(now, 120), %{})
+    assert database.() == :down
+
+    Application.put_env(:dokkit, :database_probe, fn -> {:ok, 1_048_576} end)
+    Dokkit.Self.tick(DateTime.add(now, 180), %{})
+    assert database.() == :ok
+    Application.put_env(:dokkit, :database_probe, fn -> :error end)
+    Dokkit.Self.tick(DateTime.add(now, 240), %{})
+    assert database.() == :ok
   end
 
   test "the self-check asks the database over its own connection, not the shared pool" do

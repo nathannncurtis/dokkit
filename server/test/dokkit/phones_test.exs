@@ -444,4 +444,15 @@ defmodule Dokkit.PhonesTest do
       end
     end
   end
+
+  test "a snapshot built once is stamped with its counter and time for the upload" do
+    now = ~U[2026-10-16 06:00:00Z]
+    doc = Dokkit.Phones.Snapshot.build(0, now)
+    stamped = Jason.decode!(Dokkit.Phones.Snapshot.stamp(doc, 42, now))
+    assert stamped["server"]["counter"] == 42
+    assert stamped["server"]["made_at"] == "2026-10-16T06:00:00Z"
+
+    assert Dokkit.Phones.Snapshot.fingerprint(doc) ==
+             Dokkit.Phones.Snapshot.fingerprint(put_in(doc, ["server", "counter"], 7))
+  end
 end

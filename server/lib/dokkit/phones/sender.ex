@@ -44,11 +44,12 @@ defmodule Dokkit.Phones.Sender do
 
   @doc "Uploads unless the snapshot is the one last taken by the relay less than two minutes ago. Returns what to pass next time."
   def upload_changed(sent, at) do
-    print = Dokkit.Phones.Snapshot.fingerprint()
+    doc = Dokkit.Phones.Snapshot.build(0, DateTime.utc_now())
+    print = Dokkit.Phones.Snapshot.fingerprint(doc)
 
     case sent do
       {^print, sent_at} when at - sent_at < @refresh -> sent
-      _ -> if Dokkit.Phones.upload() == :ok, do: {print, at}
+      _ -> if Dokkit.Phones.upload(doc: doc) == :ok, do: {print, at}
     end
   end
 

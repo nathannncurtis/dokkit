@@ -7,9 +7,12 @@ defmodule Dokkit.Self do
   require Logger
   alias Dokkit.{Check, Issues, Machine, Repo, Service}
 
+  @failed {__MODULE__, :database_failed}
+  @down_after 3
+
   def tick(now, config, booted \\ nil) do
     url = config["heartbeat_url"]
-    size = database_size()
+    size = Application.get_env(:dokkit, :database_probe, &database_size/0).()
     # A database that does not answer cannot record it, so the outside call stops instead.
     if url not in [nil, ""] and match?({:ok, _}, size), do: beat(url)
     row(now, booted, config, size)
@@ -86,15 +89,22 @@ defmodule Dokkit.Self do
 
     case size do
       {:ok, bytes} ->
+        :persistent_term.put(@failed, 0)
         mb = bytes / 1_048_576
         Dokkit.Numbers.record(machine.id, service, "database.size_mb", mb, now)
         Issues.record(check(service, "database"), :ok, at: now, value: mb)
 
       _ ->
-        Issues.record(check(service, "database"), :down,
-          at: now,
-          note: "The database did not answer."
-        )
+        failed = :persistent_term.get(@failed, 0) + 1
+        :persistent_term.put(@failed, failed)
+
+        # A stall of a few seconds while the disk catches up is not an outage.
+        if failed >= @down_after,
+          do:
+            Issues.record(check(service, "database"), :down,
+              at: now,
+              note: "The database has not answered for #{failed} minutes."
+            )
     end
 
     reports(service, now, booted)

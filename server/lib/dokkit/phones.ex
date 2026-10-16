@@ -181,7 +181,12 @@ defmodule Dokkit.Phones do
         max((state["counter"] || 0) + 1 + (state["skip"] || 0), DateTime.to_unix(now))
 
       put("phone_state", Map.put(state, "counter", counter))
-      json = Dokkit.Phones.Snapshot.json(counter, now)
+
+      json =
+        if opts[:doc],
+          do: Dokkit.Phones.Snapshot.stamp(opts[:doc], counter, now),
+          else: Dokkit.Phones.Snapshot.json(counter, now)
+
       envelope = seal(json, r["mailbox"], counter, now, phones)
       result = put_envelope(r, envelope)
       settle(result, now)
