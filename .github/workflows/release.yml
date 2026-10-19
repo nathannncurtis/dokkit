@@ -23,7 +23,9 @@ jobs:
       - name: Tags
         id: tags
         run: |
-          image=ghcr.io/nathannncurtis/dokkit
+          image=ghcr.io/nathannncurtis/dokkit-server
+          # Each repository publishes its own image; only the public one uses this name.
+          [ "$GITHUB_REPOSITORY" = nathannncurtis/dokkit ] || image=ghcr.io/$GITHUB_REPOSITORY_OWNER/dokkit
           if [ "${GITHUB_REF_TYPE}" = tag ]; then
             echo "list=${image}:${GITHUB_REF_NAME#v},${image}:latest" >> "$GITHUB_OUTPUT"
           else

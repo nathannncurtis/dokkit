@@ -4,7 +4,7 @@
 #     curl -fsSL https://dokkit.dev/install.sh | sudo sh -s -- dokkit.example.com
 # or from a checkout of the repository, which builds the image from the checkout:
 #     sudo sh server/install.sh dokkit.example.com
-# DOKKIT_IMAGE names the image to pull (default ghcr.io/nathannncurtis/dokkit:latest) and is kept
+# DOKKIT_IMAGE names the image to pull (default ghcr.io/nathannncurtis/dokkit-server:latest) and is kept
 # in /opt/dokkit/.env. DOKKIT_COMPOSE_URL is where the piped form fetches compose.yml from.
 # Nothing here reads standard input, so it is safe to pipe; main runs on the last line, so a
 # download cut short runs nothing.
@@ -57,7 +57,7 @@ main() {
     compose=$dir/compose.yml project=$dir
     curl -fsSL "${DOKKIT_COMPOSE_URL:-https://dokkit.dev/compose.yml}" -o "$compose.new" </dev/null
     mv "$compose.new" "$compose"
-    : "${image:=ghcr.io/nathannncurtis/dokkit:latest}"
+    : "${image:=ghcr.io/nathannncurtis/dokkit-server:latest}"
   fi
   [ -z "$image" ] || export DOKKIT_IMAGE=$image
 

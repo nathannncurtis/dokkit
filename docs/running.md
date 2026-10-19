@@ -51,7 +51,7 @@ On a fresh Debian or Ubuntu machine whose domain already points at it:
 curl -fsSL https://dokkit.dev/install.sh | sudo sh -s -- dokkit.example.com
 ```
 
-That form applies once the site serves the script. It does not yet. The release workflow pushes the image (`ghcr.io/nathannncurtis/dokkit:latest`) on every tag. What works today is the same script from a checkout of this repository, which builds the image from the checkout:
+That form applies once the site serves the script. It does not yet. The release workflow pushes the image (`ghcr.io/nathannncurtis/dokkit-server:latest`) on every tag. What works today is the same script from a checkout of this repository, which builds the image from the checkout:
 
 ```
 sudo sh server/install.sh dokkit.example.com
@@ -71,7 +71,7 @@ It refuses to run without root, without a domain, or on a system that is not Deb
 
 Pushing a tag that starts with `v` runs `.github/workflows/release.yml`. Releases `v0.1.0` to `v0.1.10` exist. It builds and publishes:
 
-- The server image, as `ghcr.io/nathannncurtis/dokkit:<version>` and `:latest`.
+- The server image, as `ghcr.io/nathannncurtis/dokkit-server:<version>` and `:latest`.
 - The `dokkit` program for Windows, Linux and macOS, each on amd64 and arm64, as release assets named `dokkit-<os>-<arch>` (`.exe` on Windows), each with a `.sha256` file beside it, and `SHA256SUMS` with its Ed25519 signature `SHA256SUMS.sig` listing them all. The signature is made with the repository secret `RELEASE_SIGNING_KEY` and checked once before it is published; without that secret the release has no signature and the updater cannot install it.
 - The Windows server as `dokkit-windows-x64.zip` with its `.sha256`, holding `bin\dokkit.bat` and `install.ps1` at the top.
 
