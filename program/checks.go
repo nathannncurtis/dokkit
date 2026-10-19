@@ -141,11 +141,19 @@ type cannotTell struct{ why string }
 func (c cannotTell) Error() string { return c.why }
 
 func readDeclaration(path string) (*declaration, error) {
-	d := &declaration{path: path}
-	if _, err := toml.DecodeFile(path, d); err != nil {
+	text, err := os.ReadFile(path)
+	if err != nil {
 		return nil, err
 	}
-	if _, err := toml.DecodeFile(path, &d.raw); err != nil {
+	return parseDeclaration(path, string(text))
+}
+
+func parseDeclaration(path, text string) (*declaration, error) {
+	d := &declaration{path: path}
+	if _, err := toml.Decode(text, d); err != nil {
+		return nil, err
+	}
+	if _, err := toml.Decode(text, &d.raw); err != nil {
 		return nil, err
 	}
 	if d.Schema != 1 {
