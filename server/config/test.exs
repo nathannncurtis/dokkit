@@ -27,7 +27,8 @@ config :dokkit,
   mail: :test,
   watch: false,
   req_options: [plug: {Req.Test, Dokkit.Alerts}, retry: false],
-  shared_relay: "https://relay.example.test"
+  shared_relay: "https://relay.example.test",
+  shared_heartbeat: "https://beat.example.test"
 
 config :logger, level: :warning
 

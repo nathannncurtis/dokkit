@@ -45,6 +45,7 @@ type Name struct {
 type State struct {
 	Secret string           `json:"secret"`
 	Names  map[string]*Name `json:"names"`
+	Beats  map[string]*Beat `json:"beats,omitempty"`
 }
 
 // Store is the whole state in one JSON file, rewritten on each change. One mutex serialises
@@ -69,6 +70,9 @@ func OpenStore(path string) (*Store, error) {
 	}
 	if st.s.Names == nil {
 		st.s.Names = map[string]*Name{}
+	}
+	if st.s.Beats == nil {
+		st.s.Beats = map[string]*Beat{}
 	}
 	migrated := false
 	for _, n := range st.s.Names {

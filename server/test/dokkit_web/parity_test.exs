@@ -14,6 +14,8 @@ defmodule DokkitWeb.ParityTest do
 
   @events %{
     "AlertsLive" => %{
+      "beat_shared" => {:owner, ["POST /api/v1/alerts/heartbeat/shared"]},
+      "beat_stop" => {:owner, ["DELETE /api/v1/alerts/heartbeat/shared"]},
       "save" => {:owner, ["PUT /api/v1/alerts"]},
       "changed" => @view,
       "rule" =>

@@ -113,7 +113,9 @@ defmodule DokkitWeb.McpControllerTest do
             :delete_logs,
             :get_log_retention,
             :put_log_retention,
-            :add_script
+            :add_script,
+            :use_shared_heartbeat,
+            :stop_shared_heartbeat
           ],
           do: r.plug_opts
 

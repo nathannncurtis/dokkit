@@ -384,6 +384,20 @@ defmodule DokkitWeb.ApiController do
 
   def post_shared_relay(conn, _), do: reply(conn, shared_relay())
 
+  def shared_heartbeat do
+    case Dokkit.SharedBeat.use() do
+      {:ok, s} -> %{heartbeat_url: s["url"], kind: s["kind"]}
+      {:error, why} -> {:error, "bad_heartbeat", why}
+    end
+  end
+
+  def use_shared_heartbeat(conn, _), do: reply(conn, shared_heartbeat())
+
+  def stop_shared_heartbeat(conn, _) do
+    Dokkit.SharedBeat.stop()
+    reply(conn, %{heartbeat_url: nil})
+  end
+
   def alert_settings(conn, _), do: reply(conn, Dokkit.Alerts.view())
 
   def save_alerts(params) do

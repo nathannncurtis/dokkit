@@ -31,9 +31,12 @@ type App struct {
 	Signins []*Provider
 	Abuse   string
 	Secret  []byte
+	Beat    string
+	Sender  *Sender
 	replays Replays
 	checks  Limiter
 	Limits  Limiter
+	signups Limiter
 }
 
 type session struct {
@@ -55,6 +58,10 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /claim", a.form(a.claim))
 	mux.HandleFunc("POST /names/{label}/code", a.form(a.newCode))
 	mux.HandleFunc("POST /names/{label}/release", a.form(a.release))
+	mux.HandleFunc("/beat/{token}", a.called)
+	mux.HandleFunc("POST /v1/beats", a.newBeat)
+	mux.HandleFunc("PUT /v1/beats/{token}", a.changeBeat)
+	mux.HandleFunc("DELETE /v1/beats/{token}", a.changeBeat)
 	mux.HandleFunc("POST /v1/register", a.register)
 	mux.HandleFunc("POST /v1/address", a.signed(func(label string, p []byte) (*Name, error) {
 		var in struct{ A, AAAA string }
@@ -508,7 +515,7 @@ h2{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color
 .sso{display:inline-flex;align-items:center;box-sizing:border-box;text-decoration:none;white-space:nowrap}.sso svg{flex:none}
 .sso{gap:12px;padding:0 18px;height:46px;min-width:270px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:600 15px var(--sans);transition:border-color .15s,background .15s}.sso:hover{border-color:var(--mute);background:var(--chip)}.sso svg{width:20px;height:20px}
 .more{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin:8px 0 0;color:var(--mute);font-size:14px}
-.steps.done1 li:first-child::before{content:"¹3";background:var(--acc);color:var(--accink)}.steps.done1 li:first-child b{color:var(--acc2)}
+.steps.done1 li:first-child::before{content:"✓";background:var(--acc);color:var(--accink)}.steps.done1 li:first-child b{color:var(--acc2)}
 #acct{transition:opacity .22s ease,transform .22s ease}#acct.out{opacity:0;transform:translateX(-24px)}#acct.in{opacity:0;transform:translateX(24px);transition:none}
 .why{margin:36px 0 0;max-width:60ch;padding:18px 20px;border-left:2px solid var(--acc);background:color-mix(in srgb,var(--panel) 60%,transparent);border-radius:0 12px 12px 0;color:var(--mute);font-size:15px}.why b{color:var(--ink);font-weight:600}.why p{margin:6px 0 0}
 .alt{display:inline-flex;align-items:center;gap:7px;padding:6px 2px;color:var(--ink);text-decoration:none;font-weight:500}.alt svg{width:16px;height:16px;flex:none}.alt:hover{color:var(--acc2)}.foot{margin:64px 0 0;color:var(--mute);font-size:14px}

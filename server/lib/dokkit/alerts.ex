@@ -207,7 +207,9 @@ defmodule Dokkit.Alerts do
 
       true ->
         note = cleared_note(cleared(params))
-        {:ok, save(params), note}
+        config = save(params)
+        Dokkit.SharedBeat.follow(config)
+        {:ok, config, note}
     end
   end
 

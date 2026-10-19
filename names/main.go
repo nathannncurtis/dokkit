@@ -58,11 +58,23 @@ func main() {
 		Signins: signins,
 		Abuse:   env("NAMES_ABUSE_EMAIL", "abuse@dokkit.dev"),
 		Secret:  []byte(store.s.Secret),
+		Beat:    strings.TrimRight(env("NAMES_BEAT_URL", "https://beat.dokkit.dev"), "/"),
+		Sender:  NewSender(),
+		signups: Limiter{Burst: 3, PerSecond: 3.0 / 3600},
 	}
 	go func() {
 		for {
 			svc.Sweep()
 			time.Sleep(time.Hour)
+		}
+	}()
+	go func() {
+		booted := time.Now()
+		for {
+			time.Sleep(30 * time.Second)
+			for _, m := range svc.Watch(booted) {
+				go app.Sender.Deliver(m)
+			}
 		}
 	}()
 	srv := &http.Server{

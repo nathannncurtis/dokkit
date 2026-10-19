@@ -195,6 +195,8 @@ defmodule DokkitWeb.Router do
     get "/alerts", ApiController, :alert_settings
     put "/alerts", ApiController, :set_alert_settings
     post "/alerts/test", ApiController, :test_alert
+    post "/alerts/heartbeat/shared", ApiController, :use_shared_heartbeat
+    delete "/alerts/heartbeat/shared", ApiController, :stop_shared_heartbeat
     get "/alerts/people", ApiController, :alert_people
     put "/alerts/people/:id", ApiController, :set_alert_person
     get "/alerts/who", ApiController, :alert_who

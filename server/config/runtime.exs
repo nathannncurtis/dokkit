@@ -52,7 +52,8 @@ config :dokkit, archive: System.get_env("DOKKIT_ARCHIVE")
 if config_env() != :test,
   do:
     config(:dokkit,
-      shared_relay: System.get_env("DOKKIT_SHARED_RELAY", "https://relay.dokkit.dev")
+      shared_relay: System.get_env("DOKKIT_SHARED_RELAY", "https://relay.dokkit.dev"),
+      shared_heartbeat: System.get_env("DOKKIT_SHARED_HEARTBEAT", "https://beat.dokkit.dev")
     )
 
 config :dokkit, programs: System.get_env("DOKKIT_PROGRAMS")
