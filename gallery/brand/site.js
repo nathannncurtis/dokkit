@@ -54,3 +54,40 @@ function showLetters(chars, p) {
   const n = Math.round(p * chars.length);
   chars.forEach((c, i) => { c.classList.toggle("on", i < n); c.classList.toggle("cur", i === n - 1 && n < chars.length); });
 }
+
+function typeIn(tl, el, duration, at) {
+  const chars = splitLetters(el), p = { v: 0 };
+  showLetters(chars, 0);
+  tl.to(p, { v: 1, duration, ease: "none", onUpdate: () => showLetters(chars, p.v) }, at);
+}
+
+// Plays the timeline once, the first time its section reaches the top going down, with the scroll held until it ends.
+function holdFor(section, tl, start) {
+  ScrollTrigger.create({
+    trigger: section, start, once: true,
+    onEnter: () => {
+      const lenis = window.dokkitScroll;
+      lenis?.scrollTo(section, { immediate: true, force: true, offset: start === "top top" ? 0 : -innerHeight * 0.12 });
+      lenis?.stop();
+      document.documentElement.classList.add("held");
+      tl.eventCallback("onComplete", () => { lenis?.start(); document.documentElement.classList.remove("held"); });
+      tl.play();
+    },
+  });
+}
+
+
+// A rail beside a page's sections marks the one being read and fills as you go.
+function railFor(sections, links) {
+  const fill = $("#railFill");
+  const where = () => {
+    const mid = innerHeight * 0.4;
+    let current = sections[0];
+    sections.forEach((s) => { if (s.getBoundingClientRect().top < mid) current = s; });
+    links.forEach((a) => a.toggleAttribute("aria-current", a.dataset.step === current.id));
+    const first = sections[0].getBoundingClientRect().top, last = sections[sections.length - 1].getBoundingClientRect().bottom;
+    if (fill) fill.style.transform = `scaleY(${Math.min(1, Math.max(0, (mid - first) / (last - first)))})`;
+  };
+  addEventListener("scroll", where, { passive: true });
+  where();
+}

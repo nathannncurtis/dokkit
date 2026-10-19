@@ -212,27 +212,6 @@ if (pinned) {
   holdWatches();
 }
 
-function typeIn(tl, el, duration, at) {
-  const chars = splitLetters(el), p = { v: 0 };
-  showLetters(chars, 0);
-  tl.to(p, { v: 1, duration, ease: "none", onUpdate: () => showLetters(chars, p.v) }, at);
-}
-
-// Plays the timeline once, the first time its section reaches the top going down, with the scroll held until it ends.
-function holdFor(section, tl, start) {
-  ScrollTrigger.create({
-    trigger: section, start, once: true,
-    onEnter: () => {
-      const lenis = window.dokkitScroll;
-      lenis?.scrollTo(section, { immediate: true, force: true, offset: start === "top top" ? 0 : -innerHeight * 0.12 });
-      lenis?.stop();
-      document.documentElement.classList.add("held");
-      tl.eventCallback("onComplete", () => { lenis?.start(); document.documentElement.classList.remove("held"); });
-      tl.play();
-    },
-  });
-}
-
 function holdRound() {
   const list = $("#list"), pane = $(".pane"), frame = $(".frame");
   const kinds = ["http", "disk", "tcp :443", "process", "service", "backup", "cert", "memory"];

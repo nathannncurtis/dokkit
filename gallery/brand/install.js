@@ -39,17 +39,5 @@ document.addEventListener("click", (e) => {
 $("#domain").addEventListener("input", render);
 $("#dburl").addEventListener("input", render);
 
-// The rail marks the step you are reading and fills as you go.
-const steps = $$(".step"), links = $$(".rail a");
-function where() {
-  const mid = innerHeight * 0.4;
-  let current = steps[0];
-  steps.forEach((s) => { if (s.getBoundingClientRect().top < mid) current = s; });
-  links.forEach((a) => a.toggleAttribute("aria-current", a.dataset.step === current.id));
-  const first = steps[0].getBoundingClientRect().top, last = steps[steps.length - 1].getBoundingClientRect().bottom;
-  const p = Math.min(1, Math.max(0, (mid - first) / (last - first)));
-  $("#railFill").style.transform = `scaleY(${p})`;
-}
-addEventListener("scroll", where, { passive: true });
+railFor($$(".step"), $$(".rail a"));
 render();
-where();
