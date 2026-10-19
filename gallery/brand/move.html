@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Move over to Dokkit</title>
+<meta name="description" content="Turn a Healthchecks export, an Uptime Kuma backup or a list of ping URLs into dokkit.toml files, in the browser.">
+<meta name="theme-color" content="#1e1917">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css?v=20">
+<link rel="stylesheet" href="move.css?v=20">
+<script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); })();</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></symbol>
+</svg>
+
+<header class="bar">
+  <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+  <nav aria-label="Site">
+    <a href="install.html">Install</a><span class="soon" title="Not built yet">Demo</span><a href="agents.html">Agents</a><a href="api.html">Docs</a><a href="phone.html">Phone</a><a href="security.html">Security</a><span class="soon" title="Not built yet">Status</span><a href="https://github.com/nathannncurtis/dokkit">Source</a>
+  </nav>
+  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
+  <a class="claim" href="install.html">Claim a name <em>soon</em></a>
+</header>
+
+<main id="top" class="page">
+  <header class="phead">
+    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><b>Move over</b></p>
+    <h1 class="ptitle">Move over</h1>
+    <p class="plede">Paste what you watch with today and get <code>dokkit.toml</code> files back, <mark class="n">each one read by the real checker</mark>, with what could not come over and why.</p>
+  </header>
+
+  <div class="steps-wrap">
+    <nav class="rail" aria-label="On this page">
+      <ol>
+        <li><a href="#bring" data-step="bring"><i>1</i>Bring it over</a></li><li><a href="#rules" data-step="rules"><i>2</i>What becomes what</a></li><li><a href="#calls" data-step="calls"><i>3</i>Then call Dokkit</a></li>
+      </ol>
+      <span class="rail-fill" id="railFill" aria-hidden="true"></span>
+    </nav>
+
+    <div class="steps">
+      <section class="step" id="bring">
+        <h2 data-type>Bring it over</h2>
+        <p class="sub-p">Paste or drop a Healthchecks export, an Uptime Kuma backup, or a list of ping URLs. It is converted here, in the page, and each file is read by the program's own checker. Nothing is uploaded.</p>
+        <div class="ex-row" role="group" aria-label="Start from"><span>Start from</span><button type="button" data-mv="hc" class="on">A Healthchecks export</button><button type="button" data-mv="kuma">An Uptime Kuma backup</button><button type="button" data-mv="urls">A list of ping URLs</button></div>
+        <div class="play" id="mvPlay">
+          <div class="ed mv-drop" id="mvDrop">
+            <div class="ed-top"><span>Paste here</span><small id="mvKind"></small></div>
+            <textarea id="mvSrc" class="mv-src" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="An export or a list of ping URLs" wrap="off"></textarea>
+            <label class="mv-pick">Or choose a file<input type="file" id="mvFile" accept=".json,.txt,.csv,application/json,text/plain"></label>
+          </div>
+          <div class="res" aria-live="polite">
+            <p class="verdict" id="mvSum"><i class="s none"></i><span>Loading the checker</span></p>
+            <button type="button" class="copy mv-all" id="mvAll" hidden>Download all</button>
+            <div class="mv-out" id="mvOut"></div>
+          </div>
+        </div>
+      </section>
+      <section class="step" id="rules">
+        <h2 data-type>What becomes what</h2>
+        <div class="cards cards-2 mv-rules">
+          <details class="card"><summary>From Healthchecks <small>checks list</small></summary><div class="card-body">
+            <p>The export is the <code>checks</code> list of the Healthchecks API (<code>GET /api/v3/checks/</code>), or the same list on its own. One file per check, its <code>slug</code> (else its name) as the service and job id.</p>
+            <ul class="did">
+              <li>A cron check becomes a <code>[[job]]</code> with the same <code>schedule</code>, <code>grace</code> from its grace, and <code>max_runtime</code> the same, as Healthchecks calls a started run down once its grace passes.</li>
+              <li>A schedule in a time zone other than UTC is kept as written, with a comment in the file: Dokkit reads every schedule as UTC, so it must be shifted by hand.</li>
+              <li>A simple check, a period since the last ping, becomes a job with one slot each period (<code>*/5 * * * *</code> for five minutes) and a grace of the period less a minute, so a ping any time in the period counts. Periods no cron line repeats evenly keep no schedule.</li>
+            </ul>
+            <ul class="did no"><li>A systemd OnCalendar schedule. Tags, descriptions, keyword filters and integrations.</li></ul>
+          </div></details>
+          <details class="card"><summary>From Uptime Kuma <small>monitorList</small></summary><div class="card-body">
+            <p>The backup file from Settings, Backup (version 1.x), read from its <code>monitorList</code>. One file per monitor, its name as the service id.</p>
+            <ul class="did">
+              <li><code>http</code> becomes an <code>http</code> check: <code>interval</code> as <code>every</code>, <code>timeout</code>, <code>accepted_statuscodes</code> as <code>status</code>, retries plus one as <code>fail_after</code>.</li>
+              <li><code>port</code> becomes a <code>tcp</code> check with its <code>host</code> and <code>port</code>.</li>
+              <li><code>push</code> becomes a job, the period mapped as for a simple Healthchecks check.</li>
+            </ul>
+            <ul class="did no"><li>keyword, json-query, ping, dns, docker, gRPC, databases and the rest: Dokkit has no check like them. Upside-down monitors, signed-in or non-GET requests. Headers, proxies and the TLS switch are not carried.</li></ul>
+          </div></details>
+          <details class="card"><summary>From a list of ping URLs <small>one per line</small></summary><div class="card-body">
+            <p>One <code>[[job]]</code> per line, all in one service, <code>moved-jobs</code>, so one app key pings them all. The id is the last part of the address that is a name; an address that holds only a key is named after its host.</p>
+            <ul class="did no"><li>A schedule: a URL does not say when the job runs. Add a <code>schedule</code> for Dokkit to call it late.</li></ul>
+          </div></details>
+        </div>
+      </section>
+      <section class="step" id="calls">
+        <h2 data-type>Then call Dokkit</h2>
+        <p class="big-fact" data-fly="up">Each job keeps calling the old address and <mark class="n">calls Dokkit's as well</mark>, until Dokkit has been right about it for long enough to trust. Paging stays with the old tool until then.</p>
+        <div class="prompt small" data-fly="up"><pre id="mvPing">https://your.domain.com/api/v1/in/&lt;app key&gt;/job/&lt;job id&gt;/start
+https://your.domain.com/api/v1/in/&lt;app key&gt;/job/&lt;job id&gt;/ok
+https://your.domain.com/api/v1/in/&lt;app key&gt;/job/&lt;job id&gt;/fail</pre><button type="button" class="copy" data-copy="mvPing">Copy</button></div>
+        <p class="note">GET or POST. A POST body is kept as the last lines of the job's output, up to 16 KB, and <code>?run=</code> ties a start to its finish. The key is the service's app key (<code>dka_</code>).</p>
+        <p class="sub-p">Send a file of jobs with that key. A file with <code>http</code> or <code>tcp</code> checks goes on a machine with <code>dokkit</code>, which runs them, in a folder it reads or sent with the machine's key.</p>
+        <div class="cmd" data-fly="left"><code id="mvApply">DOKKIT_KEY=dka_... dokkit apply nightly-backup.dokkit.toml</code><button type="button" class="copy" data-copy="mvApply">Copy</button></div>
+        <p class="sub-p">On a machine with <code>dokkit</code>, wrap the job instead: it reports the start, the exit code, the time taken and the last lines of output.</p>
+        <div class="cmd" data-fly="left"><code id="mvRun">dokkit run --job nightly-backup -- ./backup.sh</code><button type="button" class="copy" data-copy="mvRun">Copy</button></div>
+      </section>
+
+      <section class="next" aria-label="Where to go next">
+        <h2 data-type>Next:</h2>
+        <div class="next-links">
+          <a class="nl" href="check.html"><b>Check a file</b><small>Edit one and see what Dokkit will watch</small></a><a class="nl" href="api.html"><b>The ping URLs</b><small>In the API, with every answer</small></a><a class="nl" href="install.html"><b>Install it</b><small>The server, then the program on each machine</small></a>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="fl">
+    <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+    <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
+  </div>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="site.js?v=20"></script>
+<script src="wasm_exec.js?v=20"></script>
+<script src="move.js?v=20"></script>
+<script>railFor($$(".step"), $$(".rail a"));</script>
+<script src="motion.js?v=20"></script>
+</body>
+</html>

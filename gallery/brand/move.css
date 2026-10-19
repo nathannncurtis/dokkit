@@ -1,0 +1,37 @@
+/* Move over: the converter reuses check.html's editor and verdict, with files listed as cards. */
+.mv-drop { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 520px; transition: border-color 160ms var(--ease); }
+.mv-drop.over { border-color: var(--acc); }
+.mv-src { width: 100%; height: 100%; margin: 0; padding: 16px 18px; resize: none; border: 0; outline: 0; background: transparent; color: var(--ink); caret-color: var(--acc); font: 13px/1.7 var(--mono); tab-size: 2; white-space: pre; overflow: auto; }
+.mv-pick { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--line); font: 13px var(--mono); color: var(--mute); cursor: pointer; }
+.mv-pick:hover { color: var(--ink); }
+.mv-pick input { font: inherit; color: var(--mute); min-width: 0; max-width: 100%; }
+.mv-all { justify-self: start; height: 44px; }
+.mv-out { display: grid; gap: 12px; align-items: start; }
+.mv-file > summary { gap: 12px; padding: 14px 18px; }
+.mv-file > summary code { color: var(--ink); overflow-wrap: anywhere; min-width: 0; }
+.mv-file > summary small { margin-left: auto; text-align: right; }
+.mv-file .card-body { padding: 0 18px 18px; gap: 12px; }
+.mv-file .verdict { padding: 10px 14px; font-size: 14.5px; }
+.mv-file .prompt pre { padding: 16px 18px; padding-right: 96px; font-size: 13px; }
+.mv-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 14px; }
+.mv-notes { gap: 8px; font-size: 14.5px; }
+.mv-notes li::before { background: var(--acc); }
+.warn-t { color: var(--warn); font-weight: 600; }
+.mv-h { font: 500 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); }
+.mv-was { display: grid; border-top: 1px solid var(--line); }
+.mv-was > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.55fr); gap: 4px 14px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.mv-was code { color: var(--ink); overflow-wrap: anywhere; }
+.mv-skip li b { color: var(--ink); font-weight: 600; }
+.mv-rules .card-body p { color: var(--mute); }
+.mv-rules .did { font-size: 15px; }
+@media (max-width: 1000px) { .mv-drop { height: 420px; } }
+@media (max-width: 640px) {
+  .mv-was > div { grid-template-columns: 1fr; }
+  .mv-file > summary { flex-wrap: wrap; }
+  .mv-file > summary small { margin-left: 0; text-align: left; flex-basis: 100%; }
+  .mv-file > summary::after { order: 1; margin-left: auto; }
+  .mv-file > summary small { order: 2; }
+}
+.mv-file .card.inner { margin: 0; }
+.mv-calls > summary { padding: 12px 16px; font-size: 14.5px; }
+.mv-calls .card-body { padding: 0 16px 16px; }

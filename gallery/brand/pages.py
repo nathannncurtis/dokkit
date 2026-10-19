@@ -13,12 +13,13 @@ NAV = [("install.html", "Install"), (None, "Demo"), ("agents.html", "Agents"), (
 MK = '<span class="mk"><svg><use href="#mark"/></svg></span>'
 
 
-def page(file, title, desc, crumbs, h1, lede, steps, body, nxt, js=None, current=None):
+def page(file, title, desc, crumbs, h1, lede, steps, body, nxt, js=None, current=None, css=None):
     nav = "".join(f'<span class="soon" title="Not built yet">{t}</span>' if not h else
                   f'<a href="{h}"{" aria-current=\"page\"" if t == current else ""}>{t}</a>' for h, t in NAV)
     crumb = "".join(f'<a href="{h}">{t}</a><span aria-hidden="true">/</span>' for h, t in crumbs)
     rail = "".join(f'<li><a href="#{i}" data-step="{i}"><i>{n}</i>{t}</a></li>' for n, (i, t) in enumerate(steps, 1))
     links = "".join(f'<a class="nl" href="{h}"><b>{b}</b><small>{s}</small></a>' for h, b, s in nxt)
+    sheet = f'<link rel="stylesheet" href="{css}?v={V}">\n' if css else ""
     script = "".join(f'<script src="{j}?v={V}"></script>\n' for j in ([js] if isinstance(js, str) else js or []))
     html = f'''<!doctype html>
 <html lang="en">
@@ -33,7 +34,7 @@ def page(file, title, desc, crumbs, h1, lede, steps, body, nxt, js=None, current
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="site.css?v={V}">
-<script>(() => {{ let m = null; try {{ m = localStorage.getItem("motion"); }} catch {{}} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); }})();</script>
+{sheet}<script>(() => {{ let m = null; try {{ m = localStorage.getItem("motion"); }} catch {{}} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); }})();</script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -172,7 +173,7 @@ CHANNELS = [
      "lede": "A JSON request to an https address of yours when an issue opens, and another when it closes. Use it to reach anything Dokkit does not speak to directly.",
      "setup": [("Webhook address", "On Dokkit's Alerts page, under Webhook, an address that starts with <code>https://</code>."),
                ("Who is told", "Tick <code>Webhook</code> for the states it should hear about, alone or beside another channel.")],
-     "more": ["Addresses on your private network are allowed. Addresses that point at the server itself, or link-local ones, are refused unless the server runs with <code>DOKKIT_ALLOW_LOCAL_ALERTS=1</code>."],
+     "more": ["A <a href=\"alerts-slack.html\">Slack</a> or <a href=\"alerts-discord.html\">Discord</a> webhook address gets a message in their own format instead.", "Addresses on your private network are allowed. Addresses that point at the server itself, or link-local ones, are refused unless the server runs with <code>DOKKIT_ALLOW_LOCAL_ALERTS=1</code>."],
      "body": '<p class="sub-p">The request it sends:</p><div class="prompt small" data-fly="up"><pre id="hook">{\n  "event": "opened",\n  "issue": {\n    "id": "DOK-12",\n    "title": "nightly-purge did not run",\n    "note": "It was due at 01:00 and no start was reported.",\n    "machine": "db-01",\n    "state": "down",\n    "url": "https://dokkit.example.com"\n  }\n}</pre><button type="button" class="copy" data-copy="hook">Copy</button></div><p class="note">When the issue closes, the same request comes again with <code>"event": "closed"</code>.</p>'},
     {"id": "home-assistant", "name": "Home Assistant", "say": "Through the webhook, into an automation",
      "lede": "Home Assistant takes Dokkit's webhook as an automation trigger, so an issue can flash a light or speak on a speaker.",
@@ -182,7 +183,25 @@ CHANNELS = [
      "more": ["Leave <code>local_only</code> on when Dokkit and Home Assistant share a network. Turn it off only when the request comes in through Home Assistant Cloud."],
      "body": '<div class="prompt small" data-fly="up"><pre id="ha">triggers:\n  - trigger: webhook\n    webhook_id: dokkit-change-this-id\n    allowed_methods: [POST]\n    local_only: true\nconditions:\n  - condition: template\n    value_template: "{{ trigger.json.event == \'opened\' }}"\nactions:\n  - action: notify.notify\n    data:\n      title: "{{ trigger.json.issue.title }} ({{ trigger.json.issue.machine }})"\n      message: "{{ trigger.json.issue.note or trigger.json.issue.id }}"</pre><button type="button" class="copy" data-copy="ha">Copy</button></div>'},
 ]
-SOON = [("Slack", "Messages in a channel"), ("Discord", "Messages in a channel")]
+CHANNELS[6:6] = [
+    {"id": "slack", "name": "Slack", "say": "A message in a channel, through the webhook",
+     "lede": "A message in a Slack channel when an issue opens, and another when it closes. It goes through Dokkit's webhook, which <mark class=\"n\">speaks Slack's format</mark> when the address is Slack's.",
+     "setup": [("Slack", "In Slack, create an app with Incoming Webhooks switched on, add a webhook to the channel, and copy its address. It starts <code>https://hooks.slack.com/</code>."),
+               ("Webhook address", "On Dokkit's Alerts page, under Webhook, paste that address and press Save."),
+               ("Who is told", "Tick <code>Webhook</code> for the states the channel should hear about.")],
+     "more": ["Dokkit has one webhook address, so a Slack channel takes the place of any other webhook.",
+              "The message says the issue, the machine and its number, the note when it opens, and a link to Dokkit."],
+     "arrives": notif("Opened: " + SAMPLE[0], SAMPLE[1] + " Open Dokkit", big=True)},
+    {"id": "discord", "name": "Discord", "say": "A message in a channel, through the webhook",
+     "lede": "A message in a Discord channel when an issue opens, and another when it closes. The message <mark class=\"ok\">can never mention anyone</mark>, whatever the issue's text says.",
+     "setup": [("Discord", "In the channel's settings, open Integrations, then Webhooks, make a new webhook and copy its address. It starts <code>https://discord.com/api/webhooks/</code>."),
+               ("Webhook address", "On Dokkit's Alerts page, under Webhook, paste that address and press Save."),
+               ("Who is told", "Tick <code>Webhook</code> for the states the channel should hear about.")],
+     "more": ["Dokkit has one webhook address, so a Discord channel takes the place of any other webhook.",
+              "The message says the issue, the machine and its number, the note when it opens, and a link to Dokkit."],
+     "arrives": notif("Opened: " + SAMPLE[0], SAMPLE[1] + " Open Dokkit", big=True)},
+]
+SOON = []
 
 
 def channel_pages():
@@ -336,9 +355,66 @@ def check_page():
          js=["wasm_exec.js", "check.js"])
 
 
+def move_page():
+    bring = """        <p class="sub-p">Paste or drop a Healthchecks export, an Uptime Kuma backup, or a list of ping URLs. It is converted here, in the page, and each file is read by the program's own checker. Nothing is uploaded.</p>
+        <div class="ex-row" role="group" aria-label="Start from"><span>Start from</span><button type="button" data-mv="hc" class="on">A Healthchecks export</button><button type="button" data-mv="kuma">An Uptime Kuma backup</button><button type="button" data-mv="urls">A list of ping URLs</button></div>
+        <div class="play" id="mvPlay">
+          <div class="ed mv-drop" id="mvDrop">
+            <div class="ed-top"><span>Paste here</span><small id="mvKind"></small></div>
+            <textarea id="mvSrc" class="mv-src" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="An export or a list of ping URLs" wrap="off"></textarea>
+            <label class="mv-pick">Or choose a file<input type="file" id="mvFile" accept=".json,.txt,.csv,application/json,text/plain"></label>
+          </div>
+          <div class="res" aria-live="polite">
+            <p class="verdict" id="mvSum"><i class="s none"></i><span>Loading the checker</span></p>
+            <button type="button" class="copy mv-all" id="mvAll" hidden>Download all</button>
+            <div class="mv-out" id="mvOut"></div>
+          </div>
+        </div>"""
+    rules = """        <div class="cards cards-2 mv-rules">
+          <details class="card"><summary>From Healthchecks <small>checks list</small></summary><div class="card-body">
+            <p>The export is the <code>checks</code> list of the Healthchecks API (<code>GET /api/v3/checks/</code>), or the same list on its own. One file per check, its <code>slug</code> (else its name) as the service and job id.</p>
+            <ul class="did">
+              <li>A cron check becomes a <code>[[job]]</code> with the same <code>schedule</code>, <code>grace</code> from its grace, and <code>max_runtime</code> the same, as Healthchecks calls a started run down once its grace passes.</li>
+              <li>A schedule in a time zone other than UTC is kept as written, with a comment in the file: Dokkit reads every schedule as UTC, so it must be shifted by hand.</li>
+              <li>A simple check, a period since the last ping, becomes a job with one slot each period (<code>*/5 * * * *</code> for five minutes) and a grace of the period less a minute, so a ping any time in the period counts. Periods no cron line repeats evenly keep no schedule.</li>
+            </ul>
+            <ul class="did no"><li>A systemd OnCalendar schedule. Tags, descriptions, keyword filters and integrations.</li></ul>
+          </div></details>
+          <details class="card"><summary>From Uptime Kuma <small>monitorList</small></summary><div class="card-body">
+            <p>The backup file from Settings, Backup (version 1.x), read from its <code>monitorList</code>. One file per monitor, its name as the service id.</p>
+            <ul class="did">
+              <li><code>http</code> becomes an <code>http</code> check: <code>interval</code> as <code>every</code>, <code>timeout</code>, <code>accepted_statuscodes</code> as <code>status</code>, retries plus one as <code>fail_after</code>.</li>
+              <li><code>port</code> becomes a <code>tcp</code> check with its <code>host</code> and <code>port</code>.</li>
+              <li><code>push</code> becomes a job, the period mapped as for a simple Healthchecks check.</li>
+            </ul>
+            <ul class="did no"><li>keyword, json-query, ping, dns, docker, gRPC, databases and the rest: Dokkit has no check like them. Upside-down monitors, signed-in or non-GET requests. Headers, proxies and the TLS switch are not carried.</li></ul>
+          </div></details>
+          <details class="card"><summary>From a list of ping URLs <small>one per line</small></summary><div class="card-body">
+            <p>One <code>[[job]]</code> per line, all in one service, <code>moved-jobs</code>, so one app key pings them all. The id is the last part of the address that is a name; an address that holds only a key is named after its host.</p>
+            <ul class="did no"><li>A schedule: a URL does not say when the job runs. Add a <code>schedule</code> for Dokkit to call it late.</li></ul>
+          </div></details>
+        </div>"""
+    calls = """        <p class="big-fact" data-fly="up">Each job keeps calling the old address and <mark class="n">calls Dokkit's as well</mark>, until Dokkit has been right about it for long enough to trust. Paging stays with the old tool until then.</p>
+        <div class="prompt small" data-fly="up"><pre id="mvPing">https://your.domain.com/api/v1/in/&lt;app key&gt;/job/&lt;job id&gt;/start
+https://your.domain.com/api/v1/in/&lt;app key&gt;/job/&lt;job id&gt;/ok
+https://your.domain.com/api/v1/in/&lt;app key&gt;/job/&lt;job id&gt;/fail</pre><button type="button" class="copy" data-copy="mvPing">Copy</button></div>
+        <p class="note">GET or POST. A POST body is kept as the last lines of the job's output, up to 16 KB, and <code>?run=</code> ties a start to its finish. The key is the service's app key (<code>dka_</code>).</p>
+        <p class="sub-p">Send a file of jobs with that key. A file with <code>http</code> or <code>tcp</code> checks goes on a machine with <code>dokkit</code>, which runs them, in a folder it reads or sent with the machine's key.</p>
+        <div class="cmd" data-fly="left"><code id="mvApply">DOKKIT_KEY=dka_... dokkit apply nightly-backup.dokkit.toml</code><button type="button" class="copy" data-copy="mvApply">Copy</button></div>
+        <p class="sub-p">On a machine with <code>dokkit</code>, wrap the job instead: it reports the start, the exit code, the time taken and the last lines of output.</p>
+        <div class="cmd" data-fly="left"><code id="mvRun">dokkit run --job nightly-backup -- ./backup.sh</code><button type="button" class="copy" data-copy="mvRun">Copy</button></div>"""
+    page("move.html", "Move over to Dokkit", "Turn a Healthchecks export, an Uptime Kuma backup or a list of ping URLs into dokkit.toml files, in the browser.",
+         [], "Move over", "Paste what you watch with today and get <code>dokkit.toml</code> files back, <mark class=\"n\">each one read by the real checker</mark>, with what could not come over and why.",
+         [("bring", "Bring it over"), ("rules", "What becomes what"), ("calls", "Then call Dokkit")],
+         step("bring", "Bring it over", bring) + step("rules", "What becomes what", rules) + step("calls", "Then call Dokkit", calls),
+         [("check.html", "Check a file", "Edit one and see what Dokkit will watch"), ("api.html", "The ping URLs", "In the API, with every answer"), ("install.html", "Install it", "The server, then the program on each machine")],
+         js=["wasm_exec.js", "move.js"], css="move.css")
+
+
 channel_pages()
 alerts_page()
 tools_page()
 changelog_page()
 check_page()
-print("wrote", len(CHANNELS) + 3, "pages")
+move_page()
+print("wrote", len(CHANNELS) + 5, "pages")
