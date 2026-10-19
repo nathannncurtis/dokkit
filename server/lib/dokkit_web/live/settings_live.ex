@@ -570,7 +570,7 @@ defmodule DokkitWeb.SettingsLive do
                 class="inp"
                 name="acme[acme_name]"
                 value={@acme["acme_name"]}
-                placeholder="example.dokkit.dev"
+                placeholder="example.dokkit.page"
                 autocomplete="off"
                 spellcheck="false"
               />
@@ -631,7 +631,7 @@ defmodule DokkitWeb.SettingsLive do
             id={"name-form-#{@name_n}"}
           >
             <p class="lead" style="margin:0">
-              Or use a name on dokkit.dev, with no Cloudflare token: claim one at {@names_service}, paste its claim code here, and Dokkit keeps the name pointed at this server and gets its certificate through that service.
+              Or use a name on dokkit.page, with no Cloudflare token: claim one at {@names_service}, paste its claim code here, and Dokkit keeps the name pointed at this server and gets its certificate through that service.
             </p>
 
             <p :if={@dokkit_name["name"] != ""} style="margin:0" id="dokkit-name">

@@ -674,7 +674,7 @@
     ],
     "name": "set_certificate_settings",
     "scope": "admin",
-    "description": "Change those settings: acme_name (such as example.dokkit.dev), acme_cloudflare_token (a Cloudflare API token that may edit DNS in the name's zone; an empty one clears it) and acme_directory (Let's Encrypt production when empty). A setting left out stays as it was.",
+    "description": "Change those settings: acme_name (such as example.dokkit.page), acme_cloudflare_token (a Cloudflare API token that may edit DNS in the name's zone; an empty one clears it) and acme_directory (Let's Encrypt production when empty). A setting left out stays as it was.",
     "required": []
   },
   {

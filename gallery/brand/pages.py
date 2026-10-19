@@ -252,7 +252,7 @@ def alerts_page():
           <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Limits</h3><p>The percent of a disk, or of memory for three minutes running, that needs a look. Leave either blank to switch it off.</p></article>
         </div>'''
     itself = '''        <p class="big-fact" data-fly="up">Dokkit cannot tell anyone that it is down. Give it <mark class="n">an outside heartbeat</mark>: an https address it calls every minute, at a service that alerts when the calls stop.</p>
-        <details class="card"><summary>dokkit.dev as your outside heartbeat <small>soon</small></summary><div class="card-body"><p>Point the heartbeat at dokkit.dev and it tells you, the ways you choose, when your server stops calling. Nothing else to sign up for.</p></div></details>
+        <details class="card"><summary>dokkit.dev as your outside heartbeat</summary><div class="card-body"><p>On the Alerts page, under Outside heartbeat, press Use beat.dokkit.dev. There is no account to make. When your server stops calling for five minutes, dokkit.dev tells the ntfy topic or webhook already set on that page, and tells it again when the calls start. Change that topic or webhook later and the heartbeat follows. If dokkit.dev itself is down, nobody is told, as with any outside service.</p></div></details>
         <ul class="did">
           <li>When Dokkit stops taking reports or cannot reach its database, it tells you on the loudest channel that is set up, unless you choose one.</li>
           <li>Lesser trouble, such as an archive folder it cannot write to or a certificate close to running out, has its own choice.</li>
@@ -420,7 +420,7 @@ def privacy_page():
           <li>The Check a file and Move over pages work entirely in your browser. What you type or drop there is not sent anywhere.</li>
         </ul>"""
     software = """        <p class="big-fact" data-fly="up">Dokkit runs on <mark class="n">your own hardware</mark>. What it collects stays on your server, and nothing in the program, the server or the libraries reports to dokkit.dev.</p>"""
-    names = """        <p class="sub-p">To give you a name such as yours.dokkit.dev, names.dokkit.dev keeps:</p>
+    names = """        <p class="sub-p">To give you a name such as yours.dokkit.page, names.dokkit.dev keeps:</p>
         <ul class="did">
           <li>The account you signed in with: the provider (GitHub, Google, Microsoft or ChatGPT), the stable id it gives for you, and the display name it sends. Your email address is not asked for and not kept.</li>
           <li>Each name you claim, when you claimed it, the public key your server registered, the addresses your server set for it, and when it last checked in.</li>

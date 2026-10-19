@@ -1,5 +1,5 @@
 defmodule Dokkit.Names do
-  @moduledoc "A name on dokkit.dev from the claim service, which writes its DNS records for this server."
+  @moduledoc "A name on dokkit.page from the claim service, which writes its DNS records for this server."
   require Logger
   alias Dokkit.{Acme, Certificate, Setting}
 

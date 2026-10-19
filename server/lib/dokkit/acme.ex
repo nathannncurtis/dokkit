@@ -1,7 +1,7 @@
 defmodule Dokkit.Acme do
   @moduledoc """
   Keeps the uploaded certificate current by itself: an ACME v2 client (RFC 8555) that proves
-  the name with a DNS record at Cloudflare, or through the dokkit.dev claim service. A
+  the name with a DNS record at Cloudflare, or through the names.dokkit.dev claim service. A
   certificate it obtains goes through the same checks and the same saving as an upload.
   """
   require Logger
@@ -44,7 +44,7 @@ defmodule Dokkit.Acme do
         {:error, "Every setting is text."}
 
       name not in [nil, ""] and not Regex.match?(@name, name) ->
-        {:error, "acme_name is a DNS name such as example.dokkit.dev, without a wildcard."}
+        {:error, "acme_name is a DNS name such as example.dokkit.page, without a wildcard."}
 
       dir not in [nil, ""] and match?({:error, _}, Dokkit.Alerts.check_url(dir)) ->
         {:error, "acme_directory must be an https address that is not this machine."}

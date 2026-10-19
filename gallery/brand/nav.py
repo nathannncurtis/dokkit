@@ -112,7 +112,7 @@ def pager(page):
         nt, nl = title_of(nxt)
         out += f'<a class="pg-next" href="{nxt}"><small>Next</small><b>{html.escape(nt)}</b><span>{html.escape(nl)}</span></a>'
     else:
-        out += f'<a class="pg-next" href="{NAMES}"><small>Last step</small><b>Claim a name</b><span>yours.dokkit.dev for your server</span></a>'
+        out += f'<a class="pg-next" href="{NAMES}"><small>Last step</small><b>Claim a name</b><span>yours.dokkit.page for your server</span></a>'
     extra = f'<p class="pg-up"><a href="{up[0]}">{up[1]}</a></p>' if up else ""
     return f'<nav class="pager" aria-label="Where to go next">{out}</nav>{extra}'
 

@@ -1,4 +1,4 @@
-// Command names hands out <name>.dokkit.dev to Dokkit servers and is the only writer of those DNS records.
+// Command names hands out <name>.dokkit.page to Dokkit servers and is the only writer of those DNS records.
 package main
 
 import (
@@ -39,8 +39,8 @@ func main() {
 		Store: store,
 		DNS: &Azure{API: env("AZURE_API", "https://management.azure.com"), Login: env("AZURE_LOGIN", "https://login.microsoftonline.com"),
 			Tenant: os.Getenv("AZURE_TENANT"), ClientID: os.Getenv("AZURE_CLIENT_ID"), Secret: os.Getenv("AZURE_CLIENT_SECRET"),
-			Subscription: os.Getenv("AZURE_SUBSCRIPTION"), Group: os.Getenv("AZURE_DNS_GROUP"), Zone: env("NAMES_ZONE", "dokkit.dev")},
-		Zone:     env("NAMES_ZONE", "dokkit.dev"),
+			Subscription: os.Getenv("AZURE_SUBSCRIPTION"), Group: os.Getenv("AZURE_DNS_GROUP"), Zone: env("NAMES_ZONE", "dokkit.page")},
+		Zone:     env("NAMES_ZONE", "dokkit.page"),
 		Max:      max,
 		Reserved: map[string]bool{},
 		Blocked:  map[string]bool{},
