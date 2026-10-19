@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"html/template"
@@ -361,6 +362,7 @@ func (a *App) part(w http.ResponseWriter, r *http.Request) {
 func serveJS(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	io.WriteString(w, appJS)
+	io.WriteString(w, navJS)
 }
 
 // The API for servers
@@ -443,7 +445,19 @@ func (a *App) signed(fn func(label string, payload []byte) (*Name, error)) http.
 	}
 }
 
-var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
+//go:embed navbar.html
+var navbarHTML string
+
+//go:embed nav.css
+var navCSS string
+
+//go:embed nav.js
+var navJS string
+
+var pageTmpl = template.Must(template.New("page").Funcs(template.FuncMap{
+	"navbar": func() template.HTML { return template.HTML(navbarHTML) },
+	"navcss": func() template.CSS { return template.CSS(navCSS) },
+}).Parse(`<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -499,8 +513,8 @@ h2{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color
 .why{margin:36px 0 0;max-width:60ch;padding:18px 20px;border-left:2px solid var(--acc);background:color-mix(in srgb,var(--panel) 60%,transparent);border-radius:0 12px 12px 0;color:var(--mute);font-size:15px}.why b{color:var(--ink);font-weight:600}.why p{margin:6px 0 0}
 .alt{display:inline-flex;align-items:center;gap:7px;padding:6px 2px;color:var(--ink);text-decoration:none;font-weight:500}.alt svg{width:16px;height:16px;flex:none}.alt:hover{color:var(--acc2)}.foot{margin:64px 0 0;color:var(--mute);font-size:14px}
 @media (max-width:720px){.row{grid-template-columns:1fr}.acts{justify-content:flex-start}.steps{grid-template-columns:1fr}}
-</style>
-<header class="bar"><a class="brand" href="https://{{.Zone}}/"><span class="mk"><svg viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></svg></span>Dokkit</a><span class="crumb">/ <b>Claim a name</b></span></header>
+{{navcss}}</style>
+{{navbar}}
 <main>
 <h1>Claim a name</h1>
 <p class="lede">A name such as <b>yours.{{.Zone}}</b> for your Dokkit server, with a real certificate, even on a private network. Your server proves it holds the name's key before the record goes live, and keeps it renewed. A name lapses when its server stops renewing it.</p>
