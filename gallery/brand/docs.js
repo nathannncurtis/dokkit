@@ -9,7 +9,8 @@ if ($("#cli")) fetch("cli.json").then((r) => r.json()).then((d) => {
   $("#checkOut").textContent = "$ dokkit check\n" + d.check;
   $("#toc").innerHTML = d.groups.map((g) => `<b>${esc(g.name)}</b>` + g.commands.map((c, i) => `<a href="#${c.name}-${i}">${esc(c.synopsis.split(" ").slice(0, ["task", "folder"].includes(c.name) ? 3 : 2).join(" "))}</a>`).join("")).join("");
   $("#cli").innerHTML = d.groups.map((g) => `<h2>${esc(g.name)}</h2>` + g.commands.map((c, i) =>
-    `<section class="op" id="${c.name}-${i}"><h3>${esc(c.synopsis)}</h3><p class="sum">${esc(c.short)}</p><p>${esc(c.more)}</p></section>`).join("")).join("");
+    `<details class="op" id="${c.name}-${i}" data-find="${esc((c.synopsis + " " + c.short).toLowerCase())}"><summary><h3>${esc(c.synopsis)}</h3><p class="sum">${esc(c.short)}</p></summary><div class="op-body"><p>${esc(c.more)}</p></div></details>`).join("")).join("");
+  ready();
 });
 
 if ($("#api")) fetch("openapi.json").then((r) => r.json()).then((d) => {
@@ -27,17 +28,42 @@ if ($("#api")) fetch("openapi.json").then((r) => r.json()).then((d) => {
     const curl = `curl ${o.verb === "get" ? "" : "-X " + o.verb.toUpperCase() + " "}-H "Authorization: Bearer $DOKKIT_KEY" '${d.servers[0].url}${o.path}'${sent ? " -d '" + (typeof sent === "string" ? sent : JSON.stringify(sent)) + "'" : ""}`;
     const answers = Object.entries(o.responses || {}).map(([code, r]) => [code, ref(r)]);
     const good = answers.find(([code]) => code[0] === "2");
-    return `<section class="op" id="${o.operationId}">
-      <h3><span class="verb ${o.verb}">${o.verb.toUpperCase()}</span>${esc(o.path)}</h3>
-      <p class="sum">${prose(o.summary)}</p><p>${prose(o.description)}</p>
+    return `<details class="op" id="${o.operationId}" data-find="${esc((o.verb + " " + o.path + " " + o.summary).toLowerCase())}">
+      <summary><h3><span class="verb ${o.verb}">${o.verb.toUpperCase()}</span>${esc(o.path)}</h3>
+      <p class="sum">${prose(o.summary)}</p></summary><div class="op-body"><p>${prose(o.description)}</p>
       ${params.length ? `<table><thead><tr><th>Takes</th><th>In</th><th></th></tr></thead><tbody>${params.map((p) => `<tr><td><code>${esc(p.name)}</code>${p.required ? "" : " (optional)"}</td><td>${esc(p.in)}</td><td>${prose(p.description)}</td></tr>`).join("")}</tbody></table>` : ""}
       <h4>Ask</h4><pre>${esc(curl)}</pre>
       ${good && body(good[1]) !== undefined ? `<h4>Answer, ${good[0]}</h4><pre>${pretty(body(good[1]))}</pre>` : ""}
       <table><tbody>${answers.map(([code, r]) => `<tr><td><code>${code}</code></td><td>${prose(r.description)}</td></tr>`).join("")}</tbody></table>
-    </section>`;
+    </div></details>`;
   }).join("")).join("");
-  if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  ready();
 });
+
+// Everything starts folded; the sidebar, a link or the search box opens what you are after.
+function ready() {
+  const ops = [...document.querySelectorAll("details.op")], find = $("#find"), count = $("#findCount");
+  const open = (id) => { const el = document.getElementById(id); if (el?.matches("details")) { el.open = true; el.scrollIntoView({ block: "start" }); } };
+  if (location.hash) open(location.hash.slice(1));
+  addEventListener("hashchange", () => open(location.hash.slice(1)));
+  $("#foldAll")?.addEventListener("click", (e) => {
+    const shut = ops.some((o) => o.open);
+    ops.forEach((o) => (o.open = !shut && !o.hidden));
+    e.target.textContent = shut ? "Open all" : "Close all";
+  });
+  find?.addEventListener("input", () => {
+    const q = find.value.trim().toLowerCase();
+    let n = 0;
+    ops.forEach((o) => { const hit = !q || o.dataset.find.includes(q); o.hidden = !hit; n += hit; });
+    document.querySelectorAll("#api > h2, #api > h2 + p, #cli > h2").forEach((h) => {
+      let el = h.nextElementSibling, any = false;
+      while (el && el.tagName !== "H2") { if (el.matches("details.op") && !el.hidden) any = true; el = el.nextElementSibling; }
+      h.hidden = !any;
+    });
+    count.textContent = q ? `${n} of ${ops.length}` : `${ops.length}`;
+  });
+  if (count) count.textContent = `${ops.length}`;
+}
 
 document.addEventListener("click", (e) => {
   const t = e.target.closest("[data-copy]");

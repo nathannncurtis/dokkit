@@ -259,14 +259,14 @@ function holdRound() {
 }
 
 function holdWatches() {
-  const sec = $(".watches"), h = $("h2", sec), cards = $$(".wcard", sec);
+  const sec = $(".watches"), h = $("h2", sec), cards = $$(".watch-table .tr:not(.th)", sec);
   h.removeAttribute("data-type");
   cards.forEach((c) => c.removeAttribute("data-fly"));
-  gsap.set(cards, { opacity: 0, y: 60, scale: 0.97 });
+  gsap.set(cards, { opacity: 0, y: 24 });
   gsap.set(".sub-lede", { opacity: 0, y: 14 });
   const tl = gsap.timeline({ paused: true });
   typeIn(tl, h, 0.9, 0);
   tl.to(".sub-lede", { opacity: 1, y: 0, duration: 0.3 }, 0.8)
-    .to(cards, { opacity: 1, y: 0, scale: 1, stagger: 0.08, duration: 0.5, ease: "power3.out" }, 0.95);
+    .to(cards, { opacity: 1, y: 0, stagger: 0.08, duration: 0.45, ease: "power3.out" }, 0.95);
   holdFor(sec, tl, "top 12%");
 }

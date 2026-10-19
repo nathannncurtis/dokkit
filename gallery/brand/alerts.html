@@ -12,24 +12,23 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="site.css?v=20">
 <script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m !== "off"; if (!on) document.documentElement.classList.add("still"); })();</script>
+<link rel="stylesheet" href="nav.css?v=1">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="mark" viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></symbol>
 </svg>
 
-<header class="bar">
-  <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
-  <nav aria-label="Site">
-    <a href="install.html">Install</a><span class="soon" title="Not built yet">Demo</span><a href="agents.html">Agents</a><a href="api.html">Docs</a><a href="phone.html">Phone</a><a href="security.html">Security</a><span class="soon" title="Not built yet">Status</span><a href="https://github.com/nathannncurtis/dokkit">Source</a>
-  </nav>
-  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
-  <a class="claim" href="install.html">Claim a name <em>soon</em></a>
+<header class="nb" id="nb">
+  <a class="nb-brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+  <button type="button" class="nb-burger" aria-expanded="false" aria-controls="nb-nav" aria-label="Menu"><i></i></button>
+  <nav class="nb-nav" id="nb-nav" aria-label="Site"><div class="nb-group"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m0">Get started<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m0"><a class="nb-item" href="install.html"><b>Install</b><small>The server, then the program on each machine</small></a><a class="nb-item" href="move.html"><b>Move over</b><small>From Healthchecks, Uptime Kuma or ping URLs</small></a><a class="nb-item" href="check.html"><b>Check a file</b><small>Write a dokkit.toml and see what it watches</small></a><span class="nb-item nb-soon" aria-disabled="true"><b>Live demo<em>soon</em></b><small>The real server on a sample company</small></span></div></div><div class="nb-group"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m1">Build<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m1"><a class="nb-item" href="agents.html"><b>Agents</b><small>Let a coding agent wire your app in</small></a><a class="nb-item" href="libraries.html"><b>Libraries</b><small>The same calls in eleven languages</small></a><a class="nb-item" href="mcp-tools.html"><b>MCP tools</b><small>Every tool an agent can use</small></a><a class="nb-item" href="api.html"><b>API</b><small>Every call, for scripts</small></a><a class="nb-item" href="cli.html"><b>Command line</b><small>Every dokkit command</small></a></div></div><div class="nb-group nb-here"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m2">Alerts &amp; phone<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m2"><a class="nb-item" href="alerts.html" aria-current="page"><b>Alerts</b><small>Paging, push, email, chat and more</small></a><a class="nb-item" href="phone.html"><b>Phone app</b><small>What needs you, from anywhere</small></a></div></div><div class="nb-group"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m3">Project<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m3"><a class="nb-item" href="security.html"><b>Security</b><small>What it can and cannot do</small></a><a class="nb-item" href="changelog.html"><b>Changelog</b><small>Every release</small></a><span class="nb-item nb-soon" aria-disabled="true"><b>Status<em>soon</em></b><small>dokkit.dev's own status</small></span><a class="nb-item" href="https://github.com/nathannncurtis/dokkit"><b>Source</b><small>The code on GitHub</small></a></div></div></nav>
+  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button><a class="nb-claim" href="https://names.dokkit.dev/">Claim a name</a>
 </header>
 
 <main id="top" class="page">
   <header class="phead">
-    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><b>Alerts</b></p>
+    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><span>Alerts &amp; phone</span><span aria-hidden="true">/</span><b>Alerts</b></p>
     <h1 class="ptitle">Alerts</h1>
     <p class="plede">Dokkit tells you when something needs you, on <mark class="n">the channels you set up</mark>: paging for what cannot wait, a quiet push for today, and email for the morning.</p>
   </header>
@@ -86,18 +85,13 @@
       <section class="step" id="itself">
         <h2 data-type>When Dokkit is down</h2>
         <p class="big-fact" data-fly="up">Dokkit cannot tell anyone that it is down. Give it <mark class="n">an outside heartbeat</mark>: an https address it calls every minute, at a service that alerts when the calls stop.</p>
+        <details class="card"><summary>dokkit.dev as your outside heartbeat <small>soon</small></summary><div class="card-body"><p>Point the heartbeat at dokkit.dev and it tells you, the ways you choose, when your server stops calling. Nothing else to sign up for.</p></div></details>
         <ul class="did">
           <li>When Dokkit stops taking reports or cannot reach its database, it tells you on the loudest channel that is set up, unless you choose one.</li>
           <li>Lesser trouble, such as an archive folder it cannot write to or a certificate close to running out, has its own choice.</li>
         </ul>
       </section>
-
-      <section class="next" aria-label="Where to go next">
-        <h2 data-type>Next:</h2>
-        <div class="next-links">
-          <a class="nl" href="alerts-pagerduty.html"><b>Set up paging</b><small>PagerDuty, for what cannot wait</small></a><a class="nl" href="phone.html"><b>The phone app</b><small>See what needs you, read-only</small></a><a class="nl" href="install.html"><b>Install the server</b><small>So there is something to be told about</small></a>
-        </div>
-      </section>
+      <nav class="pager" aria-label="Where to go next"><a class="pg-prev" href="cli.html"><small>Back</small><b>Command line</b></a><a class="pg-next" href="phone.html"><small>Next</small><b>Phone app</b><span>What needs you, from anywhere</span></a></nav>
     </div>
   </div>
 </main>
@@ -115,5 +109,6 @@
 <script src="alerts.js?v=20"></script>
 <script>railFor($$(".step"), $$(".rail a"));</script>
 <script src="motion.js?v=20"></script>
+<script src="nav.js?v=1"></script>
 </body>
 </html>

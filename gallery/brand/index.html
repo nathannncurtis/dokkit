@@ -12,19 +12,18 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="site.css?v=19">
 <script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m !== "off"; if (!on) document.documentElement.classList.add("still"); })();</script>
+<link rel="stylesheet" href="nav.css?v=1">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="mark" viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></symbol>
 </svg>
 
-<header class="bar">
-  <a class="brand" href="index.html" aria-current="page"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
-  <nav aria-label="Site">
-    <a href="install.html">Install</a><span class="soon" title="Not built yet">Demo</span><a href="agents.html">Agents</a><a href="api.html">Docs</a><a href="phone.html">Phone</a><a href="security.html">Security</a><span class="soon" title="Not built yet">Status</span><a href="https://github.com/nathannncurtis/dokkit">Source</a>
-  </nav>
-  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
-  <a class="claim" href="install.html">Claim a name <em>soon</em></a>
+<header class="nb" id="nb">
+  <a class="nb-brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+  <button type="button" class="nb-burger" aria-expanded="false" aria-controls="nb-nav" aria-label="Menu"><i></i></button>
+  <nav class="nb-nav" id="nb-nav" aria-label="Site"><div class="nb-group"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m0">Get started<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m0"><a class="nb-item" href="install.html"><b>Install</b><small>The server, then the program on each machine</small></a><a class="nb-item" href="move.html"><b>Move over</b><small>From Healthchecks, Uptime Kuma or ping URLs</small></a><a class="nb-item" href="check.html"><b>Check a file</b><small>Write a dokkit.toml and see what it watches</small></a><span class="nb-item nb-soon" aria-disabled="true"><b>Live demo<em>soon</em></b><small>The real server on a sample company</small></span></div></div><div class="nb-group"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m1">Build<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m1"><a class="nb-item" href="agents.html"><b>Agents</b><small>Let a coding agent wire your app in</small></a><a class="nb-item" href="libraries.html"><b>Libraries</b><small>The same calls in eleven languages</small></a><a class="nb-item" href="mcp-tools.html"><b>MCP tools</b><small>Every tool an agent can use</small></a><a class="nb-item" href="api.html"><b>API</b><small>Every call, for scripts</small></a><a class="nb-item" href="cli.html"><b>Command line</b><small>Every dokkit command</small></a></div></div><div class="nb-group"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m2">Alerts &amp; phone<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m2"><a class="nb-item" href="alerts.html"><b>Alerts</b><small>Paging, push, email, chat and more</small></a><a class="nb-item" href="phone.html"><b>Phone app</b><small>What needs you, from anywhere</small></a></div></div><div class="nb-group"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m3">Project<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m3"><a class="nb-item" href="security.html"><b>Security</b><small>What it can and cannot do</small></a><a class="nb-item" href="changelog.html"><b>Changelog</b><small>Every release</small></a><span class="nb-item nb-soon" aria-disabled="true"><b>Status<em>soon</em></b><small>dokkit.dev's own status</small></span><a class="nb-item" href="https://github.com/nathannncurtis/dokkit"><b>Source</b><small>The code on GitHub</small></a></div></div></nav>
+  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button><a class="nb-claim" href="https://names.dokkit.dev/">Claim a name</a>
 </header>
 
 <main id="top">
@@ -66,17 +65,40 @@
     <p class="label" data-type>The real first screen, on a made-up company. Open a row, snooze it, mark it seen.</p>
   </section>
 
+  <section class="gifts" id="free">
+    <h2 data-type>All of it, <span>free.</span></h2>
+    <p class="sub-lede">Open source, nothing to pay for, and no account to make, except to claim a name.</p>
+    <div class="spots">
+      <a class="spot" href="https://names.dokkit.dev/" data-fly="left">
+        <div class="addr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="4.5" y="10" width="15" height="11" rx="2.5" fill="currentColor"/></svg><span>https://</span><b>brightwater</b><span>.dokkit.dev</span></div>
+        <h3>A real name with HTTPS</h3>
+        <p>Claim <mark class="n">yours.dokkit.dev</mark> and your server gets a real certificate, even on a private network. No domain to buy and nothing to renew by hand.</p>
+        <span class="go">Claim a name</span>
+      </a>
+      <a class="spot phone-spot" href="phone.html" data-fly="right">
+        <img src="img/phone.webp?v=2" width="760" height="1344" alt="The Dokkit app for Android, showing what needs you on a sample company" loading="lazy">
+        <div>
+          <h3>On your phone too</h3>
+          <p>Apps for <mark class="n">iPhone and Android</mark> show what needs you and whether the hardware is up, through a shared relay that cannot read your data.</p>
+          <span class="go">The phone app</span>
+        </div>
+      </a>
+    </div>
+    <ul class="included" data-fly="up"><li><a href="install.html"><b>The server</b><small>on Windows, Linux or Docker</small></a></li><li><a href="install.html"><b>The dokkit program</b><small>for Windows, Linux and macOS</small></a></li><li><a href="phone.html"><b>iPhone and Android apps</b><small>read-only, what needs you</small></a></li><li><a href="phone.html#relay"><b>A shared relay</b><small>for the phones, that cannot read them</small></a></li><li><a href="https://names.dokkit.dev/"><b>A name with HTTPS</b><small>yours.dokkit.dev, renewed for you</small></a></li><li><a href="libraries.html"><b>Libraries in 11 languages</b><small>the same calls in each</small></a></li><li><a href="check.html"><b>A dokkit.toml per app</b><small>that says what it is and how to check it</small></a></li><li><a href="alerts.html"><b>Alerts, ten ways</b><small>PagerDuty, ntfy, Slack, iMessage and more</small></a></li><li><a href="agents.html"><b>An MCP for agents</b><small>on your server, and one on dokkit.dev</small></a></li><li><a href="api.html"><b>An API</b><small>everything the screens can do</small></a></li><li><a href="cli.html"><b>A command line</b><small>every check, from a terminal</small></a></li><li><a href="move.html"><b>A way over</b><small>from Healthchecks and Uptime Kuma</small></a></li></ul>
+  </section>
+
   <section class="watches" id="what">
     <h2 data-type="long">What it watches, and when it <span>says so.</span></h2>
-    <p class="sub-lede">When each thing needs you. Open a card to see how it is watched.</p>
-    <div class="cards">
-      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Websites and APIs</h3><p>Three answers in a row are wrong, or slower than <mark class="warn">the limit its file sets</mark>.</p><details><summary>How it is watched</summary><p>An address is asked on the schedule its file sets, from the machine it runs on.</p></details></article>
-      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Scheduled jobs</h3><p>It does not start on time, fails, or runs <mark class="warn">longer than you allow</mark>.</p><details><summary>How it is watched</summary><p>The job reports a start and an end, or is wrapped with <code>dokkit run</code>.</p></details></article>
-      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Services and processes</h3><p>One stops, or fewer are running than <mark class="warn">the count you set</mark>.</p><details><summary>How it is watched</summary><p>Windows services, systemd units, ports and named processes.</p></details></article>
-      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Disks, memory, certificates</h3><p>A disk is <mark class="warn">on course to fill</mark>, or a certificate expires within 30 days.</p><details><summary>How it is watched</summary><p>Read on every machine with the <code>dokkit</code> program.</p></details></article>
-      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Logs</h3><p>Never by itself. <mark class="ok">Logs are for looking things up</mark>, one click from each item.</p><details><summary>How it is watched</summary><p>Files it is pointed at, apps that log to Seq, and the libraries. Kept a year, then archived.</p></details></article>
-      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Errors</h3><p>Never by itself. What is new <mark class="ok">since the last deploy</mark> is one click away.</p><details><summary>How it is watched</summary><p>From the library, or from Sentry's own SDKs, grouped by type and place.</p></details></article>
-      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Versions and deploys</h3><p>Never by itself. What broke since the last deploy is <mark class="ok">one question</mark>.</p><details><summary>How it is watched</summary><p>The version each app reports. When it changes, that is a deploy.</p></details></article>
+    <p class="sub-lede">When each thing needs you, and how it is watched.</p>
+    <div class="table watch-table">
+      <div class="tr th"><span>What</span><span>When it needs you</span><span>How it is watched</span></div>
+      <div class="tr"><span><i class="s ok"></i>Websites and APIs</span><span>Three answers in a row are wrong, or slower than <mark class="warn">the limit its file sets</mark>.</span><span>An address is asked on the schedule its file sets, from the machine it runs on.</span></div>
+      <div class="tr"><span><i class="s ok"></i>Scheduled jobs</span><span>It does not start on time, fails, or runs <mark class="warn">longer than you allow</mark>.</span><span>The job reports a start and an end, or is wrapped with <code>dokkit run</code>.</span></div>
+      <div class="tr"><span><i class="s ok"></i>Services and processes</span><span>One stops, or fewer are running than <mark class="warn">the count you set</mark>.</span><span>Windows services, systemd units, ports and named processes.</span></div>
+      <div class="tr"><span><i class="s ok"></i>Disks, memory, certificates</span><span>A disk is <mark class="warn">on course to fill</mark>, or a certificate expires within 30 days.</span><span>Read on every machine with the <code>dokkit</code> program.</span></div>
+      <div class="tr"><span><i class="s ok"></i>Logs</span><span>Never by itself. <mark class="ok">Logs are for looking things up</mark>, one click from each item.</span><span>Files it is pointed at, apps that log to Seq, and the libraries. Kept a year, then archived.</span></div>
+      <div class="tr"><span><i class="s ok"></i>Errors</span><span>Never by itself. What is new <mark class="ok">since the last deploy</mark> is one click away.</span><span>From the library, or from Sentry's own SDKs, grouped by type and place.</span></div>
+      <div class="tr"><span><i class="s ok"></i>Versions and deploys</span><span>Never by itself. What broke since the last deploy is <mark class="ok">one question</mark>.</span><span>The version each app reports. When it changes, that is a deploy.</span></div>
     </div>
     <p class="foot" data-fly="left">A machine that goes down is <mark class="bad">one page</mark>, not one for every service on it. An issue closes itself when the thing recovers.</p>
   </section>
@@ -113,5 +135,6 @@
 <script src="site.js?v=14"></script>
 <script src="home.js?v=14"></script>
 <script src="motion.js?v=14"></script>
+<script src="nav.js?v=1"></script>
 </body>
 </html>

@@ -5,18 +5,6 @@ const PROMPT = `Wire this app into Dokkit. First read https://dokkit.dev/llms-fu
 3. Run \`dokkit check\` and show me what it would send.
 
 Change nothing else, and do not commit.`;
-const HOW = {
-  claude: "Run claude in the app's repository and paste this.",
-  cursor: "Open the repository in Cursor, start an Agent chat, and paste this.",
-  codex: "Run codex in the app's repository and paste this.",
-  copilot: "Open the repository in VS Code, switch Copilot Chat to agent mode, and paste this.",
-};
-function tool(t) {
-  $$("[data-tool]").forEach((b) => b.setAttribute("aria-selected", b.dataset.tool === t));
-  $("#how").textContent = HOW[t];
-}
-$("#prompt").textContent = PROMPT;
-tool("claude");
 
 // The tools each scope offers, as the server's MCP lists them.
 const TOOLS = {
@@ -87,9 +75,8 @@ function ask(q) {
   return lines.length;
 }
 document.addEventListener("click", (e) => {
-  const q = e.target.closest("[data-q]"), t = e.target.closest("[data-tool]");
+  const q = e.target.closest("[data-q]");
   if (q) { $$(".qs button").forEach((b) => b.classList.toggle("on", b === q)); ask(+q.dataset.q); }
-  if (t) tool(t.dataset.tool);
 });
 offer();
 

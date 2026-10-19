@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="site.css?v=19">
 <script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m !== "off"; if (!on) document.documentElement.classList.add("still"); })();</script>
+<link rel="stylesheet" href="nav.css?v=1">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -19,18 +20,16 @@
   <symbol id="lock" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="shackle"/><rect x="4.5" y="10" width="15" height="11" rx="2.5" fill="currentColor"/></symbol>
 </svg>
 
-<header class="bar">
-  <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
-  <nav aria-label="Site">
-    <a href="install.html">Install</a><span class="soon" title="Not built yet">Demo</span><a href="agents.html">Agents</a><a href="api.html">Docs</a><a href="phone.html" aria-current="page">Phone</a><a href="security.html">Security</a><span class="soon" title="Not built yet">Status</span><a href="https://github.com/nathannncurtis/dokkit">Source</a>
-  </nav>
-  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
-  <a class="claim" href="install.html">Claim a name <em>soon</em></a>
+<header class="nb" id="nb">
+  <a class="nb-brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+  <button type="button" class="nb-burger" aria-expanded="false" aria-controls="nb-nav" aria-label="Menu"><i></i></button>
+  <nav class="nb-nav" id="nb-nav" aria-label="Site"><div class="nb-group"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m0">Get started<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m0"><a class="nb-item" href="install.html"><b>Install</b><small>The server, then the program on each machine</small></a><a class="nb-item" href="move.html"><b>Move over</b><small>From Healthchecks, Uptime Kuma or ping URLs</small></a><a class="nb-item" href="check.html"><b>Check a file</b><small>Write a dokkit.toml and see what it watches</small></a><span class="nb-item nb-soon" aria-disabled="true"><b>Live demo<em>soon</em></b><small>The real server on a sample company</small></span></div></div><div class="nb-group"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m1">Build<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m1"><a class="nb-item" href="agents.html"><b>Agents</b><small>Let a coding agent wire your app in</small></a><a class="nb-item" href="libraries.html"><b>Libraries</b><small>The same calls in eleven languages</small></a><a class="nb-item" href="mcp-tools.html"><b>MCP tools</b><small>Every tool an agent can use</small></a><a class="nb-item" href="api.html"><b>API</b><small>Every call, for scripts</small></a><a class="nb-item" href="cli.html"><b>Command line</b><small>Every dokkit command</small></a></div></div><div class="nb-group nb-here"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m2">Alerts &amp; phone<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m2"><a class="nb-item" href="alerts.html"><b>Alerts</b><small>Paging, push, email, chat and more</small></a><a class="nb-item" href="phone.html" aria-current="page"><b>Phone app</b><small>What needs you, from anywhere</small></a></div></div><div class="nb-group"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m3">Project<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m3"><a class="nb-item" href="security.html"><b>Security</b><small>What it can and cannot do</small></a><a class="nb-item" href="changelog.html"><b>Changelog</b><small>Every release</small></a><span class="nb-item nb-soon" aria-disabled="true"><b>Status<em>soon</em></b><small>dokkit.dev's own status</small></span><a class="nb-item" href="https://github.com/nathannncurtis/dokkit"><b>Source</b><small>The code on GitHub</small></a></div></div></nav>
+  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button><a class="nb-claim" href="https://names.dokkit.dev/">Claim a name</a>
 </header>
 
 <main id="top" class="page">
   <header class="phead">
-    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><b>Phone</b></p>
+    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><span>Alerts &amp; phone</span><span aria-hidden="true">/</span><b>Phone</b></p>
     <h1 class="ptitle">Phone</h1>
     <p class="plede">See what needs you, and whether the hardware is up, from your phone, even though your server is not on the internet. The apps are <mark class="n">read-only</mark>, for iPhone and Android.</p>
   </header>
@@ -39,7 +38,7 @@
     <nav class="rail" aria-label="On this page">
       <ol>
         <li><a href="#how" data-step="how"><i>1</i>How it reaches you</a></li>
-        <li><a href="#relay" data-step="relay"><i>2</i>Run a relay</a></li>
+        <li><a href="#relay" data-step="relay"><i>2</i>Pick a relay</a></li>
         <li><a href="#app" data-step="app"><i>3</i>Get the app</a></li>
         <li><a href="#pair" data-step="pair"><i>4</i>Pair it</a></li>
       </ol>
@@ -68,14 +67,17 @@
       </section>
 
       <section class="step" id="relay">
-        <h2 data-type>Run a relay</h2>
-        <p class="sub-p">The relay is a mode of the same <code>dokkit</code> program, on any host your phone and your server can both reach.</p>
-        <ol class="do steps-cmd">
-          <li>On that host, make a mailbox for your server. It prints the mailbox address and its upload key, once:<div class="cmd" data-fly="left"><code id="cRelayAdd">dokkit relay add home</code><button type="button" class="copy" data-copy="cRelayAdd">Copy</button></div></li>
-          <li>Serve it behind the https proxy you already run there:<div class="cmd" data-fly="left"><code id="cRelayServe">dokkit relay serve --http 127.0.0.1:8080</code><button type="button" class="copy" data-copy="cRelayServe">Copy</button></div></li>
-          <li>In Dokkit, open <mark class="n">Settings, Phones</mark> and paste the mailbox address and the upload key.</li>
-        </ol>
-        <details class="card"><summary>A shared relay at relay.dokkit.dev <small>soon</small></summary><div class="card-body"><p>So nobody needs a public host of their own to use the phone app. It would hold sealed snapshots it cannot read, like any relay.</p></div></details>
+        <h2 data-type>Pick a relay</h2>
+        <p class="big-fact" data-fly="up">The easy way: in Dokkit, open <mark class="n">Settings, Phones</mark> and choose <mark class="ok">Use the shared relay</mark>. Dokkit makes a mailbox at relay.dokkit.dev and fills in the rest.</p>
+        <p class="note">The shared relay holds sealed snapshots it cannot read, like any relay. A mailbox that gets no upload for 30 days is removed; press the button again for a new one.</p>
+        <details class="card"><summary>Or run a relay of your own <small>3 steps</small></summary><div class="card-body">
+          <p>The relay is a mode of the same <code>dokkit</code> program, on any host your phone and your server can both reach.</p>
+          <ol class="do steps-cmd">
+            <li>On that host, make a mailbox for your server. It prints the mailbox address and its upload key, once:<div class="cmd"><code id="cRelayAdd">dokkit relay add home</code><button type="button" class="copy" data-copy="cRelayAdd">Copy</button></div></li>
+            <li>Serve it behind the https proxy you already run there:<div class="cmd"><code id="cRelayServe">dokkit relay serve --http 127.0.0.1:8080</code><button type="button" class="copy" data-copy="cRelayServe">Copy</button></div></li>
+            <li>In Dokkit, open <mark class="n">Settings, Phones</mark> and paste the mailbox address and the upload key.</li>
+          </ol>
+        </div></details>
       </section>
 
       <section class="step" id="app">
@@ -109,15 +111,7 @@
         </ol>
         <p class="aside" data-fly="left">One phone can follow several servers. Remove a server in the app and its key, token and saved snapshot are deleted from the phone.</p>
       </section>
-
-      <section class="next" aria-label="Where to go next">
-        <h2 data-type>Next:</h2>
-        <div class="next-links">
-          <a class="nl" href="security.html"><b>Why the relay cannot read it</b><small>What each part can and cannot do</small></a>
-          <a class="nl" href="install.html"><b>Install the server</b><small>The phone needs one to follow</small></a>
-          <a class="nl" href="index.html"><b>Back to the start</b><small>What Dokkit is, and the working sample</small></a>
-        </div>
-      </section>
+      <nav class="pager" aria-label="Where to go next"><a class="pg-prev" href="alerts.html"><small>Back</small><b>Alerts</b></a><a class="pg-next" href="security.html"><small>Next</small><b>Security</b><span>What it can and cannot do</span></a></nav>
     </div>
   </div>
 </main>
@@ -134,5 +128,6 @@
 <script src="site.js?v=18"></script>
 <script src="phone.js?v=18"></script>
 <script src="motion.js?v=18"></script>
+<script src="nav.js?v=1"></script>
 </body>
 </html>

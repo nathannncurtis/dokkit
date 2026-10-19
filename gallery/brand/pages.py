@@ -47,7 +47,7 @@ def page(file, title, desc, crumbs, h1, lede, steps, body, nxt, js=None, current
     {nav}
   </nav>
   <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
-  <a class="claim" href="install.html">Claim a name <em>soon</em></a>
+  <a class="claim" href="https://names.dokkit.dev/">Claim a name</a>
 </header>
 
 <main id="top" class="page">
@@ -252,6 +252,7 @@ def alerts_page():
           <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Limits</h3><p>The percent of a disk, or of memory for three minutes running, that needs a look. Leave either blank to switch it off.</p></article>
         </div>'''
     itself = '''        <p class="big-fact" data-fly="up">Dokkit cannot tell anyone that it is down. Give it <mark class="n">an outside heartbeat</mark>: an https address it calls every minute, at a service that alerts when the calls stop.</p>
+        <details class="card"><summary>dokkit.dev as your outside heartbeat <small>soon</small></summary><div class="card-body"><p>Point the heartbeat at dokkit.dev and it tells you, the ways you choose, when your server stops calling. Nothing else to sign up for.</p></div></details>
         <ul class="did">
           <li>When Dokkit stops taking reports or cannot reach its database, it tells you on the loudest channel that is set up, unless you choose one.</li>
           <li>Lesser trouble, such as an archive folder it cannot write to or a certificate close to running out, has its own choice.</li>
@@ -411,10 +412,70 @@ https://your.domain.com/api/v1/in/&lt;app key&gt;/job/&lt;job id&gt;/fail</pre><
          js=["wasm_exec.js", "move.js"], css="move.css")
 
 
+def privacy_page():
+    site = """        <ul class="did">
+          <li>dokkit.dev is a static site served by GitHub Pages. It sets no cookies, runs no analytics and has no forms that send anything.</li>
+          <li>Its pages load fonts from Google Fonts and scripts from cdnjs and unpkg, so those services see your address when a page loads, as GitHub does for the page itself.</li>
+          <li>The Check a file and Move over pages work entirely in your browser. What you type or drop there is not sent anywhere.</li>
+        </ul>"""
+    software = """        <p class="big-fact" data-fly="up">Dokkit runs on <mark class="n">your own hardware</mark>. What it collects stays on your server, and nothing in the program, the server or the libraries reports to dokkit.dev.</p>"""
+    names = """        <p class="sub-p">To give you a name such as yours.dokkit.dev, names.dokkit.dev keeps:</p>
+        <ul class="did">
+          <li>The account you signed in with: the provider (GitHub, Google, Microsoft or ChatGPT), the stable id it gives for you, and the display name it sends. Your email address is not asked for and not kept.</li>
+          <li>Each name you claim, when you claimed it, the public key your server registered, the addresses your server set for it, and when it last checked in.</li>
+          <li>A sign-in cookie, only while you are signed in, to keep you signed in and to stop forged requests.</li>
+        </ul>
+        <p class="note">A name's records are public DNS, so anyone can look up the address it points to. Released or lapsed names are deleted, with their records. Your address is held in memory for a few minutes to limit how often one connection can make requests, and is not written down.</p>"""
+    relay = """        <ul class="did">
+          <li>The shared relay at relay.dokkit.dev keeps a mailbox for each server that signs up: sealed snapshots it cannot read, and the time each arrived. A mailbox with no upload for 30 days is deleted with its contents.</li>
+          <li>The public MCP at mcp.dokkit.dev reads what an agent sends it, answers, and keeps nothing.</li>
+          <li>Both hold your address in memory for a short while to limit requests, and do not write it down.</li>
+        </ul>"""
+    ask = """        <p class="sub-p">To see what names.dokkit.dev holds for you, sign in there. To have anything removed, release your names there, or write to <a href="mailto:abuse@dokkit.dev">abuse@dokkit.dev</a>. The source of every service is public, so you can check all of this.</p>
+        <p class="note">Last changed 19 October 2026.</p>"""
+    page("privacy.html", "Dokkit privacy", "What dokkit.dev and its small services keep, and what they do not.",
+         [], "Privacy", "Dokkit is software you run yourself. These pages cover the few things dokkit.dev runs for everyone: the site, names, the shared relay and the public MCP.",
+         [("software", "The software"), ("site", "This site"), ("names", "Names"), ("relay", "Relay and MCP"), ("ask", "Ask or remove")],
+         step("software", "The software", software) + step("site", "This site", site) + step("names", "Names", names) + step("relay", "Relay and MCP", relay) + step("ask", "Ask or remove", ask),
+         [("terms.html", "Terms", "The rules for the free services"), ("security.html", "Security", "What the program can and cannot do"), ("index.html", "Back to the start", "What Dokkit is, and the working sample")])
+
+
+def terms_page():
+    free = """        <ul class="did">
+          <li>names.dokkit.dev, relay.dokkit.dev and mcp.dokkit.dev are free, run on a small machine, and come with no promise of uptime or support.</li>
+          <li>They may change, be limited or stop. If one is going to stop, this page says so first where that is possible.</li>
+          <li>The software itself is under its own licences: AGPL 3.0 for the server, Apache 2.0 for the program, the libraries and the phone apps.</li>
+        </ul>"""
+    names = """        <ul class="did">
+          <li>A name is for pointing at a Dokkit server you run. At most 3 names per account.</li>
+          <li>A name lapses when its server stops checking in for 90 days, and is then freed for anyone.</li>
+          <li>Names that impersonate someone, mislead, or are used for phishing, malware or abuse are removed, without notice. Report one at <a href="mailto:abuse@dokkit.dev">abuse@dokkit.dev</a>.</li>
+          <li>Some names are kept back and cannot be claimed.</li>
+        </ul>"""
+    use = """        <ul class="did">
+          <li>Do not try to get around the limits, overload the services, or use them for anything unlawful.</li>
+          <li>Accounts and mailboxes used that way are removed.</li>
+        </ul>
+        <p class="big-fact" data-fly="up">The services are given <mark class="n">as they are</mark>, without warranty of any kind, and nobody running them is liable for any loss from using them, as far as the law allows.</p>
+        <p class="note">Last changed 19 October 2026.</p>"""
+    page("terms.html", "Dokkit terms", "The rules for dokkit.dev's free services: names, the shared relay and the public MCP.",
+         [], "Terms", "The rules for the free services dokkit.dev runs for everyone. The software you install has its own licences.",
+         [("free", "Free services"), ("names", "Names"), ("use", "Fair use")],
+         step("free", "Free services", free) + step("names", "Names", names) + step("use", "Fair use", use),
+         [("privacy.html", "Privacy", "What the services keep"), ("security.html", "Security", "What the program can and cannot do"), ("index.html", "Back to the start", "What Dokkit is, and the working sample")])
+
+
 channel_pages()
 alerts_page()
 tools_page()
 changelog_page()
 check_page()
 move_page()
-print("wrote", len(CHANNELS) + 5, "pages")
+privacy_page()
+terms_page()
+print("wrote", len(CHANNELS) + 7, "pages")
+
+import nav
+for f in sorted(os.listdir(here)):
+    if f.endswith(".html"):
+        nav.apply(os.path.join(here, f))

@@ -21,7 +21,8 @@
   all("[data-type]").forEach((el) => {
     const chars = splitLetters(el);
     el.classList.add("typing");
-    let shown = -1;
+    let shown = 0;
+    chars[0]?.classList.add("pre");
     ScrollTrigger.create({
       trigger: el, start: "top 92%", end: el.dataset.type === "long" ? "clamp(top 40%)" : "clamp(top 62%)", scrub: true,
       onUpdate: ({ progress }) => {
@@ -30,7 +31,11 @@
         chars.forEach((c, i) => c.classList.toggle("on", i < n));
         chars[shown - 1]?.classList.remove("cur");
         chars[n - 1]?.classList.toggle("cur", n < chars.length);
+        chars[0]?.classList.toggle("pre", n === 0);
         shown = n;
+        el.classList.add("moving");
+        clearTimeout(el.still);
+        el.still = setTimeout(() => el.classList.remove("moving"), 450);
       },
     });
   });

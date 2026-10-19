@@ -53,6 +53,7 @@ function splitLetters(el) {
 function showLetters(chars, p) {
   const n = Math.round(p * chars.length);
   chars.forEach((c, i) => { c.classList.toggle("on", i < n); c.classList.toggle("cur", i === n - 1 && n < chars.length); });
+  chars[0]?.classList.toggle("pre", n === 0);
 }
 
 function typeIn(tl, el, duration, at) {

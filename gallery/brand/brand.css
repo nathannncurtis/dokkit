@@ -279,3 +279,18 @@ footer nav a { font-size: 16px; }
 .lede .cmd code { white-space: normal; height: auto; min-height: 42px; padding: 10px 14px; line-height: 1.5; overflow-wrap: anywhere; }
 .lede .cmd { align-items: start; }
 .nav nav a[aria-current="page"] { color: var(--ink); }
+
+details.op { padding: 0; display: block; }
+details.op > summary { list-style: none; cursor: pointer; display: grid; gap: 4px; padding: 16px 36px 16px 0; position: relative; }
+details.op > summary::-webkit-details-marker { display: none; }
+details.op > summary::after { content: ""; position: absolute; right: 8px; top: 24px; width: 8px; height: 8px; border-right: 1.5px solid var(--mute); border-bottom: 1.5px solid var(--mute); transform: rotate(45deg); transition: transform .2s; }
+details.op[open] > summary::after { transform: rotate(225deg); }
+details.op > summary:hover h3 { color: var(--acc); }
+details.op > summary .sum { font-size: 15px; color: var(--mute); margin: 0; }
+details.op[open] > summary .sum { color: var(--ink); }
+details.op .op-body { display: grid; gap: 12px; padding: 0 0 28px; }
+.findbar { position: sticky; top: 64px; z-index: 4; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 0; margin: 8px 0 4px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.findbar input { flex: 1 1 260px; min-height: 42px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel, transparent); color: var(--ink); font: 15px inherit; }
+.findbar input:focus { outline: 2px solid var(--acc); outline-offset: 2px; }
+.findbar output { font: 13px var(--mono); color: var(--mute); }
+.findbar button { min-height: 42px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: none; color: var(--ink); font: 500 14px inherit; cursor: pointer; }
