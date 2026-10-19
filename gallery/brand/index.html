@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="site.css?v=4">
+<link rel="stylesheet" href="site.css?v=6">
 <script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); })();</script>
 </head>
 <body>
@@ -67,15 +67,15 @@
 
   <section class="watches" id="what">
     <h2 data-type="long">What it watches, and when it <span>says so.</span></h2>
-    <div class="table" role="table" aria-label="What Dokkit watches">
-      <div class="tr th" role="row"><span role="columnheader">Thing</span><span role="columnheader">How it is watched</span><span role="columnheader">It needs you when</span></div>
-      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Websites and APIs</span><span role="cell">An address is asked on the schedule its file sets, from the machine it runs on.</span><span role="cell">Three answers in a row are wrong, or slower than <mark class="warn">the limit its file sets</mark>.</span></div>
-      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Scheduled jobs</span><span role="cell">The job reports a start and an end, or is wrapped with <code>dokkit run</code>.</span><span role="cell">It does not start on time, fails, or runs <mark class="warn">longer than you allow</mark>.</span></div>
-      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Services and processes</span><span role="cell">Windows services, systemd units, ports and named processes.</span><span role="cell">One stops, or fewer are running than <mark class="warn">the count you set</mark>.</span></div>
-      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Disks, memory, certificates</span><span role="cell">Read on every machine with the <code>dokkit</code> program.</span><span role="cell">A disk is <mark class="warn">on course to fill</mark>, or a certificate expires within 30 days.</span></div>
-      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Logs</span><span role="cell">Files it is pointed at, apps that log to Seq, and the libraries. Kept a year, then archived.</span><span role="cell">Never by itself. <mark class="ok">Logs are for looking things up</mark>, one click from each item.</span></div>
-      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Errors</span><span role="cell">From the library, or from Sentry's own SDKs, grouped by type and place.</span><span role="cell">Never by itself. What is new <mark class="ok">since the last deploy</mark> is one click away.</span></div>
-      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Versions and deploys</span><span role="cell">The version each app reports. When it changes, that is a deploy.</span><span role="cell">Never by itself. What broke since the last deploy is <mark class="ok">one question</mark>.</span></div>
+    <p class="sub-lede">When each thing needs you. Open a card to see how it is watched.</p>
+    <div class="cards">
+      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Websites and APIs</h3><p>Three answers in a row are wrong, or slower than <mark class="warn">the limit its file sets</mark>.</p><details><summary>How it is watched</summary><p>An address is asked on the schedule its file sets, from the machine it runs on.</p></details></article>
+      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Scheduled jobs</h3><p>It does not start on time, fails, or runs <mark class="warn">longer than you allow</mark>.</p><details><summary>How it is watched</summary><p>The job reports a start and an end, or is wrapped with <code>dokkit run</code>.</p></details></article>
+      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Services and processes</h3><p>One stops, or fewer are running than <mark class="warn">the count you set</mark>.</p><details><summary>How it is watched</summary><p>Windows services, systemd units, ports and named processes.</p></details></article>
+      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Disks, memory, certificates</h3><p>A disk is <mark class="warn">on course to fill</mark>, or a certificate expires within 30 days.</p><details><summary>How it is watched</summary><p>Read on every machine with the <code>dokkit</code> program.</p></details></article>
+      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Logs</h3><p>Never by itself. <mark class="ok">Logs are for looking things up</mark>, one click from each item.</p><details><summary>How it is watched</summary><p>Files it is pointed at, apps that log to Seq, and the libraries. Kept a year, then archived.</p></details></article>
+      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Errors</h3><p>Never by itself. What is new <mark class="ok">since the last deploy</mark> is one click away.</p><details><summary>How it is watched</summary><p>From the library, or from Sentry's own SDKs, grouped by type and place.</p></details></article>
+      <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Versions and deploys</h3><p>Never by itself. What broke since the last deploy is <mark class="ok">one question</mark>.</p><details><summary>How it is watched</summary><p>The version each app reports. When it changes, that is a deploy.</p></details></article>
     </div>
     <p class="foot" data-fly="left">A machine that goes down is <mark class="bad">one page</mark>, not one for every service on it. An issue closes itself when the thing recovers.</p>
   </section>
@@ -106,11 +106,11 @@
     <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
   </div>
 </footer>
-<script src="site.js?v=4"></script>
-<script src="home.js?v=4"></script>
+<script src="site.js?v=6"></script>
+<script src="home.js?v=6"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
-<script src="motion.js?v=4"></script>
+<script src="motion.js?v=6"></script>
 </body>
 </html>

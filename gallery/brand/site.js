@@ -17,7 +17,7 @@ document.addEventListener("click", (e) => {
 });
 
 $$("main mark").forEach((m) => m.classList.add("pend"));
-$$(".tr:not(.th)").forEach((r, i) => { r.classList.add("pend"); r.style.setProperty("--d", i * 120 + "ms"); });
+$$(".tr:not(.th), .wcard").forEach((r, i) => { r.classList.add("pend"); r.style.setProperty("--d", i * 120 + "ms"); });
 const seen = new IntersectionObserver((es) => es.forEach((e) => {
   if (!e.isIntersecting) return;
   const el = e.target;
@@ -29,3 +29,4 @@ const seen = new IntersectionObserver((es) => es.forEach((e) => {
   el.classList.replace("pend", "lit");
 }), { rootMargin: "0px 0px -12% 0px" });
 $$(".pend").forEach((el) => seen.observe(el));
+document.addEventListener("toggle", () => window.ScrollTrigger?.refresh(), true);

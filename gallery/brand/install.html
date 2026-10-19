@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="site.css?v=4">
+<link rel="stylesheet" href="site.css?v=6">
 <script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); })();</script>
 </head>
 <body>
@@ -58,11 +58,11 @@
         <div data-for="linux">
           <p class="sentence sub">Its address is <label class="named"><span class="sr">Its domain</span><input id="domain" value="dokkit.example.com" spellcheck="false" autocomplete="off" size="18"></label>, already pointing at that machine.</p>
           <div class="cmd" data-fly="left"><code id="cmdLinux"></code><button type="button" class="copy" data-copy="cmdLinux">Copy</button></div>
-          <ul class="did" data-fly="up">
+          <details class="card" data-fly="up"><summary>What the installer does <small>3 things</small></summary><ul class="did card-body">
             <li>Installs Docker and its compose plugin if they are missing, and writes its settings to <code>/opt/dokkit/.env</code>.</li>
             <li>Starts three containers: <mark class="n">Postgres 17</mark>, the Dokkit server, and Caddy, which gets and renews the certificate for <span class="echo" data-echo="domain"></span> by itself.</li>
             <li>Waits until the server answers over https, then prints the address and <mark class="warn">a setup code</mark> for the first visit.</li>
-          </ul>
+          </ul></details>
         </div>
 
         <div data-for="windows" hidden>
@@ -72,16 +72,15 @@
             </span><span id="dbWrap" hidden>, at <label class="named"><span class="sr">Connection address</span><input id="dburl" value="ecto://dokkit:password@localhost/dokkit" spellcheck="false" autocomplete="off" size="30"></label></span>.
           </p>
           <div class="cmd" data-fly="left"><code id="cmdWindows"></code><button type="button" class="copy" data-copy="cmdWindows">Copy</button></div>
-          <ul class="did" data-fly="up">
-            <li>Run it from <mark class="n">an administrator PowerShell</mark>.</li>
+          <p class="note">Run it from <mark class="n">an administrator PowerShell</mark>.</p>
+          <details class="card" data-fly="up"><summary>What the installer does <small>3 things</small></summary><ul class="did card-body">
             <li>Fetches the release and refuses it unless its checksums carry <mark class="ok">a valid signature</mark> from the release key.</li>
             <li id="didOwn">The first time, sets up Postgres 17 as a Windows service of its own that listens on this machine only.</li>
             <li>Installs Dokkit as a Windows service and starts it. Without a certificate it serves plain http to <mark class="warn">this machine only</mark>; give it one with <code>-Cert</code> and <code>-CertKey</code>, or get one later in Settings.</li>
-          </ul>
+          </ul></details>
         </div>
 
-        <div class="needs" data-fly="up">
-          <h3>What the server needs</h3>
+        <details class="card needs" data-fly="up"><summary>What the server needs <small>1 core, 1 GB, 20 GB at least</small></summary><div class="card-body">
           <div class="table" role="table" aria-label="What the server needs">
             <div class="tr th" role="row"><span role="columnheader"></span><span role="columnheader">Minimum</span><span role="columnheader">Recommended</span></div>
             <div class="tr" role="row"><span role="cell">Processor</span><span role="cell">1 core</span><span role="cell">2 cores</span></div>
@@ -89,7 +88,7 @@
             <div class="tr" role="row"><span role="cell">Disk</span><span role="cell">20 GB</span><span role="cell">40 GB, more if you keep a lot of logs</span></div>
           </div>
           <p class="note">Estimates for about ten machines and sixty services. They have not been measured yet.</p>
-        </div>
+        </div></details>
       </section>
 
       <section class="step" id="first">
@@ -157,11 +156,11 @@
     <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
   </div>
 </footer>
-<script src="site.js?v=4"></script>
-<script src="install.js?v=4"></script>
+<script src="site.js?v=6"></script>
+<script src="install.js?v=6"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
-<script src="motion.js?v=4"></script>
+<script src="motion.js?v=6"></script>
 </body>
 </html>
