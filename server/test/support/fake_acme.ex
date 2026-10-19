@@ -96,6 +96,51 @@ defmodule Dokkit.FakeAcme do
     |> send_resp(200, Jason.encode!(answer))
   end
 
+  ## The dokkit.dev claim service
+
+  defp route("POST", "names.test", path, _, body, conn, state) do
+    %{"protected" => p, "payload" => payload, "signature" => sig} = Jason.decode!(body)
+    header = p |> Base.url_decode64!(padding: false) |> Jason.decode!()
+
+    input =
+      if payload == "",
+        do: %{},
+        else: payload |> Base.url_decode64!(padding: false) |> Jason.decode!()
+
+    key = header["jwk"] || Agent.get(state.agent, & &1.jwks["names"])
+
+    cond do
+      header["url"] != "https://names.test" <> path or key == nil or
+          not check(p <> "." <> payload, sig, key) ->
+        json(conn, 401, %{error: "the signature does not verify"})
+
+      path == "/v1/register" and (state.mode == :names_refuses or input["code"] != "goodcode1") ->
+        json(conn, 403, %{error: "That claim code is not known or has run out."})
+
+      path == "/v1/register" ->
+        Agent.update(state.agent, &put_in(&1.jwks["names"], header["jwk"]))
+        call(state, {:names_register, header["jwk"]})
+        json(conn, 200, %{name: "home.dokkit.dev"})
+
+      header["kid"] != "home.dokkit.dev" ->
+        json(conn, 401, %{error: "No such name."})
+
+      path == "/v1/address" ->
+        call(state, {:names_address, input["a"]})
+        json(conn, 200, %{name: "home.dokkit.dev", a: input["a"]})
+
+      path == "/v1/txt" ->
+        call(state, {:names_txt, input["value"]})
+        Agent.update(state.agent, &%{&1 | txt: input["value"]})
+        json(conn, 200, %{name: "home.dokkit.dev"})
+
+      path == "/v1/txt/clear" ->
+        call(state, :names_txt_cleared)
+        Agent.update(state.agent, &%{&1 | txt: nil})
+        json(conn, 200, %{name: "home.dokkit.dev"})
+    end
+  end
+
   defp route("GET", @host, "/directory", _, _, conn, _) do
     json(conn, 200, %{
       newNonce: "https://#{@host}/nonce",

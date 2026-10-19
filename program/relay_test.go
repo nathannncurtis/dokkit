@@ -292,11 +292,117 @@ func TestRelayCommands(t *testing.T) {
 			t.Error("remove should work once")
 		}
 	})
-	for _, a := range [][]string{{"relay"}, {"relay", "serve"}, {"relay", "serve", "--http"}, {"relay", "add"}} {
+	for _, a := range [][]string{{"relay"}, {"relay", "serve"}, {"relay", "serve", "--http"}, {"relay", "add"},
+		{"relay", "serve", "--open-signup"}, {"relay", "serve", "--http", "127.0.0.1:0", "--max-mailboxes", "0"}, {"relay", "serve", "--http", "127.0.0.1:0", "extra"}} {
 		capture(t, func() {
 			if cli(a) != 2 {
 				t.Errorf("%v should exit 2", a)
 			}
 		})
+	}
+}
+
+func signupRelay(t *testing.T) (*relayServer, *httptest.Server) {
+	s := newRelayServer(t.TempDir())
+	s.logOut = io.Discard
+	s.openSignup = true
+	ts := httptest.NewServer(s.handler())
+	t.Cleanup(ts.Close)
+	return s, ts
+}
+
+func TestRelaySignup(t *testing.T) {
+	c := loadSealing(t)
+	_, ts := signupRelay(t)
+	code, body, _ := relayDo(t, "POST", ts.URL+"/mailboxes", "", nil)
+	if code != 201 {
+		t.Fatalf("signup: %d %s", code, body)
+	}
+	var got struct{ Address, Mailbox, Key string }
+	json.Unmarshal(body, &got)
+	if !validID(got.Mailbox) || got.Address != "/m/"+got.Mailbox || !validKey(got.Key, "dkr_") {
+		t.Fatalf("signup answer: %s", body)
+	}
+	if code, body, _ := relayDo(t, "PUT", ts.URL+got.Address, got.Key, c.Envelope); code != 200 {
+		t.Fatalf("upload to a signed-up mailbox: %d %s", code, body)
+	}
+
+	closed := newRelayServer(t.TempDir())
+	closed.logOut = io.Discard
+	cs := httptest.NewServer(closed.handler())
+	defer cs.Close()
+	if code, _, _ := relayDo(t, "POST", cs.URL+"/mailboxes", "", nil); code != 404 {
+		t.Fatalf("signup on a closed relay answered %d", code)
+	}
+}
+
+func TestRelaySignupLimits(t *testing.T) {
+	s, ts := signupRelay(t)
+	clock := time.Date(2026, 10, 14, 3, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return clock }
+	for i := 0; i < 3; i++ {
+		if code, _, _ := relayDo(t, "POST", ts.URL+"/mailboxes", "", nil, "X-Forwarded-For", "198.51.100.7"); code != 201 {
+			t.Fatalf("signup %d answered %d", i, code)
+		}
+	}
+	code, _, h := relayDo(t, "POST", ts.URL+"/mailboxes", "", nil, "X-Forwarded-For", "203.0.113.9, 198.51.100.7")
+	if code != 429 || h.Get("Retry-After") == "" {
+		t.Fatalf("fourth signup from one address answered %d", code)
+	}
+	if code, _, _ := relayDo(t, "POST", ts.URL+"/mailboxes", "", nil, "X-Forwarded-For", "198.51.100.8"); code != 201 {
+		t.Fatalf("another address answered %d", code)
+	}
+	clock = clock.Add(61 * time.Minute)
+	if code, _, _ := relayDo(t, "POST", ts.URL+"/mailboxes", "", nil, "X-Forwarded-For", "198.51.100.7"); code != 201 {
+		t.Fatalf("after an hour answered %d", code)
+	}
+	s.maxMailboxes = 5
+	if code, _, _ := relayDo(t, "POST", ts.URL+"/mailboxes", "", nil, "X-Forwarded-For", "198.51.100.9"); code != 503 {
+		t.Fatalf("a full relay answered %d", code)
+	}
+}
+
+func TestRelayClientIP(t *testing.T) {
+	for _, c := range [][3]string{
+		{"127.0.0.1:5000", "198.51.100.7", "198.51.100.7"},
+		{"127.0.0.1:5000", "", "127.0.0.1"},
+		{"192.0.2.1:5000", "198.51.100.7", "192.0.2.1"},
+		{"[2001:db8:1:2:3:4:5:6]:5000", "", "2001:db8:1:2::"},
+	} {
+		r := httptest.NewRequest("POST", "/mailboxes", nil)
+		r.RemoteAddr = c[0]
+		if c[1] != "" {
+			r.Header.Set("X-Forwarded-For", c[1])
+		}
+		if got := clientIP(r); got != c[2] {
+			t.Fatalf("%v gave %q", c, got)
+		}
+	}
+}
+
+func TestRelaySweep(t *testing.T) {
+	c := loadSealing(t)
+	s, ts := signupRelay(t)
+	clock := time.Date(2026, 10, 14, 3, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return clock }
+	var ids [2]struct{ Address, Mailbox, Key string }
+	for i := range ids {
+		_, body, _ := relayDo(t, "POST", ts.URL+"/mailboxes", "", nil)
+		json.Unmarshal(body, &ids[i])
+	}
+	clock = clock.Add(20 * 24 * time.Hour)
+	relayDo(t, "PUT", ts.URL+ids[1].Address, ids[1].Key, c.Envelope)
+	clock = clock.Add(11 * 24 * time.Hour)
+	if n := s.sweep(relayIdleDays * 24 * time.Hour); n != 1 {
+		t.Fatalf("swept %d", n)
+	}
+	if _, err := os.Stat(filepath.Join(s.dir, ids[0].Mailbox)); !os.IsNotExist(err) {
+		t.Fatal("the idle mailbox should be gone")
+	}
+	if code, _, _ := relayDo(t, "GET", ts.URL+ids[1].Address+"/"+c.Phones[0].Slot, c.Phones[0].Token, nil); code != 200 {
+		t.Fatalf("the used mailbox answered %d", code)
+	}
+	if len(s.hits) != 1 {
+		t.Fatalf("old hits should be forgotten: %v", s.hits)
 	}
 }

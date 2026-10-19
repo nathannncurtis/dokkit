@@ -96,12 +96,15 @@ defmodule DokkitWeb.ParityTest do
       "certificate_remove" => {:owner, ["DELETE /api/v1/certificate"]},
       "acme_save" => {:owner, ["PUT /api/v1/certificate/settings"]},
       "acme_now" => {:owner, ["POST /api/v1/certificate/renew"]},
+      "name_claim" =>
+        {:owner, ["POST /api/v1/certificate/name", "POST /api/v1/certificate/renew"]},
       "retention_save" => {:owner, ["PUT /api/v1/logs/retention"]},
       "retention_change" => @view,
       "full" => @view,
       "full_typed" => @view,
       "full_token" => @session,
       "relay_save" => {:owner, ["PUT /api/v1/phones/relay"]},
+      "relay_shared" => {:owner, ["POST /api/v1/phones/relay/shared"]},
       "phone_add" => {:owner, ["POST /api/v1/phones"]},
       "phone_remove" => {:owner, ["DELETE /api/v1/phones/:id"]},
       "phone_hide" => @view

@@ -289,8 +289,14 @@ defmodule DokkitWeb.McpController do
      "Change those settings: acme_name (such as example.dokkit.dev), acme_cloudflare_token (a Cloudflare API token that may edit DNS in the name's zone; an empty one clears it) and acme_directory (Let's Encrypt production when empty). A setting left out stays as it was.",
      %{"acme_name" => @text, "acme_cloudflare_token" => @text, "acme_directory" => @text}, []},
     {"renew_certificate", "admin",
-     "Get a certificate for acme_name now from the certificate authority, proving the name with a DNS record at Cloudflare. It can take a few minutes. Answers with the certificates, or the reason it failed.",
+     "Get a certificate for acme_name now from the certificate authority, proving the name with a DNS record at Cloudflare, or through the dokkit.dev claim service for a name claimed there. It can take a few minutes. Answers with the certificates, or the reason it failed.",
      %{}, []},
+    {"dokkit_name", "admin",
+     "The name on dokkit.dev this server holds through the claim service, if any: the name, the address set for it (empty means this machine's own), the address last sent, and whether that worked.",
+     %{}, []},
+    {"claim_dokkit_name", "admin",
+     "Claim a name on dokkit.dev with the one-time claim code from names.dokkit.dev: this server registers a key with the claim service, makes the name acme_name and points it at address (empty for this machine's own). Without a code, changes only the address. Follow with renew_certificate.",
+     %{"code" => @text, "address" => @text}, []},
     {"update_machine", "admin",
      "Ask the updater on a machine to move to a release this server holds completely, such as v1.2.3. Takes the id from machines and the version from releases. Only a signed release installs.",
      %{"id" => @text, "version" => @text}, ["id", "version"]},
@@ -582,6 +588,8 @@ defmodule DokkitWeb.McpController do
   defp tool("certificate_settings", _), do: Api.certificate_settings()
   defp tool("set_certificate_settings", args), do: Api.save_certificate_settings(args) |> r()
   defp tool("renew_certificate", _), do: Api.renew_certificate() |> r()
+  defp tool("dokkit_name", _), do: Api.certificate_name()
+  defp tool("claim_dokkit_name", args), do: Api.claim_name(args) |> r()
 
   defp tool("update_machine", %{"id" => id, "version" => version}),
     do: Api.approve_update(version, id) |> r()

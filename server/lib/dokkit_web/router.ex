@@ -117,6 +117,8 @@ defmodule DokkitWeb.Router do
     get "/certificate/settings", ApiController, :get_certificate_settings
     put "/certificate/settings", ApiController, :put_certificate_settings
     post "/certificate/renew", ApiController, :renew
+    get "/certificate/name", ApiController, :get_certificate_name
+    post "/certificate/name", ApiController, :post_certificate_name
     put "/releases/:version/:file", ReleaseController, :put
     get "/releases/:version/:file", ReleaseController, :show
     delete "/releases/:version", ReleaseController, :delete
@@ -151,6 +153,7 @@ defmodule DokkitWeb.Router do
     post "/phones", ApiController, :add_phone
     get "/phones/relay", ApiController, :get_relay
     put "/phones/relay", ApiController, :put_relay
+    post "/phones/relay/shared", ApiController, :post_shared_relay
     delete "/phones/:id", ApiController, :remove_phone
     post "/users", ApiController, :add_user
     delete "/users/:id", ApiController, :remove_user

@@ -48,6 +48,13 @@ end
 
 # The folder old log months are archived to. Without it, every month stays in the database.
 config :dokkit, archive: System.get_env("DOKKIT_ARCHIVE")
+
+if config_env() != :test,
+  do:
+    config(:dokkit,
+      shared_relay: System.get_env("DOKKIT_SHARED_RELAY", "https://relay.dokkit.dev")
+    )
+
 config :dokkit, programs: System.get_env("DOKKIT_PROGRAMS")
 
 # Signed releases the updaters fetch. Beside the settings file in production.

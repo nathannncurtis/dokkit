@@ -8524,6 +8524,136 @@
         ]
       }
     },
+    "/api/v1/phones/relay/shared": {
+      "post": {
+        "operationId": "useSharedRelay",
+        "summary": "Use the shared relay",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Asks the shared relay for a new mailbox and saves its address, mailbox and upload key as the relay, then makes one upload and says whether the relay took it, as setting the relay does. The shared relay is `https://relay.dokkit.dev` unless `DOKKIT_SHARED_RELAY` names another. A different mailbox removes every phone. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.",
+        "responses": {
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The relay, and what the upload did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "address": {
+                          "type": "string"
+                        },
+                        "mailbox": {
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string",
+                          "enum": [
+                            "set",
+                            "not set"
+                          ],
+                          "description": "The upload key is never shown."
+                        },
+                        "last_good_upload": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time"
+                        },
+                        "last_error": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "The relay's answer to the last upload, while uploads are failing."
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "uploaded": {
+                          "type": "boolean"
+                        },
+                        "result": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "example": {
+                  "address": "https://relay.example.com",
+                  "mailbox": "92bea4d52a1d53f0c8111edf39e26a89",
+                  "key": "set",
+                  "last_good_upload": "2026-10-13T09:01:00Z",
+                  "last_error": null,
+                  "uploaded": true,
+                  "result": "The relay took the snapshot."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The shared relay made no mailbox, or what it gave could not be saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_relay",
+                    "message": "The address must start with https://."
+                  }
+                }
+              }
+            },
+            "example": {
+              "error": {
+                "code": "bad_relay",
+                "message": "The shared relay answered 429: At most 3 new mailboxes an hour from one address."
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/phones/{id}": {
       "delete": {
         "operationId": "removePhone",
@@ -12143,6 +12273,230 @@
                   "error": {
                     "code": "renewal_failed",
                     "message": "Cloudflare refused: Authentication error"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/certificate/name": {
+      "get": {
+        "operationId": "getDokkitName",
+        "summary": "The name on dokkit.dev",
+        "tags": [
+          "Admin"
+        ],
+        "description": "The name this server holds through the dokkit.dev claim service, empty when none: the address set for it (empty means this machine's own), the address last sent, and whether that worked. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "responses": {
+          "200": {
+            "description": "The name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "address": {
+                      "type": "string"
+                    },
+                    "sent": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "ok": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "name": "home.dokkit.dev",
+                  "address": "",
+                  "sent": "192.168.1.20",
+                  "ok": true,
+                  "note": "home.dokkit.dev points at 192.168.1.20"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      },
+      "post": {
+        "operationId": "claimDokkitName",
+        "summary": "Claim a name on dokkit.dev",
+        "tags": [
+          "Admin"
+        ],
+        "description": "With `code`, the one-time claim code from names.dokkit.dev: the server makes a key, registers it with the claim service, makes the name `acme_name` and points the name at `address`, or at this machine's own address when that is empty. From then on the server sends its address once a day, which keeps the name from lapsing, and certificates for the name are proved through the claim service. Without `code`, only the address changes. Follow with `POST /certificate/renew`. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "code": "k3j5w2x7q4m6p2r8t5v3y7z2",
+                "address": ""
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The name after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "address": {
+                      "type": "string"
+                    },
+                    "sent": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "ok": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "name": "home.dokkit.dev",
+                  "address": "",
+                  "sent": "192.168.1.20",
+                  "ok": true,
+                  "note": "home.dokkit.dev points at 192.168.1.20"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "It failed. The message says why.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_claim",
+                    "message": "The claim service refused: That claim code is not known or has run out."
                   }
                 }
               }

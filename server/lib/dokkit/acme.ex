@@ -1,11 +1,11 @@
 defmodule Dokkit.Acme do
   @moduledoc """
   Keeps the uploaded certificate current by itself: an ACME v2 client (RFC 8555) that proves
-  the name with a DNS record at Cloudflare. A certificate it obtains goes through the same
-  checks and the same saving as an upload.
+  the name with a DNS record at Cloudflare, or through the dokkit.dev claim service. A
+  certificate it obtains goes through the same checks and the same saving as an upload.
   """
   require Logger
-  alias Dokkit.{Certificate, Cloudflare, Repo, Setting}
+  alias Dokkit.{Certificate, Cloudflare, Names, Repo, Setting}
 
   @directory "https://acme-v02.api.letsencrypt.org/directory"
   @settings "certificate"
@@ -65,7 +65,11 @@ defmodule Dokkit.Acme do
   defp filled(text), do: if(is_binary(text) and String.trim(text) != "", do: String.trim(text))
 
   defp complete?(s),
-    do: filled(s["acme_name"]) != nil and filled(s["acme_cloudflare_token"]) != nil
+    do:
+      filled(s["acme_name"]) != nil and
+        (filled(s["acme_cloudflare_token"]) != nil or Names.ours?(s["acme_name"]))
+
+  defp dns(s), do: if(Names.ours?(s["acme_name"]), do: Names, else: Cloudflare)
 
   ## The outcome of the last attempt
 
@@ -91,6 +95,7 @@ defmodule Dokkit.Acme do
 
   @doc "The daily check. Renews when it is time, and tries again no sooner than twelve hours after a failure."
   def tick(now) do
+    Names.tick(now)
     s = settings()
 
     if complete?(s) and due_for_check?(now) do
@@ -162,7 +167,7 @@ defmodule Dokkit.Acme do
     with {:ok, st} <- start(directory(s)),
          {:ok, st} <- account(st),
          {:ok, order, order_url, st} <- new_order(st, name),
-         {:ok, st} <- authorize(st, order["authorizations"], name, token),
+         {:ok, st} <- authorize(st, order["authorizations"], name, {dns(s), token}),
          key = :public_key.generate_key({:namedCurve, :secp256r1}),
          {:ok, order, st} <- finalize(st, order, order_url, csr(key, name)),
          {:ok, chain} <- download(st, order["certificate"]),
@@ -178,7 +183,8 @@ defmodule Dokkit.Acme do
       {:error, "Getting a certificate failed. The server log has the reason."}
   end
 
-  defp key_pem(key),
+  @doc false
+  def key_pem(key),
     do:
       :public_key.pem_encode([
         {:ECPrivateKey, :public_key.der_encode(:ECPrivateKey, key), :not_encrypted}
@@ -234,7 +240,7 @@ defmodule Dokkit.Acme do
     end)
   end
 
-  defp prove(st, url, name, token) do
+  defp prove(st, url, name, {dns, token}) do
     with {:ok, resp, st} <- post(st, url, ""),
          authz = Jason.decode!(resp.body),
          {:ok, challenge} <- dns_challenge(authz) do
@@ -243,14 +249,14 @@ defmodule Dokkit.Acme do
       else
         value = txt_value(challenge["token"], st.jwk)
 
-        with {:ok, handle} <- Cloudflare.add_txt(token, name, value) do
+        with {:ok, handle} <- dns.add_txt(token, name, value) do
           try do
             with :ok <- Cloudflare.wait(name, value),
                  {:ok, _, st} <- post(st, challenge["url"], %{}) do
               poll(st, url, ["valid"])
             end
           after
-            Cloudflare.delete(token, handle)
+            dns.delete(token, handle)
           end
         end
       end

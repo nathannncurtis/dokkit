@@ -29,6 +29,7 @@ defmodule DokkitWeb.PhonesApiTest do
           post: "/phones",
           get: "/phones/relay",
           put: "/phones/relay",
+          post: "/phones/relay/shared",
           delete: "/phones/x"
         ] do
       assert %{"error" => %{"code" => "no_scope"}} = json_response(call(method, path, act), 403)

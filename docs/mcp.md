@@ -80,6 +80,8 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `certificate_settings` | `admin` | Shows the settings for getting and renewing the uploaded certificate. |
 | `set_certificate_settings` | `admin` | Changes those settings. A setting left out stays as it was. |
 | `renew_certificate` | `admin` | Gets a certificate now from the certificate authority. |
+| `dokkit_name` | `admin` | Shows the name on dokkit.dev this server holds through the claim service. |
+| `claim_dokkit_name` | `admin` | Claims a name on dokkit.dev with a claim code, or changes the address it points at. |
 | `add_app` | `admin` | Adds an app that runs on many machines. Its key is returned once. |
 | `add_dependency` | `admin` | Adds something outside that is depended on. With a check (`http` url or `tcp` address) it is put on an enrolled machine whose program runs the check; without one it belongs to the group Outside. |
 | `add_job` | `admin` | Adds a job to watch. Its key and addresses are returned once. |
@@ -106,3 +108,22 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 ## Built so far
 
 `POST /mcp` with a user token: every tool in the table, 70 in all (25 `read`, 2 `read-logs`, 14 `act`, 29 `admin`), one for each call of the API a token can make. Making a full-control token, pairing and removing phones (`/phones`), moving log lines between services and the browser's own sign-in have no tool: they are Settings and the browser only. A tool the token may not use is not listed.
+
+## The public MCP at mcp.dokkit.dev
+
+A second, separate MCP for anyone writing a `dokkit.toml` or wiring a client library. It needs no account and no Dokkit server, reads none of your data, and stores nothing.
+
+```
+claude mcp add --transport http dokkit-help https://mcp.dokkit.dev/
+```
+
+It is `dokkit public-mcp --http 127.0.0.1:8090` behind a reverse proxy: streamable HTTP, JSON-RPC 2.0 by `POST /` (`initialize`, `ping`, `tools/list`, `tools/call`, the same protocol version handling as `/mcp`). `GET /` answers how to connect, as plain text.
+
+| Tool | Takes | Does |
+|---|---|---|
+| `check_file` | `text` | Checks a `dokkit.toml` with the program's own code, as `dokkit check` does, without running any check. Answers `verdict` (`accepted` or `refused`); a refusal has the program's words in `error` with an `explanation` and a `fix`; an accepted file has its checks (`runs` true for those `dokkit watch` makes, false for those the app reports), jobs, log path, and in `sends` the JSON `dokkit apply` would send. |
+| `example_file` | `kind` | A starting file that passes the check: `web`, `worker`, `windows`, `linux`, `job`, `dependency` or `certificate`. |
+| `library_calls` | `language` | A client library's install line and its setup, start, beat, job, capture and logging calls, from `clients/`. Common other names (`ts`, `c#`, `golang`, `bash`) are understood. |
+| `explain_error` | `error` | What a refusal from the checker means and how to fix it. Text the checker does not write gets a general answer. |
+
+A request is at most 64 KB. Each address may make 60 requests a minute; `X-Forwarded-For` is believed only from a proxy on the same host. Reads and writes time out after 15 seconds.

@@ -64,6 +64,69 @@ defmodule DokkitWeb.PhonesLiveTest do
     assert gone == %{}
   end
 
+  test "the shared relay makes a mailbox and fills the relay in", %{conn: conn} do
+    test = self()
+
+    Req.Test.stub(Dokkit.Alerts, fn conn ->
+      send(
+        test,
+        {conn.method, conn.host, conn.request_path,
+         Plug.Conn.get_req_header(conn, "authorization")}
+      )
+
+      {status, body} =
+        if conn.method == "POST",
+          do:
+            {201, ~s({"address":"/m/#{@mailbox}","mailbox":"#{@mailbox}","key":"#{@upload_key}"})},
+          else: {200, ~s({"ok":true,"slots":{}})}
+
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.send_resp(status, body)
+    end)
+
+    {:ok, view, html} = live(signed_in(conn), "/settings")
+    assert html =~ "Use the shared relay at relay.example.test"
+
+    html = render_click(view, "relay_shared", %{})
+    assert html =~ "The relay took the snapshot."
+    refute html =~ @upload_key
+    assert_received {"POST", "relay.example.test", "/mailboxes", []}
+    assert_received {"PUT", "relay.example.test", "/m/" <> @mailbox, ["Bearer " <> @upload_key]}
+
+    assert Phones.relay() == %{
+             "address" => "https://relay.example.test",
+             "mailbox" => @mailbox,
+             "key" => @upload_key
+           }
+  end
+
+  test "a failed signup says why and changes nothing", %{conn: conn} do
+    {:ok, view, _} = live(signed_in(conn), "/settings")
+
+    for {status, body, words} <- [
+          {429,
+           ~s({"error":{"code":"rate_limited","message":"At most 3 new mailboxes an hour from one address."}}),
+           "The shared relay answered 429: At most 3 new mailboxes an hour"},
+          {503, ~s({"error":{"code":"full","message":"This relay takes no new mailboxes now."}}),
+           "takes no new mailboxes"},
+          {404, "{}", "does not make mailboxes for others"},
+          {502, "", "The shared relay answered 502."}
+        ] do
+      Req.Test.stub(Dokkit.Alerts, fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(status, body)
+      end)
+
+      assert render_click(view, "relay_shared", %{}) =~ words
+    end
+
+    Req.Test.stub(Dokkit.Alerts, &Req.Test.transport_error(&1, :econnrefused))
+    assert render_click(view, "relay_shared", %{}) =~ "The shared relay did not answer"
+    assert Phones.relay()["key"] == ""
+  end
+
   test "a viewer sees no part of it and cannot use it", %{conn: conn} do
     viewer = Repo.insert!(%User{name: "vic", password_hash: "-", role: :viewer})
 
@@ -79,6 +142,7 @@ defmodule DokkitWeb.PhonesLiveTest do
     refute html =~ "Relay address"
     render_submit(view, "relay_save", %{"relay" => @relay})
     render_submit(view, "phone_add", %{"phone" => %{"name" => "x"}})
+    render_click(view, "relay_shared", %{})
     assert Phones.relay()["key"] == ""
     assert Phones.list() == []
   end

@@ -47,7 +47,8 @@ dokkit imessage test <recipient> [words...]
 dokkit relay add <name>
 dokkit relay list
 dokkit relay remove <name>
-dokkit relay serve --http <address>
+dokkit relay serve --http <address> [--open-signup] [--max-mailboxes <n>]
+dokkit public-mcp --http <address>
 dokkit doctor
 dokkit service install|uninstall|update|start|stop
 dokkit updater install|uninstall|run|status|rehearse <folder>
@@ -108,6 +109,9 @@ func cli(args []string) int {
 	}
 	if args[0] == "relay" {
 		return relayCommand(args[1:])
+	}
+	if args[0] == "public-mcp" {
+		return publicMCPCommand(args[1:])
 	}
 	if args[0] == "imessage" {
 		return imessageCommand(args[1:])

@@ -69,6 +69,34 @@ defmodule Dokkit.Phones do
     end
   end
 
+  @doc "Makes a mailbox on the shared relay (DOKKIT_SHARED_RELAY, else relay.dokkit.dev) and saves it as the relay."
+  def use_shared_relay do
+    base = Application.get_env(:dokkit, :shared_relay) |> String.trim_trailing("/")
+
+    options =
+      [retry: false, redirect: false, receive_timeout: 10_000] ++
+        Application.get_env(:dokkit, :req_options, [])
+
+    with :ok <- Alerts.check_url(base) do
+      case Req.post(base <> "/mailboxes", options) do
+        {:ok, %{status: 201, body: %{"mailbox" => mailbox, "key" => key}}} ->
+          save_relay(%{"address" => base, "mailbox" => mailbox, "key" => key})
+
+        {:ok, %{status: 404}} ->
+          {:error, "#{base} does not make mailboxes for others."}
+
+        {:ok, %{status: s, body: %{"error" => %{"message" => why}}}} ->
+          {:error, "The shared relay answered #{s}: #{why}"}
+
+        {:ok, %{status: s}} ->
+          {:error, "The shared relay answered #{s}."}
+
+        {:error, e} ->
+          {:error, "The shared relay did not answer: " <> Exception.message(e)}
+      end
+    end
+  end
+
   defp text(value), do: if(is_binary(value), do: String.trim(value), else: "")
 
   @doc "Pairs a phone. `{:ok, phone, code}`: the code holds the fetch token and the phone's key and is not kept."

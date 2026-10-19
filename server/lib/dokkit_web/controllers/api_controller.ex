@@ -367,20 +367,22 @@ defmodule DokkitWeb.ApiController do
   def get_relay(conn, _), do: json(conn, Dokkit.Phones.relay_view())
 
   @doc "Saves the relay, makes one upload, and answers the relay as it is with the words for what the upload did."
-  def save_relay(params) do
-    case Dokkit.Phones.save_relay(params) do
-      {:ok, _} ->
-        result = Dokkit.Phones.upload(force: true)
+  def save_relay(params), do: relay_saved(Dokkit.Phones.save_relay(params))
 
-        Dokkit.Phones.relay_view()
-        |> Map.merge(%{uploaded: result == :ok, result: Dokkit.Phones.words(result)})
+  def shared_relay, do: relay_saved(Dokkit.Phones.use_shared_relay())
 
-      {:error, why} ->
-        {:error, "bad_relay", why}
-    end
+  defp relay_saved({:ok, _}) do
+    result = Dokkit.Phones.upload(force: true)
+
+    Dokkit.Phones.relay_view()
+    |> Map.merge(%{uploaded: result == :ok, result: Dokkit.Phones.words(result)})
   end
 
+  defp relay_saved({:error, why}), do: {:error, "bad_relay", why}
+
   def put_relay(conn, params), do: reply(conn, save_relay(params))
+
+  def post_shared_relay(conn, _), do: reply(conn, shared_relay())
 
   def alert_settings(conn, _), do: reply(conn, Dokkit.Alerts.view())
 
@@ -603,6 +605,19 @@ defmodule DokkitWeb.ApiController do
     end
   end
 
+  def certificate_name, do: Dokkit.Names.view()
+
+  def claim_name(params) do
+    text = &if(is_binary(params[&1]), do: params[&1], else: "")
+
+    case Dokkit.Names.claim(text.("code"), text.("address")) do
+      {:ok, _} -> Dokkit.Names.view()
+      {:error, why} -> {:error, "bad_claim", why}
+    end
+  end
+
+  def get_certificate_name(conn, _), do: json(conn, certificate_name())
+  def post_certificate_name(conn, params), do: reply(conn, claim_name(params))
   def get_certificate_settings(conn, _), do: json(conn, certificate_settings())
   def put_certificate_settings(conn, params), do: reply(conn, save_certificate_settings(params))
   def renew(conn, _), do: certificates(conn, renew_certificate())
@@ -821,7 +836,7 @@ defmodule DokkitWeb.ApiController do
       {_, area, _} when area in ["keys", "users", "update-all", "phones", "add-script"] ->
         "admin"
 
-      {"GET", "certificate", "settings"} ->
+      {"GET", "certificate", last} when last in ["settings", "name"] ->
         "admin"
 
       {_, "logs", "retention"} ->

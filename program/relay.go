@@ -7,10 +7,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"hash/crc32"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -25,6 +27,8 @@ const (
 	relayMaxBody     = 2 << 20
 	relayUploadsMin  = 12
 	relayFetchesMin  = 30
+	relaySignupsHour = 3
+	relayIdleDays    = 30
 	base62           = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 	relayNotFoundMsg = "No such mailbox, slot or token."
 )
@@ -53,11 +57,13 @@ type relaySlot struct {
 }
 
 type relayServer struct {
-	dir    string
-	mu     sync.Mutex
-	hits   map[string][]time.Time
-	now    func() time.Time
-	logOut io.Writer
+	dir          string
+	mu           sync.Mutex
+	hits         map[string][]time.Time
+	now          func() time.Time
+	logOut       io.Writer
+	openSignup   bool
+	maxMailboxes int
 }
 
 func relayDir() (string, error) {
@@ -69,7 +75,7 @@ func relayDir() (string, error) {
 }
 
 func newRelayServer(dir string) *relayServer {
-	return &relayServer{dir: dir, hits: map[string][]time.Time{}, now: time.Now, logOut: os.Stdout}
+	return &relayServer{dir: dir, hits: map[string][]time.Time{}, now: time.Now, logOut: os.Stdout, maxMailboxes: 5000}
 }
 
 func randomKey(prefix string) string {
@@ -163,29 +169,47 @@ func (s *relayServer) addMailbox(name, key string) (string, error) {
 			return "", fmt.Errorf("there is already a mailbox named %q", name)
 		}
 	}
+	return s.makeMailbox(name, key)
+}
+
+func (s *relayServer) makeMailbox(name, key string) (string, error) {
 	b := make([]byte, 16)
 	rand.Read(b)
 	id := hex.EncodeToString(b)
+	if name == "" {
+		name = "signup-" + id[:8]
+	}
 	if err := os.MkdirAll(filepath.Join(s.dir, id), 0o700); err != nil {
 		return "", err
 	}
 	return id, s.writeMailbox(id, &relayMailbox{Name: name, KeySha256: sha256Hex(key), Created: s.now().UTC()})
 }
 
-// limited counts one hit for key and returns the seconds to wait when it is over n a minute.
-func (s *relayServer) limited(key string, n int) int {
+func (s *relayServer) countMailboxes() (int, error) {
+	entries, err := os.ReadDir(s.dir)
+	n := 0
+	for _, e := range entries {
+		if e.IsDir() && validID(e.Name()) {
+			n++
+		}
+	}
+	return n, err
+}
+
+// limited counts one hit for key and returns the seconds to wait when it is over n in the window.
+func (s *relayServer) limited(key string, n int, window time.Duration) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
 	kept := s.hits[key][:0]
 	for _, t := range s.hits[key] {
-		if now.Sub(t) < time.Minute {
+		if now.Sub(t) < window {
 			kept = append(kept, t)
 		}
 	}
 	if len(kept) >= n {
 		s.hits[key] = kept
-		return int((time.Minute - now.Sub(kept[0])).Seconds()) + 1
+		return int((window - now.Sub(kept[0])).Seconds()) + 1
 	}
 	s.hits[key] = append(kept, now)
 	return 0
@@ -242,6 +266,8 @@ func bearer(r *http.Request) string {
 
 func (s *relayServer) route(w http.ResponseWriter, r *http.Request, parts []string) {
 	switch {
+	case s.openSignup && len(parts) == 1 && parts[0] == "mailboxes" && r.Method == http.MethodPost:
+		s.signup(w, r)
 	case len(parts) == 2 && parts[0] == "m" && r.Method == http.MethodPut && validID(parts[1]):
 		s.upload(w, r, parts[1])
 	case len(parts) == 3 && parts[0] == "m" && r.Method == http.MethodGet && validID(parts[1]):
@@ -249,6 +275,79 @@ func (s *relayServer) route(w http.ResponseWriter, r *http.Request, parts []stri
 	default:
 		relayNotFound(w)
 	}
+}
+
+// clientIP trusts X-Forwarded-For only from a proxy on this host, and buckets IPv6 by /64.
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		if xff := r.Header.Values("X-Forwarded-For"); len(xff) > 0 {
+			hops := strings.Split(xff[len(xff)-1], ",")
+			host = strings.TrimSpace(hops[len(hops)-1])
+		}
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
+		return ip.Mask(net.CIDRMask(64, 128)).String()
+	}
+	return host
+}
+
+func (s *relayServer) signup(w http.ResponseWriter, r *http.Request) {
+	if wait := s.limited("signup:"+clientIP(r), relaySignupsHour, time.Hour); wait > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(wait))
+		relayError(w, 429, "rate_limited", "At most 3 new mailboxes an hour from one address.")
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n, err := s.countMailboxes()
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		relayError(w, 500, "store_failed", "The mailbox could not be made.")
+		return
+	}
+	if n >= s.maxMailboxes {
+		relayError(w, 503, "full", "This relay takes no new mailboxes now.")
+		return
+	}
+	key := randomKey("dkr_")
+	id, err := s.makeMailbox("", key)
+	if err != nil {
+		relayError(w, 500, "store_failed", "The mailbox could not be made.")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"address": "/m/" + id, "mailbox": id, "key": key})
+}
+
+// sweep removes mailboxes with no upload for idle (counting from creation when there was none) and forgets old rate-limit hits.
+func (s *relayServer) sweep(idle time.Duration) int {
+	all, _ := s.mailboxes()
+	removed := 0
+	for id := range all {
+		s.mu.Lock()
+		if m, err := s.readMailbox(id); err == nil {
+			last := m.Created
+			if m.LastUpload != nil {
+				last = *m.LastUpload
+			}
+			if s.now().Sub(last) > idle && os.RemoveAll(filepath.Join(s.dir, id)) == nil {
+				removed++
+			}
+		}
+		s.mu.Unlock()
+	}
+	s.mu.Lock()
+	for k, ts := range s.hits {
+		if len(ts) == 0 || s.now().Sub(ts[len(ts)-1]) > time.Hour {
+			delete(s.hits, k)
+		}
+	}
+	s.mu.Unlock()
+	return removed
 }
 
 func (s *relayServer) upload(w http.ResponseWriter, r *http.Request, id string) {
@@ -261,7 +360,7 @@ func (s *relayServer) upload(w http.ResponseWriter, r *http.Request, id string) 
 		relayError(w, 401, "bad_key", "The upload key is missing or wrong.")
 		return
 	}
-	if wait := s.limited("up:"+id, relayUploadsMin); wait > 0 {
+	if wait := s.limited("up:"+id, relayUploadsMin, time.Minute); wait > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(wait))
 		relayError(w, 429, "rate_limited", "At most 4 uploads a minute.")
 		return
@@ -346,7 +445,7 @@ func (s *relayServer) fetch(w http.ResponseWriter, r *http.Request, id, slot str
 		relayNotFound(w)
 		return
 	}
-	if wait := s.limited("get:"+id+":"+slot, relayFetchesMin); wait > 0 {
+	if wait := s.limited("get:"+id+":"+slot, relayFetchesMin, time.Minute); wait > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(wait))
 		relayError(w, 429, "rate_limited", "At most 30 fetches a minute.")
 		return
@@ -458,15 +557,29 @@ func relayCommand(args []string) int {
 		}
 		return fail(fmt.Errorf("there is no mailbox named %q", args[1]))
 	case "serve":
-		if len(args) != 3 || args[1] != "--http" {
+		fl := flag.NewFlagSet("relay serve", flag.ContinueOnError)
+		fl.SetOutput(io.Discard)
+		addr := fl.String("http", "", "")
+		fl.BoolVar(&s.openSignup, "open-signup", false, "")
+		fl.IntVar(&s.maxMailboxes, "max-mailboxes", 5000, "")
+		if fl.Parse(args[1:]) != nil || *addr == "" || fl.NArg() > 0 || s.maxMailboxes < 1 {
 			return bad()
 		}
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return fail(err)
 		}
-		srv := &http.Server{Addr: args[2], Handler: s.handler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second,
+		if s.openSignup {
+			go func() {
+				for ; ; time.Sleep(time.Hour) {
+					if n := s.sweep(relayIdleDays * 24 * time.Hour); n > 0 {
+						fmt.Fprintf(s.logOut, "%s sweep removed %d idle mailboxes\n", s.now().UTC().Format(time.RFC3339), n)
+					}
+				}
+			}()
+		}
+		srv := &http.Server{Addr: *addr, Handler: s.handler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second,
 			WriteTimeout: 30 * time.Second, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 16 << 10}
-		fmt.Fprintln(os.Stderr, "dokkit: relay listening on", args[2])
+		fmt.Fprintln(os.Stderr, "dokkit: relay listening on", *addr)
 		return fail(srv.ListenAndServe())
 	default:
 		return bad()

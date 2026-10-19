@@ -147,4 +147,6 @@ A second certificate, for a real name with a publicly trusted certificate, can b
 
 **Updates.** Releases for the updater are put on the server with `PUT /api/v1/releases/<version>/<file>`, and the interface's Update and Update all buttons approve a version for a machine. The updater runs on Windows, Linux, macOS and a QNAP NAS.
 
+**Phones.** Settings, Phones takes a relay you run, or makes a mailbox on the shared relay at `https://relay.dokkit.dev` with one button; `DOKKIT_SHARED_RELAY` names another relay that was started with `dokkit relay serve --open-signup`.
+
 **Archiving.** With `DOKKIT_ARCHIVE` set to a folder, each log month older than the live limit (12 months unless changed) is written there as `logs-YYYY-MM.ndjson.gz` and dropped from the database, checked once an hour. With the setting `delete`, the month is dropped with no file and no folder is needed; files already there stay and can be loaded back. `Dokkit.Logs.restore/1` loads a file back. A month whose file is already there is dropped without rewriting the file. Without the setting every month stays.
