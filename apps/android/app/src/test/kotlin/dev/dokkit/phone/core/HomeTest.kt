@@ -25,7 +25,7 @@ class HomeTest {
         val box = Fixtures.snapshot.inbox
         assertEquals("3 need you", top.title)
         assertTrue(top.urgent)
-        assertEquals((box?.needsYou?.size ?: 0) + (box?.soon?.size ?: 0), top.issues.size)
+        assertEquals(box?.needsYou?.size ?: 0, top.issues.size)
         assertTrue(top.issues.all { it.title.isNotEmpty() && it.detail.isNotEmpty() && it.serviceId != null })
         assertEquals(Fixtures.snapshot.inbox?.snoozed?.size?.let { "$it snoozed" }, h.snoozed)
         assertEquals(6, h.hardware.size + h.groups.size)

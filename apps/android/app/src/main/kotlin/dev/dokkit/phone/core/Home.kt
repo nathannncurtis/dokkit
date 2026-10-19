@@ -64,8 +64,9 @@ object Home {
         val needs = s.inbox?.needsYou ?: emptyList()
         val soon = s.inbox?.soon ?: emptyList()
         if (needs.isNotEmpty() || soon.isNotEmpty()) {
+            val shown = needs.ifEmpty { soon }
             val title = if (needs.isEmpty()) "${soon.size} coming up soon" else "${needs.size} need you"
-            return TopBox.Attention(title, (needs + soon).map { line(it, names, now) }, needs.isNotEmpty())
+            return TopBox.Attention(title, shown.map { line(it, names, now) }, needs.isNotEmpty())
         }
         val machines = s.machines ?: emptyList()
         val hardware = machines.filter { it.kind == "enrolled" }

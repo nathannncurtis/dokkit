@@ -92,7 +92,7 @@ public enum Home {
         let needs: [Issue] = s.inbox?.needsYou ?? []
         let soon: [Issue] = s.inbox?.soon ?? []
         var lines: [IssueLine] = []
-        for i in needs + soon { lines.append(line(i, names: names, now: now)) }
+        for i in (needs.isEmpty ? soon : needs) { lines.append(line(i, names: names, now: now)) }
         if !lines.isEmpty {
             let title: String = needs.isEmpty ? "\(soon.count) coming up soon" : "\(needs.count) need you"
             return .attention(title: title, lines: lines, urgent: !needs.isEmpty)

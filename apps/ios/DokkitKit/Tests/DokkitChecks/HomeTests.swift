@@ -33,7 +33,7 @@ struct HomeTests {
         }
         try await expect(title == "3 need you")
         try await expect(urgent)
-        try await expect(lines.count == 5)
+        try await expect(lines.count == 3)
         try await expect(lines.allSatisfy { !$0.title.isEmpty && $0.serviceID != nil })
         try await expect(h.snoozedLine == "1 snoozed")
         try await expect(h.machines.count == 6 && h.groups.isEmpty)

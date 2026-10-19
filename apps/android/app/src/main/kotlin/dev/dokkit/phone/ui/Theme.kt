@@ -1,6 +1,7 @@
 package dev.dokkit.phone.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -61,7 +62,7 @@ fun DokkitTheme(content: @Composable () -> Unit) {
             secondaryContainer = p.chip, onSecondaryContainer = p.ink,
         )
     }
-    CompositionLocalProvider(LocalPalette provides p) {
+    CompositionLocalProvider(LocalPalette provides p, LocalContentColor provides p.ink) {
         MaterialTheme(colorScheme = colors, content = content)
     }
 }
