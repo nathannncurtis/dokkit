@@ -621,7 +621,7 @@ defmodule DokkitWeb.AlertsLive do
                   aria-label="Webhook address"
                 /> <.send_test channel="webhook" tests={@tests} />
                 <span class="hint">
-                  An https address. A JSON request when an issue opens and another when it closes.
+                  An https address. A JSON request when an issue opens and another when it closes. A Slack or Discord webhook address gets a message in their own format.
                 </span>
               </dd>
             </dl>

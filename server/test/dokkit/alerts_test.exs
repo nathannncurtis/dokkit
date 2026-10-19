@@ -101,6 +101,55 @@ defmodule Dokkit.AlertsTest do
     assert %{"event" => "opened", "issue" => %{"id" => "DOK-0"}} = Jason.decode!(body)
   end
 
+  defp webhook_round(key, url) do
+    Alerts.save(%{"down" => "webhook", "webhook_url" => url})
+    Intake.ping(key, "backup", "fail", nil, "disk <full> & cold")
+    assert Alerts.deliver_pending() == 1
+    assert_received {:sent, _, opened, _}
+    Intake.ping(key, "backup", "ok", nil, "")
+    assert Alerts.deliver_pending() == 1
+    assert_received {:sent, _, closed, _}
+    {Jason.decode!(opened), Jason.decode!(closed)}
+  end
+
+  test "a Slack webhook gets Slack's text, escaped, with a link", %{key: key} do
+    {opened, closed} = webhook_round(key, "https://hooks.slack.com/services/T0/B0/x")
+    url = Dokkit.Certificate.url()
+    assert [%{"text" => "Opened: Nightly backup failed (vault, DOK-" <> rest}] = [opened]
+    assert map_size(opened) == 1
+    assert rest =~ ~r/^\d+\)\ndisk &lt;full&gt; &amp; cold\n<#{Regex.escape(url)}\|Open Dokkit>$/
+
+    assert closed["text"] =~
+             ~r/^Resolved: Nightly backup failed \(vault, DOK-\d+\)\n<.+\|Open Dokkit>$/
+  end
+
+  test "a Discord webhook gets content with mentions turned off", %{key: key} do
+    {opened, closed} = webhook_round(key, "https://discord.com/api/webhooks/1/tok")
+    url = Dokkit.Certificate.url()
+    assert opened["allowed_mentions"] == %{"parse" => []}
+    assert closed["allowed_mentions"] == %{"parse" => []}
+
+    assert opened["content"] =~
+             ~r/^Opened: .+ \(vault, DOK-\d+\)\ndisk <full> & cold\n\[Open Dokkit\]\(#{Regex.escape(url)}\)$/
+
+    assert closed["content"] =~
+             ~r/^Resolved: Nightly backup failed \(vault, DOK-\d+\)\n\[Open Dokkit\]/
+  end
+
+  for url <- ["https://hooks.example/x", "https://discord.com/other"] do
+    test "#{url} keeps Dokkit's own JSON", %{key: key} do
+      {opened, closed} = webhook_round(key, unquote(url))
+
+      assert %{
+               "event" => "opened",
+               "issue" => %{"id" => "DOK-" <> _, "note" => "disk <full> & cold"}
+             } = opened
+
+      assert Map.keys(opened["issue"]) |> Enum.sort() == ~w(id machine note state title url)
+      assert %{"event" => "closed"} = closed
+    end
+  end
+
   test "email and text go through the mail server, and the digest is one mail a day" do
     Alerts.save(%{"down" => "email", "degraded" => "digest", "email_to" => "me@example.com"})
     machine = Repo.insert!(%Machine{name: "press"})

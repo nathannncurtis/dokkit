@@ -1236,12 +1236,7 @@ defmodule Dokkit.Alerts do
     do: {:error, "Pushover needs an application token and a user key."}
 
   defp send_to(:webhook, action, about, %{"webhook_url" => url}) when url not in [nil, ""] do
-    post(url,
-      json: %{
-        event: if(action == :open, do: "opened", else: "closed"),
-        issue: Map.put(about, :id, about.short) |> Map.delete(:short)
-      }
-    )
+    post(url, json: webhook_body(webhook_kind(url), action, about))
   end
 
   defp send_to(:webhook, _, _, _), do: {:error, "The webhook has no address yet."}
@@ -1283,6 +1278,56 @@ defmodule Dokkit.Alerts do
   defp digits(number), do: String.replace(number, ~r/[ ()\-.]/, "")
 
   defp summary(about), do: "#{about.title} (#{about.machine}, #{about.short})"
+
+  @discord_hosts ~w(discord.com discordapp.com ptb.discord.com canary.discord.com)
+
+  defp webhook_kind(url) do
+    %URI{host: host, path: path} = URI.parse(url)
+    host = String.downcase(host || "")
+
+    cond do
+      host == "hooks.slack.com" -> :slack
+      host in @discord_hosts and (path || "") =~ ~r{^/api/(v\d+/)?webhooks/} -> :discord
+      true -> :json
+    end
+  end
+
+  defp webhook_body(:slack, action, about) do
+    esc =
+      &(&1
+        |> String.replace("&", "&amp;")
+        |> String.replace("<", "&lt;")
+        |> String.replace(">", "&gt;"))
+
+    %{text: chat_text(action, about, esc, "<#{about.url}|Open Dokkit>")}
+  end
+
+  defp webhook_body(:discord, action, about) do
+    %{
+      content: chat_text(action, about, & &1, "[Open Dokkit](#{about.url})"),
+      allowed_mentions: %{parse: []}
+    }
+  end
+
+  defp webhook_body(:json, action, about) do
+    %{
+      event: if(action == :open, do: "opened", else: "closed"),
+      issue: Map.put(about, :id, about.short) |> Map.delete(:short)
+    }
+  end
+
+  # The note is cut so a Discord message stays under its 2000 characters.
+  defp chat_text(:open, about, esc, link) do
+    note = about.note && esc.(String.slice(about.note, 0, 1500))
+
+    Enum.join(
+      Enum.reject(["Opened: " <> esc.(summary(about)), note, link], &(&1 in [nil, ""])),
+      "\n"
+    )
+  end
+
+  defp chat_text(:close, about, esc, link),
+    do: "Resolved: #{esc.(summary(about))}\n#{link}"
 
   @local_error "The address points at this machine or a link-local address. Set DOKKIT_ALLOW_LOCAL_ALERTS=1 on the server to allow that."
   @failed "Dokkit could not deliver it there. The server log has the reason."
