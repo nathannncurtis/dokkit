@@ -1,5 +1,25 @@
 [
  {
+  "version": "v0.1.48",
+  "at": "2026-10-18T23:55:30-07:00",
+  "changes": [
+   "The public repository publishes its own server image, ghcr.io/nathannncurtis/dokkit-server",
+   "Both licences at the repository root",
+   "Licence files: the libraries and the phone apps are Apache 2.0",
+   "Licence files: the server is AGPL 3.0 and the program Apache 2.0"
+  ]
+ },
+ {
+  "version": "v0.1.47",
+  "at": "2026-10-18T23:06:42-07:00",
+  "changes": [
+   "A Slack or Discord webhook address gets a message in their own format, when an issue opens and when it closes",
+   "The program builds for the browser as dokkit check without running the checks, from the same parsing and rules",
+   "Phone apps: titles follow the theme in dark mode, and the need-you card lists only what it counts",
+   "Specs that only described code already written are gone; the dokkit.toml format and the MCP move to docs, and code no longer points at doc files"
+  ]
+ },
+ {
   "version": "v0.1.46",
   "at": "2026-10-15T23:32:02-07:00",
   "changes": [
