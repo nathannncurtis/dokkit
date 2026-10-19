@@ -46,7 +46,7 @@ type State struct {
 }
 
 // Store is the whole state in one JSON file, rewritten on each change. One mutex serialises
-// every change, including the Cloudflare calls it makes, so two calls can never race on a record.
+// every change, including the DNS calls it makes, so two calls can never race on a record.
 type Store struct {
 	mu   sync.Mutex
 	path string
