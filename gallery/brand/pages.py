@@ -34,7 +34,7 @@ def page(file, title, desc, crumbs, h1, lede, steps, body, nxt, js=None, current
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="site.css?v={V}">
-{sheet}<script>(() => {{ let m = null; try {{ m = localStorage.getItem("motion"); }} catch {{}} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); }})();</script>
+{sheet}<script>(() => {{ let m = null; try {{ m = localStorage.getItem("motion"); }} catch {{}} const on = m !== "off"; if (!on) document.documentElement.classList.add("still"); }})();</script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
