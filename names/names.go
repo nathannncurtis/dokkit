@@ -41,6 +41,7 @@ type Service struct {
 	Zone     string
 	Max      int
 	Reserved map[string]bool
+	Blocked  map[string]bool
 	Now      func() time.Time
 }
 
@@ -68,14 +69,62 @@ func newCode() string {
 	return strings.ToLower(base32.StdEncoding.EncodeToString(b))
 }
 
+// CheckLabel gives the first rule a label breaks, in the words the page shows as you type.
 func (s *Service) CheckLabel(label string) error {
 	switch {
-	case !labelRe.MatchString(label):
-		return refuse(400, "A name is 3 to 40 lower-case letters, digits and hyphens, and starts and ends with a letter or digit.")
+	case strings.Trim(label, "abcdefghijklmnopqrstuvwxyz0123456789-") != "":
+		return refuse(400, "Only lower-case letters, digits and hyphens.")
+	case strings.HasPrefix(label, "-"):
+		return refuse(400, "It can't start with a hyphen.")
+	case len(label) < 3:
+		return refuse(400, "At least 3 characters.")
+	case len(label) > 40:
+		return refuse(400, "At most 40 characters.")
+	case strings.HasSuffix(label, "-"):
+		return refuse(400, "It can't end with a hyphen.")
 	case len(label) >= 4 && label[2:4] == "--":
-		return refuse(400, "A name may not have two hyphens in the third and fourth places.")
+		return refuse(400, "It can't have two hyphens in the third and fourth places.")
+	case !labelRe.MatchString(label):
+		return refuse(400, "Only lower-case letters, digits and hyphens, starting and ending with a letter or digit.")
+	case offensive(label, s.Blocked):
+		return refuse(400, "That name isn't allowed.")
 	case s.Reserved[label]:
-		return refuse(409, "%s is reserved.", label)
+		return refuse(409, "%s is kept back for Dokkit itself.", s.fqdn(label))
+	}
+	return nil
+}
+
+// Available says why owner cannot claim label now, or nil.
+func (s *Service) Available(owner, label string) error {
+	if err := s.CheckLabel(label); err != nil {
+		return err
+	}
+	s.Store.mu.Lock()
+	defer s.Store.mu.Unlock()
+	return s.available(owner, label)
+}
+
+func (s *Service) available(owner, label string) error {
+	if n := s.Store.s.Names[label]; n != nil {
+		if n.Owner == owner {
+			return refuse(409, "%s is already yours.", s.fqdn(label))
+		}
+		return refuse(409, "%s is taken.", s.fqdn(label))
+	}
+	if len(s.mine(owner)) >= perAccount {
+		return refuse(409, "You hold %d names already. Release one to claim another.", perAccount)
+	}
+	if len(s.Store.s.Names) >= s.Max {
+		return refuse(503, "No more names can be handed out for now.")
+	}
+	for _, fq := range []string{s.fqdn(label), "_acme-challenge." + s.fqdn(label)} {
+		taken, err := s.DNS.Exists(fq)
+		if err != nil {
+			return refuse(502, "The DNS provider could not be asked: %v", err)
+		}
+		if taken {
+			return refuse(409, "%s is taken.", s.fqdn(label))
+		}
 	}
 	return nil
 }
@@ -109,23 +158,8 @@ func (s *Service) Claim(owner string, login, label string) (string, error) {
 	}
 	s.Store.mu.Lock()
 	defer s.Store.mu.Unlock()
-	if s.Store.s.Names[label] != nil {
-		return "", refuse(409, "%s is taken.", s.fqdn(label))
-	}
-	if len(s.mine(owner)) >= perAccount {
-		return "", refuse(409, "An account holds at most %d names.", perAccount)
-	}
-	if len(s.Store.s.Names) >= s.Max {
-		return "", refuse(503, "No more names can be handed out for now.")
-	}
-	for _, fq := range []string{s.fqdn(label), "_acme-challenge." + s.fqdn(label)} {
-		taken, err := s.DNS.Exists(fq)
-		if err != nil {
-			return "", refuse(502, "The DNS provider could not be asked: %v", err)
-		}
-		if taken {
-			return "", refuse(409, "%s is taken.", s.fqdn(label))
-		}
+	if err := s.available(owner, label); err != nil {
+		return "", err
 	}
 	code := newCode()
 	now := s.Now()

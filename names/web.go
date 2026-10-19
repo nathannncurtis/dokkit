@@ -28,9 +28,11 @@ type App struct {
 	Svc     *Service
 	Base    string
 	Signins []*Provider
+	Demo    bool
 	Abuse   string
 	Secret  []byte
 	replays Replays
+	checks  Limiter
 	Limits  Limiter
 }
 
@@ -46,6 +48,12 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /{$}", a.home)
 	mux.HandleFunc("GET /login/{provider}", a.login)
 	mux.HandleFunc("GET /callback/{provider}", a.callback)
+	mux.HandleFunc("GET /part", a.part)
+	mux.HandleFunc("GET /check", a.check)
+	mux.HandleFunc("GET /app.js", serveJS)
+	if a.Demo {
+		mux.HandleFunc("GET /demo-signin", a.demoSignin)
+	}
 	mux.HandleFunc("POST /logout", a.logout)
 	mux.HandleFunc("POST /claim", a.form(a.claim))
 	mux.HandleFunc("POST /names/{label}/code", a.form(a.newCode))
@@ -74,10 +82,10 @@ func (a *App) Routes() http.Handler {
 func (a *App) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
-		if !a.Limits.Allow(clientIP(r), time.Now()) {
+		if r.URL.Path != "/check" && !a.Limits.Allow(clientIP(r), time.Now()) {
 			http.Error(w, "Too many requests. Wait a minute.", http.StatusTooManyRequests)
 			return
 		}
@@ -183,6 +191,9 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 	}
 	state := randomHex(16)
 	a.setCookie(w, "st", p.Key+"."+state, 10*time.Minute)
+	if r.URL.Query().Get("popup") == "1" {
+		a.setCookie(w, "pop", "1", 10*time.Minute)
+	}
 	http.Redirect(w, r, p.authorizeURL(a.Base+"/callback/"+p.Key, state, a.mac("pkce|"+state), a.mac("nonce|"+state)), http.StatusFound)
 }
 
@@ -204,6 +215,12 @@ func (a *App) callback(w http.ResponseWriter, r *http.Request) {
 	raw, _ := json.Marshal(session{Account: p.Key + ":" + id.ID, Login: id.Name, Via: p.Title, Exp: time.Now().Add(sessionLife).Unix()})
 	body := b64.EncodeToString(raw)
 	a.setCookie(w, "s", body+"."+a.mac("s|"+body), sessionLife)
+	if c, err := r.Cookie("pop"); err == nil && c.Value == "1" {
+		a.setCookie(w, "pop", "", -1)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		io.WriteString(w, `<!doctype html><meta charset="utf-8"><title>Signed in</title><body data-signed-in><p>Signed in. You can close this window.</p><script src="/app.js"></script>`)
+		return
+	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -217,6 +234,14 @@ func getJSON(client *http.Client, req *http.Request, out any) error {
 		return errors.New("answered " + resp.Status)
 	}
 	return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out)
+}
+
+// demoSignin signs in a made-up account, for trying the page on a local copy only.
+func (a *App) demoSignin(w http.ResponseWriter, r *http.Request) {
+	raw, _ := json.Marshal(session{Account: "demo:1", Login: "demo-user", Via: "a demo sign-in", Exp: time.Now().Add(sessionLife).Unix()})
+	body := b64.EncodeToString(raw)
+	a.setCookie(w, "s", body+"."+a.mac("s|"+body), sessionLife)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (a *App) logout(w http.ResponseWriter, r *http.Request) {
@@ -237,6 +262,7 @@ type view struct {
 	Zone                                         string
 	Abuse                                        string
 	Max                                          int
+	Demo                                         bool
 	Status                                       int
 }
 
@@ -294,7 +320,7 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) page(w http.ResponseWriter, r *http.Request, status int, v view) {
-	v.Zone, v.Abuse, v.Max, v.Signins = a.Svc.Zone, a.Abuse, perAccount, a.Signins
+	v.Zone, v.Abuse, v.Max, v.Signins, v.Demo = a.Svc.Zone, a.Abuse, perAccount, a.Signins, a.Demo
 	if s, csrf := a.session(r); s != nil {
 		v.Login, v.Via, v.CSRF = s.Login, s.Via, csrf
 		for _, n := range a.Svc.Mine(s.Account) {
@@ -307,9 +333,47 @@ func (a *App) page(w http.ResponseWriter, r *http.Request, status int, v view) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	if err := pageTmpl.Execute(w, v); err != nil {
+	name := "page"
+	if r.URL.Path == "/part" {
+		name = "acct"
+	}
+	if err := pageTmpl.ExecuteTemplate(w, name, v); err != nil {
 		log.Printf("page: %v", err)
 	}
+}
+
+// check answers the claim box as you type: whether the name can be claimed, and why not.
+func (a *App) check(w http.ResponseWriter, r *http.Request) {
+	s, _ := a.session(r)
+	if s == nil {
+		http.Error(w, "Sign in first.", http.StatusUnauthorized)
+		return
+	}
+	if !a.checks.Allow(clientIP(r), time.Now()) {
+		a.reply(w, http.StatusTooManyRequests, map[string]any{"ok": false, "reason": "Slow down a moment."})
+		return
+	}
+	label := strings.TrimSpace(r.URL.Query().Get("name"))
+	if err := a.Svc.Available(s.Account, label); err != nil {
+		reason := "That name could not be checked."
+		var p *Problem
+		if errors.As(err, &p) {
+			reason = p.Text
+		}
+		a.reply(w, http.StatusOK, map[string]any{"ok": false, "reason": reason})
+		return
+	}
+	a.reply(w, http.StatusOK, map[string]any{"ok": true, "reason": a.Svc.fqdn(label) + " is free."})
+}
+
+// part is the signed-in or signed-out half of the page, swapped in without a reload.
+func (a *App) part(w http.ResponseWriter, r *http.Request) {
+	a.page(w, r, http.StatusOK, view{})
+}
+
+func serveJS(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	io.WriteString(w, appJS)
 }
 
 // The API for servers
@@ -419,7 +483,7 @@ button:hover,.btn:hover{border-color:var(--mute)}
 .pri{background:var(--acc);border-color:var(--acc);color:var(--accink)}.pri:hover{background:var(--acc2);border-color:var(--acc2)}
 .small{font-size:13.5px;padding:6px 12px;border-radius:8px}.danger:hover{border-color:var(--bad);color:var(--bad)}
 .code{margin:32px 0 0;padding:24px;border:1px solid var(--acc);border-radius:16px;background:color-mix(in srgb,var(--acc) 7%,var(--bg))}
-.code p{margin:0}.code .v{margin:14px 0;font:500 clamp(18px,2.2vw,24px) var(--mono);letter-spacing:.04em;color:var(--acc2);background:var(--well);border:1px solid var(--line);border-radius:10px;padding:14px 18px;user-select:all;overflow-wrap:anywhere}
+.code p{margin:0}.cv{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:14px 0}.cv .v{flex:1 1 280px;min-width:0;display:block;margin:0;font:500 clamp(18px,2.2vw,24px) var(--mono);letter-spacing:.04em;color:var(--acc2);background:var(--well);border:1px solid var(--line);border-radius:10px;padding:14px 18px;user-select:all;overflow-wrap:anywhere}
 .code .m{color:var(--mute);font-size:15px}
 h2{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:56px 0 12px}
 .names{border-top:1px solid var(--ink)}
@@ -434,15 +498,18 @@ h2{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color
 .claim .f{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 .claim input{font:500 17px var(--mono);padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--well);color:var(--ink);width:min(100%,280px)}
 .claim input:focus{outline:2px solid var(--acc);outline-offset:2px}.claim .z{font:500 17px var(--mono);color:var(--mute)}
-.claim .m{margin:12px 0 0;color:var(--mute);font-size:14px}
+.claim{transition:border-color .2s}.claim .m{margin:12px 0 0;color:var(--mute);font-size:14px;transition:color .2s}.claim.bad{border-color:var(--bad)}.claim.bad .m{color:var(--bad)}.claim.good{border-color:var(--ok)}.claim.good .m{color:var(--ok)}.claim button:disabled{opacity:.45;cursor:not-allowed}
 .steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:48px 0 0;padding:0;list-style:none;counter-reset:s}
 .steps li{counter-increment:s;padding:20px;border:1px solid var(--line);border-radius:14px;color:var(--mute);font-size:15px}
-.steps li::before{content:counter(s);display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--chip);color:var(--ink);font:500 12px var(--mono);margin-bottom:10px}
+.steps li::before{content:counter(s);transition:background .3s,color .3s;display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--chip);color:var(--ink);font:500 12px var(--mono);margin-bottom:10px}
 .steps b{display:block;color:var(--ink);font-weight:600;margin-bottom:4px}
 .start{margin:40px 0 0;display:flex;flex-direction:column;align-items:flex-start;gap:12px}
 .sso{display:inline-flex;align-items:center;box-sizing:border-box;text-decoration:none;white-space:nowrap}.sso svg{flex:none}
 .sso{gap:12px;padding:0 18px;height:46px;min-width:270px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:600 15px var(--sans);transition:border-color .15s,background .15s}.sso:hover{border-color:var(--mute);background:var(--chip)}.sso svg{width:20px;height:20px}
 .more{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin:8px 0 0;color:var(--mute);font-size:14px}
+.steps.done1 li:first-child::before{content:"¹3";background:var(--acc);color:var(--accink)}.steps.done1 li:first-child b{color:var(--acc2)}
+#acct{transition:opacity .22s ease,transform .22s ease}#acct.out{opacity:0;transform:translateX(-24px)}#acct.in{opacity:0;transform:translateX(24px);transition:none}
+.why{margin:36px 0 0;max-width:60ch;padding:18px 20px;border-left:2px solid var(--acc);background:color-mix(in srgb,var(--panel) 60%,transparent);border-radius:0 12px 12px 0;color:var(--mute);font-size:15px}.why b{color:var(--ink);font-weight:600}.why p{margin:6px 0 0}
 .alt{display:inline-flex;align-items:center;gap:7px;padding:6px 2px;color:var(--ink);text-decoration:none;font-weight:500}.alt svg{width:16px;height:16px;flex:none}.alt:hover{color:var(--acc2)}.foot{margin:64px 0 0;color:var(--mute);font-size:14px}
 @media (max-width:720px){.row{grid-template-columns:1fr}.acts{justify-content:flex-start}.steps{grid-template-columns:1fr}}
 </style>
@@ -450,12 +517,22 @@ h2{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color
 <main>
 <h1>Claim a name</h1>
 <p class="lede">A name such as <b>yours.{{.Zone}}</b> for your Dokkit server, with a real certificate, even on a private network. Your server proves it holds the name's key before the record goes live, and keeps it renewed. A name lapses when its server stops renewing it.</p>
-{{if .Error}}<p class="msg bad" role="alert">{{.Error}}</p>{{end}}
+<ol class="steps{{if .Login}} done1{{end}}" id="steps">
+<li><b>Sign in</b>so each name has an owner.</li>
+<li><b>Pick a name</b>and get a claim code, shown once.</li>
+<li><b>Paste it into your server</b>under Settings, Certificate. It points the name at itself and gets a certificate.</li>
+</ol>
+<div id="acct">{{template "acct" .}}</div>
+<p class="foot">To report a name used for abuse, write to <a href="mailto:{{.Abuse}}">{{.Abuse}}</a>.</p>
+</main>
+<script src="/app.js"></script>
+</html>
+{{define "acct"}}{{if .Error}}<p class="msg bad" role="alert">{{.Error}}</p>{{end}}
 {{if .Done}}<p class="msg ok" role="status">{{.Done}}</p>{{end}}
 {{if .Login}}
 <div class="who"><span>Signed in as <b>{{.Login}}</b> through {{.Via}}.</span><form method="post" action="/logout"><button class="small">Sign out</button></form></div>
 {{if .Code}}<div class="code" role="status">
-<p>Claim code for <b>{{.CodeFor}}</b></p><p class="v">{{.Code}}</p>
+<p>Claim code for <b>{{.CodeFor}}</b></p><div class="cv"><code class="v" data-code="{{.Code}}" aria-label="Claim code, hidden">••••••••••••••••••••••••</code><button type="button" class="small" data-reveal>Show</button><button type="button" class="small pri" data-copy>Copy</button></div>
 <p class="m">In your Dokkit server, open Settings, Certificate, "A name on {{.Zone}}", and paste it there. It works once, within seven days, and is not shown again.</p></div>{{end}}
 <h2>Your names</h2>
 {{if .Rows}}<div class="names">
@@ -471,21 +548,15 @@ h2{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color
 </div>{{else}}<p class="lede" style="margin-top:0">No names yet.</p>{{end}}
 {{if lt (len .Rows) .Max}}<form method="post" action="/claim" class="claim" style="display:block">
 <input type="hidden" name="csrf" value="{{.CSRF}}">
-<div class="f"><input name="name" aria-label="Name" placeholder="yours" required minlength="3" maxlength="40" pattern="[a-z0-9][a-z0-9\-]{1,38}[a-z0-9]" autocomplete="off" spellcheck="false"><span class="z">.{{.Zone}}</span><button class="pri">Claim</button></div>
-<p class="m">3 to 40 lower-case letters, digits and hyphens. At most {{.Max}} names per account.</p>
+<div class="f"><input name="name" aria-label="Name" placeholder="yours" autofocus required maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="claim-say"><span class="z">.{{.Zone}}</span><button class="pri">Claim</button></div>
+<p class="m" id="claim-say" aria-live="polite" data-zone="{{.Zone}}" data-hint="3 to 40 lower-case letters, digits and hyphens. At most {{.Max}} names per account.">3 to 40 lower-case letters, digits and hyphens. At most {{.Max}} names per account.</p>
 </form>{{end}}
 {{else}}
-<ol class="steps">
-<li><b>Sign in</b>so each name has an owner.</li>
-<li><b>Pick a name</b>and get a claim code, shown once.</li>
-<li><b>Paste it into your server</b>under Settings, Certificate. It points the name at itself and gets a certificate.</li>
-</ol>
-<div class="start">{{range .Main}}<a class="sso {{.Key}}" href="/login/{{.Key}}">{{template "mark" .}}<span>Sign in with {{.Title}}</span></a>{{end}}
+<div class="start">{{if .Demo}}<a class="sso" href="/demo-signin" style="border-color:var(--acc)"><span>Demo: sign in as a made-up user</span></a>{{end}}{{range .Main}}<a class="sso {{.Key}}" href="/login/{{.Key}}">{{template "mark" .}}<span>Sign in with {{.Title}}</span></a>{{end}}
 {{with .More}}<p class="more"><span>More:</span>{{range $i, $p := .}}{{if $i}}<span aria-hidden="true">·</span>{{end}}<a class="alt" href="/login/{{$p.Key}}" aria-label="Sign in with {{$p.Title}}">{{template "mark" $p}}{{$p.Title}}</a>{{end}}</p>{{end}}</div>
+<div class="why"><b>Why sign in?</b><p>A name points at your server, so it needs an owner. Signing in is what lets only you release a name or move it to a new server, keeps one person to 3 names, and lets a name used for abuse be traced to one account.</p><p>Dokkit keeps only the id your sign-in gives it and a display name. No password, and no email address is asked for.</p></div>
 {{end}}
-<p class="foot">To report a name used for abuse, write to <a href="mailto:{{.Abuse}}">{{.Abuse}}</a>.</p>
-</main>
-</html>
+{{end}}
 {{define "mark"}}{{- if eq .Key "github"}}<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="#fff" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
 {{- else if eq .Key "google"}}<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
 {{- else if eq .Key "microsoft"}}<svg viewBox="0 0 21 21" aria-hidden="true"><path fill="#f25022" d="M1 1h9v9H1z"/><path fill="#7fba00" d="M11 1h9v9h-9z"/><path fill="#00a4ef" d="M1 11h9v9H1z"/><path fill="#ffb900" d="M11 11h9v9h-9z"/></svg>
@@ -495,3 +566,98 @@ h2{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color
 {{- else if eq .Key "discord"}}<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
 {{- else if eq .Key "codeberg"}}<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#2185D0" d="M11.955.49A12 12 0 0 0 0 12.49a12 12 0 0 0 1.832 6.373L11.838 5.928a.187.14 0 0 1 .324 0l10.006 12.935A12 12 0 0 0 24 12.49a12 12 0 0 0-12-12 12 12 0 0 0-.045 0zm.375 6.467l4.416 16.553a12 12 0 0 0 5.137-4.213z"/></svg>
 {{- end}}{{end}}`))
+
+const appJS = `(() => {
+  if (document.body.hasAttribute("data-signed-in")) {
+    if (window.opener) { window.opener.postMessage("dokkit-signed-in", location.origin); window.close(); }
+    else location.replace("/");
+    return;
+  }
+  const acct = document.getElementById("acct");
+  async function swap() {
+    const res = await fetch("/part", { credentials: "same-origin" });
+    if (!res.ok) return location.reload();
+    const html = await res.text();
+    acct.classList.add("out");
+    await new Promise(r => setTimeout(r, 220));
+    acct.innerHTML = html;
+    document.getElementById("steps").classList.toggle("done1", !!acct.querySelector(".who"));
+    acct.classList.replace("out", "in");
+    requestAnimationFrame(() => requestAnimationFrame(() => acct.classList.remove("in")));
+    armed();
+    acct.querySelector("input[name=name]")?.focus({ preventScroll: true });
+  }
+  const rules = [
+    [v => /[^a-z0-9-]/.test(v), "Only lower-case letters, digits and hyphens."],
+    [v => v.startsWith("-"), "It can't start with a hyphen."],
+    [v => v.length < 3, "At least 3 characters."],
+    [v => v.length > 40, "At most 40 characters."],
+    [v => v.endsWith("-"), "It can't end with a hyphen."],
+    [v => v.length >= 4 && v.slice(2, 4) === "--", "It can't have two hyphens in the third and fourth places."],
+  ];
+  let timer, asked = 0;
+  function mark(form, state, text) {
+    const say = form.querySelector("#claim-say");
+    form.classList.toggle("bad", state === "bad");
+    form.classList.toggle("good", state === "good");
+    say.textContent = text ?? say.dataset.hint;
+    form.querySelector("button").disabled = state !== "good";
+  }
+  function armed() {
+    const box = document.querySelector("form.claim input[name=name]");
+    if (box && !box.value) box.form.querySelector("button").disabled = true;
+  }
+  armed();
+  document.addEventListener("input", e => {
+    const box = e.target.closest("form.claim input[name=name]");
+    if (!box) return;
+    const form = box.form, at = box.selectionStart;
+    box.value = box.value.toLowerCase().replace(/\s/g, "");
+    box.setSelectionRange(at, at);
+    const v = box.value, say = form.querySelector("#claim-say");
+    clearTimeout(timer);
+    asked++;
+    if (!v) return mark(form, "", null);
+    const broken = rules.find(([test]) => test(v));
+    if (broken) return mark(form, "bad", broken[1]);
+    mark(form, "", "Checking " + v + "." + say.dataset.zone + "…");
+    const mine = asked;
+    timer = setTimeout(async () => {
+      const res = await fetch("/check?name=" + encodeURIComponent(v), { credentials: "same-origin" });
+      const out = await res.json().catch(() => ({ ok: false, reason: "That name could not be checked." }));
+      if (mine === asked) mark(form, out.ok ? "good" : "bad", out.reason);
+    }, 250);
+  });
+  document.addEventListener("click", async e => {
+    const reveal = e.target.closest("[data-reveal]"), copy = e.target.closest("[data-copy]");
+    if (!reveal && !copy) return;
+    const code = e.target.closest(".cv").querySelector("[data-code]");
+    if (reveal) {
+      const shown = reveal.textContent === "Hide";
+      code.textContent = shown ? "•".repeat(24) : code.dataset.code;
+      code.setAttribute("aria-label", shown ? "Claim code, hidden" : "Claim code");
+      reveal.textContent = shown ? "Show" : "Hide";
+      return;
+    }
+    try { await navigator.clipboard.writeText(code.dataset.code); copy.textContent = "Copied"; }
+    catch { copy.textContent = "Press Show, then copy it"; }
+    setTimeout(() => (copy.textContent = "Copy"), 1800);
+  });
+  addEventListener("message", e => { if (e.origin === location.origin && e.data === "dokkit-signed-in") swap(); });
+  document.addEventListener("click", async e => {
+    const a = e.target.closest("a[href^='/login/'], a[href='/demo-signin']");
+    if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    if (a.getAttribute("href") === "/demo-signin") { await fetch("/demo-signin", { credentials: "same-origin" }); return swap(); }
+    const w = 520, h = 680, x = screenX + (outerWidth - w) / 2, y = screenY + (outerHeight - h) / 3;
+    const pop = open(a.href + "?popup=1", "dokkit-signin", "popup,width=" + w + ",height=" + h + ",left=" + x + ",top=" + y);
+    if (!pop) location.href = a.href;
+  });
+  document.addEventListener("submit", async e => {
+    if (e.target.getAttribute("action") !== "/logout") return;
+    e.preventDefault();
+    await fetch("/logout", { method: "POST", credentials: "same-origin" });
+    swap();
+  });
+})();
+`

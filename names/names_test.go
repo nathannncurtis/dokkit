@@ -325,7 +325,7 @@ func body(t *testing.T, resp *http.Response) string {
 }
 
 var csrfRe = regexp.MustCompile(`name="csrf" value="([^"]+)"`)
-var codeRe = regexp.MustCompile(`<p class="v">([a-z0-9]+)</p>`)
+var codeRe = regexp.MustCompile(`data-code="([a-z0-9]+)"`)
 
 func (rg *rig) post(c *http.Client, path string, form url.Values) (int, string) {
 	resp, _ := c.Get(rg.srv.URL + "/")
@@ -526,14 +526,14 @@ func TestNameRules(t *testing.T) {
 	rg := newRig(t)
 	c := rg.browser(7)
 	for label, want := range map[string]string{
-		"ab":                    "3 to 40",
-		"-abc":                  "3 to 40",
-		"abc-":                  "3 to 40",
-		"a.bc":                  "3 to 40",
-		strings.Repeat("a", 41): "3 to 40",
+		"ab":                    "At least 3 characters.",
+		"-abc":                  "start with a hyphen",
+		"abc-":                  "end with a hyphen",
+		"a.bc":                  "Only lower-case letters",
+		strings.Repeat("a", 41): "At most 40 characters.",
 		"xn--abc":               "two hyphens",
-		"www":                   "reserved",
-		"taken":                 "taken",
+		"www":                   "kept back for Dokkit",
+		"taken":                 "taken.dokkit.dev is taken.",
 	} {
 		status, html := rg.post(c, "/claim", url.Values{"name": {label}})
 		if status == 200 || !strings.Contains(html, want) {
@@ -543,7 +543,7 @@ func TestNameRules(t *testing.T) {
 	rg.claim(c, "one")
 	rg.claim(c, "Two")
 	rg.claim(c, "three")
-	if status, html := rg.post(c, "/claim", url.Values{"name": {"four"}}); status != 409 || !strings.Contains(html, "at most 3") {
+	if status, html := rg.post(c, "/claim", url.Values{"name": {"four"}}); status != 409 || !strings.Contains(html, "Release one") {
 		t.Fatalf("fourth name: %d", status)
 	}
 	if status, html := rg.post(rg.browser(8), "/claim", url.Values{"name": {"one"}}); status != 409 || !strings.Contains(html, "taken") {
@@ -890,5 +890,52 @@ func TestLimiter(t *testing.T) {
 	r.RemoteAddr = "198.51.100.7:5000"
 	if clientIP(r) != "198.51.100.7" {
 		t.Fatal("a forwarded header was believed from a far address")
+	}
+}
+
+func TestCheckAsYouType(t *testing.T) {
+	rg := newRig(t)
+	c := rg.browser(7)
+	ask := func(c *http.Client, name string) (int, map[string]any) {
+		resp, err := c.Get(rg.srv.URL + "/check?name=" + url.QueryEscape(name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out map[string]any
+		json.NewDecoder(resp.Body).Decode(&out)
+		resp.Body.Close()
+		return resp.StatusCode, out
+	}
+	if status, _ := ask(&http.Client{}, "free-one"); status != 401 {
+		t.Fatalf("signed out: %d", status)
+	}
+	rg.claim(c, "mine")
+	for name, want := range map[string]string{
+		"ab":       "At least 3 characters.",
+		"www":      "www.dokkit.dev is kept back for Dokkit itself.",
+		"taken":    "taken.dokkit.dev is taken.",
+		"mine":     "mine.dokkit.dev is already yours.",
+		"free-one": "free-one.dokkit.dev is free.",
+	} {
+		_, out := ask(c, name)
+		if out["reason"] != want || out["ok"] != (name == "free-one") {
+			t.Errorf("%s: %v, want %q", name, out, want)
+		}
+	}
+	if status, html := rg.post(c, "/claim", url.Values{"name": {"mine"}}); status != 409 || !strings.Contains(html, "already yours") {
+		t.Errorf("claiming your own name again: %d", status)
+	}
+}
+
+func TestOffensiveNames(t *testing.T) {
+	for label, want := range map[string]bool{
+		"fuck": true, "fuck-off": true, "f-u-c-k": true, "fvck": false, "phuck": true, "sh1t": true,
+		"my-ass": true, "assets": false, "cockpit": false, "dick-box": true, "essex": false,
+		"homelab": false, "brightwater": false, "title": false, "nazi-lab": true,
+		"extra-word": true, "grapefruit": false, "torpedo": false, "swanky": false, "rape-lab": true, "conspicuous": false,
+	} {
+		if got := offensive(label, map[string]bool{"word": true}); got != want {
+			t.Errorf("%s: %v, want %v", label, got, want)
+		}
 	}
 }
