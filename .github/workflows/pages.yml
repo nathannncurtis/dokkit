@@ -1,0 +1,39 @@
+name: site
+
+on:
+  push:
+    branches: [main]
+    paths: ['gallery/brand/**', 'program/get.sh', 'program/get.ps1', 'server/install.sh', 'server/rel/overlays/install.ps1', 'server/compose.yml', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+# dokkit.dev: the site, and the install scripts its commands fetch.
+jobs:
+  deploy:
+    if: github.repository == 'nathannncurtis/dokkit'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble
+        run: |
+          mkdir site
+          cp -r gallery/brand/. site/
+          rm -f site/*.py site/*.exs
+          cp program/get.sh program/get.ps1 server/install.sh server/rel/overlays/install.ps1 server/compose.yml site/
+          echo dokkit.dev > site/CNAME
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
