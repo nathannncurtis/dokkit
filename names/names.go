@@ -37,7 +37,7 @@ var (
 
 type Service struct {
 	Store    *Store
-	DNS      *Cloudflare
+	DNS      *Azure
 	Zone     string
 	Max      int
 	Reserved map[string]bool

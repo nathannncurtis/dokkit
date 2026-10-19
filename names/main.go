@@ -18,7 +18,7 @@ func env(key, fallback string) string {
 }
 
 func main() {
-	for _, k := range []string{"CF_API_TOKEN", "CF_ZONE_ID", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"} {
+	for _, k := range []string{"AZURE_TENANT", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION", "AZURE_DNS_GROUP", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"} {
 		if os.Getenv(k) == "" {
 			log.Fatalf("%s is not set", k)
 		}
@@ -27,13 +27,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("state: %v", err)
 	}
-	max, err := strconv.Atoi(env("NAMES_MAX", "40"))
+	max, err := strconv.Atoi(env("NAMES_MAX", "1000"))
 	if err != nil || max < 1 {
 		log.Fatalf("NAMES_MAX must be a whole number above 0")
 	}
 	svc := &Service{
-		Store:    store,
-		DNS:      &Cloudflare{API: env("CF_API", "https://api.cloudflare.com/client/v4"), Token: os.Getenv("CF_API_TOKEN"), Zone: os.Getenv("CF_ZONE_ID")},
+		Store: store,
+		DNS: &Azure{API: env("AZURE_API", "https://management.azure.com"), Login: env("AZURE_LOGIN", "https://login.microsoftonline.com"),
+			Tenant: os.Getenv("AZURE_TENANT"), ClientID: os.Getenv("AZURE_CLIENT_ID"), Secret: os.Getenv("AZURE_CLIENT_SECRET"),
+			Subscription: os.Getenv("AZURE_SUBSCRIPTION"), Group: os.Getenv("AZURE_DNS_GROUP"), Zone: env("NAMES_ZONE", "dokkit.dev")},
 		Zone:     env("NAMES_ZONE", "dokkit.dev"),
 		Max:      max,
 		Reserved: map[string]bool{},
@@ -47,7 +49,7 @@ func main() {
 		Base: strings.TrimRight(env("NAMES_BASE_URL", "https://names.dokkit.dev"), "/"),
 		GitHub: GitHub{
 			ClientID: os.Getenv("GITHUB_CLIENT_ID"), Secret: os.Getenv("GITHUB_CLIENT_SECRET"),
-			Web: "https://github.com", API: "https://api.github.com",
+			Web: env("GITHUB_WEB", "https://github.com"), API: env("GITHUB_API", "https://api.github.com"),
 		},
 		Abuse:  env("NAMES_ABUSE_EMAIL", "abuse@dokkit.dev"),
 		Secret: []byte(store.s.Secret),

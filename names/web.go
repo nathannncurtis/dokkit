@@ -78,7 +78,7 @@ func (a *App) Routes() http.Handler {
 func (a *App) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+		h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
 		if !a.Limits.Allow(clientIP(r), time.Now()) {
@@ -416,51 +416,89 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Names on {{.Zone}}</title>
+<title>Claim a name on {{.Zone}}</title>
+<meta name="theme-color" content="#1e1917">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-:root{color-scheme:light dark;--bg:#fbfaf8;--fg:#1d1b19;--mute:#6b6560;--line:#e4e0da;--bad:#b3261e;--ok:#1f7a43}
-@media (prefers-color-scheme:dark){:root{--bg:#161514;--fg:#ece8e3;--mute:#a19a93;--line:#34312e;--bad:#f2b8b5;--ok:#7fd3a0}}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
-main{max-width:720px;margin:0 auto;padding:32px 16px}
-h1{font-size:1.5rem;margin:0 0 4px}p{margin:8px 0}.mute{color:var(--mute)}.bad{color:var(--bad)}.ok{color:var(--ok)}
-table{width:100%;border-collapse:collapse;margin:16px 0}td,th{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
-input{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit}
-button,.btn{font:inherit;padding:6px 12px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;cursor:pointer;text-decoration:none;display:inline-block}
-form{display:inline}code{font-size:1.1rem;padding:2px 6px;border:1px solid var(--line);border-radius:6px;user-select:all}
-.box{border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin:16px 0}
+:root{--bg:#1e1917;--panel:#27201d;--line:#40342f;--chip:#3a2f2a;--well:#120f0d;--ink:#f7f1ec;--mute:#b9a99e;--acc:#ff9a4d;--acc2:#ffb074;--accink:#2a1203;--ok:#7bd88f;--warn:#f5c542;--bad:#ff7b72;--display:"Bricolage Grotesque","Hanken Grotesk",system-ui,sans-serif;--sans:"Hanken Grotesk",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace;color-scheme:dark}
+*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;color:var(--ink);font:16.5px/1.65 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:var(--acc2)}:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:4px}
+.bar{display:flex;align-items:center;gap:16px;padding:14px clamp(16px,6vw,112px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;font:700 19px var(--display);color:var(--ink);text-decoration:none}
+.mk{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:linear-gradient(#ffb074,#ff9a4d)}.mk svg{width:86%;height:86%;fill:var(--accink)}
+.crumb{font:13px var(--mono);color:var(--mute)}.crumb b{color:var(--ink);font-weight:500}
+main{max-width:860px;margin:0 auto;padding:clamp(48px,8vw,112px) 16px clamp(64px,10vw,140px)}
+h1{font:700 clamp(40px,6vw,84px)/0.95 var(--display);letter-spacing:-0.04em;margin:0}
+.lede{max-width:52ch;font-size:clamp(17px,1.4vw,20px);color:var(--mute);margin:22px 0 0}.lede b{color:var(--ink);font-weight:500}
+.msg{margin:28px 0 0;padding:14px 18px;border-radius:12px;border:1px solid var(--line);background:var(--panel)}.msg.bad{border-color:var(--bad);color:var(--bad)}.msg.ok{border-color:var(--ok);color:var(--ok)}
+.who{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin:40px 0 0;color:var(--mute)}.who b{color:var(--ink);font-weight:600}
+form{display:inline;margin:0}
+button,.btn{font:600 15px var(--sans);padding:10px 18px;border-radius:10px;border:1px solid var(--line);background:none;color:var(--ink);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+button:hover,.btn:hover{border-color:var(--mute)}
+.pri{background:var(--acc);border-color:var(--acc);color:var(--accink)}.pri:hover{background:var(--acc2);border-color:var(--acc2)}
+.small{font-size:13.5px;padding:6px 12px;border-radius:8px}.danger:hover{border-color:var(--bad);color:var(--bad)}
+.code{margin:32px 0 0;padding:24px;border:1px solid var(--acc);border-radius:16px;background:color-mix(in srgb,var(--acc) 7%,var(--bg))}
+.code p{margin:0}.code .v{margin:14px 0;font:500 clamp(18px,2.2vw,24px) var(--mono);letter-spacing:.04em;color:var(--acc2);background:var(--well);border:1px solid var(--line);border-radius:10px;padding:14px 18px;user-select:all;overflow-wrap:anywhere}
+.code .m{color:var(--mute);font-size:15px}
+h2{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:56px 0 12px}
+.names{border-top:1px solid var(--ink)}
+.row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.2fr) minmax(0,0.8fr) auto;gap:8px 24px;align-items:start;padding:20px 0;border-bottom:1px solid var(--line)}
+.row .n{font:500 16px var(--mono);overflow-wrap:anywhere}.row .st{display:flex;gap:10px;align-items:baseline}.row .st small{display:block;color:var(--mute);font-size:13.5px}
+.row .ad{font:13.5px var(--mono);color:var(--mute);overflow-wrap:anywhere}
+.acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end}
+.acts label{font-size:13px;color:var(--mute);display:inline-flex;gap:6px;align-items:center}.acts a{font-size:13px;color:var(--mute)}
+.s{flex:none;display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--ok);transform:translateY(1px)}
+.s.warn{background:var(--warn);transform:rotate(45deg) scale(.9)}.s.bad{background:var(--bad);border-radius:50%}.s.none{background:none;border:1.5px dashed var(--mute)}
+.claim{margin:40px 0 0;padding:26px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--panel) 60%,transparent)}
+.claim .f{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.claim input{font:500 17px var(--mono);padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--well);color:var(--ink);width:min(100%,280px)}
+.claim input:focus{outline:2px solid var(--acc);outline-offset:2px}.claim .z{font:500 17px var(--mono);color:var(--mute)}
+.claim .m{margin:12px 0 0;color:var(--mute);font-size:14px}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:48px 0 0;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;padding:20px;border:1px solid var(--line);border-radius:14px;color:var(--mute);font-size:15px}
+.steps li::before{content:counter(s);display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--chip);color:var(--ink);font:500 12px var(--mono);margin-bottom:10px}
+.steps b{display:block;color:var(--ink);font-weight:600;margin-bottom:4px}
+.start{margin:40px 0 0}.foot{margin:64px 0 0;color:var(--mute);font-size:14px}
+@media (max-width:720px){.row{grid-template-columns:1fr}.acts{justify-content:flex-start}.steps{grid-template-columns:1fr}}
 </style>
+<header class="bar"><a class="brand" href="https://{{.Zone}}/"><span class="mk"><svg viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></svg></span>Dokkit</a><span class="crumb">/ <b>Claim a name</b></span></header>
 <main>
-<h1>Names on {{.Zone}}</h1>
-<p class="mute">A name such as <b>yours.{{.Zone}}</b> for your Dokkit server, with a real certificate, even on a private network. Your server proves it holds the name's key before the record goes live, and keeps it renewed. A name lapses when its server stops renewing it.</p>
-{{if .Error}}<p class="bad" role="alert">{{.Error}}</p>{{end}}
-{{if .Done}}<p class="ok" role="status">{{.Done}}</p>{{end}}
+<h1>Claim a name</h1>
+<p class="lede">A name such as <b>yours.{{.Zone}}</b> for your Dokkit server, with a real certificate, even on a private network. Your server proves it holds the name's key before the record goes live, and keeps it renewed. A name lapses when its server stops renewing it.</p>
+{{if .Error}}<p class="msg bad" role="alert">{{.Error}}</p>{{end}}
+{{if .Done}}<p class="msg ok" role="status">{{.Done}}</p>{{end}}
 {{if .Login}}
-<p>Signed in as {{.Login}} through GitHub. <form method="post" action="/logout"><button>Sign out</button></form></p>
-{{if .Code}}<div class="box" role="status">
-<p>Claim code for <b>{{.CodeFor}}</b>:</p><p><code>{{.Code}}</code></p>
-<p class="mute">Paste it into your Dokkit server under Settings, Certificate, "A name on {{.Zone}}". It works once, within seven days, and is not shown again.</p></div>{{end}}
-{{if .Rows}}<table>
-<tr><th>Name</th><th>State</th><th>Address</th><th></th></tr>
-{{range .Rows}}<tr>
-<td><b>{{.Name}}</b></td>
-<td>{{.State}}<br><span class="mute">{{.Note}}</span></td>
-<td>{{.A}}{{if .AAAA}}<br>{{.AAAA}}{{end}}</td>
-<td>
-<form method="post" action="/names/{{.Label}}/code"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button>New claim code</button></form>
-<form method="post" action="/names/{{.Label}}/release"><input type="hidden" name="csrf" value="{{$.CSRF}}"><label><input type="checkbox" name="sure" required> sure</label> <button>Release</button></form>
+<div class="who"><span>Signed in as <b>{{.Login}}</b> through GitHub.</span><form method="post" action="/logout"><button class="small">Sign out</button></form></div>
+{{if .Code}}<div class="code" role="status">
+<p>Claim code for <b>{{.CodeFor}}</b></p><p class="v">{{.Code}}</p>
+<p class="m">In your Dokkit server, open Settings, Certificate, "A name on {{.Zone}}", and paste it there. It works once, within seven days, and is not shown again.</p></div>{{end}}
+<h2>Your names</h2>
+{{if .Rows}}<div class="names">
+{{range .Rows}}<div class="row">
+<div class="n">{{.Name}}</div>
+<div class="st"><i class="s {{if eq .State "live"}}ok{{else if eq .State "lapsing"}}warn{{else if eq .State "lapsed"}}bad{{else}}none{{end}}"></i><span>{{.State}}<small>{{.Note}}</small></span></div>
+<div class="ad">{{.A}}{{if .AAAA}}<br>{{.AAAA}}{{end}}</div>
+<div class="acts">
+<form method="post" action="/names/{{.Label}}/code"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="small">New claim code</button></form>
+<form method="post" action="/names/{{.Label}}/release"><input type="hidden" name="csrf" value="{{$.CSRF}}"><label><input type="checkbox" name="sure" required> sure</label> <button class="small danger">Release</button></form>
 <a href="{{.Report}}">Report abuse</a>
-</td></tr>{{end}}
-</table>{{else}}<p class="mute">No names yet.</p>{{end}}
-{{if lt (len .Rows) .Max}}<form method="post" action="/claim" class="box" style="display:block">
+</div></div>{{end}}
+</div>{{else}}<p class="lede" style="margin-top:0">No names yet.</p>{{end}}
+{{if lt (len .Rows) .Max}}<form method="post" action="/claim" class="claim" style="display:block">
 <input type="hidden" name="csrf" value="{{.CSRF}}">
-<label>Name <input name="name" required minlength="3" maxlength="40" pattern="[a-z0-9][a-z0-9\-]{1,38}[a-z0-9]" autocomplete="off" spellcheck="false"></label>.{{.Zone}}
-<button>Claim</button>
-<p class="mute">3 to 40 lower-case letters, digits and hyphens. At most {{.Max}} names per account.</p>
+<div class="f"><input name="name" aria-label="Name" placeholder="yours" required minlength="3" maxlength="40" pattern="[a-z0-9][a-z0-9\-]{1,38}[a-z0-9]" autocomplete="off" spellcheck="false"><span class="z">.{{.Zone}}</span><button class="pri">Claim</button></div>
+<p class="m">3 to 40 lower-case letters, digits and hyphens. At most {{.Max}} names per account.</p>
 </form>{{end}}
 {{else}}
-<p><a class="btn" href="/login">Sign in with GitHub</a></p>
+<ol class="steps">
+<li><b>Sign in</b>with GitHub, so each name has an owner.</li>
+<li><b>Pick a name</b>and get a claim code, shown once.</li>
+<li><b>Paste it into your server</b>under Settings, Certificate. It points the name at itself and gets a certificate.</li>
+</ol>
+<p class="start"><a class="btn pri" href="/login">Sign in with GitHub</a></p>
 {{end}}
-<p class="mute">To report a name used for abuse, write to <a href="mailto:{{.Abuse}}">{{.Abuse}}</a>.</p>
+<p class="foot">To report a name used for abuse, write to <a href="mailto:{{.Abuse}}">{{.Abuse}}</a>.</p>
 </main>
 </html>
 `))

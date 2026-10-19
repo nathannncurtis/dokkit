@@ -36,14 +36,14 @@ Build it with `go build` in `names/`. Settings come from the environment:
 
 | Variable | Meaning |
 |---|---|
-| `CF_API_TOKEN` | A Cloudflare API token that may edit DNS in the zone. Required. |
-| `CF_ZONE_ID` | The zone's id. Required. |
+| `AZURE_TENANT`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | A service principal with the DNS Zone Contributor role on the zone, and nothing else. Required. |
+| `AZURE_SUBSCRIPTION`, `AZURE_DNS_GROUP` | Where the Azure DNS zone is. Required. |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | A GitHub OAuth app whose callback is `https://names.dokkit.dev/callback`. Required. |
 | `NAMES_BASE_URL` | Default `https://names.dokkit.dev`. |
 | `NAMES_ZONE` | Default `dokkit.dev`. |
 | `NAMES_ADDR` | Where it listens. Default `127.0.0.1:8080`. |
 | `NAMES_STATE` | The state file. Default `names.json` in the working folder. |
-| `NAMES_MAX` | How many names it hands out in all. Default 40. Each name holds up to four records; set it to fit the zone's record limit. |
+| `NAMES_MAX` | How many names it hands out in all. Default 1000. Each name holds up to three record sets, and an Azure DNS zone holds 10,000. |
 | `NAMES_RESERVED` | More names nobody may claim, separated by spaces or commas. Anything already in the zone is refused anyway. |
 | `NAMES_ABUSE_EMAIL` | Where report links go. Default `abuse@dokkit.dev`. |
 

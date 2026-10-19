@@ -20,73 +20,71 @@ import (
 	"time"
 )
 
-type fakeCF struct {
+type fakeDNS struct {
 	mu   sync.Mutex
-	recs map[string]cfRecord
-	n    int
+	sets map[string][]string
 	ops  []string
 }
 
-func (f *fakeCF) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (f *fakeDNS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if r.Header.Get("Authorization") != "Bearer cf-token" {
-		w.WriteHeader(403)
-		fmt.Fprint(w, `{"success":false,"errors":[{"message":"Authentication error"}]}`)
+	if r.URL.Path == "/tenant1/oauth2/v2.0/token" {
+		r.ParseForm()
+		if r.PostForm.Get("client_secret") != "az-secret" {
+			w.WriteHeader(401)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"access_token": "az-token", "expires_in": 3600})
 		return
 	}
-	ok := func(v any) { json.NewEncoder(w).Encode(map[string]any{"success": true, "result": v}) }
-	path := strings.TrimPrefix(r.URL.Path, "/zones/zone1/dns_records")
-	f.ops = append(f.ops, r.Method+" "+path)
-	switch {
-	case r.Method == "GET" && path == "":
-		var out []cfRecord
-		for _, rec := range f.recs {
-			if rec.Name == r.URL.Query().Get("name") {
-				out = append(out, rec)
-			}
-		}
-		ok(out)
-	case r.Method == "POST" && path == "":
-		var rec cfRecord
-		json.NewDecoder(r.Body).Decode(&rec)
-		f.n++
-		rec.ID = fmt.Sprintf("r%d", f.n)
-		f.recs[rec.ID] = rec
-		ok(rec)
-	case r.Method == "PUT" || r.Method == "DELETE":
-		id := strings.TrimPrefix(path, "/")
-		if _, found := f.recs[id]; !found {
-			w.WriteHeader(404)
-			fmt.Fprint(w, `{"success":false,"errors":[{"message":"Record does not exist."}]}`)
-			return
-		}
-		if r.Method == "DELETE" {
-			delete(f.recs, id)
-			ok(map[string]string{"id": id})
-			return
-		}
-		var rec cfRecord
-		json.NewDecoder(r.Body).Decode(&rec)
-		rec.ID = id
-		f.recs[id] = rec
-		ok(rec)
-	default:
+	if r.Header.Get("Authorization") != "Bearer az-token" {
+		w.WriteHeader(401)
+		return
+	}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.Network/dnsZones/dokkit.dev/"), "/")
+	if len(parts) != 2 {
 		w.WriteHeader(400)
+		return
+	}
+	key := parts[0] + " " + parts[1]
+	f.ops = append(f.ops, r.Method+" "+key)
+	switch r.Method {
+	case "GET":
+		vals, found := f.sets[key]
+		if !found {
+			w.WriteHeader(404)
+			return
+		}
+		json.NewEncoder(w).Encode(setOf(parts[0], vals))
+	case "PUT":
+		var in azSet
+		json.NewDecoder(r.Body).Decode(&in)
+		f.sets[key] = in.values(parts[0])
+		json.NewEncoder(w).Encode(in)
+	case "DELETE":
+		delete(f.sets, key)
 	}
 }
 
-func (f *fakeCF) records() map[string]string {
+func (f *fakeDNS) records() map[string]string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := map[string]string{}
-	for _, r := range f.recs {
-		out[r.Type+" "+r.Name] += r.Content + ";"
+	for key, vals := range f.sets {
+		typ, rel, _ := strings.Cut(key, " ")
+		name := rel + ".dokkit.dev"
+		if rel == "@" {
+			name = "dokkit.dev"
+		}
+		for _, v := range vals {
+			out[typ+" "+name] += v + ";"
+		}
 	}
 	return out
 }
 
-func (f *fakeCF) take() []string {
+func (f *fakeDNS) take() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	ops := f.ops
@@ -114,7 +112,7 @@ func (g *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 type rig struct {
 	t     *testing.T
-	cf    *fakeCF
+	cf    *fakeDNS
 	gh    *fakeGitHub
 	svc   *Service
 	app   *App
@@ -124,17 +122,17 @@ type rig struct {
 }
 
 func newRig(t *testing.T) *rig {
-	rg := &rig{t: t, cf: &fakeCF{recs: map[string]cfRecord{}}, gh: &fakeGitHub{id: 7}, now: time.Now()}
+	rg := &rig{t: t, cf: &fakeDNS{sets: map[string][]string{}}, gh: &fakeGitHub{id: 7}, now: time.Now()}
 	cfSrv := httptest.NewServer(rg.cf)
 	ghSrv := httptest.NewServer(rg.gh)
 	t.Cleanup(cfSrv.Close)
 	t.Cleanup(ghSrv.Close)
-	rg.cf.recs["mine"] = cfRecord{ID: "mine", Type: "A", Name: "taken.dokkit.dev", Content: "192.0.2.1"}
+	rg.cf.sets["A taken"] = []string{"192.0.2.1"}
 	store, err := OpenStore(filepath.Join(t.TempDir(), "names.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	rg.svc = &Service{Store: store, DNS: &Cloudflare{API: cfSrv.URL, Token: "cf-token", Zone: "zone1"},
+	rg.svc = &Service{Store: store, DNS: &Azure{API: cfSrv.URL, Login: cfSrv.URL, Tenant: "tenant1", ClientID: "c1", Secret: "az-secret", Subscription: "sub1", Group: "rg1", Zone: "dokkit.dev"},
 		Zone: "dokkit.dev", Max: 40, Reserved: map[string]bool{"www": true, "mcp": true}, Now: rg.clock}
 	rg.app = &App{Svc: rg.svc, GitHub: GitHub{ClientID: "gh-id", Secret: "gh-secret", Web: ghSrv.URL, API: ghSrv.URL},
 		Abuse: "abuse@dokkit.dev", Secret: []byte(store.s.Secret), Limits: Limiter{Burst: 1e6, PerSecond: 1}}
@@ -184,7 +182,7 @@ func body(t *testing.T, resp *http.Response) string {
 }
 
 var csrfRe = regexp.MustCompile(`name="csrf" value="([^"]+)"`)
-var codeRe = regexp.MustCompile(`<code>([a-z0-9]+)</code>`)
+var codeRe = regexp.MustCompile(`<p class="v">([a-z0-9]+)</p>`)
 
 func (rg *rig) post(c *http.Client, path string, form url.Values) (int, string) {
 	resp, _ := c.Get(rg.srv.URL + "/")
@@ -435,7 +433,7 @@ func TestSignIn(t *testing.T) {
 	}
 	b := rg.browser(9)
 	resp, _ = b.Get(rg.srv.URL + "/")
-	if html := body(t, resp); !strings.Contains(html, "Signed in as user9") {
+	if html := body(t, resp); !strings.Contains(html, "Signed in as <b>user9</b>") {
 		t.Fatal("not signed in")
 	}
 	rg.post(b, "/logout", nil)
