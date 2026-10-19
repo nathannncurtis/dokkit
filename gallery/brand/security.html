@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dokkit security</title>
+<meta name="description" content="What the dokkit program can and cannot do on a machine, what the server keeps, and how to check a release yourself.">
+<meta name="theme-color" content="#1e1917">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css?v=12">
+<script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); })();</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></symbol>
+</svg>
+
+<header class="bar">
+  <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+  <nav aria-label="Site">
+    <a href="install.html">Install</a><span class="soon" title="Not built yet">Demo</span><a href="agents.html">Agents</a><a href="api.html">Docs</a><span class="soon" title="Not built yet">Phone</span><a href="security.html" aria-current="page">Security</a><span class="soon" title="Not built yet">Status</span><a href="https://github.com/nathannncurtis/dokkit">Source</a>
+  </nav>
+  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
+  <a class="claim" href="install.html">Claim a name <em>soon</em></a>
+</header>
+
+<main id="top" class="page">
+  <header class="phead">
+    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><b>Security</b></p>
+    <h1 class="ptitle">Security</h1>
+    <p class="plede">What the program can and cannot do on your machines, what your server keeps, and how to check a release yourself before you trust it.</p>
+  </header>
+
+  <div class="steps-wrap">
+    <nav class="rail" aria-label="On this page">
+      <ol>
+        <li><a href="#machine" data-step="machine"><i>1</i>On each machine</a></li>
+        <li><a href="#server" data-step="server"><i>2</i>On your server</a></li>
+        <li><a href="#releases" data-step="releases"><i>3</i>Releases</a></li>
+        <li><a href="#phone" data-step="phone"><i>4</i>The phone</a></li>
+      </ol>
+      <span class="rail-fill" id="railFill" aria-hidden="true"></span>
+    </nav>
+
+    <div class="steps">
+      <section class="step" id="machine">
+        <h2 data-type>On each machine</h2>
+        <p class="big-fact" data-fly="up">The <code>dokkit</code> program <mark class="ok">opens no port</mark>. It makes one connection out to your server and keeps it open. Nothing can connect in to it.</p>
+        <div class="two" data-fly="up">
+          <div>
+            <h3>What it does</h3>
+            <ul class="did">
+              <li>Sends a beat with the machine's readings every minute, and each check's result on the schedule its file sets (every 30 seconds unless it says otherwise).</li>
+              <li>Reads the log files you point it at, and the <code>dokkit.toml</code> files in folders you added.</li>
+              <li>Once a day, looks the machine over and proposes what to watch. <mark class="ok">Nothing it finds is watched</mark> until you accept it.</li>
+              <li>Restarts a service only when you have allowed restarts for that service.</li>
+              <li>Installs an update only when you approve it, and only if its signature checks out.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>What it never does</h3>
+            <ul class="did no">
+              <li>Listen on a port.</li>
+              <li>Run a command your server sends it. There is no remote shell.</li>
+              <li>Send anything to dokkit.dev. The program talks to your server, and your server to nobody you did not set up.</li>
+              <li>Ask you to turn off antivirus.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="step" id="server">
+        <h2 data-type>On your server</h2>
+        <p class="big-fact" data-fly="up">Everything stays on <mark class="n">your own hardware</mark>, in your own Postgres. Logs are kept a year, then archived to a folder you name.</p>
+        <div class="cards cards-2">
+          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Keys are shown once</h3><p>Only a hash of each key is stored. A lost key is revoked and replaced, never shown again.</p></article>
+          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Four kinds of key</h3><p>One to enrol a machine, one per machine, one per app, and tokens for people and their agents. Each can do only its own job.</p></article>
+          <article class="wcard" data-fly="up"><h3><i class="s warn"></i>Full control asks twice</h3><p>A token that can do everything is made only after you type the server's own address. Every other token is limited to what you switch on.</p></article>
+          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Error messages are dropped</h3><p>Errors keep their type and their stack. The message, where personal data ends up, is kept only for a service you set to keep it.</p></article>
+          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>The first visit is yours</h3><p>The owner account needs the setup code the server printed when it started, so nobody else on the network can claim it first.</p></article>
+          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Two-step sign-in</h3><p>Each person can add an authenticator app, with recovery codes for the day the phone is lost.</p></article>
+        </div>
+      </section>
+
+      <section class="step" id="releases">
+        <h2 data-type>Releases</h2>
+        <p class="big-fact" data-fly="up">Every release carries a list of its files' SHA-256 sums, <mark class="ok">signed</mark> with the release key. The installers and the updater refuse anything whose signature does not check.</p>
+        <p class="sub-p">The release key, as Ed25519:</p>
+        <div class="cmd" data-fly="left"><code id="key">xX87EOVIFN9AkYL7vMj40ivpQ36bRyvJGLOMIbgAmRk=</code><button type="button" class="copy" data-copy="key">Copy</button></div>
+        <details class="card" data-fly="up"><summary>Check a release yourself <small>3 commands, with openssl</small></summary>
+          <div class="card-body">
+            <p>Download <code>SHA256SUMS</code>, <code>SHA256SUMS.sig</code> and the files you want from the release, into one folder.</p>
+            <ol class="do steps-cmd">
+              <li>Save the key as a file:<div class="prompt small"><pre id="pem">-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAxX87EOVIFN9AkYL7vMj40ivpQ36bRyvJGLOMIbgAmRk=
+-----END PUBLIC KEY-----</pre><button type="button" class="copy" data-copy="pem">Copy</button></div><p class="note">as <code>release-key.pem</code>.</p></li>
+              <li>Check the signature on the list:<div class="cmd"><code id="verify">base64 -d SHA256SUMS.sig &gt; sig.bin &amp;&amp; openssl pkeyutl -verify -pubin -inkey release-key.pem -rawin -in SHA256SUMS -sigfile sig.bin</code><button type="button" class="copy" data-copy="verify">Copy</button></div><p class="note">It prints <code>Signature Verified Successfully</code>.</p></li>
+              <li>Check the files against the list:<div class="cmd"><code id="sums">sha256sum -c SHA256SUMS --ignore-missing</code><button type="button" class="copy" data-copy="sums">Copy</button></div></li>
+            </ol>
+          </div>
+        </details>
+        <p class="note">The project hands out no builds signed with anyone's code-signing certificate. Whoever builds signs their own.</p>
+      </section>
+
+      <section class="step" id="phone">
+        <h2 data-type>The phone</h2>
+        <p class="big-fact" data-fly="up">The phone apps are <mark class="n">read-only</mark>. Your server seals a snapshot each minute and leaves it at a relay; the phone fetches it and opens it. <mark class="ok">The relay cannot read it</mark>, and nothing comes back in.</p>
+        <ul class="did" data-fly="up">
+          <li>The server never opens a port to reach the phone. It only dials out to the relay.</li>
+          <li>A phone is paired by scanning a code on your network, and can be removed in Settings.</li>
+        </ul>
+      </section>
+
+      <section class="next" aria-label="Where to go next">
+        <h2 data-type>Next:</h2>
+        <div class="next-links">
+          <a class="nl" href="install.html"><b>Install it</b><small>The server, then the program on each machine</small></a>
+          <a class="nl" href="agents.html"><b>What an agent's token allows</b><small>Every tool, and the switches that offer it</small></a>
+          <a class="nl" href="index.html"><b>Back to the start</b><small>What Dokkit is, and the working sample</small></a>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="fl">
+    <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+    <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
+  </div>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="site.js?v=12"></script>
+<script>railFor($$(".step"), $$(".rail a"));</script>
+<script src="motion.js?v=12"></script>
+</body>
+</html>
