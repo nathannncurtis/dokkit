@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dokkit terms</title>
+<meta name="description" content="The rules for dokkit.dev&#x27;s free services: names, the shared relay and the public MCP.">
+<meta name="theme-color" content="#1e1917">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css?v=20">
+<script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m !== "off"; if (!on) document.documentElement.classList.add("still"); })();</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></symbol>
+</svg>
+
+<header class="bar">
+  <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+  <nav aria-label="Site">
+    <a href="install.html">Install</a><span class="soon" title="Not built yet">Demo</span><a href="agents.html">Agents</a><a href="api.html">Docs</a><a href="phone.html">Phone</a><a href="security.html">Security</a><span class="soon" title="Not built yet">Status</span><a href="https://github.com/nathannncurtis/dokkit">Source</a>
+  </nav>
+  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
+  <a class="claim" href="https://names.dokkit.dev/">Claim a name</a>
+</header>
+
+<main id="top" class="page">
+  <header class="phead">
+    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><b>Terms</b></p>
+    <h1 class="ptitle">Terms</h1>
+    <p class="plede">The rules for the free services dokkit.dev runs for everyone. The software you install has its own licences.</p>
+  </header>
+
+  <div class="steps-wrap">
+    <nav class="rail" aria-label="On this page">
+      <ol>
+        <li><a href="#free" data-step="free"><i>1</i>Free services</a></li><li><a href="#names" data-step="names"><i>2</i>Names</a></li><li><a href="#use" data-step="use"><i>3</i>Fair use</a></li>
+      </ol>
+      <span class="rail-fill" id="railFill" aria-hidden="true"></span>
+    </nav>
+
+    <div class="steps">
+      <section class="step" id="free">
+        <h2 data-type>Free services</h2>
+        <ul class="did">
+          <li>names.dokkit.dev, relay.dokkit.dev and mcp.dokkit.dev are free, run on a small machine, and come with no promise of uptime or support.</li>
+          <li>They may change, be limited or stop. If one is going to stop, this page says so first where that is possible.</li>
+          <li>The software itself is under its own licences: AGPL 3.0 for the server, Apache 2.0 for the program, the libraries and the phone apps.</li>
+        </ul>
+      </section>
+      <section class="step" id="names">
+        <h2 data-type>Names</h2>
+        <ul class="did">
+          <li>A name is for pointing at a Dokkit server you run. At most 3 names per account.</li>
+          <li>A name lapses when its server stops checking in for 90 days, and is then freed for anyone.</li>
+          <li>Names that impersonate someone, mislead, or are used for phishing, malware or abuse are removed, without notice. Report one at <a href="mailto:abuse@dokkit.dev">abuse@dokkit.dev</a>.</li>
+          <li>Some names are kept back and cannot be claimed.</li>
+        </ul>
+      </section>
+      <section class="step" id="use">
+        <h2 data-type>Fair use</h2>
+        <ul class="did">
+          <li>Do not try to get around the limits, overload the services, or use them for anything unlawful.</li>
+          <li>Accounts and mailboxes used that way are removed.</li>
+        </ul>
+        <p class="big-fact" data-fly="up">The services are given <mark class="n">as they are</mark>, without warranty of any kind, and nobody running them is liable for any loss from using them, as far as the law allows.</p>
+        <p class="note">Last changed 19 October 2026.</p>
+      </section>
+
+      <section class="next" aria-label="Where to go next">
+        <h2 data-type>Next:</h2>
+        <div class="next-links">
+          <a class="nl" href="privacy.html"><b>Privacy</b><small>What the services keep</small></a><a class="nl" href="security.html"><b>Security</b><small>What the program can and cannot do</small></a><a class="nl" href="index.html"><b>Back to the start</b><small>What Dokkit is, and the working sample</small></a>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="fl">
+    <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+    <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
+  </div>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="site.js?v=20"></script>
+<script>railFor($$(".step"), $$(".rail a"));</script>
+<script src="motion.js?v=20"></script>
+</body>
+</html>

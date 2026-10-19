@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dokkit privacy</title>
+<meta name="description" content="What dokkit.dev and its small services keep, and what they do not.">
+<meta name="theme-color" content="#1e1917">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css?v=20">
+<script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m !== "off"; if (!on) document.documentElement.classList.add("still"); })();</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></symbol>
+</svg>
+
+<header class="bar">
+  <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+  <nav aria-label="Site">
+    <a href="install.html">Install</a><span class="soon" title="Not built yet">Demo</span><a href="agents.html">Agents</a><a href="api.html">Docs</a><a href="phone.html">Phone</a><a href="security.html">Security</a><span class="soon" title="Not built yet">Status</span><a href="https://github.com/nathannncurtis/dokkit">Source</a>
+  </nav>
+  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
+  <a class="claim" href="https://names.dokkit.dev/">Claim a name</a>
+</header>
+
+<main id="top" class="page">
+  <header class="phead">
+    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><b>Privacy</b></p>
+    <h1 class="ptitle">Privacy</h1>
+    <p class="plede">Dokkit is software you run yourself. These pages cover the few things dokkit.dev runs for everyone: the site, names, the shared relay and the public MCP.</p>
+  </header>
+
+  <div class="steps-wrap">
+    <nav class="rail" aria-label="On this page">
+      <ol>
+        <li><a href="#software" data-step="software"><i>1</i>The software</a></li><li><a href="#site" data-step="site"><i>2</i>This site</a></li><li><a href="#names" data-step="names"><i>3</i>Names</a></li><li><a href="#relay" data-step="relay"><i>4</i>Relay and MCP</a></li><li><a href="#ask" data-step="ask"><i>5</i>Ask or remove</a></li>
+      </ol>
+      <span class="rail-fill" id="railFill" aria-hidden="true"></span>
+    </nav>
+
+    <div class="steps">
+      <section class="step" id="software">
+        <h2 data-type>The software</h2>
+        <p class="big-fact" data-fly="up">Dokkit runs on <mark class="n">your own hardware</mark>. What it collects stays on your server, and nothing in the program, the server or the libraries reports to dokkit.dev.</p>
+      </section>
+      <section class="step" id="site">
+        <h2 data-type>This site</h2>
+        <ul class="did">
+          <li>dokkit.dev is a static site served by GitHub Pages. It sets no cookies, runs no analytics and has no forms that send anything.</li>
+          <li>Its pages load fonts from Google Fonts and scripts from cdnjs and unpkg, so those services see your address when a page loads, as GitHub does for the page itself.</li>
+          <li>The Check a file and Move over pages work entirely in your browser. What you type or drop there is not sent anywhere.</li>
+        </ul>
+      </section>
+      <section class="step" id="names">
+        <h2 data-type>Names</h2>
+        <p class="sub-p">To give you a name such as yours.dokkit.dev, names.dokkit.dev keeps:</p>
+        <ul class="did">
+          <li>The account you signed in with: the provider (GitHub, Google, Microsoft or ChatGPT), the stable id it gives for you, and the display name it sends. Your email address is not asked for and not kept.</li>
+          <li>Each name you claim, when you claimed it, the public key your server registered, the addresses your server set for it, and when it last checked in.</li>
+          <li>A sign-in cookie, only while you are signed in, to keep you signed in and to stop forged requests.</li>
+        </ul>
+        <p class="note">A name's records are public DNS, so anyone can look up the address it points to. Released or lapsed names are deleted, with their records. Your address is held in memory for a few minutes to limit how often one connection can make requests, and is not written down.</p>
+      </section>
+      <section class="step" id="relay">
+        <h2 data-type>Relay and MCP</h2>
+        <ul class="did">
+          <li>The shared relay at relay.dokkit.dev keeps a mailbox for each server that signs up: sealed snapshots it cannot read, and the time each arrived. A mailbox with no upload for 30 days is deleted with its contents.</li>
+          <li>The public MCP at mcp.dokkit.dev reads what an agent sends it, answers, and keeps nothing.</li>
+          <li>Both hold your address in memory for a short while to limit requests, and do not write it down.</li>
+        </ul>
+      </section>
+      <section class="step" id="ask">
+        <h2 data-type>Ask or remove</h2>
+        <p class="sub-p">To see what names.dokkit.dev holds for you, sign in there. To have anything removed, release your names there, or write to <a href="mailto:abuse@dokkit.dev">abuse@dokkit.dev</a>. The source of every service is public, so you can check all of this.</p>
+        <p class="note">Last changed 19 October 2026.</p>
+      </section>
+
+      <section class="next" aria-label="Where to go next">
+        <h2 data-type>Next:</h2>
+        <div class="next-links">
+          <a class="nl" href="terms.html"><b>Terms</b><small>The rules for the free services</small></a><a class="nl" href="security.html"><b>Security</b><small>What the program can and cannot do</small></a><a class="nl" href="index.html"><b>Back to the start</b><small>What Dokkit is, and the working sample</small></a>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="fl">
+    <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+    <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
+  </div>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="site.js?v=20"></script>
+<script>railFor($$(".step"), $$(".rail a"));</script>
+<script src="motion.js?v=20"></script>
+</body>
+</html>
