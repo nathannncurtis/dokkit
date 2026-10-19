@@ -366,16 +366,16 @@ html.held { overflow: hidden; }
 
 /* phone */
 .flow { position: relative; display: grid; grid-template-columns: 1fr 70px 1fr 70px 1.1fr; align-items: center; gap: 0; margin: 12px 0 8px; }
-.node { border: 1px solid var(--line); border-radius: 16px; padding: 22px; display: grid; gap: 6px; justify-items: start; background: color-mix(in srgb, var(--panel) 60%, transparent); transition: border-color 300ms; }
+.node { position: relative; z-index: 1; border: 1px solid var(--line); border-radius: 16px; padding: 22px; display: grid; gap: 6px; justify-items: start; background: color-mix(in srgb, var(--panel) 60%, var(--bg)); transition: border-color 300ms; }
 .node b { font: 600 17px var(--sans); }
 .node small { color: var(--mute); font-size: 13.5px; }
 .blind { font: 500 12px var(--mono); font-style: normal; color: var(--warn); padding: 2px 8px; border-radius: 6px; background: color-mix(in srgb, var(--warn) 14%, transparent); }
 .wire { height: 2px; background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 12px); }
-.phone-node { padding: 14px; justify-items: center; background: none; border: 0; }
+.phone-node { position: static; padding: 14px; justify-items: center; background: none; border: 0; }
 .handset { position: relative; width: 100%; max-width: 270px; }
 .handset img { display: block; width: 100%; height: auto; filter: drop-shadow(0 30px 40px #000a); }
 .screen-off { position: absolute; inset: 0; background: #0c0a09; clip-path: inset(5.95% 14.08% 6.32% 14.08% round 9% / 5%); opacity: 0; }
-.env { position: absolute; left: 0; top: 0; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: var(--acc); color: var(--acc-ink); box-shadow: 0 10px 20px -10px #000; --shut: 0; }
+.env { position: absolute; z-index: 0; left: 0; top: 0; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: var(--acc); color: var(--acc-ink); box-shadow: 0 10px 20px -10px #000; --shut: 0; }
 .env svg { width: 22px; height: 22px; }
 .env .shackle { transform: translateY(calc((1 - var(--shut)) * -3.5px)); }
 html:not(.pinned) .env { display: none; }
