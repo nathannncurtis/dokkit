@@ -30,3 +30,27 @@ const seen = new IntersectionObserver((es) => es.forEach((e) => {
 }), { rootMargin: "0px 0px -12% 0px" });
 $$(".pend").forEach((el) => seen.observe(el));
 document.addEventListener("toggle", () => window.ScrollTrigger?.refresh(), true);
+
+function splitLetters(el) {
+  if (/^H\d$/.test(el.tagName)) el.setAttribute("aria-label", el.textContent.replace(/\s+/g, " ").trim());
+  const out = [];
+  const walk = (node) => [...node.childNodes].forEach((n) => {
+    if (n.nodeType === 1) return walk(n);
+    const frag = document.createDocumentFragment();
+    [...n.textContent].forEach((ch) => {
+      const s = document.createElement("span");
+      s.className = "ch";
+      s.textContent = ch;
+      out.push(s);
+      frag.append(s);
+    });
+    n.replaceWith(frag);
+  });
+  walk(el);
+  el.classList.add("typing");
+  return out;
+}
+function showLetters(chars, p) {
+  const n = Math.round(p * chars.length);
+  chars.forEach((c, i) => { c.classList.toggle("on", i < n); c.classList.toggle("cur", i === n - 1 && n < chars.length); });
+}

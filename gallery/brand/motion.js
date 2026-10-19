@@ -18,26 +18,8 @@
   });
   window.dokkitScroll = lenis;
 
-  function letters(el) {
-    if (/^H\d$/.test(el.tagName)) el.setAttribute("aria-label", el.textContent.replace(/\s+/g, " ").trim());
-    const out = [];
-    const walk = (node) => [...node.childNodes].forEach((n) => {
-      if (n.nodeType === 1) return walk(n);
-      const frag = document.createDocumentFragment();
-      [...n.textContent].forEach((ch) => {
-        const s = document.createElement("span");
-        s.className = "ch";
-        s.textContent = ch;
-        out.push(s);
-        frag.append(s);
-      });
-      n.replaceWith(frag);
-    });
-    walk(el);
-    return out;
-  }
   all("[data-type]").forEach((el) => {
-    const chars = letters(el);
+    const chars = splitLetters(el);
     el.classList.add("typing");
     let shown = -1;
     ScrollTrigger.create({

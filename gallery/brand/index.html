@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="site.css?v=6">
+<link rel="stylesheet" href="site.css?v=7">
 <script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); })();</script>
 </head>
 <body>
@@ -45,7 +45,8 @@
   </section>
 
   <section class="sample" id="sample" aria-label="A working sample of Dokkit, on made-up data">
-    <div class="frame" data-fly="tilt">
+    <div class="cap" id="cap" aria-hidden="true"><span>One round of checks. Sixty of them.</span><span>57 are fine. They fold into one line.</span><span>3 need you. That is the whole list.</span></div>
+    <div class="frame">
       <div class="chrome">
         <span class="org"><span class="mk sm"><svg><use href="#mark"/></svg></span>Brightwater</span>
         <div class="tabs" role="tablist">
@@ -106,11 +107,11 @@
     <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
   </div>
 </footer>
-<script src="site.js?v=6"></script>
-<script src="home.js?v=6"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
-<script src="motion.js?v=6"></script>
+<script src="site.js?v=7"></script>
+<script src="home.js?v=7"></script>
+<script src="motion.js?v=7"></script>
 </body>
 </html>

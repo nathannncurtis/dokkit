@@ -287,3 +287,11 @@ a.nl:hover::after { transform: translateX(6px); }
 [data-for][hidden], [data-machine-for][hidden] { display: none; }
 @media (max-width: 1100px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .cards { grid-template-columns: 1fr; } }
+
+/* pinned moments */
+.cap { position: relative; height: 1.6em; font: 600 clamp(18px, 1.6vw, 24px)/1.4 var(--display); letter-spacing: -0.01em; }
+.cap span { position: absolute; inset: 0; opacity: 0; }
+html.still .cap, .js:not(.pinned) .cap { display: none; }
+.doors.stacked { display: grid; }
+.doors.stacked .door { grid-area: 1 / 1; border-bottom: 1px solid var(--line); background: var(--bg); }
+.round.scrub span { animation: none; }
