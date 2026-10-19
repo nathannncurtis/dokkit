@@ -131,7 +131,7 @@
      "name": "updater",
      "synopsis": "dokkit updater install|uninstall|run|status",
      "short": "Updates the program, and the server on the machine that runs it, when asked. Windows only so far.",
-     "more": "Windows only so far. install, from an administrator prompt, once: copies this program to Program Files\\DokkitUpdater, makes ProgramData\\DokkitUpdater for administrators and the system account only, registers the scheduled task Dokkit updater (system account, every five minutes and at start-up), and runs one check. It needs the program's service installed first. run is what the task runs: it asks the server whether this machine has been told to move to a version, and only installs a release whose list is signed with the project's release key and whose files match it. It never installs an older version. status prints the installed versions, the last check and the last result. uninstall removes the task and the copied file. See spec/updates.md."
+     "more": "Windows only so far. install, from an administrator prompt, once: copies this program to Program Files\\DokkitUpdater, makes ProgramData\\DokkitUpdater for administrators and the system account only, registers the scheduled task Dokkit updater (system account, every five minutes and at start-up), and runs one check. It needs the program's service installed first. run is what the task runs: it asks the server whether this machine has been told to move to a version, and only installs a release whose list is signed with the project's release key and whose files match it. It never installs an older version. status prints the installed versions, the last check and the last result. uninstall removes the task and the copied file."
     }
    ]
   },

@@ -1,5 +1,5 @@
 defmodule Dokkit.Releases do
-  @moduledoc "The signed releases this server holds for the updaters to fetch. See spec/updates.md."
+  @moduledoc "The signed releases this server holds for the updaters to fetch."
   import Ecto.Query
   alias Dokkit.{Machine, Repo}
 

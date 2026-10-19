@@ -54,7 +54,7 @@ Checks (http, tcp, process, Windows service, systemd unit, beats, jobs on a sche
 ## Evidence on Hand
 
 - The working interface mock at `gallery/app/` on an invented company (Brightwater). Real screens can be shown; the data is synthetic and says so.
-- The specs in `spec/` and the docs in `docs/`.
+- The docs in `docs/`.
 - No customers, testimonials, benchmarks or prices exist. None may be invented.
 
 ## Product Principles

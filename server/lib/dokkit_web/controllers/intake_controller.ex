@@ -133,7 +133,7 @@ defmodule DokkitWeb.IntakeController do
     end
   end
 
-  @doc "The door for Sentry's SDKs. See spec/errors.md."
+  @doc "The door for Sentry's SDKs."
   def envelope(conn, params) do
     with {:ok, body, conn} <- body(conn),
          {:ok, key} <- Keys.verify(sentry_key(conn, params) || head_key(conn, body) || "", :app),

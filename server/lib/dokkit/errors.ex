@@ -1,6 +1,6 @@
 defmodule Dokkit.Errors do
   @moduledoc """
-  Errors an app reports, grouped by type and the app's own frames. See spec/errors.md.
+  Errors an app reports, grouped by type and the app's own frames.
   Message text is kept only for a service set to keep it.
   """
   import Ecto.Query

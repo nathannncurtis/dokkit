@@ -1,7 +1,7 @@
 defmodule Dokkit.Processes do
   @moduledoc """
   A machine's process list: the newest full list, and 24 hours of the top 10 by memory and by
-  processor. See spec/api.md, Intake and Read.
+  processor.
   """
   import Ecto.Query
   alias Dokkit.{Machine, ProcessList, ProcessTop, Repo}

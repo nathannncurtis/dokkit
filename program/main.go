@@ -1,5 +1,4 @@
 // dokkit is the command-line tool and the program that runs on each machine.
-// The contract it follows is in ../spec/program.md and ../spec/api.md.
 package main
 
 import (

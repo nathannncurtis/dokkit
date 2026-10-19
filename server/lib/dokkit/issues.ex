@@ -1,5 +1,5 @@
 defmodule Dokkit.Issues do
-  @moduledoc "Turns check results into issues. The rules are in spec/alerts.md."
+  @moduledoc "Turns check results into issues."
   import Ecto.Query
   alias Dokkit.{Check, Issue, Repo, Service}
 

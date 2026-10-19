@@ -1,6 +1,6 @@
 # The Dokkit server
 
-Phoenix on Postgres. The contract it implements is in `../spec/`.
+Phoenix on Postgres.
 
 ```
 mix setup        # dependencies, database, assets

@@ -1,9 +1,9 @@
 """Writes the docs an AI tool is handed: api.md, cli.md, llms.txt and llms-full.txt.
-Run from anywhere: python gallery/brand/agent_docs.py. Reads openapi.json and cli.json here, and spec/."""
+Run from anywhere: python gallery/brand/agent_docs.py. Reads openapi.json and cli.json here, and docs/."""
 import json, os
 
 here = os.path.dirname(os.path.abspath(__file__))
-spec = os.path.join(here, "..", "..", "spec")
+docs = os.path.join(here, "..", "..", "docs")
 site = "https://dokkit.dev"
 read = lambda *p: open(os.path.join(*p), encoding="utf-8").read()
 d, cli = json.loads(read(here, "openapi.json")), json.loads(read(here, "cli.json"))
@@ -68,7 +68,7 @@ An AI tool reaches Dokkit over MCP at `/mcp` on the server, or over the HTTP API
 - [Everything in one file]({site}/llms-full.txt): the API, the command line, the MCP tools and the `dokkit.toml` reference
 """
 files = {"api.md": api, "cli.md": cmd, "llms.txt": index,
-         "llms-full.txt": "\n\n".join([index, read(spec, "mcp.md"), read(spec, "dokkit-toml.md"), cmd, api])}
+         "llms-full.txt": "\n\n".join([index, read(docs, "mcp.md"), read(docs, "dokkit-toml.md"), cmd, api])}
 for name, text in files.items():
     open(os.path.join(here, name), "w", encoding="utf-8", newline="\n").write(text)
     print(name, len(text) // 1024, "KB")

@@ -1,5 +1,5 @@
 defmodule Dokkit.Quiet do
-  @moduledoc "Planned downtime: a window in which a machine going silent, and its checks failing, open nothing. The rules are in spec/alerts.md."
+  @moduledoc "Planned downtime: a window in which a machine going silent, and its checks failing, open nothing."
   import Ecto.Query
   alias Dokkit.{Check, Machine, QuietWindow, Repo}
 

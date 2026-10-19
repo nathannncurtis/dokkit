@@ -1,5 +1,5 @@
 defmodule Dokkit.QuietSchedules do
-  @moduledoc "Scheduled planned downtime: windows a machine gets by itself, once or repeating. The rules are in spec/alerts.md."
+  @moduledoc "Scheduled planned downtime: windows a machine gets by itself, once or repeating."
   import Ecto.Query
   alias Dokkit.{Alerts, Quiet, QuietSchedule, Repo}
 

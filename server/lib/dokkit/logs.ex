@@ -1,5 +1,5 @@
 defmodule Dokkit.Logs do
-  @moduledoc "Log lines. Stored one partition per month; see spec/log-lines.md."
+  @moduledoc "Log lines. Stored one partition per month."
   import Ecto.Query
   alias Dokkit.{Log, Repo, Setting}
 

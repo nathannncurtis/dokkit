@@ -17,4 +17,4 @@ Dokkit is not affiliated with Sentry.
 
 ## What is accepted
 
-Error events only. Everything else the SDKs can send is read and dropped. The details are in `spec/errors.md`.
+Error events only. Everything else the SDKs can send is read and dropped.

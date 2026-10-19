@@ -39,7 +39,7 @@ Dokkit cannot page about itself when it is down, so two things cover it:
 
 ## Upgrades
 
-- Windows: run the newer installer over the old one. It stops the service, updates the database, and starts it again. On a machine with the updater installed, the Update button in the interface does this with the signed release (see `spec/updates.md`).
+- Windows: run the newer installer over the old one. It stops the service, updates the database, and starts it again. On a machine with the updater installed, the Update button in the interface does this with the signed release.
 - Docker: pull the newer image.
 - A server works with the `dokkit` program one version behind it, so machines do not have to be updated at the same moment.
 
@@ -125,7 +125,7 @@ The database is one of two, chosen the first time:
 
 Run again from a newer release with no arguments, it stops the service, copies, updates the database, registers the service again with the new paths and starts it. Settings that were given before are kept; any given again replace them. Given `-Postgres` again with a newer folder, it also stops Dokkit's Postgres, puts the newer binaries in place and starts it. It refuses a folder of a different major version of Postgres, which needs a dump and a restore.
 
-Releases for the updaters (`updates.md`) are kept in a `releases` folder beside `settings.env`, one folder per version, so `ProgramData\Dokkit\releases` on Windows; the installer makes it writable by the service only. `DOKKIT_RELEASES` names another place, and the folder is made when the first file arrives. In development and tests it is a folder under the system temporary directory.
+Releases for the updaters are kept in a `releases` folder beside `settings.env`, one folder per version, so `ProgramData\Dokkit\releases` on Windows; the installer makes it writable by the service only. `DOKKIT_RELEASES` names another place, and the folder is made when the first file arrives. In development and tests it is a folder under the system temporary directory.
 
 The service runs as Local Service, starts with Windows after `dokkit-postgres`, and Erlang's service wrapper restarts it if it stops. It reads its settings from `ProgramData\Dokkit\settings.env` and writes its log to `ProgramData\Dokkit\log\dokkit.log`, a folder only administrators, the system account and Local Service can reach; the installer prints the setup code from it. The Erlang node's distribution port listens on this machine only, and its cookie is made at install time; it is kept in a file and in the service's registry key, both readable by administrators, the system account and Local Service only. The Erlang port mapper (port 4369) listens on every interface, so a firewall should keep it closed. The installer refuses a `ProgramData\Dokkit` folder that is owned by anyone but administrators. A folder given as `-Archive` is created and made writable by Local Service. With `-Cert`, the installer adds a Windows Firewall rule named Dokkit that lets the port in.
 
@@ -145,6 +145,6 @@ A second certificate, for a real name with a publicly trusted certificate, can b
 
 **The program for machines to fetch.** With `DOKKIT_PROGRAMS` set to a folder holding `version.txt` and files named like `dokkit-windows-amd64.exe`, the Versions page lists the machines behind that version and can ask each to fetch the newer copy. The file is only fetched; finishing the update on the machine is what the updater does (see below).
 
-**Updates.** Releases for the updater are put on the server with `PUT /api/v1/releases/<version>/<file>`, and the interface's Update and Update all buttons approve a version for a machine. `spec/updates.md` describes the updater, which runs on Windows, Linux, macOS and a QNAP NAS.
+**Updates.** Releases for the updater are put on the server with `PUT /api/v1/releases/<version>/<file>`, and the interface's Update and Update all buttons approve a version for a machine. The updater runs on Windows, Linux, macOS and a QNAP NAS.
 
 **Archiving.** With `DOKKIT_ARCHIVE` set to a folder, each log month older than the live limit (12 months unless changed) is written there as `logs-YYYY-MM.ndjson.gz` and dropped from the database, checked once an hour. With the setting `delete`, the month is dropped with no file and no folder is needed; files already there stay and can be loaded back. `Dokkit.Logs.restore/1` loads a file back. A month whose file is already there is dropped without rewriting the file. Without the setting every month stays.

@@ -2,9 +2,9 @@
 
 One place that watches everything I run and tells me what needs my attention.
 
-This is a personal project. It is private while it is in development and will be open source once the install-specific material listed at the bottom is out of it and there is a proper demo.
+This is a personal project. It is private while it is in development and will be open source once there is a proper demo.
 
-The server and the `dokkit` program are being built, against the contract in `spec/`. What works and what does not is under "Where it stands". The repo also holds the decisions and a clickable mock of the interface.
+The server and the `dokkit` program are being built. What works and what does not is under "Where it stands". The repo also holds the decisions and a clickable mock of the interface.
 
 ## Where it stands
 
@@ -24,7 +24,7 @@ Working, with tests:
 - **Updates.** The server holds signed releases. A person approves a version for one machine or for all, and the updater on each machine, installed once by an administrator, installs it. It has been run on Windows, Linux, macOS and a QNAP NAS. An update starts within seconds of the click: the server tells the machine's program, which pokes the updater without gaining any rights, and a five-minute check is the fallback.
 - **Libraries.** For Python, .NET, JavaScript, Go, Elixir, Rust, Java, PHP, PowerShell, shell and Swift, one file each: beats, job progress, an app's own checks, errors, logs. Anything sent from an environment other than production lands on its own row and never alerts.
 - **Phone apps.** Native apps for iOS and Android show whether anything needs attention and whether the hardware is up, and change nothing. A server reaches them through a relay its owner runs, a mode of the `dokkit` program: the server uploads a sealed snapshot each minute and nothing comes back in. Each release carries both apps unsigned, for whoever installs them to sign.
-- **The API and the MCP**, for user tokens made in Settings. Every read and act call in `spec/api.md` is there, and a token with the `admin` scope manages keys, people, rules, checks and restart.
+- **The API and the MCP**, for user tokens made in Settings. Every read and act call is there, and a token with the `admin` scope manages keys, people, rules, checks and restart.
 
 In use: one server and eight machines (Windows, Linux, macOS and a QNAP NAS), one of them outside the office network and reporting over a private tunnel, with paging, push and mail all sent for real, and a phone paired through a relay.
 
@@ -78,7 +78,6 @@ go build -o dokkit.exe .
 - Three failed checks open an issue. An issue pages once. A machine that is down is one page, not one per service on it.
 - Dokkit suggests changes to rules and never makes them itself.
 - Safe services can be restarted automatically. That is allow-listed per service.
-- The detail is in `spec/alerts.md`.
 
 ### The server
 
@@ -140,8 +139,8 @@ Four kinds of key: one to enrol a machine, one per machine, one per app that can
 | Path | What it is |
 |---|---|
 | `gallery/app/` | The current mock, filled with an invented company's data. Open `index.html` through a web server. Settings switches theme, dark base and accent. `node check.js` renders every route. |
-| `spec/` | The contract: the API, `dokkit.toml`, alerts, log lines, errors, the `dokkit` program, the library, the MCP, and the stats document two applications already implement. |
-| `docs/` | Wiring an app in, running the server, moving over from other tools, and the note on Sentry's SDKs. |
+| `spec/` | `openapi.json`, which the site's API page is drawn from and the server's routes are tested against, and test cases shared by the server, the program and the phone apps. |
+| `docs/` | The `dokkit.toml` format, the MCP, wiring an app in, running the server, moving over from other tools, and the note on Sentry's SDKs. |
 | `server/` | The server: Phoenix on Postgres. Its stylesheet and fonts, in `server/priv/static/`, are the ones the mock loads. |
 | `program/` | The `dokkit` program, in Go. |
 
@@ -157,8 +156,6 @@ Then open `http://localhost:7912/app/`.
 
 The mock and the product run on invented data. What is left to do first:
 
-- The earlier galleries and the requirements interview were filled with one real install's inventory. They are gone from the tree and still in the history, which has to be rewritten or left behind.
-- `spec/stats-v1.md`: written for two specific applications.
 - The interface was built with another product's layout as the reference. It mostly stays as it is; the parts that are recognisably theirs get changed, and the description under "The look" is reworded to match.
 - `docs/sentry-compatibility.md` is followed everywhere the project describes itself.
 

@@ -6,7 +6,7 @@ Nothing is switched off on a date. Each check or app reports to both the old too
 
 ## From ping-style job monitoring
 
-A job that calls a URL when it finishes moves by calling a second one. See the ping URLs in `spec/api.md`. Where the job runs on a machine with the `dokkit` program, wrapping it in `dokkit run` reports more: the exit code, the duration and the last lines of output.
+A job that calls a URL when it finishes moves by calling a second one. See the ping URLs in the API (`spec/openapi.json`). Where the job runs on a machine with the `dokkit` program, wrapping it in `dokkit run` reports more: the exit code, the duration and the last lines of output.
 
 ## From Seq
 
@@ -16,7 +16,7 @@ Dokkit answers at the address Seq clients post to, and `dokkit import seq` copie
 
 An app that logs to Seq keeps its logging code. Only two settings change.
 
-1. In Dokkit, get an app key for the app's service: `POST /api/v1/keys` with `{"kind": "app", "service": "<service id>"}` (`spec/api.md`) makes one, shown once. A service added as an app has one already. The key starts `dka_`.
+1. In Dokkit, get an app key for the app's service: `POST /api/v1/keys` with `{"kind": "app", "service": "<service id>"}` makes one, shown once. A service added as an app has one already. The key starts `dka_`.
 2. In the app, set the Seq server URL to the Dokkit server's address, such as `https://your.domain.com`, and the Seq API key to that app key.
 
 Seq clients post to `/api/events/raw` (CLEF or Seq's JSON events) and newer ones to `/ingest/clef`. Dokkit takes both, and the key in the `X-Seq-ApiKey` header or the `apiKey` query value. seqlog was run against a capture server and both of its forms (CLEF and the JSON events) are tested with what it sent. Serilog.Sinks.Seq and the pino, winston and bunyan Seq transports send CLEF or the same JSON events; they are tested with bodies built from Seq's documented formats, not by a run of each. The tests are in `server/test/dokkit_web/controllers/seq_controller_test.exs`.

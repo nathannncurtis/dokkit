@@ -1,5 +1,5 @@
 defmodule DokkitWeb.ApiController do
-  @moduledoc "The read and act calls of spec/api.md, for a user token."
+  @moduledoc "The read and act calls, for a user token."
   use DokkitWeb, :controller
   require Logger
   alias Dokkit.{Issues, Keys, Read}

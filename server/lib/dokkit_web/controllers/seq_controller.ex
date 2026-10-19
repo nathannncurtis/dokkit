@@ -1,5 +1,5 @@
 defmodule DokkitWeb.SeqController do
-  @moduledoc "The door for apps that log to Seq. See spec/log-lines.md."
+  @moduledoc "The door for apps that log to Seq."
   use DokkitWeb, :controller
   alias Dokkit.{Intake, Keys}
 

@@ -1,5 +1,5 @@
 defmodule DokkitWeb.ReleaseController do
-  @moduledoc "The releases the server holds. People put them here; machines fetch them. See spec/updates.md."
+  @moduledoc "The releases the server holds. People put them here; machines fetch them."
   use DokkitWeb, :controller
   alias Dokkit.{Keys, Releases}
 

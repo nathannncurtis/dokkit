@@ -3,7 +3,7 @@ defmodule Dokkit.Intake.Refused do
 end
 
 defmodule Dokkit.Intake do
-  @moduledoc "Everything that arrives from machines and apps. See spec/api.md, Intake."
+  @moduledoc "Everything that arrives from machines and apps."
   import Ecto.Query
   require Logger
   alias Dokkit.{Batch, Check, Issues, JobRun, Key, Machine, Repo, Service}
@@ -386,7 +386,7 @@ defmodule Dokkit.Intake do
 
   defp hosts(_, _, _), do: nil
 
-  @doc "An error report, in the format of spec/errors.md."
+  @doc "An error report."
   def error(%Key{} = key, report) do
     report = clean(report)
     seen(key)

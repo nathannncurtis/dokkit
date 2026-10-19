@@ -301,7 +301,7 @@ Error reports from an app, in Dokkit's own format or as Sentry envelopes. App ke
 
 ### POST /api/v1/errors
 
-Report an error in Dokkit's format. One error report. Reports are grouped by `type` and the app's own frames. Message text is dropped unless the service's page is set to keep it. An error does not open an issue or alert anyone. See `errors.md`. Takes a machine key (`dkm_`) or an app key (`dka_`).
+Report an error in Dokkit's format. One error report. Reports are grouped by `type` and the app's own frames. Message text is dropped unless the service's page is set to keep it. An error does not open an issue or alert anyone. Takes a machine key (`dkm_`) or an app key (`dka_`).
 
 
 Send:

@@ -1,7 +1,7 @@
 defmodule DokkitWeb.McpController do
   @moduledoc """
   The MCP, as JSON-RPC over one POST address. It is a client of the same data as the API
-  and can do no more than its user token allows. See spec/mcp.md.
+  and can do no more than its user token allows.
   """
   use DokkitWeb, :controller
   alias Dokkit.{Estate, Issues, Read}
