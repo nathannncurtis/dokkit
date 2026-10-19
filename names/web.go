@@ -28,7 +28,6 @@ type App struct {
 	Svc     *Service
 	Base    string
 	Signins []*Provider
-	Demo    bool
 	Abuse   string
 	Secret  []byte
 	replays Replays
@@ -51,9 +50,6 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /part", a.part)
 	mux.HandleFunc("GET /check", a.check)
 	mux.HandleFunc("GET /app.js", serveJS)
-	if a.Demo {
-		mux.HandleFunc("GET /demo-signin", a.demoSignin)
-	}
 	mux.HandleFunc("POST /logout", a.logout)
 	mux.HandleFunc("POST /claim", a.form(a.claim))
 	mux.HandleFunc("POST /names/{label}/code", a.form(a.newCode))
@@ -236,14 +232,6 @@ func getJSON(client *http.Client, req *http.Request, out any) error {
 	return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out)
 }
 
-// demoSignin signs in a made-up account, for trying the page on a local copy only.
-func (a *App) demoSignin(w http.ResponseWriter, r *http.Request) {
-	raw, _ := json.Marshal(session{Account: "demo:1", Login: "demo-user", Via: "a demo sign-in", Exp: time.Now().Add(sessionLife).Unix()})
-	body := b64.EncodeToString(raw)
-	a.setCookie(w, "s", body+"."+a.mac("s|"+body), sessionLife)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
 func (a *App) logout(w http.ResponseWriter, r *http.Request) {
 	a.setCookie(w, "s", "", -1)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -262,7 +250,6 @@ type view struct {
 	Zone                                         string
 	Abuse                                        string
 	Max                                          int
-	Demo                                         bool
 	Status                                       int
 }
 
@@ -320,7 +307,7 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) page(w http.ResponseWriter, r *http.Request, status int, v view) {
-	v.Zone, v.Abuse, v.Max, v.Signins, v.Demo = a.Svc.Zone, a.Abuse, perAccount, a.Signins, a.Demo
+	v.Zone, v.Abuse, v.Max, v.Signins = a.Svc.Zone, a.Abuse, perAccount, a.Signins
 	if s, csrf := a.session(r); s != nil {
 		v.Login, v.Via, v.CSRF = s.Login, s.Via, csrf
 		for _, n := range a.Svc.Mine(s.Account) {
@@ -552,7 +539,7 @@ h2{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color
 <p class="m" id="claim-say" aria-live="polite" data-zone="{{.Zone}}" data-hint="3 to 40 lower-case letters, digits and hyphens. At most {{.Max}} names per account.">3 to 40 lower-case letters, digits and hyphens. At most {{.Max}} names per account.</p>
 </form>{{end}}
 {{else}}
-<div class="start">{{if .Demo}}<a class="sso" href="/demo-signin" style="border-color:var(--acc)"><span>Demo: sign in as a made-up user</span></a>{{end}}{{range .Main}}<a class="sso {{.Key}}" href="/login/{{.Key}}">{{template "mark" .}}<span>Sign in with {{.Title}}</span></a>{{end}}
+<div class="start">{{range .Main}}<a class="sso {{.Key}}" href="/login/{{.Key}}">{{template "mark" .}}<span>Sign in with {{.Title}}</span></a>{{end}}
 {{with .More}}<p class="more"><span>More:</span>{{range $i, $p := .}}{{if $i}}<span aria-hidden="true">·</span>{{end}}<a class="alt" href="/login/{{$p.Key}}" aria-label="Sign in with {{$p.Title}}">{{template "mark" $p}}{{$p.Title}}</a>{{end}}</p>{{end}}</div>
 <div class="why"><b>Why sign in?</b><p>A name points at your server, so it needs an owner. Signing in is what lets only you release a name or move it to a new server, keeps one person to 3 names, and lets a name used for abuse be traced to one account.</p><p>Dokkit keeps only the id your sign-in gives it and a display name. No password, and no email address is asked for.</p></div>
 {{end}}
@@ -645,10 +632,9 @@ const appJS = `(() => {
   });
   addEventListener("message", e => { if (e.origin === location.origin && e.data === "dokkit-signed-in") swap(); });
   document.addEventListener("click", async e => {
-    const a = e.target.closest("a[href^='/login/'], a[href='/demo-signin']");
+    const a = e.target.closest("a[href^='/login/']");
     if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
     e.preventDefault();
-    if (a.getAttribute("href") === "/demo-signin") { await fetch("/demo-signin", { credentials: "same-origin" }); return swap(); }
     const w = 520, h = 680, x = screenX + (outerWidth - w) / 2, y = screenY + (outerHeight - h) / 3;
     const pop = open(a.href + "?popup=1", "dokkit-signin", "popup,width=" + w + ",height=" + h + ",left=" + x + ",top=" + y);
     if (!pop) location.href = a.href;

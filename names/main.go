@@ -56,7 +56,6 @@ func main() {
 		Svc:     svc,
 		Base:    strings.TrimRight(env("NAMES_BASE_URL", "https://names.dokkit.dev"), "/"),
 		Signins: signins,
-		Demo:    os.Getenv("NAMES_DEMO") == "1" && strings.HasPrefix(env("NAMES_BASE_URL", ""), "http://127.0.0.1"),
 		Abuse:   env("NAMES_ABUSE_EMAIL", "abuse@dokkit.dev"),
 		Secret:  []byte(store.s.Secret),
 	}
