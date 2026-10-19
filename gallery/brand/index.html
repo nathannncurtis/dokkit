@@ -5,226 +5,111 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dokkit: one place that says what needs a look</title>
 <meta name="description" content="Dokkit watches your servers, jobs, logs and errors from a server you host yourself, and says what needs a look.">
-<meta property="og:title" content="Dokkit: one place that says what needs a look">
-<meta property="og:description" content="Self-hosted monitoring for the person who is the only one watching.">
 <meta name="theme-color" content="#1e1917">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="brand.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="home.css?v=3">
+<script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); })();</script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="mark" viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></symbol>
 </svg>
 
-<header class="nav">
-  <div class="wrap">
-    <a class="brand" href="#top"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
-    <nav aria-label="Site"><a href="#day">How it looks</a><a href="#told">Alerts</a><a href="#agents">Agents</a><a href="#how">How it works</a><a href="api.html">API</a><a href="cli.html">Command line</a><a href="https://github.com/nathannncurtis/dokkit">Source</a></nav>
-    <a class="btn pri" href="#install">Install</a>
-  </div>
+<header class="bar">
+  <a class="brand" href="#top"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+  <nav aria-label="Site">
+    <a href="#install">Install</a><a href="#sample">Demo</a><a href="#build">Agents</a><a href="api.html">Docs</a><a href="#watch">Phone</a><a href="#trust">Security</a><a href="#status">Status</a><a href="https://github.com/nathannncurtis/dokkit">Source</a>
+  </nav>
+  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
+  <a class="claim" href="#install">Claim a name <em>soon</em></a>
 </header>
 
 <main id="top">
-  <section class="hero wrap">
-    <h1>One place that says what <span>needs a look.</span></h1>
-    <div class="lede">
-      <p>Dokkit watches your servers, jobs, logs and errors from a server you host yourself, and keeps the list short. Its first screen is below, and it works.</p>
-      <div class="cmd"><code id="c0">curl -fsSL https://dokkit.dev/install.sh | sudo sh -s -- your.domain.com</code><button class="btn" data-copy="c0">Copy</button></div>
-      <a class="quiet" href="#install">or from source, or as a Windows service</a>
-    </div>
+  <section class="open">
+    <h1>One place that says<br>what <span>needs a look.</span></h1>
+    <p class="offer">Dokkit watches your servers, jobs, logs and errors from a server <mark class="ok">you host yourself</mark>, and keeps the list short. In the sample below, <mark class="warn">3</mark> of <mark class="n">60 checks</mark> need you.</p>
 
-    <div class="win" aria-label="A working sample of Dokkit">
-      <aside>
-        <span class="org"><span class="mk"><svg><use href="#mark"/></svg></span><span>Brightwater<small>sample data</small></span></span>
-        <button class="on" data-tab="need"><i class="s warn"></i>Needs you<em id="nNeed">3</em></button>
-        <button data-tab="soon"><i class="s ok"></i>Soon<em>2</em></button>
-        <button data-tab="found"><i class="s none"></i>Not watched<em id="nFound">4</em></button>
-        <button data-tab="snoozed"><i class="s none"></i>Snoozed<em id="nSnoozed">1</em></button>
-        <p>Open a row. Snooze it. These are the real first screen's lists, with made-up data.</p>
-      </aside>
+    <div class="build" id="install">
+      <p class="sentence">Put the server on
+        <span class="choose" role="radiogroup" aria-label="Where the server runs">
+          <button type="button" role="radio" aria-checked="true" data-os="linux">a Linux box</button><button type="button" role="radio" aria-checked="false" data-os="windows">a Windows machine</button>
+        </span>
+        <span id="atWrap">at <label class="named"><span class="sr">Its address</span><input id="host" value="dokkit.example.com" spellcheck="false" autocomplete="off" size="18"></label></span>.
+      </p>
+      <div class="cmd"><code id="cmd"></code><button type="button" class="copy" data-copy="cmd">Copy</button></div>
+      <p class="then">Then on each machine you want watched: <code id="get"></code> <button type="button" class="copy small" data-copy="get">Copy</button></p>
+    </div>
+  </section>
+
+  <section class="sample" id="sample" aria-label="A working sample of Dokkit, on made-up data">
+    <div class="frame">
+      <div class="chrome">
+        <span class="org"><span class="mk sm"><svg><use href="#mark"/></svg></span>Brightwater</span>
+        <div class="tabs" role="tablist">
+          <button role="tab" aria-selected="true" data-tab="need"><i class="s warn"></i>Needs you <em id="nNeed">3</em></button>
+          <button role="tab" aria-selected="false" data-tab="soon"><i class="s ok"></i>Soon <em>2</em></button>
+          <button role="tab" aria-selected="false" data-tab="found"><i class="s none"></i>Not watched <em id="nFound">4</em></button>
+          <button role="tab" aria-selected="false" data-tab="snoozed"><i class="s none"></i>Snoozed <em id="nSnoozed">1</em></button>
+        </div>
+        <span class="beat" id="beat" aria-hidden="true">checked just now</span>
+        <i class="sweep" id="sweep" aria-hidden="true"></i>
+      </div>
       <div class="pane">
         <h2 id="paneTitle">This needs your attention.</h2>
         <div class="list" id="list"></div>
       </div>
     </div>
+    <p class="label">The real first screen, on a made-up company. Open a row, snooze it, mark it seen.</p>
   </section>
 
-  <section class="band" id="day">
-    <div class="wrap">
-      <div class="head">
-        <h2>One quiet day. <span>Three&nbsp;things</span> needed you.</h2>
-        <p>Seven machines, every half hour of one day. Nearly all of it is quiet, which is the point. Point at a cell.</p>
-      </div>
-      <div class="panel">
-        <div class="ticks"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span></div>
-        <div class="lanes" id="lanes"></div>
-        <p class="tip" id="tip">front-desk-pc was switched off overnight. That is not a problem, so it is not coloured like one.</p>
-      </div>
-      <div class="events">
-        <p><i class="s bad"></i><b>01:30</b>nightly-purge did not run<em>paged, closed itself 02:10</em></p>
-        <p><i class="s warn"></i><b>09:12</b>nas disk at 91%<em>pushed</em></p>
-        <p><i class="s warn"></i><b>09:40</b>upload portal slow<em>pushed, closed itself 11:05</em></p>
-      </div>
+  <section class="watches" id="what">
+    <h2>What it watches, and when it <span>says so.</span></h2>
+    <div class="table" role="table" aria-label="What Dokkit watches">
+      <div class="tr th" role="row"><span role="columnheader">Thing</span><span role="columnheader">How it is watched</span><span role="columnheader">It needs you when</span></div>
+      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Websites and APIs</span><span role="cell">An address is asked on the schedule its file sets, from the machine it runs on.</span><span role="cell">Three answers in a row are wrong, or slower than <mark class="warn">the limit its file sets</mark>.</span></div>
+      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Scheduled jobs</span><span role="cell">The job reports a start and an end, or is wrapped with <code>dokkit run</code>.</span><span role="cell">It does not start on time, fails, or runs <mark class="warn">longer than you allow</mark>.</span></div>
+      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Services and processes</span><span role="cell">Windows services, systemd units, ports and named processes.</span><span role="cell">One stops, or fewer are running than <mark class="warn">the count you set</mark>.</span></div>
+      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Disks, memory, certificates</span><span role="cell">Read on every machine with the <code>dokkit</code> program.</span><span role="cell">A disk is <mark class="warn">on course to fill</mark>, or a certificate expires within 30 days.</span></div>
+      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Logs</span><span role="cell">Files it is pointed at, apps that log to Seq, and the libraries. Kept a year, then archived.</span><span role="cell">Never by itself. <mark class="ok">Logs are for looking things up</mark>, one click from each item.</span></div>
+      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Errors</span><span role="cell">From the library, or from Sentry's own SDKs, grouped by type and place.</span><span role="cell">Never by itself. What is new <mark class="ok">since the last deploy</mark> is one click away.</span></div>
+      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Versions and deploys</span><span role="cell">The version each app reports. When it changes, that is a deploy.</span><span role="cell">Never by itself. What broke since the last deploy is <mark class="ok">one question</mark>.</span></div>
     </div>
+    <p class="foot">A machine that goes down is <mark class="bad">one page</mark>, not one for every service on it. An issue closes itself when the thing recovers.</p>
   </section>
 
-  <section class="wrap told" id="told">
-    <h2>It knows what broke. <span>You decide</span> who hears about it.</h2>
-    <div class="panel rows">
-      <div class="chead"><i class="s warn"></i><div><b>nightly-purge</b><code>db-01 · job · every night at 01:00</code></div></div>
-      <div class="crow"><span>If it does not run</span><div class="seg"><label><input type="radio" name="how" value="page" checked><span>Page</span></label><label><input type="radio" name="how" value="push"><span>Push</span></label><label><input type="radio" name="how" value="email"><span>Email</span></label><label><input type="radio" name="how" value="imessage"><span>iMessage</span></label><label><input type="radio" name="how" value="sms"><span>SMS</span></label><label><input type="radio" name="how" value="digest"><span>Digest</span></label></div></div>
-      <div class="crow"><span>Wake me at night for this</span><label class="sw"><input type="checkbox" id="night" checked><span></span></label></div>
-            <div class="crow"><span>Count it as late after</span><input type="range" id="late" min="5" max="120" step="5" value="30" aria-label="Minutes late"><code id="lateOut">30 min</code></div>
-      <div class="crow"><span>Say it ran long after</span><input type="range" id="long" min="5" max="120" step="5" value="60" aria-label="Minutes running"><code id="longOut">60 min</code></div>
+  <section class="doors">
+    <div class="door" id="build">
+      <h3>If you build it</h3>
+      <p>An app describes itself in a <code>dokkit.toml</code> in its own repo. Hand an agent <mark class="n">one link</mark> and it can do the wiring: write the file, add the library in your language, and prove it with <code>dokkit check</code>, before any server exists.</p>
+      <ul><li><a href="#build">Prompts for your agent</a></li><li><a href="#build">The Claude Code plugin</a></li><li><a href="#build">Check a file in the browser</a></li><li><a href="#build">Libraries in 11 languages</a></li></ul>
     </div>
-    <div class="saidcol">
-      <p class="said" id="said"></p>
-      <p class="quiet">Change the controls. The sentence is what Dokkit will do. A job declared in a <code>dokkit.toml</code> sets its timing there.</p>
+    <div class="door" id="watch">
+      <h3>If you watch it</h3>
+      <p>You decide who hears about what, per service: <mark class="bad">a page</mark> for the job that must run, <mark class="warn">a push</mark> for the slow portal, <mark class="ok">the morning digest</mark> for the rest. On a phone, a read-only app shows it all through a relay the server dials out to.</p>
+      <ul><li><a href="#watch">Where alerts can reach you</a></li><li><a href="#watch">The phone app</a></li><li><a href="#status">Our own status, by Dokkit</a></li></ul>
     </div>
-  </section>
-
-  <section class="band" id="agents">
-    <div class="wrap">
-      <div class="head">
-        <h2>Your AI agents can <span>watch it too.</span></h2>
-        <p>Everything the interface shows comes from one API. A script, the command line and an AI tool all reach it the same way, each with a token that says how far it may go.</p>
-      </div>
-      <div class="doors">
-        <div class="panel rows" id="token">
-          <div class="chead"><i class="s ok"></i><div><b>A token for an agent</b><code>dku_&hellip; &middot; made in Settings</code></div></div>
-          <div class="crow"><span>Read states, issues, jobs and errors</span><code>on</code></div>
-          <div class="crow"><span>Read what is written in the logs</span><label class="sw"><input type="checkbox" id="scLogs"><span></span></label></div>
-          <div class="crow"><span>Snooze, mark as seen, watch, run tasks you accepted</span><label class="sw"><input type="checkbox" id="scAct"><span></span></label></div>
-          <div class="crow"><span>Everything you can do: keys, people, rules, checks</span><label class="sw"><input type="checkbox" id="scAll"><span></span></label></div>
-          <div class="sure" id="sure" hidden>
-            <b>A token that can do everything</b>
-            <p>Whatever holds it can make and revoke keys, add and remove people, and change who is told, with nobody asked first. Dokkit makes you type its own address and tick a box.</p>
-            <label><span>Type <code>dokkit.brightwater.example</code> to confirm</span><input id="sureText" autocomplete="off" spellcheck="false"></label>
-            <div class="acts"><button class="btn sm" id="sureNo" type="button">Cancel</button><button class="btn sm bad" id="sureYes" type="button" disabled>Give it full control</button></div>
-          </div>
-          <div class="tools" id="tools"></div>
-          <p class="tip" id="toolSay"></p>
-        </div>
-        <div class="panel ask" id="ask">
-          <div class="qs">
-            <button class="on" data-q="0">What needs a look?</button>
-            <button data-q="1">Why did nightly-purge not run?</button>
-            <button data-q="2">What broke since the last deploy?</button>
-            <button data-q="3">Snooze the disk warning until Monday</button>
-            <button data-q="4">Page me if db-01 goes down</button>
-          </div>
-          <div class="talk" id="talk" aria-live="polite"></div>
-          <p class="tip">Sample answers on the sample data. The tools are the real ones, with ids and times shortened here, and they follow the token on the left.</p>
-        </div>
-      </div>
-      <div class="ways">
-          <ol>
-            <li><b>An AI tool, over MCP</b><div class="cmd"><code id="c6">claude mcp add --transport http dokkit https://your.domain.com/mcp --header "Authorization: Bearer dku_..."</code><button class="btn" data-copy="c6">Copy</button></div></li>
-            <li><b>A script, over the API</b><div class="cmd"><code id="c7">curl -H "Authorization: Bearer dku_..." https://your.domain.com/api/v1/inbox</code><button class="btn" data-copy="c7">Copy</button></div></li>
-            <li><b>In an app's repo, from the command line</b><div class="cmd"><code id="c8">dokkit check</code><button class="btn" data-copy="c8">Copy</button></div><span class="quiet">Runs every check once and prints what would be sent. No server needed.</span></li>
-            <li><b>All of it, in one file an agent can read</b><div class="cmd"><code id="c9">https://dokkit.dev/llms-full.txt</code><button class="btn" data-copy="c9">Copy</button></div><span class="quiet">The API, every command, the MCP tools and the <code>dokkit.toml</code> reference. Paste the link and it knows how.</span></li>
-          </ol>
-          <p class="quiet never">An agent can be given everything you can do, and Dokkit asks you to be sure before it makes that token. <a href="api.html">The whole API</a> and <a href="cli.html">every command</a> are written down.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="wrap how" id="how">
-    <div class="stick">
-      <h2>You build it. You are also <span>the only one watching it.</span></h2>
-      <div class="file"><b>dokkit.toml</b><pre id="toml">schema = 1
-
-[service]
-id = "upload-portal"
-name = "Upload portal"
-
-[[check]]
-type = "http"
-url = "http://localhost:8080/healthz"
-every = "30s"
-slow = "2s"                # slower is degraded, not down
-
-[[job]]
-id = "nightly-purge"
-schedule = "0 1 * * *"   # every night at 01:00
-grace = "30m"
-
-[logs]
-path = "logs/*.jsonl"</pre></div>
-    </div>
-    <dl>
-      <div><dt>Wired in while you build</dt><dd><code>dokkit init</code> writes the file and <code>dokkit check</code> proves it on your own machine, with no server. Run the app as <code>dev</code> and it shows up without ever alerting.</dd></div>
-      <div><dt>A deploy is noticed by itself</dt><dd>When the version an app reports changes, that is a deploy. What broke since the last one is a single question, for you or for your agent.</dd></div>
-      <div><dt>The app describes itself</dt><dd>A <code>dokkit.toml</code> in the app's own repo says what it is and how to tell it is healthy. Nothing is wired in by hand on the server.</dd></div>
-      <div><dt>Nothing privileged listens</dt><dd>The program on each machine opens no port. Work reaches it over a connection it makes itself, and only tasks you accepted can run.</dd></div>
-      <div><dt>Scanning is offered, never required</dt><dd>Let it look over a machine and propose what to watch, or list things yourself. Nobody is asked to turn off antivirus.</dd></div>
-      <div><dt>On your hardware</dt><dd>A Windows service or a Docker container, on Postgres. Logs stay a year live, then go to an archive folder you name.</dd></div>
-      <div><dt>One list, not six tools</dt><dd>Checks and scheduled jobs feed one short list. Logs, errors, versions and deploys sit one click from each item on it. An issue closes by itself when the thing recovers.</dd></div>
-      <div><dt>In eleven languages</dt><dd>A small library adds what only the app knows: <code>beat</code>, <code>job</code>, <code>check</code>, <code>capture</code> and <code>log</code>, with a handler for the language's own logging where it has one. Python, .NET, JavaScript, Go, Rust, Java, PHP, Elixir, Swift, PowerShell and shell.</dd></div>
-    </dl>
-  </section>
-
-  <section class="band" id="install">
-    <div class="wrap">
-      <div class="head">
-        <h2>Yours to run.</h2>
-        <p>One server. Then one small program on each machine you want watched.</p>
-      </div>
-      <div class="steps">
-        <div>
-          <h3>The server, one of these</h3>
-          <ol>
-            <li><b>A fresh Debian or Ubuntu VPS, with a domain pointed at it</b><div class="cmd"><code id="c1">curl -fsSL https://dokkit.dev/install.sh | sudo sh -s -- your.domain.com</code><button class="btn" data-copy="c1">Copy</button></div></li>
-            <li><b>The same, from a checkout of the source</b><div class="cmd"><code id="c5">sudo sh server/install.sh your.domain.com</code><button class="btn" data-copy="c5">Copy</button></div></li>
-            <li><b>Windows, as a service, from an administrator PowerShell</b><div class="cmd"><code id="c2">irm https://dokkit.dev/install.ps1 | iex</code><button class="btn" data-copy="c2">Copy</button></div></li>
-          </ol>
-        </div>
-        <div>
-          <h3>Then</h3>
-          <ol>
-            <li><b>On each machine you want watched, get the program</b><div class="cmd"><code id="c10">curl -fsSL https://dokkit.dev/get.sh | sh</code><button class="btn" data-copy="c10">Copy</button></div><div class="cmd"><code id="c11">irm https://dokkit.dev/get.ps1 | iex</code><button class="btn" data-copy="c11">Copy</button></div></li>
-            <li><b>Join it to your server</b><div class="cmd"><code id="c3">dokkit enrol https://your.domain.com &lt;token&gt;</code><button class="btn" data-copy="c3">Copy</button></div></li>
-            <li><b>Keep it running with nobody signed in: an administrator prompt on Windows, sudo on Linux</b><div class="cmd"><code id="c12">dokkit service install</code><button class="btn" data-copy="c12">Copy</button></div></li>
-            <li><b>In each app's own folder, describe it, then say where it lives</b><div class="cmd"><code id="c4">dokkit init</code><button class="btn" data-copy="c4">Copy</button></div><div class="cmd"><code id="c13">dokkit folder add .</code><button class="btn" data-copy="c13">Copy</button></div></li>
-          </ol>
-        </div>
-      </div>
-      <div class="needs" id="needs">
-        <h3>What the server needs</h3>
-        <table>
-          <thead><tr><th></th><th>Minimum</th><th>Recommended</th></tr></thead>
-          <tbody>
-            <tr><th>Processor</th><td>1 core</td><td>2 cores</td></tr>
-            <tr><th>Memory</th><td>1 GB</td><td>2 GB</td></tr>
-            <tr><th>Disk</th><td>20 GB</td><td>40 GB, more if you keep a lot of logs</td></tr>
-            <tr><th>System</th><td colspan="2">Debian or Ubuntu for the one-line install, any Linux with Docker by hand, or Windows 10, 11 or Server as a service. Postgres 15 or newer; 17 is what it is tested on.</td></tr>
-          </tbody>
-        </table>
-        <p class="quiet">Estimates for about ten machines and sixty services. They have not been measured yet. The program on each watched machine needs next to nothing.</p>
-      </div>
+    <div class="door" id="trust">
+      <h3>If you have to trust it</h3>
+      <p>The program on each machine <mark class="ok">opens no port</mark>. Work reaches it over a connection it makes itself, and only tasks you accepted can run. Releases are signed, and you can check one yourself. It runs on Postgres on <mark class="n">your own hardware</mark>.</p>
+      <ul><li><a href="#trust">What it can and cannot do</a></li><li><a href="api.html">The API</a></li><li><a href="cli.html">The command line</a></li></ul>
     </div>
   </section>
 </main>
 
-<footer>
-  <div class="wrap">
-    <div class="fbrand">
-      <a class="brand" href="#top"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
-      <p>One place that says what needs a look. For the person who builds it and watches it, on your own hardware.</p>
-      <a class="btn pri" href="#install">Install</a>
-    </div>
-    <nav aria-label="Site map">
-      <div><b>The product</b><a href="#day">How it looks</a><a href="#told">Alerts</a><a href="#agents">Agents</a><a href="#how">How it works</a><a href="#install">Install</a></div>
-      <div><b>Reading</b><a href="api.html">The API</a><a href="cli.html">The command line</a><a href="https://github.com/nathannncurtis/dokkit/tree/main/clients">Client libraries</a><a href="https://github.com/nathannncurtis/dokkit/blob/main/docs/running.md">Running it</a></div>
-      <div><b>The project</b><a href="https://github.com/nathannncurtis/dokkit">Source</a><a href="https://github.com/nathannncurtis/dokkit/releases">Releases</a><a href="https://github.com/nathannncurtis/dokkit/tree/main/spec">Spec</a></div>
-    </nav>
-    <p class="legal">Server AGPL. Program and libraries Apache 2.0. Dokkit also accepts reports from Sentry's open-source SDKs and is not affiliated with Sentry.</p>
+<footer id="status">
+  <p class="rel"><i class="s ok"></i><code>v0.1.46</code> · 16 Oct · The database only counts as down after three minutes in a row without an answer. <a href="https://github.com/nathannncurtis/dokkit/releases">Changelog</a></p>
+  <div class="fl">
+    <a class="brand" href="#top"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+    <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
   </div>
 </footer>
-<script src="brand.js"></script>
+<script src="home.js?v=3"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="motion.js?v=3"></script>
 </body>
 </html>
