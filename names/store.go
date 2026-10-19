@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -25,7 +26,8 @@ type TXT struct {
 
 type Name struct {
 	Label     string    `json:"label"`
-	Owner     int64     `json:"owner"`
+	Owner     string    `json:"account"`
+	GitHubID  int64     `json:"owner,omitempty"` // before accounts named their provider
 	Login     string    `json:"login"`
 	Created   time.Time `json:"created"`
 	CodeHash  string    `json:"code_hash,omitempty"`
@@ -68,8 +70,16 @@ func OpenStore(path string) (*Store, error) {
 	if st.s.Names == nil {
 		st.s.Names = map[string]*Name{}
 	}
-	if st.s.Secret == "" {
-		st.s.Secret = randomHex(32)
+	migrated := false
+	for _, n := range st.s.Names {
+		if n.Owner == "" && n.GitHubID != 0 {
+			n.Owner, n.GitHubID, migrated = "github:"+strconv.FormatInt(n.GitHubID, 10), 0, true
+		}
+	}
+	if st.s.Secret == "" || migrated {
+		if st.s.Secret == "" {
+			st.s.Secret = randomHex(32)
+		}
 		if err := st.save(); err != nil {
 			return nil, err
 		}

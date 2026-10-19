@@ -80,7 +80,7 @@ func (s *Service) CheckLabel(label string) error {
 	return nil
 }
 
-func (s *Service) mine(owner int64) []*Name {
+func (s *Service) mine(owner string) []*Name {
 	var out []*Name
 	for _, n := range s.Store.s.Names {
 		if n.Owner == owner {
@@ -91,7 +91,7 @@ func (s *Service) mine(owner int64) []*Name {
 	return out
 }
 
-func (s *Service) Mine(owner int64) []Name {
+func (s *Service) Mine(owner string) []Name {
 	s.Store.mu.Lock()
 	defer s.Store.mu.Unlock()
 	var out []Name
@@ -102,7 +102,7 @@ func (s *Service) Mine(owner int64) []Name {
 }
 
 // Claim holds the label for the account and returns a one-time claim code.
-func (s *Service) Claim(owner int64, login, label string) (string, error) {
+func (s *Service) Claim(owner string, login, label string) (string, error) {
 	label = strings.ToLower(strings.TrimSpace(label))
 	if err := s.CheckLabel(label); err != nil {
 		return "", err
@@ -135,7 +135,7 @@ func (s *Service) Claim(owner int64, login, label string) (string, error) {
 }
 
 // NewCode replaces the claim code; registering with it later replaces the name's key.
-func (s *Service) NewCode(owner int64, label string) (string, error) {
+func (s *Service) NewCode(owner string, label string) (string, error) {
 	s.Store.mu.Lock()
 	defer s.Store.mu.Unlock()
 	n := s.Store.s.Names[label]
@@ -148,7 +148,7 @@ func (s *Service) NewCode(owner int64, label string) (string, error) {
 }
 
 // Release removes the name's records and frees it.
-func (s *Service) Release(owner int64, label string) error {
+func (s *Service) Release(owner string, label string) error {
 	s.Store.mu.Lock()
 	defer s.Store.mu.Unlock()
 	n := s.Store.s.Names[label]

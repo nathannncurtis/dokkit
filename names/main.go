@@ -18,10 +18,14 @@ func env(key, fallback string) string {
 }
 
 func main() {
-	for _, k := range []string{"AZURE_TENANT", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION", "AZURE_DNS_GROUP", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"} {
+	for _, k := range []string{"AZURE_TENANT", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION", "AZURE_DNS_GROUP"} {
 		if os.Getenv(k) == "" {
 			log.Fatalf("%s is not set", k)
 		}
+	}
+	signins, err := configuredProviders()
+	if err != nil {
+		log.Fatal(err)
 	}
 	store, err := OpenStore(env("NAMES_STATE", "names.json"))
 	if err != nil {
@@ -45,14 +49,11 @@ func main() {
 		svc.Reserved[w] = true
 	}
 	app := &App{
-		Svc:  svc,
-		Base: strings.TrimRight(env("NAMES_BASE_URL", "https://names.dokkit.dev"), "/"),
-		GitHub: GitHub{
-			ClientID: os.Getenv("GITHUB_CLIENT_ID"), Secret: os.Getenv("GITHUB_CLIENT_SECRET"),
-			Web: env("GITHUB_WEB", "https://github.com"), API: env("GITHUB_API", "https://api.github.com"),
-		},
-		Abuse:  env("NAMES_ABUSE_EMAIL", "abuse@dokkit.dev"),
-		Secret: []byte(store.s.Secret),
+		Svc:     svc,
+		Base:    strings.TrimRight(env("NAMES_BASE_URL", "https://names.dokkit.dev"), "/"),
+		Signins: signins,
+		Abuse:   env("NAMES_ABUSE_EMAIL", "abuse@dokkit.dev"),
+		Secret:  []byte(store.s.Secret),
 	}
 	go func() {
 		for {
