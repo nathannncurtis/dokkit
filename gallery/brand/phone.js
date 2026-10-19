@@ -4,13 +4,13 @@ railFor($$(".step"), $$(".rail a"));
 if (!still && window.gsap && window.ScrollTrigger) {
   gsap.registerPlugin(ScrollTrigger);
   document.documentElement.classList.add("pinned");
-  const env = $("#env"), caps = $$("#pcap span"), rows = $$("#screen p");
+  const env = $("#env"), caps = $$("#pcap span"), off = $("#screenOff");
   const at = (node) => {
     const f = $("#flow").getBoundingClientRect(), r = $(node).getBoundingClientRect();
     return { x: r.left - f.left + r.width / 2 - 22, y: r.top - f.top + r.height / 2 - 22 };
   };
   gsap.set(caps, { opacity: 0, y: 10 });
-  gsap.set(rows, { opacity: 0, y: 8 });
+  gsap.set(off, { opacity: 1 });
   gsap.set(env, { opacity: 0 });
   gsap.set("#nRelay .blind", { opacity: 0, y: 6 });
   const tl = gsap.timeline({ paused: true });
@@ -33,7 +33,7 @@ if (!still && window.gsap && window.ScrollTrigger) {
     .to("#nRelay", { borderColor: "", duration: 0.3 }, "<")
     .to(env, { "--shut": 0, duration: 0.2 })
     .to(env, { opacity: 0, scale: 1.6, duration: 0.3 })
-    .to(rows, { opacity: 1, y: 0, stagger: 0.08, duration: 0.35, ease: "power3.out" }, "<");
+    .to(off, { opacity: 0, duration: 0.5 }, "<");
   tl.timeScale(tl.duration() / 3.5);
   holdFor("#how", tl, "top 12%");
 }
