@@ -275,6 +275,7 @@ function holdRound() {
     .fromTo(rows, { x: (i) => -lift[i][0], y: (i) => -lift[i][1], opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.7, ease: "power3.out" }, "<0.05")
     .to({}, { duration: 0.1 });
   typeIn(tl, label, 0.5, ">");
+  tl.timeScale(tl.duration() / 3.5);
   holdFor("#sample", tl, "top top");
 }
 
