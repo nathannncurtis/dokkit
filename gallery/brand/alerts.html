@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Where Dokkit alerts reach you</title>
+<meta name="description" content="Every channel Dokkit can alert through, how it decides who is told, and how to set each one up.">
+<meta name="theme-color" content="#1e1917">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css?v=20">
+<script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); })();</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></symbol>
+</svg>
+
+<header class="bar">
+  <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+  <nav aria-label="Site">
+    <a href="install.html">Install</a><span class="soon" title="Not built yet">Demo</span><a href="agents.html">Agents</a><a href="api.html">Docs</a><a href="phone.html">Phone</a><a href="security.html">Security</a><span class="soon" title="Not built yet">Status</span><a href="https://github.com/nathannncurtis/dokkit">Source</a>
+  </nav>
+  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
+  <a class="claim" href="install.html">Claim a name <em>soon</em></a>
+</header>
+
+<main id="top" class="page">
+  <header class="phead">
+    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><b>Alerts</b></p>
+    <h1 class="ptitle">Alerts</h1>
+    <p class="plede">Dokkit tells you when something needs you, on <mark class="n">the channels you set up</mark>: paging for what cannot wait, a quiet push for today, and email for the morning.</p>
+  </header>
+
+  <div class="steps-wrap">
+    <nav class="rail" aria-label="On this page">
+      <ol>
+        <li><a href="#how" data-step="how"><i>1</i>How it decides</a></li><li><a href="#channels" data-step="channels"><i>2</i>The channels</a></li><li><a href="#people" data-step="people"><i>3</i>People and rules</a></li><li><a href="#itself" data-step="itself"><i>4</i>When Dokkit is down</a></li>
+      </ol>
+      <span class="rail-fill" id="railFill" aria-hidden="true"></span>
+    </nav>
+
+    <div class="steps">
+      <section class="step" id="how">
+        <h2 data-type>How it decides</h2>
+        <p class="sub-p">An issue alerts once, when it opens, and what it raised is resolved when it closes. Its state picks the channel.</p>
+        <div class="routes" id="routes"><div class="rt routes-head"><span>The issue</span><span>What decides</span><span>Where</span><span>What arrives</span></div><div class="rt" data-route>
+            <div><b><i class="s bad"></i> nightly-purge did not run</b><small>db-01 · a job · stopped · DOK-12</small></div>
+            <div><span class="via">When something stops</span></div>
+            <div><span class="to">Page</span><small>PagerDuty</small></div>
+            <div><div class="notif"><span class="mk"><svg><use href="#mark"/></svg></span><b>nightly-purge did not run (db-01, DOK-12)<em>01:04</em></b><span>It was due at 01:00 and no start was reported.</span></div></div>
+          </div><div class="rt" data-route>
+            <div><b><i class="s warn"></i> upload-portal is answering slowly</b><small>web-02 · a service · struggling · DOK-09</small></div>
+            <div><span class="via">When something is struggling</span></div>
+            <div><span class="to">Push</span><small>ntfy</small></div>
+            <div><div class="notif"><span class="mk"><svg><use href="#mark"/></svg></span><b>upload-portal is answering slowly (web-02, DOK-09)<em>09:40</em></b><span>Answers are taking 4.2 s, over its 2 s limit.</span></div></div>
+          </div><div class="rt" data-route>
+            <div><b><i class="s warn"></i> report-builder is answering slowly</b><small>app-01 · a service set not to wake you · struggling · DOK-14</small></div>
+            <div><span class="via">Night, 22:00 to 07:00</span><span class="held">opened at 02:15</span></div>
+            <div><span class="to">Push</span><small>held until 07:00</small></div>
+            <div><div class="notif"><span class="mk"><svg><use href="#mark"/></svg></span><b>report-builder is answering slowly (app-01, DOK-14)<em>07:00</em></b><span>Held through the night, then sent.</span></div></div>
+          </div></div>
+        <ul class="did">
+          <li>Only the production environment alerts. Issues in other environments are listed, and stay quiet.</li>
+          <li>If something recovers and fails again inside 30 minutes, it is the same issue, and it stays quiet.</li>
+          <li>Tick more than one channel and each sends its own alert.</li>
+        </ul>
+      </section>
+      <section class="step" id="channels">
+        <h2 data-type>The channels</h2>
+        <p class="sub-p">Each one is set up on Dokkit's Alerts page, in Settings, and has a Send a test button. Pick one to see its fields.</p>
+        <div class="next-links" data-fly="up"><a class="nl" href="alerts-pagerduty.html"><b>PagerDuty</b><small>Paging, for what cannot wait until morning</small></a><a class="nl" href="alerts-ntfy.html"><b>ntfy</b><small>A quiet push to your phone, through ntfy.sh or your own ntfy</small></a><a class="nl" href="alerts-pushover.html"><b>Pushover</b><small>A quiet push to your phone, through Pushover</small></a><a class="nl" href="alerts-email.html"><b>Email</b><small>Email through your own mail server, and the morning digest</small></a><a class="nl" href="alerts-imessage.html"><b>iMessage</b><small>Sent from a Mac you own, signed in to Messages</small></a><a class="nl" href="alerts-sms.html"><b>SMS</b><small>Text messages through a Twilio account</small></a><a class="nl" href="alerts-webhook.html"><b>Webhook</b><small>A JSON request to any https address, when an issue opens and closes</small></a><a class="nl" href="alerts-home-assistant.html"><b>Home Assistant</b><small>Through the webhook, into an automation</small></a><span class="nl soon"><b>Slack</b><small>Messages in a channel · soon</small></span><span class="nl soon"><b>Discord</b><small>Messages in a channel · soon</small></span></div>
+      </section>
+      <section class="step" id="people">
+        <h2 data-type>People and rules</h2>
+        <p class="sub-p">Until you name people, an alert goes to the addresses set for each channel. Name them at four levels: the default, a rule, a service and a check. The most specific level that names someone decides.</p>
+        <div class="cards cards-2">
+          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>People</h3><p>Each person can have their own email, phone, iMessage address, ntfy topic, Pushover key and PagerDuty key. Send a test to one person from their row.</p></article>
+          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Rules</h3><p>A rule picks the channel and the people for a kind of issue, a state and a machine. The first rule that fits decides. A service's own routing comes first.</p></article>
+          <article class="wcard" data-fly="up"><h3><i class="s warn"></i>Night</h3><p>Choose when night starts and ends, and a time zone. A service set not to wake you holds its alerts until the night ends.</p></article>
+          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Limits</h3><p>The percent of a disk, or of memory for three minutes running, that needs a look. Leave either blank to switch it off.</p></article>
+        </div>
+      </section>
+      <section class="step" id="itself">
+        <h2 data-type>When Dokkit is down</h2>
+        <p class="big-fact" data-fly="up">Dokkit cannot tell anyone that it is down. Give it <mark class="n">an outside heartbeat</mark>: an https address it calls every minute, at a service that alerts when the calls stop.</p>
+        <ul class="did">
+          <li>When Dokkit stops taking reports or cannot reach its database, it tells you on the loudest channel that is set up, unless you choose one.</li>
+          <li>Lesser trouble, such as an archive folder it cannot write to or a certificate close to running out, has its own choice.</li>
+        </ul>
+      </section>
+
+      <section class="next" aria-label="Where to go next">
+        <h2 data-type>Next:</h2>
+        <div class="next-links">
+          <a class="nl" href="alerts-pagerduty.html"><b>Set up paging</b><small>PagerDuty, for what cannot wait</small></a><a class="nl" href="phone.html"><b>The phone app</b><small>See what needs you, read-only</small></a><a class="nl" href="install.html"><b>Install the server</b><small>So there is something to be told about</small></a>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="fl">
+    <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+    <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
+  </div>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="site.js?v=20"></script>
+<script src="alerts.js?v=20"></script><script>railFor($$(".step"), $$(".rail a"));</script>
+<script src="motion.js?v=20"></script>
+</body>
+</html>

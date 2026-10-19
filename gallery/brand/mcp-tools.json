@@ -1,0 +1,947 @@
+[
+  {
+    "args": [],
+    "name": "attention",
+    "scope": "read",
+    "description": "What needs a look right now, what will need one soon, what was found and is not watched, what is snoozed, issues in other environments, and how many things are fine.",
+    "required": []
+  },
+  {
+    "args": [
+      "cursor",
+      "environment",
+      "kind",
+      "limit",
+      "machine",
+      "q"
+    ],
+    "name": "find",
+    "scope": "read",
+    "description": "Search services by name. Optionally only on one machine, in one environment or of one kind. A list longer than limit (default 100) answers {items, next}: pass next as cursor for the following page.",
+    "required": []
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "service",
+    "scope": "read",
+    "description": "One service: its state, checks, routing, facts, version on each machine, recent deploys, stats and open issue. Takes the id from find.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "cursor",
+      "environment",
+      "limit",
+      "machine",
+      "q",
+      "service",
+      "state"
+    ],
+    "name": "jobs",
+    "scope": "read",
+    "description": "Every job with its schedule, last run (with done and total while it runs), last good run and next expected run. state is ok, degraded, down or unknown.",
+    "required": []
+  },
+  {
+    "args": [
+      "cursor",
+      "from",
+      "id",
+      "limit",
+      "result",
+      "to"
+    ],
+    "name": "job_runs",
+    "scope": "read",
+    "description": "The recent runs of one job, newest first, with their output and, while running, done and total. Takes the job's id from jobs. result is running, ok or fail.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "cursor",
+      "from",
+      "level",
+      "limit",
+      "machine",
+      "q",
+      "service",
+      "to"
+    ],
+    "name": "logs",
+    "scope": "read-logs",
+    "description": "Search log lines, newest first. level is that level and worse.",
+    "required": []
+  },
+  {
+    "args": [
+      "id",
+      "until"
+    ],
+    "name": "snooze",
+    "scope": "act",
+    "description": "Snooze an issue until a time (RFC 3339). Takes the issue id from attention.",
+    "required": [
+      "id",
+      "until"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "acknowledge",
+    "scope": "act",
+    "description": "Mark an issue as seen.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "cursor",
+      "environment",
+      "from",
+      "id",
+      "limit",
+      "machine",
+      "q",
+      "service",
+      "to"
+    ],
+    "name": "errors",
+    "scope": "read",
+    "description": "Error groups, newest first. With an id from that list, one group with its stack and its individual reports, newest first, paged by cursor.",
+    "required": []
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "since_deploy",
+    "scope": "read",
+    "description": "The latest deploy of one service, and the issues and errors first seen after it. Takes the id from find.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "cursor",
+      "limit",
+      "machine",
+      "q"
+    ],
+    "name": "machines",
+    "scope": "read",
+    "description": "Every machine with its state and what it runs.",
+    "required": []
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "machine",
+    "scope": "read",
+    "description": "One machine. Takes the id from machines.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "cursor",
+      "environment",
+      "from",
+      "limit",
+      "machine",
+      "q",
+      "service",
+      "state",
+      "to"
+    ],
+    "name": "issues",
+    "scope": "read",
+    "description": "Issues, newest first. state is open, snoozed, closed or all; without it, the open and snoozed ones.",
+    "required": []
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "issue",
+    "scope": "read",
+    "description": "One issue with its history: opened, notes, acknowledged, snoozed, closed. Takes the id from issues or attention.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "cursor",
+      "environment",
+      "from",
+      "limit",
+      "machine",
+      "q",
+      "service",
+      "to"
+    ],
+    "name": "deploys",
+    "scope": "read",
+    "description": "Deploys of every service, newest first.",
+    "required": []
+  },
+  {
+    "args": [],
+    "name": "versions",
+    "scope": "read",
+    "description": "The versions of the apps Dokkit watches, and the apps.",
+    "required": []
+  },
+  {
+    "args": [
+      "cursor",
+      "limit",
+      "q"
+    ],
+    "name": "rules",
+    "scope": "read",
+    "description": "The alert rules, first match first.",
+    "required": []
+  },
+  {
+    "args": [
+      "cursor",
+      "kind",
+      "limit",
+      "machine",
+      "q",
+      "system"
+    ],
+    "name": "proposals",
+    "scope": "read",
+    "description": "Things Dokkit found that a person may accept or dismiss: services, ports, jobs, containers and sites, each with an origin (system, software or yours; absent when the machine's program is too old to say) and the reason. The operating system's own things (origin system) are left out unless system is true, and counted in hidden, in total and for each machine. Answers items, next and hidden.",
+    "required": []
+  },
+  {
+    "args": [
+      "from",
+      "id",
+      "machine",
+      "metric",
+      "points",
+      "to"
+    ],
+    "name": "series",
+    "scope": "read",
+    "description": "Numbers over time for one service, or for a machine's own disks, memory and processor when given machine instead of id. Without metric, lists the metric names. from and to are RFC 3339 and default to the last day.",
+    "required": []
+  },
+  {
+    "args": [
+      "limit",
+      "machine",
+      "pid",
+      "q",
+      "sort"
+    ],
+    "name": "processes",
+    "scope": "read",
+    "description": "A machine's newest process list, taken about once a minute: name, pid, memory (bytes and percent of the machine's memory), processor percent (null on a first sample), path. sort is memory (default) or cpu; q matches name or path; pid picks one process; limit defaults to 50, at most 10,000. Answers at, total_memory_bytes, items and count (all that matched).",
+    "required": [
+      "machine"
+    ]
+  },
+  {
+    "args": [
+      "from",
+      "kind",
+      "machine",
+      "to"
+    ],
+    "name": "process_history",
+    "scope": "read",
+    "description": "The top 10 processes by memory or by processor of a machine, one list a minute, up to 24 hours back. kind is memory (default) or cpu; from and to are RFC 3339 and default to the last hour.",
+    "required": [
+      "machine"
+    ]
+  },
+  {
+    "args": [
+      "to"
+    ],
+    "name": "day",
+    "scope": "read",
+    "description": "The last 24 hours in half hours: for each machine, which half hours had something down, something that needed a look, nothing, or no signal, and the issues that opened. to is RFC 3339 and defaults to now.",
+    "required": []
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "unsnooze",
+    "scope": "act",
+    "description": "Wake a snoozed issue.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "id",
+      "text"
+    ],
+    "name": "note",
+    "scope": "act",
+    "description": "Add a note to an issue.",
+    "required": [
+      "id",
+      "text"
+    ]
+  },
+  {
+    "args": [
+      "action",
+      "ids",
+      "until"
+    ],
+    "name": "bulk",
+    "scope": "act",
+    "description": "Snooze, unsnooze or acknowledge many issues at once. snooze needs until (RFC 3339).",
+    "required": [
+      "ids",
+      "action"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "watch",
+    "scope": "act",
+    "description": "Start watching a service. Takes the id from find.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "unwatch",
+    "scope": "act",
+    "description": "Stop watching a service. Its open issues close.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "degraded",
+      "down",
+      "id",
+      "night"
+    ],
+    "name": "routing",
+    "scope": "act",
+    "description": "Set where a service's issues go when it stops (down) and when it struggles (degraded), and with night false whether they wait for morning at night. Each is one channel or a list of channels, each of which sends its own alert; none stands alone. A field left out stays as it was; an empty down or degraded clears the route.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "down",
+      "id",
+      "night"
+    ],
+    "name": "machine_routing",
+    "scope": "act",
+    "description": "Set how a machine that stops reporting is announced: down is one channel or a list (empty for the server-wide choice for down), and night false holds the alert until the night ends (true, the default, wakes someone). A field left out stays as it was.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "id",
+      "version"
+    ],
+    "name": "hold",
+    "scope": "act",
+    "description": "Hold a service at a version, so a newer one is not offered. An empty or missing version lets it go.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "all",
+      "id",
+      "ids",
+      "system"
+    ],
+    "name": "accept_proposal",
+    "scope": "act",
+    "description": "Accept found services and ports: one (id), some (ids) or every one waiting and shown (all true; the operating system's own only with system true). Takes the ids from proposals; a hidden one can be accepted by id.",
+    "required": []
+  },
+  {
+    "args": [
+      "all",
+      "id",
+      "ids",
+      "system"
+    ],
+    "name": "dismiss_proposal",
+    "scope": "act",
+    "description": "Dismiss proposals: one (id), some (ids) or every one waiting and shown (all true; the operating system's own only with system true). Takes the ids from proposals; a hidden one can be dismissed by id.",
+    "required": []
+  },
+  {
+    "args": [
+      "channel",
+      "channels",
+      "kind",
+      "machine",
+      "state"
+    ],
+    "name": "add_rule",
+    "scope": "admin",
+    "description": "Add an alert rule at the end of the list. kind is job, check, machine or empty for anything; state is down, degraded or empty for both.",
+    "required": []
+  },
+  {
+    "args": [
+      "channel",
+      "channels",
+      "id",
+      "kind",
+      "machine",
+      "on",
+      "state"
+    ],
+    "name": "update_rule",
+    "scope": "admin",
+    "description": "Change an alert rule. A field left out stays as it was; an empty one clears it. Takes the id from rules. on false switches the rule off.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "delete_rule",
+    "scope": "admin",
+    "description": "Delete an alert rule.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "checks",
+      "id"
+    ],
+    "name": "set_checks",
+    "scope": "admin",
+    "description": "Replace the checks added in the interface for a service. Checks from a file are left alone.",
+    "required": [
+      "id",
+      "checks"
+    ]
+  },
+  {
+    "args": [
+      "allow",
+      "id"
+    ],
+    "name": "allow_restart",
+    "scope": "admin",
+    "description": "Allow or forbid restarting a service from Dokkit.",
+    "required": [
+      "id",
+      "allow"
+    ]
+  },
+  {
+    "args": [
+      "cursor",
+      "from",
+      "kind",
+      "limit",
+      "machine",
+      "q",
+      "to"
+    ],
+    "name": "keys",
+    "scope": "admin",
+    "description": "Every key and token, with its kind, label and scopes. Never the key text.",
+    "required": []
+  },
+  {
+    "args": [
+      "kind",
+      "label",
+      "machine",
+      "scopes",
+      "service"
+    ],
+    "name": "make_key",
+    "scope": "admin",
+    "description": "Make a key. kind user needs label and scopes, app needs service, enrol takes an optional machine name. The key text is returned once.",
+    "required": [
+      "kind"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "revoke_key",
+    "scope": "admin",
+    "description": "Revoke a key. Takes the id from keys.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "cursor",
+      "limit",
+      "q"
+    ],
+    "name": "people",
+    "scope": "admin",
+    "description": "The people who can sign in, with their roles.",
+    "required": []
+  },
+  {
+    "args": [
+      "name",
+      "password",
+      "role"
+    ],
+    "name": "add_person",
+    "scope": "admin",
+    "description": "Add a person who can sign in.",
+    "required": [
+      "name",
+      "role",
+      "password"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "remove_person",
+    "scope": "admin",
+    "description": "Remove a person. Takes the id from people.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [],
+    "name": "alert_settings",
+    "scope": "read",
+    "description": "The alert settings: who is told by default, the limits, the night and the mail settings. Addresses, user names and secrets are only shown as set or not set.",
+    "required": []
+  },
+  {
+    "args": [],
+    "name": "alert_people",
+    "scope": "read",
+    "description": "The people alerts can be told, each with their own destinations: email, phone for SMS, iMessage address, ntfy address, Pushover user key and PagerDuty routing key. The ntfy address, Pushover key and routing key are only shown as set or not set.",
+    "required": []
+  },
+  {
+    "args": [],
+    "name": "alert_who",
+    "scope": "read",
+    "description": "Who is told at each level where someone is named: the default, a rule, a service, a check. Where nothing is named the level above decides, and the default is everyone.",
+    "required": []
+  },
+  {
+    "args": [],
+    "name": "alert_suggestions",
+    "scope": "read",
+    "description": "Changes Dokkit suggests: an issue that keeps opening and is snoozed, which the daily digest could take instead.",
+    "required": []
+  },
+  {
+    "args": [],
+    "name": "archives",
+    "scope": "read-logs",
+    "description": "The archived months of logs that can be loaded back.",
+    "required": []
+  },
+  {
+    "args": [
+      "id",
+      "keep"
+    ],
+    "name": "keep_messages",
+    "scope": "act",
+    "description": "Keep the text of a service's errors from now on, or stop keeping it.",
+    "required": [
+      "id",
+      "keep"
+    ]
+  },
+  {
+    "args": [
+      "grace",
+      "id",
+      "max_runtime"
+    ],
+    "name": "set_job_timing",
+    "scope": "act",
+    "description": "Set when a job counts as late (grace) and as run too long (max_runtime), such as 30m or 2h. A field left out stays as it was; an empty one clears it. A job from a dokkit.toml is changed in the file.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "update_program",
+    "scope": "admin",
+    "description": "Ask an enrolled machine to fetch the newer dokkit program. A person finishes the update on the machine. Takes the id from machines.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "cursor",
+      "limit",
+      "q"
+    ],
+    "name": "releases",
+    "scope": "read",
+    "description": "The program releases this server holds, each with its files and whether it is complete. Only a complete release can be approved.",
+    "required": []
+  },
+  {
+    "args": [],
+    "name": "certificate",
+    "scope": "read",
+    "description": "The certificates this server serves itself: the installed one and the uploaded one, each with its names, issuer, when it runs out, whether it is self-signed and its SHA-256 fingerprint.",
+    "required": []
+  },
+  {
+    "args": [
+      "cert",
+      "key"
+    ],
+    "name": "set_certificate",
+    "scope": "admin",
+    "description": "Put a certificate for a real name in place: cert is the PEM of the certificate followed by its chain, key is its PEM private key. It is served at once to clients that ask for one of its names.",
+    "required": [
+      "cert",
+      "key"
+    ]
+  },
+  {
+    "args": [],
+    "name": "remove_certificate",
+    "scope": "admin",
+    "description": "Remove the uploaded certificate.",
+    "required": []
+  },
+  {
+    "args": [],
+    "name": "certificate_settings",
+    "scope": "admin",
+    "description": "The settings for getting and renewing the uploaded certificate by itself: the DNS name, the certificate authority's directory, and whether a Cloudflare token is set. The token is never shown.",
+    "required": []
+  },
+  {
+    "args": [
+      "acme_cloudflare_token",
+      "acme_directory",
+      "acme_name"
+    ],
+    "name": "set_certificate_settings",
+    "scope": "admin",
+    "description": "Change those settings: acme_name (such as example.dokkit.dev), acme_cloudflare_token (a Cloudflare API token that may edit DNS in the name's zone; an empty one clears it) and acme_directory (Let's Encrypt production when empty). A setting left out stays as it was.",
+    "required": []
+  },
+  {
+    "args": [],
+    "name": "renew_certificate",
+    "scope": "admin",
+    "description": "Get a certificate for acme_name now from the certificate authority, proving the name with a DNS record at Cloudflare. It can take a few minutes. Answers with the certificates, or the reason it failed.",
+    "required": []
+  },
+  {
+    "args": [
+      "id",
+      "version"
+    ],
+    "name": "update_machine",
+    "scope": "admin",
+    "description": "Ask the updater on a machine to move to a release this server holds completely, such as v1.2.3. Takes the id from machines and the version from releases. Only a signed release installs.",
+    "required": [
+      "id",
+      "version"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "scan_machine",
+    "scope": "act",
+    "description": "Ask an enrolled machine to look itself over again and send what it finds to proposals. Read-only on the machine; nothing found is watched until accepted. Takes the id from machines. Answers with the run id; a program too old to know it refuses.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "for",
+      "id",
+      "reason"
+    ],
+    "name": "plan_downtime",
+    "scope": "act",
+    "description": "Say an enrolled machine is going down on purpose, such as for a restart: for the time given, `for` (such as 15m, at most 4h), it opens no issue for going silent or for its checks failing, and sends nothing. When the time is up the usual rules resume at once. A second call replaces the window; `for` of 0 ends it. Issues already open stay open. Takes the id from machines.",
+    "required": [
+      "id",
+      "for"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "end_downtime",
+    "scope": "act",
+    "description": "End a machine's planned downtime now. Takes the id from machines.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "downtime_schedules",
+    "scope": "read",
+    "description": "The planned downtime scheduled for a machine, each with its id, repeat, time, days, length in seconds, reason, who made it and when it next starts. Takes the id from machines.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "at",
+      "days",
+      "for",
+      "id",
+      "reason",
+      "repeat",
+      "time"
+    ],
+    "name": "schedule_downtime",
+    "scope": "act",
+    "description": "Schedule planned downtime for an enrolled machine, so it starts by itself. repeat is once (with at, an RFC 3339 time), daily or weekly (with time, such as 02:00 in the server's night time zone, or UTC when none is set; weekly also takes days, 1 for Monday to 7 for Sunday). `for` is the length (such as 30m, at most 4h). A window it starts is not ended early when the machine comes back. Takes the id from machines.",
+    "required": [
+      "id",
+      "repeat",
+      "for"
+    ]
+  },
+  {
+    "args": [
+      "id",
+      "schedule"
+    ],
+    "name": "remove_scheduled_downtime",
+    "scope": "act",
+    "description": "Remove a scheduled planned downtime. Takes the id from machines and the schedule from downtime_schedules.",
+    "required": [
+      "id",
+      "schedule"
+    ]
+  },
+  {
+    "args": [
+      "version"
+    ],
+    "name": "update_all",
+    "scope": "admin",
+    "description": "Ask the updater on every machine that has one to move to a release this server holds completely, such as v1.2.3.",
+    "required": [
+      "version"
+    ]
+  },
+  {
+    "args": [
+      "name"
+    ],
+    "name": "add_app",
+    "scope": "admin",
+    "description": "Add an app that runs on many machines, such as a desktop program. Its key is returned once and goes into the app's build.",
+    "required": [
+      "name"
+    ]
+  },
+  {
+    "args": [
+      "check",
+      "machine",
+      "name"
+    ],
+    "name": "add_dependency",
+    "scope": "admin",
+    "description": "Add something outside that is depended on, such as a payment service. With check, a machine that runs dokkit (machine) tests it: {type http, url} or {type tcp, address host:port}. Without a check it belongs to the group Outside.",
+    "required": [
+      "name"
+    ]
+  },
+  {
+    "args": [
+      "grace",
+      "machine",
+      "max_runtime",
+      "name",
+      "schedule"
+    ],
+    "name": "add_job",
+    "scope": "admin",
+    "description": "Add a job to watch. The key and the addresses the job calls are returned once. schedule is a cron line read as UTC; grace and max_runtime are times such as 30m.",
+    "required": [
+      "name",
+      "machine"
+    ]
+  },
+  {
+    "args": [
+      "degraded",
+      "digest_at",
+      "disk_limit",
+      "down",
+      "email_to",
+      "heartbeat_url",
+      "imessage_machine",
+      "imessage_to",
+      "mail_from",
+      "memory_limit",
+      "night_from",
+      "night_offset",
+      "night_to",
+      "night_zone",
+      "ntfy_token",
+      "ntfy_url",
+      "pagerduty_key",
+      "push_with",
+      "pushover_token",
+      "pushover_user",
+      "self_degraded",
+      "self_down",
+      "sms_to",
+      "smtp_host",
+      "smtp_password",
+      "smtp_port",
+      "smtp_user",
+      "twilio_from",
+      "twilio_sid",
+      "twilio_token",
+      "webhook_url"
+    ],
+    "name": "set_alert_settings",
+    "scope": "admin",
+    "description": "Change alert settings. A setting left out stays as it was; an empty secret clears it. If the address a secret is sent to changes (ntfy_url, smtp_host), send the secret again in the same call or it is cleared, and the answer says so. Addresses must be https, not this machine; mail ports are 25, 465, 587 and 2525.",
+    "required": []
+  },
+  {
+    "args": [
+      "channel",
+      "person"
+    ],
+    "name": "test_alert",
+    "scope": "admin",
+    "description": "Send a test alert by one channel, to the server-wide destination or, with person, to that person's. Answers sent, or one fixed reason. A page, or a push through PagerDuty, stays open for two minutes and then resolves itself. Four at once, then one every 25 seconds; a test that stays open costs twice as much: two at once, then one every 50 seconds.",
+    "required": [
+      "channel"
+    ]
+  },
+  {
+    "args": [
+      "email",
+      "id",
+      "imessage",
+      "ntfy_url",
+      "pagerduty_key",
+      "phone",
+      "pushover_user"
+    ],
+    "name": "set_alert_person",
+    "scope": "admin",
+    "description": "Change a person's destinations. Takes the id from alert_people. A destination left out stays as it was; an empty one clears it.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "id",
+      "name",
+      "scope",
+      "service",
+      "to"
+    ],
+    "name": "set_alert_who",
+    "scope": "admin",
+    "description": "Name who is told at one level. scope is default, rule, service or check; id is the rule, service or check (not for default); for a check, service and name may be sent instead of id; to is a list of person ids from alert_people, or [\"everyone\"] for the server-wide destinations. An empty list names nobody there, so the level above decides. The check comes before the service, the service before the rule, the rule before the default.",
+    "required": [
+      "scope",
+      "to"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "accept_suggestion",
+    "scope": "admin",
+    "description": "Send that service's issues to the daily digest from now on. Takes the id from alert_suggestions.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "dismiss_suggestion",
+    "scope": "admin",
+    "description": "Dismiss an alert suggestion. Takes the id from alert_suggestions.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "name"
+    ],
+    "name": "restore_archive",
+    "scope": "admin",
+    "description": "Load an archived month of logs back for a week. Takes the name from archives.",
+    "required": [
+      "name"
+    ]
+  }
+]

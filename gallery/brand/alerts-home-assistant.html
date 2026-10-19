@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dokkit alerts by Home Assistant</title>
+<meta name="description" content="Setting up Home Assistant for Dokkit&#x27;s alerts.">
+<meta name="theme-color" content="#1e1917">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css?v=20">
+<script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); })();</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></symbol>
+</svg>
+
+<header class="bar">
+  <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+  <nav aria-label="Site">
+    <a href="install.html">Install</a><span class="soon" title="Not built yet">Demo</span><a href="agents.html">Agents</a><a href="api.html">Docs</a><a href="phone.html">Phone</a><a href="security.html">Security</a><span class="soon" title="Not built yet">Status</span><a href="https://github.com/nathannncurtis/dokkit">Source</a>
+  </nav>
+  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
+  <a class="claim" href="install.html">Claim a name <em>soon</em></a>
+</header>
+
+<main id="top" class="page">
+  <header class="phead">
+    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><a href="alerts.html">Alerts</a><span aria-hidden="true">/</span><b>Home Assistant</b></p>
+    <h1 class="ptitle">Home Assistant</h1>
+    <p class="plede">Home Assistant takes Dokkit's webhook as an automation trigger, so an issue can flash a light or speak on a speaker.</p>
+  </header>
+
+  <div class="steps-wrap">
+    <nav class="rail" aria-label="On this page">
+      <ol>
+        <li><a href="#setup" data-step="setup"><i>1</i>Set it up</a></li><li><a href="#arrives" data-step="arrives"><i>2</i>What it sends</a></li><li><a href="#test" data-step="test"><i>3</i>Try it</a></li>
+      </ol>
+      <span class="rail-fill" id="railFill" aria-hidden="true"></span>
+    </nav>
+
+    <div class="steps">
+      <section class="step" id="setup">
+        <h2 data-type>Set it up</h2>
+        <p class="sub-p">On Dokkit's Alerts page, in Settings. Only the owner can change it.</p>
+        <div class="fields" data-fly="up"><div class="field"><b>An https address</b><span>Dokkit sends only to https, so Home Assistant needs an https address: its own certificate, or Home Assistant Cloud.</span></div><div class="field"><b>The automation</b><span>Add the automation below in Home Assistant, with a webhook id nobody would guess.</span></div><div class="field"><b>Webhook address</b><span>On Dokkit's Alerts page, under Webhook, paste <code>https://your-home-assistant/api/webhook/</code> and that id.</span></div></div>
+      </section>
+      <section class="step" id="arrives">
+        <h2 data-type>What it sends</h2>
+<div class="prompt small" data-fly="up"><pre id="ha">triggers:
+  - trigger: webhook
+    webhook_id: dokkit-change-this-id
+    allowed_methods: [POST]
+    local_only: true
+conditions:
+  - condition: template
+    value_template: "{{ trigger.json.event == 'opened' }}"
+actions:
+  - action: notify.notify
+    data:
+      title: "{{ trigger.json.issue.title }} ({{ trigger.json.issue.machine }})"
+      message: "{{ trigger.json.issue.note or trigger.json.issue.id }}"</pre><button type="button" class="copy" data-copy="ha">Copy</button></div>
+      </section>
+      <section class="step" id="test">
+        <h2 data-type>Try it</h2>
+        <p class="big-fact" data-fly="up">Under Home Assistant, press <mark class="ok">Send a test</mark>. It says at once whether it went, or why not.</p>
+        <ul class="did"><li>Leave <code>local_only</code> on when Dokkit and Home Assistant share a network. Turn it off only when the request comes in through Home Assistant Cloud.</li></ul>
+      </section>
+
+      <section class="next" aria-label="Where to go next">
+        <h2 data-type>Next:</h2>
+        <div class="next-links">
+          <a class="nl" href="alerts.html"><b>Every channel</b><small>How Dokkit decides who is told</small></a><a class="nl" href="alerts-pagerduty.html"><b>PagerDuty</b><small>Paging, for what cannot wait until morning</small></a><a class="nl" href="index.html"><b>Back to the start</b><small>What Dokkit is, and the working sample</small></a>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="fl">
+    <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+    <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
+  </div>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="site.js?v=20"></script>
+<script>railFor($$(".step"), $$(".rail a"));</script>
+<script src="motion.js?v=20"></script>
+</body>
+</html>

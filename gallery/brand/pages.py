@@ -1,0 +1,303 @@
+"""Writes the Alerts pages, mcp-tools.html and changelog.html from the data here and in
+mcp-tools.json and changelog.json. Run from anywhere: python gallery/brand/pages.py"""
+import json, os
+from datetime import datetime
+from html import escape as e
+
+here = os.path.dirname(os.path.abspath(__file__))
+read = lambda n: json.load(open(os.path.join(here, n), encoding="utf-8"))
+V = "20"
+ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E"
+MARK = '<circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/>'
+NAV = [("install.html", "Install"), (None, "Demo"), ("agents.html", "Agents"), ("api.html", "Docs"), ("phone.html", "Phone"), ("security.html", "Security"), (None, "Status"), ("https://github.com/nathannncurtis/dokkit", "Source")]
+MK = '<span class="mk"><svg><use href="#mark"/></svg></span>'
+
+
+def page(file, title, desc, crumbs, h1, lede, steps, body, nxt, js=None, current=None):
+    nav = "".join(f'<span class="soon" title="Not built yet">{t}</span>' if not h else
+                  f'<a href="{h}"{" aria-current=\"page\"" if t == current else ""}>{t}</a>' for h, t in NAV)
+    crumb = "".join(f'<a href="{h}">{t}</a><span aria-hidden="true">/</span>' for h, t in crumbs)
+    rail = "".join(f'<li><a href="#{i}" data-step="{i}"><i>{n}</i>{t}</a></li>' for n, (i, t) in enumerate(steps, 1))
+    links = "".join(f'<a class="nl" href="{h}"><b>{b}</b><small>{s}</small></a>' for h, b, s in nxt)
+    script = f'<script src="{js}?v={V}"></script>' if js else ""
+    html = f'''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{e(title)}</title>
+<meta name="description" content="{e(desc)}">
+<meta name="theme-color" content="#1e1917">
+<link rel="icon" href="{ICON}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css?v={V}">
+<script>(() => {{ let m = null; try {{ m = localStorage.getItem("motion"); }} catch {{}} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); }})();</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 100 100">{MARK}</symbol>
+</svg>
+
+<header class="bar">
+  <a class="brand" href="index.html">{MK}Dokkit</a>
+  <nav aria-label="Site">
+    {nav}
+  </nav>
+  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
+  <a class="claim" href="install.html">Claim a name <em>soon</em></a>
+</header>
+
+<main id="top" class="page">
+  <header class="phead">
+    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span>{crumb}<b>{e(h1)}</b></p>
+    <h1 class="ptitle">{e(h1)}</h1>
+    <p class="plede">{lede}</p>
+  </header>
+
+  <div class="steps-wrap">
+    <nav class="rail" aria-label="On this page">
+      <ol>
+        {rail}
+      </ol>
+      <span class="rail-fill" id="railFill" aria-hidden="true"></span>
+    </nav>
+
+    <div class="steps">
+{body}
+      <section class="next" aria-label="Where to go next">
+        <h2 data-type>Next:</h2>
+        <div class="next-links">
+          {links}
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="fl">
+    <a class="brand" href="index.html">{MK}Dokkit</a>
+    <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
+  </div>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="site.js?v={V}"></script>
+{script}<script>railFor($$(".step"), $$(".rail a"));</script>
+<script src="motion.js?v={V}"></script>
+</body>
+</html>
+'''
+    open(os.path.join(here, file), "w", encoding="utf-8", newline="\n").write(html)
+
+
+def step(id, h2, inner):
+    return f'''      <section class="step" id="{id}">
+        <h2 data-type>{h2}</h2>
+{inner}
+      </section>
+'''
+
+
+def notif(title, body, when="now", big=False):
+    return f'<div class="notif{" big" if big else ""}">{MK}<b>{e(title)}<em>{when}</em></b><span>{e(body)}</span></div>'
+
+
+def fields(rows):
+    return '<div class="fields" data-fly="up">' + "".join(f'<div class="field"><b>{a}</b><span>{b}</span></div>' for a, b in rows) + "</div>"
+
+
+SAMPLE = ("nightly-purge did not run (db-01, DOK-12)", "It was due at 01:00 and no start was reported.")
+
+# Every channel the server can send through, in the words of its Alerts page.
+CHANNELS = [
+    {"id": "pagerduty", "name": "PagerDuty", "say": "Paging, for what cannot wait until morning",
+     "lede": "For what cannot wait until morning. Dokkit raises a PagerDuty incident when an issue opens and <mark class=\"ok\">resolves it when the issue closes</mark>.",
+     "setup": [("PagerDuty", "In PagerDuty, add an <code>Events API v2</code> integration to the service that should page you, and copy its integration key."),
+               ("PagerDuty routing key", "On Dokkit's Alerts page, under PagerDuty, paste the key and press Save."),
+               ("Who is told", "Choose <code>Page</code> for <code>When something stops</code>. It is the default.")],
+     "more": ["A paged issue is a <code>critical</code> incident. Push can go through PagerDuty too, as a <code>warning</code>: under Push, set <code>Push goes through</code> to PagerDuty.",
+              "Page and Push through PagerDuty together make one incident, at the page's severity.",
+              "Each person can have their own routing key, under People, so a rule can page one person."],
+     "arrives": notif("[critical] " + SAMPLE[0], "Source db-01 · Open Dokkit", big=True)},
+    {"id": "ntfy", "name": "ntfy", "say": "A quiet push to your phone, through ntfy.sh or your own ntfy",
+     "lede": "A quiet notification on your phone, for what should be seen today. Works with ntfy.sh or <mark class=\"n\">an ntfy server of your own</mark>.",
+     "setup": [("ntfy", "Install the ntfy app and subscribe to a topic with a name nobody would guess, or use a topic on your own server."),
+               ("ntfy topic address", "On Dokkit's Alerts page, under Push, paste the topic's address, such as <code>https://ntfy.sh/your-topic</code>."),
+               ("Access token, if the topic needs one", "For a protected topic, paste an ntfy access token. Dokkit sends it as a bearer token."),
+               ("Push goes through", "Leave it on ntfy. It is the default."),
+               ("Who is told", "Choose <code>Push</code> for <code>When something is struggling</code>. It is the default.")],
+     "more": ["The notification is sent at low priority, with the issue as its title and a tap that opens Dokkit.",
+              "Each person can have their own topic, under People."],
+     "arrives": notif(SAMPLE[0], SAMPLE[1], big=True)},
+    {"id": "pushover", "name": "Pushover", "say": "A quiet push to your phone, through Pushover",
+     "lede": "The same quiet push, through Pushover instead of ntfy.",
+     "setup": [("Pushover", "In Pushover, create an application for Dokkit and copy its API token, and copy your user key from the front page."),
+               ("Push goes through", "On Dokkit's Alerts page, under Push, choose Pushover."),
+               ("Application token", "Paste the application's API token."),
+               ("User key", "Paste your user key, and press Save.")],
+     "more": ["It is sent at Pushover's quiet priority, so it does not make a sound, with a link that opens Dokkit.",
+              "Each person can have their own user key, under People."],
+     "arrives": notif(SAMPLE[0], SAMPLE[1], big=True)},
+    {"id": "email", "name": "Email", "say": "Email through your own mail server, and the morning digest",
+     "lede": "Email through a mail server you already use, and <mark class=\"n\">the daily digest</mark>: one email a day with what opened without paging.",
+     "setup": [("Mail server", "On Dokkit's Alerts page, under Email: the server, such as <code>smtp.example.com</code>, the port (587 unless told otherwise; 25, 465, 587 and 2525 are allowed), the user name and the password."),
+               ("Sent from", "The address the mail comes from, such as <code>dokkit@example.com</code>."),
+               ("Email goes to", "One address, or several with commas between them."),
+               ("Daily digest", "Under Limits and night, the time the digest goes out, such as <code>07:00</code>, in the time zone you choose there.")],
+     "more": ["Every email is HTML, with a plain copy for mail readers that want one.",
+              "The digest holds what opened without paging, new errors, and numbers close to a limit. A day with nothing to say sends nothing.",
+              "Choose <code>Daily digest</code> as a channel for anything that can wait until morning."],
+     "arrives": notif(SAMPLE[0], "nightly-purge did not run. It was due at 01:00 and no start was reported. On db-01. DOK-12.", big=True)},
+    {"id": "imessage", "name": "iMessage", "say": "Sent from a Mac you own, signed in to Messages",
+     "lede": "iMessages go out through <mark class=\"n\">a Mac that runs the dokkit program</mark> and is signed in to Messages. No other service is involved.",
+     "setup": [("The Mac", "Install the program on the Mac and enrol it, like any machine, and sign it in to Messages."),
+               ("dokkit imessage on", "On that Mac, run <code>dokkit imessage on</code> so it may send. macOS asks once, on its screen."),
+               ("Sent from", "On Dokkit's Alerts page, under iMessage, choose that Mac."),
+               ("Goes to", "Phone numbers or email addresses, with commas between them.")],
+     "more": ["<code>dokkit imessage test &lt;recipient&gt;</code> on the Mac sends one message straight from it, to check Messages itself.",
+              "Each person can have their own iMessage address, under People."],
+     "arrives": notif(SAMPLE[0], "Messages · from your Mac", big=True)},
+    {"id": "sms", "name": "SMS", "say": "Text messages through a Twilio account",
+     "lede": "Text messages through your own Twilio account, for people who want a text.",
+     "setup": [("Twilio account", "On Dokkit's Alerts page, under SMS, paste the account SID and the auth token from Twilio's console."),
+               ("Sent from", "A Twilio number on that account, such as <code>+15555550100</code>."),
+               ("Goes to", "Phone numbers, with commas between them.")],
+     "more": ["Each person can have their own number, under People."],
+     "arrives": notif(SAMPLE[0], "Text message", big=True)},
+    {"id": "webhook", "name": "Webhook", "say": "A JSON request to any https address, when an issue opens and closes",
+     "lede": "A JSON request to an https address of yours when an issue opens, and another when it closes. Use it to reach anything Dokkit does not speak to directly.",
+     "setup": [("Webhook address", "On Dokkit's Alerts page, under Webhook, an address that starts with <code>https://</code>."),
+               ("Who is told", "Tick <code>Webhook</code> for the states it should hear about, alone or beside another channel.")],
+     "more": ["Addresses on your private network are allowed. Addresses that point at the server itself, or link-local ones, are refused unless the server runs with <code>DOKKIT_ALLOW_LOCAL_ALERTS=1</code>."],
+     "body": '<p class="sub-p">The request it sends:</p><div class="prompt small" data-fly="up"><pre id="hook">{\n  "event": "opened",\n  "issue": {\n    "id": "DOK-12",\n    "title": "nightly-purge did not run",\n    "note": "It was due at 01:00 and no start was reported.",\n    "machine": "db-01",\n    "state": "down",\n    "url": "https://dokkit.example.com"\n  }\n}</pre><button type="button" class="copy" data-copy="hook">Copy</button></div><p class="note">When the issue closes, the same request comes again with <code>"event": "closed"</code>.</p>'},
+    {"id": "home-assistant", "name": "Home Assistant", "say": "Through the webhook, into an automation",
+     "lede": "Home Assistant takes Dokkit's webhook as an automation trigger, so an issue can flash a light or speak on a speaker.",
+     "setup": [("An https address", "Dokkit sends only to https, so Home Assistant needs an https address: its own certificate, or Home Assistant Cloud."),
+               ("The automation", "Add the automation below in Home Assistant, with a webhook id nobody would guess."),
+               ("Webhook address", "On Dokkit's Alerts page, under Webhook, paste <code>https://your-home-assistant/api/webhook/</code> and that id.")],
+     "more": ["Leave <code>local_only</code> on when Dokkit and Home Assistant share a network. Turn it off only when the request comes in through Home Assistant Cloud."],
+     "body": '<div class="prompt small" data-fly="up"><pre id="ha">triggers:\n  - trigger: webhook\n    webhook_id: dokkit-change-this-id\n    allowed_methods: [POST]\n    local_only: true\nconditions:\n  - condition: template\n    value_template: "{{ trigger.json.event == \'opened\' }}"\nactions:\n  - action: notify.notify\n    data:\n      title: "{{ trigger.json.issue.title }} ({{ trigger.json.issue.machine }})"\n      message: "{{ trigger.json.issue.note or trigger.json.issue.id }}"</pre><button type="button" class="copy" data-copy="ha">Copy</button></div>'},
+]
+SOON = [("Slack", "Messages in a channel"), ("Discord", "Messages in a channel")]
+
+
+def channel_pages():
+    names = [c["name"] for c in CHANNELS]
+    for i, c in enumerate(CHANNELS):
+        setup = '        <p class="sub-p">On Dokkit\'s Alerts page, in Settings. Only the owner can change it.</p>\n        ' + fields(c["setup"])
+        arrives = c.get("body") or f'        <div data-fly="up">{c["arrives"]}</div>\n        <p class="note">The sample company\'s issue, as it would arrive.</p>'
+        more = '<ul class="did">' + "".join(f"<li>{m}</li>" for m in c["more"]) + "</ul>"
+        test = f'''        <p class="big-fact" data-fly="up">Under {e(c["name"])}, press <mark class="ok">Send a test</mark>. It says at once whether it went, or why not.</p>
+        {more}'''
+        nx = CHANNELS[(i + 1) % len(CHANNELS)]
+        page(f"alerts-{c['id']}.html", f"Dokkit alerts by {c['name']}", f"Setting up {c['name']} for Dokkit's alerts.",
+             [("alerts.html", "Alerts")], c["name"], c["lede"],
+             [("setup", "Set it up"), ("arrives", "What arrives" if not c.get("body") else "What it sends"), ("test", "Try it")],
+             step("setup", "Set it up", setup) + step("arrives", "What arrives" if not c.get("body") else "What it sends", arrives) + step("test", "Try it", test),
+             [("alerts.html", "Every channel", "How Dokkit decides who is told"), (f"alerts-{nx['id']}.html", nx["name"], nx["say"]), ("index.html", "Back to the start", "What Dokkit is, and the working sample")])
+
+
+def alerts_page():
+    rows = [
+        ("DOK-12", "nightly-purge did not run", "db-01 · a job · stopped", "When something stops", "Page", "PagerDuty", notif(SAMPLE[0], SAMPLE[1], "01:04"), None),
+        ("DOK-09", "upload-portal is answering slowly", "web-02 · a service · struggling", "When something is struggling", "Push", "ntfy", notif("upload-portal is answering slowly (web-02, DOK-09)", "Answers are taking 4.2 s, over its 2 s limit.", "09:40"), None),
+        ("DOK-14", "report-builder is answering slowly", "app-01 · a service set not to wake you · struggling", "Night, 22:00 to 07:00", "Push", "held until 07:00", notif("report-builder is answering slowly (app-01, DOK-14)", "Held through the night, then sent.", "07:00"), "opened at 02:15"),
+    ]
+    head = '<div class="rt routes-head"><span>The issue</span><span>What decides</span><span>Where</span><span>What arrives</span></div>'
+    body_rows = "".join(f'''<div class="rt" data-route>
+            <div><b><i class="s {"bad" if n == 0 else "warn"}"></i> {e(t)}</b><small>{e(sub)} · {k}</small></div>
+            <div><span class="via">{e(rule)}</span>{f'<span class="held">{held}</span>' if held else ""}</div>
+            <div><span class="to">{ch}</span><small>{e(where)}</small></div>
+            <div>{nt}</div>
+          </div>''' for n, (k, t, sub, rule, ch, where, nt, held) in enumerate(rows))
+    how = f'''        <p class="sub-p">An issue alerts once, when it opens, and what it raised is resolved when it closes. Its state picks the channel.</p>
+        <div class="routes" id="routes">{head}{body_rows}</div>
+        <ul class="did">
+          <li>Only the production environment alerts. Issues in other environments are listed, and stay quiet.</li>
+          <li>If something recovers and fails again inside 30 minutes, it is the same issue, and it stays quiet.</li>
+          <li>Tick more than one channel and each sends its own alert.</li>
+        </ul>'''
+    chan = "".join(f'<a class="nl" href="alerts-{c["id"]}.html"><b>{c["name"]}</b><small>{c["say"]}</small></a>' for c in CHANNELS)
+    chan += "".join(f'<span class="nl soon"><b>{n}</b><small>{s} · soon</small></span>' for n, s in SOON)
+    channels = f'''        <p class="sub-p">Each one is set up on Dokkit's Alerts page, in Settings, and has a Send a test button. Pick one to see its fields.</p>
+        <div class="next-links" data-fly="up">{chan}</div>'''
+    people = f'''        <p class="sub-p">Until you name people, an alert goes to the addresses set for each channel. Name them at four levels: the default, a rule, a service and a check. The most specific level that names someone decides.</p>
+        <div class="cards cards-2">
+          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>People</h3><p>Each person can have their own email, phone, iMessage address, ntfy topic, Pushover key and PagerDuty key. Send a test to one person from their row.</p></article>
+          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Rules</h3><p>A rule picks the channel and the people for a kind of issue, a state and a machine. The first rule that fits decides. A service's own routing comes first.</p></article>
+          <article class="wcard" data-fly="up"><h3><i class="s warn"></i>Night</h3><p>Choose when night starts and ends, and a time zone. A service set not to wake you holds its alerts until the night ends.</p></article>
+          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Limits</h3><p>The percent of a disk, or of memory for three minutes running, that needs a look. Leave either blank to switch it off.</p></article>
+        </div>'''
+    itself = '''        <p class="big-fact" data-fly="up">Dokkit cannot tell anyone that it is down. Give it <mark class="n">an outside heartbeat</mark>: an https address it calls every minute, at a service that alerts when the calls stop.</p>
+        <ul class="did">
+          <li>When Dokkit stops taking reports or cannot reach its database, it tells you on the loudest channel that is set up, unless you choose one.</li>
+          <li>Lesser trouble, such as an archive folder it cannot write to or a certificate close to running out, has its own choice.</li>
+        </ul>'''
+    page("alerts.html", "Where Dokkit alerts reach you", "Every channel Dokkit can alert through, how it decides who is told, and how to set each one up.",
+         [], "Alerts", "Dokkit tells you when something needs you, on <mark class=\"n\">the channels you set up</mark>: paging for what cannot wait, a quiet push for today, and email for the morning.",
+         [("how", "How it decides"), ("channels", "The channels"), ("people", "People and rules"), ("itself", "When Dokkit is down")],
+         step("how", "How it decides", how) + step("channels", "The channels", channels) + step("people", "People and rules", people) + step("itself", "When Dokkit is down", itself),
+         [("alerts-pagerduty.html", "Set up paging", "PagerDuty, for what cannot wait"), ("phone.html", "The phone app", "See what needs you, read-only"), ("install.html", "Install the server", "So there is something to be told about")],
+         js="alerts.js")
+
+
+SCOPES = [("read", "Read", "Read states, issues, jobs and errors", "Every token has it."),
+          ("read-logs", "Read logs", "Read what is written in the logs", "Switch it on for the token."),
+          ("act", "Act", "Snooze, mark as seen, watch, plan downtime", "Switch it on for the token."),
+          ("admin", "Admin", "Everything you can do: keys, people, rules, checks", "A full-control token, made only after you type the server's address.")]
+
+
+def tools_page():
+    tools = read("mcp-tools.json")
+    body = f'''        <p class="sub-p">The address is your server's address with <code>/mcp</code> on the end, and the token goes in <code>Authorization: Bearer</code>. An agent is offered only the tools its token allows.</p>
+        <div class="find-tools"><input type="search" id="findTool" placeholder="Find a tool, such as snooze or logs" aria-label="Find a tool" autocomplete="off"><output id="toolCount" for="findTool">{len(tools)} tools</output></div>'''
+    secs = step("find", "Find a tool", body)
+    for sid, name, switch, say in SCOPES:
+        mine = [t for t in tools if t["scope"] == sid]
+        rows = "".join(f'''<div class="tool" id="t-{t["name"]}" data-tool="{t["name"]} {e(t["description"].lower())}"><code>{t["name"]}</code><div><p>{e(t["description"])}</p>{('<div class="args">' + "".join(f'<code class="{"req" if a in t["required"] else ""}">{a}{"" if a not in t["required"] else " *"}</code>' for a in sorted(t["args"], key=lambda a: (a not in t["required"], a))) + "</div>") if t["args"] else ""}</div></div>''' for t in mine)
+        inner = f'''        <p class="scope-say"><code class="{"adm" if sid == "admin" else ""}">{sid}</code><span>{switch}. {say}</span></p>
+        <div class="tlist">{rows}</div>'''
+        secs += step(sid, f"{name} <span>{len(mine)}</span>", inner).replace('<section class="step"', '<section class="step scope-sec"')
+    page("mcp-tools.html", "Dokkit's MCP tools", f"All {len(tools)} tools of a Dokkit server's MCP, and the token access each one needs.",
+         [("agents.html", "Agents")], "MCP tools",
+         f"Every tool a Dokkit server's MCP offers, all <mark class=\"n\">{len(tools)}</mark>, grouped by the token access each one needs. Arguments marked * are required.",
+         [("find", "Find a tool")] + [(s, f"{n} · {sum(t['scope'] == s for t in tools)}") for s, n, _, _ in SCOPES],
+         secs, [("agents.html", "Connect an agent", "The prompt, the MCP address and the token"), ("api.html", "The API", "Every call, for scripts"), ("index.html", "Back to the start", "What Dokkit is, and the working sample")],
+         js="mcp-tools.js")
+
+
+def changelog_page():
+    rels = read("changelog.json")
+    days = {}
+    for r in rels:
+        days.setdefault(datetime.fromisoformat(r["at"]).strftime("%Y-%m-%d"), []).append(r)
+    word = lambda d: datetime.strptime(d, "%Y-%m-%d").strftime("%-d %B" if os.name != "nt" else "%#d %B")
+    secs = ""
+    first = True
+    for d, rs in days.items():
+        rows = ""
+        for r in rs:
+            at = datetime.fromisoformat(r["at"]).strftime("%H:%M")
+            ch, rest = r["changes"][:4], r["changes"][4:]
+            lis = "".join(f"<li>{e(c)}</li>" for c in ch)
+            more = f'<details class="card"><summary>{len(rest)} more <small>changes</small></summary><div class="card-body"><ul>{"".join(f"<li>{e(c)}</li>" for c in rest)}</ul></div></details>' if rest else ""
+            rows += f'<article class="rls{" latest" if first else ""}" id="{r["version"]}"><div><code>{r["version"]}</code><time datetime="{r["at"]}">{at} Pacific</time></div><div><ul>{lis}</ul>{more}</div></article>'
+            first = False
+        secs += step("d" + d, word(d), f'        <div class="cl">{rows}</div>')
+    lede = f"Every release, newest first: {len(rels)} since {word(list(days)[-1])}, in the words of the change itself."
+    feed = '        <p class="feedline"><a href="changelog.xml">The feed</a><span>for a reader that follows it</span><a href="https://github.com/nathannncurtis/dokkit/releases">The releases on GitHub</a><span>with the files</span></p>'
+    secs = secs.replace('<div class="cl">', feed + '\n        <div class="cl">', 1)
+    page("changelog.html", "Dokkit changelog", "Every Dokkit release, newest first, in plain words for someone running it.",
+         [], "Changelog", lede, [("d" + d, word(d)) for d in days], secs,
+         [("security.html", "Check a release yourself", "The release key and three commands"), ("install.html", "Install it", "The server, then the program on each machine"), ("index.html", "Back to the start", "What Dokkit is, and the working sample")])
+
+
+channel_pages()
+alerts_page()
+tools_page()
+changelog_page()
+print("wrote", len(CHANNELS) + 3, "pages")
