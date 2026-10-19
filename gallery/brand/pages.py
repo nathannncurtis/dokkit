@@ -19,7 +19,7 @@ def page(file, title, desc, crumbs, h1, lede, steps, body, nxt, js=None, current
     crumb = "".join(f'<a href="{h}">{t}</a><span aria-hidden="true">/</span>' for h, t in crumbs)
     rail = "".join(f'<li><a href="#{i}" data-step="{i}"><i>{n}</i>{t}</a></li>' for n, (i, t) in enumerate(steps, 1))
     links = "".join(f'<a class="nl" href="{h}"><b>{b}</b><small>{s}</small></a>' for h, b, s in nxt)
-    script = f'<script src="{js}?v={V}"></script>' if js else ""
+    script = "".join(f'<script src="{j}?v={V}"></script>\n' for j in ([js] if isinstance(js, str) else js or []))
     html = f'''<!doctype html>
 <html lang="en">
 <head>
@@ -296,8 +296,49 @@ def changelog_page():
          [("security.html", "Check a release yourself", "The release key and three commands"), ("install.html", "Install it", "The server, then the program on each machine"), ("index.html", "Back to the start", "What Dokkit is, and the working sample")])
 
 
+def check_page():
+    try_it = """        <p class="sub-p">Write or paste a <code>dokkit.toml</code>. The program's own checking code, built for the browser, reads it as you type. Nothing leaves this page.</p>
+        <div class="ex-row" role="group" aria-label="Start from"><span>Start from</span><button type="button" data-ex="web" class="on">A web app</button><button type="button" data-ex="worker">A worker with jobs</button><button type="button" data-ex="win">A Windows app</button><button type="button" data-ex="bad">One with a mistake</button></div>
+        <div class="play" id="play">
+          <div class="ed">
+            <div class="ed-top"><span>dokkit.toml</span><small id="edPos"></small></div>
+            <div class="ed-body"><pre class="gut" id="gut" aria-hidden="true"></pre><div class="ed-txt"><pre class="hl" id="hl" aria-hidden="true"></pre><textarea id="src" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="dokkit.toml" wrap="off"></textarea></div></div>
+          </div>
+          <div class="res" aria-live="polite">
+            <p class="verdict" id="verdict"><i class="s none"></i><span>Loading the checker</span></p>
+            <div id="plan"></div>
+            <details class="card inner sends" id="sendsCard"><summary>What <code>dokkit apply</code> sends <small>JSON</small></summary><div class="card-body"><pre id="sends"></pre></div></details>
+          </div>
+        </div>"""
+    machine = """        <p class="big-fact" data-fly="up">The browser can read the file, but only your machine can make the checks. On the machine, <code>dokkit check</code> does both, and prints <mark class="n">exactly what would be sent</mark>. It needs no server.</p>
+        <div class="cmd" data-fly="left"><code id="cCheck">dokkit check dokkit.toml</code><button type="button" class="copy" data-copy="cCheck">Copy</button></div>
+        <div class="prompt small" data-fly="up"><pre>dokkit.toml: upload-portal, 3 check(s)
+  ok   http           http://localhost:8080/
+       would send {"at":"2026-10-19T05:52:28.4482109Z","check":"http","service":"upload-portal","state":"ok","type":"state","value":11}
+  ok   tcp            port 8080
+       would send {"at":"2026-10-19T05:52:28.4487947Z","check":"tcp","service":"upload-portal","state":"ok","type":"state","value":0}
+  worker             reported by the app, not run here</pre></div>
+        <p class="note">It exits with 1 when a check fails, so a build can stop on it.</p>"""
+    refuses = """        <p class="sub-p">The same rules the server applies when the file is declared, in its words, and three more about what the program reads itself.</p>
+        <ul class="did" data-fly="up">
+          <li>A file without <code>schema = 1</code>, or a <code>[service]</code> without an <code>id</code>.</li>
+          <li>A <code>service.id</code> with anything but lower-case letters, digits, dots, dashes and underscores.</li>
+          <li>A <code>service.kind</code> that is not <code>service</code>, <code>job</code>, <code>dependency</code> or <code>app</code>.</li>
+          <li>A job without an <code>id</code>, or a <code>schedule</code> that is not a cron line. <code>@reboot</code> has no time and is refused.</li>
+          <li>A <code>fail_after</code> that is not a whole number from 1 to 100, and times that are not like <code>30s</code> or <code>5m</code>.</li>
+          <li>A <code>key_env</code> that does not start with <code>DOKKIT_STATS_</code>, a stats address that is not http or https, and a logs path that leaves the file's folder.</li>
+        </ul>"""
+    page("check.html", "Check a dokkit.toml", "Write a dokkit.toml and see, as you type, what Dokkit will watch and what it would send.",
+         [], "Check a file", "Write a <code>dokkit.toml</code> and see, as you type, whether Dokkit accepts it, <mark class=\"n\">what it will watch</mark>, and what would be sent.",
+         [("try", "Try a file"), ("machine", "On your machine"), ("refuses", "What it refuses")],
+         step("try", "Try a file", try_it) + step("machine", "On your machine", machine) + step("refuses", "What it refuses", refuses),
+         [("libraries.html", "Add the library", "For the checks your app reports itself"), ("agents.html", "Let an agent write it", "One prompt, and it runs dokkit check for you"), ("install.html", "Install it", "The server, then the program on each machine")],
+         js=["wasm_exec.js", "check.js"])
+
+
 channel_pages()
 alerts_page()
 tools_page()
 changelog_page()
+check_page()
 print("wrote", len(CHANNELS) + 3, "pages")
