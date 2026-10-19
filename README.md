@@ -161,7 +161,7 @@ The mock and the product run on invented data. What is left to do first:
 
 ## Licence
 
-When this is public: the server is AGPL 3.0, and the `dokkit` program and the libraries are Apache 2.0.
+The server (`server/`) is AGPL 3.0. The `dokkit` program (`program/`), the libraries (`clients/`) and the phone apps (`apps/`) are Apache 2.0. Each folder carries its own `LICENSE`.
 
 ## The name
 
