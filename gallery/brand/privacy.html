@@ -13,6 +13,17 @@
 <link rel="stylesheet" href="site.css?v=20">
 <script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m !== "off"; if (!on) document.documentElement.classList.add("still"); })();</script>
 <link rel="stylesheet" href="nav.css?v=1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Dokkit">
+<meta property="og:title" content="Dokkit privacy">
+<meta property="og:description" content="What dokkit.dev and its small services keep, and what they do not.">
+<meta property="og:url" content="https://dokkit.dev/privacy.html">
+<meta property="og:image" content="https://dokkit.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Dokkit mark and name on dark brown, with the line: one place that says what needs a look.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://dokkit.dev/privacy.html">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -49,8 +60,9 @@
       <section class="step" id="site">
         <h2 data-type>This site</h2>
         <ul class="did">
-          <li>dokkit.dev is a static site served by GitHub Pages. It sets no cookies, runs no analytics and has no forms that send anything.</li>
-          <li>Its pages load fonts from Google Fonts and scripts from cdnjs and unpkg, so those services see your address when a page loads, as GitHub does for the page itself.</li>
+          <li>dokkit.dev is a static site served by GitHub Pages. It sets no cookies and has no forms that send anything.</li>
+          <li>It counts visits with Cloudflare Web Analytics: which page was seen, roughly where from, and how fast it loaded. That counter sets no cookies and keeps nothing that identifies you.</li>
+          <li>Its pages load fonts from Google Fonts and scripts from cdnjs and unpkg, and the counter from Cloudflare, so those services see your address when a page loads, as GitHub does for the page itself.</li>
           <li>The Check a file and Move over pages work entirely in your browser. What you type or drop there is not sent anywhere.</li>
         </ul>
       </section>
@@ -101,5 +113,6 @@
 <script>railFor($$(".step"), $$(".rail a"));</script>
 <script src="motion.js?v=20"></script>
 <script src="nav.js?v=1"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "9c697efa266343149d988907066e0008"}'></script>
 </body>
 </html>

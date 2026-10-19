@@ -1,0 +1,6 @@
+Contact: mailto:abuse@dokkit.dev
+Contact: https://github.com/nathannncurtis/dokkit/security/advisories/new
+Expires: 2027-10-19T11:03:10.000Z
+Preferred-Languages: en
+Canonical: https://dokkit.dev/.well-known/security.txt
+Policy: https://dokkit.dev/security.html

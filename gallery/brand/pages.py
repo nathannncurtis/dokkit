@@ -414,8 +414,9 @@ https://your.domain.com/api/v1/in/&lt;app key&gt;/job/&lt;job id&gt;/fail</pre><
 
 def privacy_page():
     site = """        <ul class="did">
-          <li>dokkit.dev is a static site served by GitHub Pages. It sets no cookies, runs no analytics and has no forms that send anything.</li>
-          <li>Its pages load fonts from Google Fonts and scripts from cdnjs and unpkg, so those services see your address when a page loads, as GitHub does for the page itself.</li>
+          <li>dokkit.dev is a static site served by GitHub Pages. It sets no cookies and has no forms that send anything.</li>
+          <li>It counts visits with Cloudflare Web Analytics: which page was seen, roughly where from, and how fast it loaded. That counter sets no cookies and keeps nothing that identifies you.</li>
+          <li>Its pages load fonts from Google Fonts and scripts from cdnjs and unpkg, and the counter from Cloudflare, so those services see your address when a page loads, as GitHub does for the page itself.</li>
           <li>The Check a file and Move over pages work entirely in your browser. What you type or drop there is not sent anywhere.</li>
         </ul>"""
     software = """        <p class="big-fact" data-fly="up">Dokkit runs on <mark class="n">your own hardware</mark>. What it collects stays on your server, and nothing in the program, the server or the libraries reports to dokkit.dev.</p>"""
@@ -472,6 +473,23 @@ changelog_page()
 check_page()
 move_page()
 privacy_page()
+
+
+def not_found():
+    body = """        <p class="big-fact" data-fly="up">Nothing lives at this address. It may have moved, or the link may have a typo in it.</p>"""
+    page("404.html", "Not found · Dokkit", "Nothing lives at this address.",
+         [], "Not found", "That page is not here. The rest of the site is.",
+         [("gone", "Where to go")], step("gone", "Where to go", body),
+         [("index.html", "Back to the start", "What Dokkit is, and the working sample"), ("install.html", "Install", "Get it running"), ("changelog.html", "Changelog", "What changed, release by release")])
+    # served at any missing path, so every relative link must resolve from the root
+    f = os.path.join(os.path.dirname(os.path.abspath(__file__)), "404.html")
+    s = open(f, encoding="utf-8").read()
+    if '<base href="/">' not in s:
+        s = s.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n<base href="/">', 1)
+        open(f, "w", encoding="utf-8", newline="\n").write(s)
+
+
+not_found()
 terms_page()
 print("wrote", len(CHANNELS) + 7, "pages")
 

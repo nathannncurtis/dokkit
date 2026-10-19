@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://dokkit.dev/agents.html</loc></url>
+  <url><loc>https://dokkit.dev/alerts-discord.html</loc></url>
+  <url><loc>https://dokkit.dev/alerts-email.html</loc></url>
+  <url><loc>https://dokkit.dev/alerts-home-assistant.html</loc></url>
+  <url><loc>https://dokkit.dev/alerts-imessage.html</loc></url>
+  <url><loc>https://dokkit.dev/alerts-ntfy.html</loc></url>
+  <url><loc>https://dokkit.dev/alerts-pagerduty.html</loc></url>
+  <url><loc>https://dokkit.dev/alerts-pushover.html</loc></url>
+  <url><loc>https://dokkit.dev/alerts-slack.html</loc></url>
+  <url><loc>https://dokkit.dev/alerts-sms.html</loc></url>
+  <url><loc>https://dokkit.dev/alerts-webhook.html</loc></url>
+  <url><loc>https://dokkit.dev/alerts.html</loc></url>
+  <url><loc>https://dokkit.dev/api.html</loc></url>
+  <url><loc>https://dokkit.dev/changelog.html</loc></url>
+  <url><loc>https://dokkit.dev/check.html</loc></url>
+  <url><loc>https://dokkit.dev/cli.html</loc></url>
+  <url><loc>https://dokkit.dev/</loc></url>
+  <url><loc>https://dokkit.dev/install.html</loc></url>
+  <url><loc>https://dokkit.dev/libraries.html</loc></url>
+  <url><loc>https://dokkit.dev/mcp-tools.html</loc></url>
+  <url><loc>https://dokkit.dev/move.html</loc></url>
+  <url><loc>https://dokkit.dev/phone.html</loc></url>
+  <url><loc>https://dokkit.dev/privacy.html</loc></url>
+  <url><loc>https://dokkit.dev/security.html</loc></url>
+  <url><loc>https://dokkit.dev/terms.html</loc></url>
+</urlset>

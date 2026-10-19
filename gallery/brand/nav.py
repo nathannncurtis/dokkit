@@ -117,6 +117,37 @@ def pager(page):
     return f'<nav class="pager" aria-label="Where to go next">{out}</nav>{extra}'
 
 
+SITE = "https://dokkit.dev"
+BEACON = """<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "9c697efa266343149d988907066e0008"}'></script>"""
+NOINDEX = {"navbar.html"}
+
+
+def social(page, s):
+    """Link-preview tags and the visit counter, added once to every page."""
+    if 'property="og:image"' not in s:
+        t = re.search(r"<title>(.*?)</title>", s, re.S)
+        d = re.search(r'<meta name="description" content="([^"]*)"', s)
+        title = t.group(1).strip() if t else "Dokkit"
+        desc = d.group(1) if d else "Self-hosted monitoring that says what needs a look."
+        url = SITE + "/" + ("" if page == "index.html" else page)
+        tags = (f'<meta property="og:type" content="website">\n<meta property="og:site_name" content="Dokkit">\n'
+                f'<meta property="og:title" content="{title}">\n<meta property="og:description" content="{desc}">\n'
+                f'<meta property="og:url" content="{url}">\n<meta property="og:image" content="{SITE}/og.png">\n'
+                f'<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n'
+                f'<meta property="og:image:alt" content="The Dokkit mark and name on dark brown, with the line: one place that says what needs a look.">\n'
+                f'<meta name="twitter:card" content="summary_large_image">\n<link rel="canonical" href="{url}">\n')
+        s = s.replace("</head>", tags + "</head>", 1)
+    if "cloudflareinsights" not in s:
+        s = s.replace("</body>", BEACON + "\n</body>", 1)
+    return s
+
+
+def sitemap(pages):
+    rows = "".join(f"  <url><loc>{SITE}/{'' if p == 'index.html' else p}</loc></url>\n" for p in pages)
+    open(os.path.join(here, "sitemap.xml"), "w", encoding="utf-8", newline="\n").write(
+        '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + rows + "</urlset>\n")
+
+
 def apply(path):
     page = os.path.basename(path)
     s = open(path, encoding="utf-8").read()
@@ -146,6 +177,8 @@ def apply(path):
             s = s.replace(end, f"\n      {p}{end}", 1)
         else:
             s = s.replace("</main>", f"{p}\n</main>", 1)
+    if page not in NOINDEX:
+        s = social(page, s)
     open(path, "w", encoding="utf-8", newline="\n").write(s)
     return True
 
@@ -168,3 +201,4 @@ if __name__ == "__main__":
     names_copy()
     done = [os.path.basename(f) for f in sorted(glob.glob(os.path.join(here, "*.html"))) if apply(f)]
     print("navigation on", len(done), "pages")
+    sitemap([p for p in done if p not in NOINDEX and p != "404.html"])
