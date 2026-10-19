@@ -2,7 +2,7 @@
 
 A read-only view of a Dokkit server, for a server that is not on the internet. It shows what needs attention and the state of every machine and service, from the sealed snapshots a relay holds. It cannot change anything on the server and sends no notifications.
 
-The project does not publish the app. You build it and sign it with your own Apple account.
+The app is not on the App Store yet. Until it is, you build it and sign it with your own Apple account.
 
 ## Build and install
 
