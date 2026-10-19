@@ -278,3 +278,4 @@ footer nav a { font-size: 16px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } html { scroll-behavior: auto; } }
 .lede .cmd code { white-space: normal; height: auto; min-height: 42px; padding: 10px 14px; line-height: 1.5; overflow-wrap: anywhere; }
 .lede .cmd { align-items: start; }
+.nav nav a[aria-current="page"] { color: var(--ink); }
