@@ -204,13 +204,12 @@ new IntersectionObserver(([e]) => {
   }
 }, { threshold: 0.35 }).observe($(".frame"));
 
-// With motion on, the page stops at each of these moments and the scroll plays them through.
+// With motion on, these moments play by themselves when they reach the top, and the page waits for them.
 if (pinned) {
   gsap.registerPlugin(ScrollTrigger);
   document.documentElement.classList.add("pinned");
-  pinRound();
-  pinWatches();
-  pinDoors();
+  holdRound();
+  holdWatches();
 }
 
 function typeIn(tl, el, duration, at) {
@@ -219,7 +218,22 @@ function typeIn(tl, el, duration, at) {
   tl.to(p, { v: 1, duration, ease: "none", onUpdate: () => showLetters(chars, p.v) }, at);
 }
 
-function pinRound() {
+// Plays the timeline once, the first time its section reaches the top going down, with the scroll held until it ends.
+function holdFor(section, tl, start) {
+  ScrollTrigger.create({
+    trigger: section, start, once: true,
+    onEnter: () => {
+      const lenis = window.dokkitScroll;
+      lenis?.scrollTo(section, { immediate: true, force: true, offset: start === "top top" ? 0 : -innerHeight * 0.12 });
+      lenis?.stop();
+      document.documentElement.classList.add("held");
+      tl.eventCallback("onComplete", () => { lenis?.start(); document.documentElement.classList.remove("held"); });
+      tl.play();
+    },
+  });
+}
+
+function holdRound() {
   const list = $("#list"), pane = $(".pane"), frame = $(".frame");
   const kinds = ["http", "disk", "tcp :443", "process", "service", "backup", "cert", "memory"];
   const flagged = { 7: 0, 23: 1, 41: 2 };
@@ -238,64 +252,41 @@ function pinRound() {
   const to = line.querySelector(".s").getBoundingClientRect();
   const fold = oks.map((t) => { const r = t.getBoundingClientRect(); return [to.left - r.left, to.top - r.top]; });
   const lift = flags.map((t, i) => { const a = t.getBoundingClientRect(), b = rows[i].getBoundingClientRect(); return [b.left - a.left, b.top - a.top]; });
-  const caps = $$("#cap span"), n = { v: 0 };
+  const caps = $$("#cap span"), n = { v: 0 }, label = $(".sample .label");
+  label.removeAttribute("data-type");
   gsap.set([...rows, line], { opacity: 0 });
   gsap.set(tiles, { opacity: 0, y: 14, scale: 0.94 });
   gsap.set(caps, { opacity: 0, y: 10 });
-  gsap.set(frame, { transformPerspective: 1600, transformOrigin: "50% 0%" });
   frame.style.pointerEvents = "none";
 
-  const tl = gsap.timeline({
-    scrollTrigger: { trigger: "#sample", start: "top top", end: "+=2600", pin: true, scrub: 0.6, anticipatePin: 1,
-      onUpdate: (st) => { frame.style.pointerEvents = st.progress > 0.97 ? "" : "none"; } },
-    onComplete: () => setTimeout(recover, 6000),
-  });
-  tl.fromTo(frame, { rotateX: 14, scale: 0.92, y: 50 }, { rotateX: 0, scale: 1, y: 0, duration: 0.5, ease: "power2.out" })
-    .to(caps[0], { opacity: 1, y: 0, duration: 0.2 }, 0.1)
-    .to(tiles, { opacity: 1, y: 0, scale: 1, stagger: 0.012, duration: 0.3, ease: "power2.out" }, 0.2)
+  const tl = gsap.timeline({ paused: true, onComplete: () => { frame.style.pointerEvents = ""; box.remove(); setTimeout(recover, 6000); } });
+  tl.to(caps[0], { opacity: 1, y: 0, duration: 0.3 }, 0)
+    .to(tiles, { opacity: 1, y: 0, scale: 1, stagger: 0.011, duration: 0.3, ease: "power2.out" }, 0.1)
     .to({}, { duration: 0.6 })
-    .to(caps[0], { opacity: 0, y: -10, duration: 0.15 })
-    .to(caps[1], { opacity: 1, y: 0, duration: 0.2 }, "<")
-    .to(line, { opacity: 1, duration: 0.2 }, "<")
-    .to(oks, { x: (i) => fold[i][0], y: (i) => fold[i][1], scale: 0.18, opacity: 0, stagger: 0.008, duration: 0.4, ease: "power2.in" }, "<")
-    .to(n, { v: 57, duration: 0.4 + 0.008 * 56, ease: "none", onUpdate: () => (count.textContent = Math.round(n.v)) }, "<")
-    .to({}, { duration: 0.2 })
-    .to(caps[1], { opacity: 0, y: -10, duration: 0.15 })
-    .to(caps[2], { opacity: 1, y: 0, duration: 0.2 }, "<")
-    .to(flags, { x: (i) => lift[i][0], y: (i) => lift[i][1], opacity: 0, duration: 0.45, ease: "power3.inOut" }, "<")
-    .fromTo(rows, { x: (i) => -lift[i][0], y: (i) => -lift[i][1], opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, "<0.05")
-    .to({}, { duration: 0.7 });
+    .to(caps[0], { opacity: 0, y: -10, duration: 0.2 })
+    .to(caps[1], { opacity: 1, y: 0, duration: 0.3 }, "<")
+    .to(line, { opacity: 1, duration: 0.3 }, "<")
+    .to(oks, { x: (i) => fold[i][0], y: (i) => fold[i][1], scale: 0.18, opacity: 0, stagger: 0.009, duration: 0.5, ease: "power2.in" }, "<")
+    .to(n, { v: 57, duration: 0.5 + 0.009 * 56, ease: "none", onUpdate: () => (count.textContent = Math.round(n.v)) }, "<")
+    .to({}, { duration: 0.3 })
+    .to(caps[1], { opacity: 0, y: -10, duration: 0.2 })
+    .to(caps[2], { opacity: 1, y: 0, duration: 0.3 }, "<")
+    .to(flags, { x: (i) => lift[i][0], y: (i) => lift[i][1], opacity: 0, duration: 0.6, ease: "power3.inOut" }, "<")
+    .fromTo(rows, { x: (i) => -lift[i][0], y: (i) => -lift[i][1], opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.7, ease: "power3.out" }, "<0.05")
+    .to({}, { duration: 0.1 });
+  typeIn(tl, label, 0.5, ">");
+  holdFor("#sample", tl, "top top");
 }
 
-function pinWatches() {
+function holdWatches() {
   const sec = $(".watches"), h = $("h2", sec), cards = $$(".wcard", sec);
   h.removeAttribute("data-type");
   cards.forEach((c) => c.removeAttribute("data-fly"));
-  const tl = gsap.timeline({ scrollTrigger: { trigger: sec, start: "top top", end: "+=1500", pin: true, scrub: 0.6, anticipatePin: 1 } });
+  gsap.set(cards, { opacity: 0, y: 60, scale: 0.97 });
+  gsap.set(".sub-lede", { opacity: 0, y: 14 });
+  const tl = gsap.timeline({ paused: true });
   typeIn(tl, h, 0.9, 0);
-  tl.from(".sub-lede", { opacity: 0, y: 16, duration: 0.25 }, 0.8)
-    .from(cards, { opacity: 0, y: 70, scale: 0.96, stagger: 0.12, duration: 0.45, ease: "power3.out" }, 1)
-    .to({}, { duration: 0.5 });
-}
-
-function pinDoors() {
-  const sec = $(".doors"), doors = $$(".door", sec);
-  sec.classList.add("stacked");
-  doors.forEach((d) => {
-    $("h3", d).removeAttribute("data-type");
-    $("p", d).removeAttribute("data-fly");
-    $("ul", d).removeAttribute("data-fly-each");
-  });
-  const tl = gsap.timeline({ scrollTrigger: { trigger: sec, start: "top 12%", end: "+=" + doors.length * 900, pin: true, scrub: 0.6, anticipatePin: 1 } });
-  doors.forEach((d, i) => {
-    const at = i * 1.6;
-    if (i) tl.fromTo(d, { opacity: 0, x: 120 }, { opacity: 1, x: 0, duration: 0.4, ease: "power3.out" }, at);
-    else gsap.set(d, { opacity: 1 });
-    typeIn(tl, $("h3", d), 0.4, at + 0.1);
-    tl.from($("p", d), { opacity: 0, y: 30, duration: 0.35 }, at + 0.25)
-      .from($$("li", d), { opacity: 0, x: 60, stagger: 0.08, duration: 0.3 }, at + 0.35);
-    if (i < doors.length - 1) tl.to(d, { opacity: 0, x: -120, duration: 0.4, ease: "power2.in" }, at + 1.3);
-  });
-  tl.to({}, { duration: 0.4 });
-  doors.slice(1).forEach((d) => gsap.set(d, { opacity: 0 }));
+  tl.to(".sub-lede", { opacity: 1, y: 0, duration: 0.3 }, 0.8)
+    .to(cards, { opacity: 1, y: 0, scale: 1, stagger: 0.08, duration: 0.5, ease: "power3.out" }, 0.95);
+  holdFor(sec, tl, "top 12%");
 }
