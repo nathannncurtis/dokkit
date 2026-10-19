@@ -374,7 +374,7 @@ html.held { overflow: hidden; }
 .phone-node { padding: 14px; justify-items: center; background: none; border: 0; }
 .handset { position: relative; width: 100%; max-width: 270px; }
 .handset img { display: block; width: 100%; height: auto; filter: drop-shadow(0 30px 40px #000a); }
-.screen-off { position: absolute; inset: 0; background: #0c0a09; clip-path: polygon(32.2% 7.9%, 84.4% 5.3%, 66.2% 92.4%, 12.7% 90.1%); opacity: 0; }
+.screen-off { position: absolute; inset: 0; background: #0c0a09; clip-path: inset(5.95% 14.08% 6.32% 14.08% round 9% / 5%); opacity: 0; }
 .env { position: absolute; left: 0; top: 0; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: var(--acc); color: var(--acc-ink); box-shadow: 0 10px 20px -10px #000; --shut: 0; }
 .env svg { width: 22px; height: 22px; }
 .env .shackle { transform: translateY(calc((1 - var(--shut)) * -3.5px)); }
