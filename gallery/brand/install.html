@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install Dokkit</title>
+<meta name="description" content="Install the Dokkit server, then the dokkit program on each machine you want watched.">
+<meta name="theme-color" content="#1e1917">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css?v=4">
+<script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); })();</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></symbol>
+</svg>
+
+<header class="bar">
+  <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+  <nav aria-label="Site">
+    <a href="install.html" aria-current="page">Install</a><span class="soon" title="Not built yet">Demo</span><span class="soon" title="Not built yet">Agents</span><a href="api.html">Docs</a><span class="soon" title="Not built yet">Phone</span><span class="soon" title="Not built yet">Security</span><span class="soon" title="Not built yet">Status</span><a href="https://github.com/nathannncurtis/dokkit">Source</a>
+  </nav>
+  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
+  <a class="claim" href="install.html">Claim a name <em>soon</em></a>
+</header>
+
+<main id="top" class="page">
+  <header class="phead">
+    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><b>Install</b></p>
+    <h1 class="ptitle">Install</h1>
+    <p class="plede">One server, then a small program on each machine you want watched. Four steps, in order. The step you are on is always marked.</p>
+  </header>
+
+  <div class="steps-wrap">
+    <nav class="rail" aria-label="Steps">
+      <ol>
+        <li><a href="#server" data-step="server"><i>1</i>The server</a></li>
+        <li><a href="#first" data-step="first"><i>2</i>The first visit</a></li>
+        <li><a href="#machines" data-step="machines"><i>3</i>Each machine</a></li>
+        <li><a href="#apps" data-step="apps"><i>4</i>Each app</a></li>
+      </ol>
+      <span class="rail-fill" id="railFill" aria-hidden="true"></span>
+    </nav>
+
+    <div class="steps">
+      <section class="step" id="server">
+        <p class="stepno">Step 1 of 4</p>
+        <h2 data-type>The server</h2>
+        <p class="sentence">It will run on
+          <span class="choose" role="radiogroup" aria-label="Where the server runs">
+            <button type="button" role="radio" aria-checked="true" data-server="linux">a Debian or Ubuntu box</button><button type="button" role="radio" aria-checked="false" data-server="windows">a Windows machine</button>
+          </span>.
+        </p>
+
+        <div data-for="linux">
+          <p class="sentence sub">Its address is <label class="named"><span class="sr">Its domain</span><input id="domain" value="dokkit.example.com" spellcheck="false" autocomplete="off" size="18"></label>, already pointing at that machine.</p>
+          <div class="cmd" data-fly="left"><code id="cmdLinux"></code><button type="button" class="copy" data-copy="cmdLinux">Copy</button></div>
+          <ul class="did" data-fly="up">
+            <li>Installs Docker and its compose plugin if they are missing, and writes its settings to <code>/opt/dokkit/.env</code>.</li>
+            <li>Starts three containers: <mark class="n">Postgres 17</mark>, the Dokkit server, and Caddy, which gets and renews the certificate for <span class="echo" data-echo="domain"></span> by itself.</li>
+            <li>Waits until the server answers over https, then prints the address and <mark class="warn">a setup code</mark> for the first visit.</li>
+          </ul>
+        </div>
+
+        <div data-for="windows" hidden>
+          <p class="sentence sub">Its database is
+            <span class="choose" role="radiogroup" aria-label="The database">
+              <button type="button" role="radio" aria-checked="true" data-db="own">a Postgres of its own</button><button type="button" role="radio" aria-checked="false" data-db="yours">a Postgres I already run</button>
+            </span><span id="dbWrap" hidden>, at <label class="named"><span class="sr">Connection address</span><input id="dburl" value="ecto://dokkit:password@localhost/dokkit" spellcheck="false" autocomplete="off" size="30"></label></span>.
+          </p>
+          <div class="cmd" data-fly="left"><code id="cmdWindows"></code><button type="button" class="copy" data-copy="cmdWindows">Copy</button></div>
+          <ul class="did" data-fly="up">
+            <li>Run it from <mark class="n">an administrator PowerShell</mark>.</li>
+            <li>Fetches the release and refuses it unless its checksums carry <mark class="ok">a valid signature</mark> from the release key.</li>
+            <li id="didOwn">The first time, sets up Postgres 17 as a Windows service of its own that listens on this machine only.</li>
+            <li>Installs Dokkit as a Windows service and starts it. Without a certificate it serves plain http to <mark class="warn">this machine only</mark>; give it one with <code>-Cert</code> and <code>-CertKey</code>, or get one later in Settings.</li>
+          </ul>
+        </div>
+
+        <div class="needs" data-fly="up">
+          <h3>What the server needs</h3>
+          <div class="table" role="table" aria-label="What the server needs">
+            <div class="tr th" role="row"><span role="columnheader"></span><span role="columnheader">Minimum</span><span role="columnheader">Recommended</span></div>
+            <div class="tr" role="row"><span role="cell">Processor</span><span role="cell">1 core</span><span role="cell">2 cores</span></div>
+            <div class="tr" role="row"><span role="cell">Memory</span><span role="cell">1 GB</span><span role="cell">2 GB</span></div>
+            <div class="tr" role="row"><span role="cell">Disk</span><span role="cell">20 GB</span><span role="cell">40 GB, more if you keep a lot of logs</span></div>
+          </div>
+          <p class="note">Estimates for about ten machines and sixty services. They have not been measured yet.</p>
+        </div>
+      </section>
+
+      <section class="step" id="first">
+        <p class="stepno">Step 2 of 4</p>
+        <h2 data-type>The first visit</h2>
+        <ol class="do" data-fly="up">
+          <li>Open <span class="addr" data-echo="address"></span> in a browser.</li>
+          <li>Type the <mark class="warn">setup code</mark> the server printed when it started. It is there so nobody else on the network can claim the server first.</li>
+          <li>Make the owner account. That is you.</li>
+        </ol>
+        <p class="aside" data-fly="left">Dokkit cannot page you about itself when it is down. In Settings, give it <mark class="n">an outside heartbeat</mark>: an https address it calls every minute, at any service that alerts when the calls stop.</p>
+      </section>
+
+      <section class="step" id="machines">
+        <p class="stepno">Step 3 of 4</p>
+        <h2 data-type>Each machine</h2>
+        <p class="sentence">The machine runs
+          <span class="choose" role="radiogroup" aria-label="The machine's system">
+            <button type="button" role="radio" aria-checked="true" data-machine="windows">Windows</button><button type="button" role="radio" aria-checked="false" data-machine="linux">Linux</button><button type="button" role="radio" aria-checked="false" data-machine="mac">macOS</button>
+          </span>.
+        </p>
+        <div data-machine-for="windows">
+          <ol class="do" data-fly="up">
+            <li>In Dokkit, open <mark class="n">Add a machine</mark> and give it a name. It gives you one line, made for that machine.</li>
+            <li>Paste it into an administrator PowerShell on the machine:</li>
+          </ol>
+          <div class="cmd" data-fly="left"><code id="cmdAdd"></code><button type="button" class="copy" data-copy="cmdAdd">Copy</button></div>
+          <p class="note">It fetches the program from your server, checks its signature, joins the machine, installs the service and the updater, and checks it reports.</p>
+        </div>
+        <div data-machine-for="unix" hidden>
+          <ol class="do steps-cmd">
+            <li>Get the program:<div class="cmd"><code id="cmdGet">curl -fsSL https://dokkit.dev/get.sh | sh</code><button type="button" class="copy" data-copy="cmdGet">Copy</button></div></li>
+            <li>Join it to your server, with a token from <mark class="n">Add a machine</mark>:<div class="cmd"><code id="cmdEnrol"></code><button type="button" class="copy" data-copy="cmdEnrol">Copy</button></div></li>
+            <li>Keep it running with nobody signed in:<div class="cmd"><code id="cmdService">sudo dokkit service install</code><button type="button" class="copy" data-copy="cmdService">Copy</button></div></li>
+          </ol>
+        </div>
+        <p class="aside" data-fly="left">The program <mark class="ok">opens no port</mark>. It reaches your server over a connection it makes itself.</p>
+      </section>
+
+      <section class="step" id="apps">
+        <p class="stepno">Step 4 of 4</p>
+        <h2 data-type>Each app</h2>
+        <ol class="do steps-cmd">
+          <li>In the app's own folder, describe it. This asks what the app is and writes <code>dokkit.toml</code>:<div class="cmd"><code id="cmdInit">dokkit init</code><button type="button" class="copy" data-copy="cmdInit">Copy</button></div></li>
+          <li>Prove it on your own machine. It runs every check once and prints what would be sent, with <mark class="ok">no server needed</mark>:<div class="cmd"><code id="cmdCheck">dokkit check</code><button type="button" class="copy" data-copy="cmdCheck">Copy</button></div></li>
+          <li>On the machine where it runs, tell the program where it lives:<div class="cmd"><code id="cmdFolder">dokkit folder add .</code><button type="button" class="copy" data-copy="cmdFolder">Copy</button></div></li>
+        </ol>
+      </section>
+
+      <section class="next" aria-label="Where to go next">
+        <h2 data-type>That is the install. Next:</h2>
+        <div class="next-links">
+          <span class="nl soon"><b>Choose where alerts reach you</b><small>Paging, push, email, iMessage, SMS, the morning digest · soon</small></span>
+          <span class="nl soon"><b>Let an agent wire your apps in</b><small>One prompt per tool, and the Claude Code plugin · soon</small></span>
+          <a class="nl" href="index.html"><b>Back to the start</b><small>What Dokkit is, and the working sample</small></a>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="fl">
+    <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+    <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
+  </div>
+</footer>
+<script src="site.js?v=4"></script>
+<script src="install.js?v=4"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="motion.js?v=4"></script>
+</body>
+</html>

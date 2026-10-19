@@ -27,14 +27,8 @@ const DATA = {
 };
 const MACHINES = ["db-01", "web-02", "nas", "mail", "build", "front-desk-pc", "sql"];
 const TITLES = { need: "This needs your attention.", soon: "Soon, not yet.", found: "Found, and nothing is watching it.", snoozed: "Snoozed, for now." };
-const $ = (q, r = document) => r.querySelector(q), $$ = (q, r = document) => [...r.querySelectorAll(q)];
-const still = document.documentElement.classList.contains("still");
-$("#motion").setAttribute("aria-pressed", !still);
-$("#motion b").textContent = still ? "off" : "on";
-$("#motion").addEventListener("click", () => { try { localStorage.setItem("motion", still ? "on" : "off"); } catch {} location.reload(); });
 const fresh = JSON.stringify(DATA);
 let lists = JSON.parse(fresh), tab = "need", fine = 57;
-document.documentElement.classList.add("js");
 
 function draw() {
   $("#nNeed").textContent = lists.need.length;
@@ -58,10 +52,9 @@ function draw() {
 }
 
 document.addEventListener("click", (e) => {
-  const t = e.target.closest("[data-tab],[data-act],[data-reset],[data-copy],[data-os],.item > button");
+  const t = e.target.closest("[data-tab],[data-act],[data-reset],[data-os],.item > button");
   if (!t) return;
   if (t.dataset.os) return setOs(t.dataset.os);
-  if (t.dataset.copy) return copy(t);
   if (t.dataset.tab) {
     tab = t.dataset.tab;
     $$(".tabs button").forEach((b) => b.setAttribute("aria-selected", b === t));
@@ -112,12 +105,6 @@ function setOs(next) {
   write(true);
 }
 $("#host").addEventListener("input", () => write(false));
-function copy(t) {
-  const el = $("#" + t.dataset.copy), was = t.textContent;
-  const done = (word) => { t.textContent = word; setTimeout(() => (t.textContent = was), 1400); };
-  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(el.textContent).then(() => done("Copied"), () => done("Select it"));
-  else { getSelection().selectAllChildren(el); done("Selected"); }
-}
 
 // One round of checks: all of them arrive, the fine ones fold into one line, three stay.
 function round() {
@@ -202,20 +189,6 @@ function recover() {
   }, 2200);
 }
 
-// Facts are highlighted as they are read; the table's marks tick like checks passing.
-$$("main mark").forEach((m) => m.classList.add("pend"));
-$$(".tr:not(.th)").forEach((r, i) => { r.classList.add("pend"); r.style.setProperty("--d", i * 120 + "ms"); });
-const seen = new IntersectionObserver((es) => es.forEach((e) => {
-  if (!e.isIntersecting) return;
-  const el = e.target;
-  seen.unobserve(el);
-  if (el.matches("mark")) {
-    const sibs = $$("mark", el.closest("p, .tr, span") || el.parentElement);
-    el.style.setProperty("--d", Math.max(0, sibs.indexOf(el)) * 220 + "ms");
-  }
-  el.classList.replace("pend", "lit");
-}), { rootMargin: "0px 0px -12% 0px" });
-$$(".pend").forEach((el) => seen.observe(el));
 
 let started = false;
 new IntersectionObserver(([e]) => {

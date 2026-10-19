@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="home.css?v=3">
+<link rel="stylesheet" href="site.css?v=4">
 <script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m ? m === "on" : !matchMedia("(prefers-reduced-motion: reduce)").matches; if (!on) document.documentElement.classList.add("still"); })();</script>
 </head>
 <body>
@@ -19,12 +19,12 @@
 </svg>
 
 <header class="bar">
-  <a class="brand" href="#top"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+  <a class="brand" href="index.html" aria-current="page"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
   <nav aria-label="Site">
-    <a href="#install">Install</a><a href="#sample">Demo</a><a href="#build">Agents</a><a href="api.html">Docs</a><a href="#watch">Phone</a><a href="#trust">Security</a><a href="#status">Status</a><a href="https://github.com/nathannncurtis/dokkit">Source</a>
+    <a href="install.html">Install</a><span class="soon" title="Not built yet">Demo</span><span class="soon" title="Not built yet">Agents</span><a href="api.html">Docs</a><span class="soon" title="Not built yet">Phone</span><span class="soon" title="Not built yet">Security</span><span class="soon" title="Not built yet">Status</span><a href="https://github.com/nathannncurtis/dokkit">Source</a>
   </nav>
   <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button>
-  <a class="claim" href="#install">Claim a name <em>soon</em></a>
+  <a class="claim" href="install.html">Claim a name <em>soon</em></a>
 </header>
 
 <main id="top">
@@ -39,13 +39,13 @@
         </span>
         <span id="atWrap">at <label class="named"><span class="sr">Its address</span><input id="host" value="dokkit.example.com" spellcheck="false" autocomplete="off" size="18"></label></span>.
       </p>
-      <div class="cmd"><code id="cmd"></code><button type="button" class="copy" data-copy="cmd">Copy</button></div>
+      <div class="cmd" data-fly="left"><code id="cmd"></code><button type="button" class="copy" data-copy="cmd">Copy</button></div>
       <p class="then">Then on each machine you want watched: <code id="get"></code> <button type="button" class="copy small" data-copy="get">Copy</button></p>
     </div>
   </section>
 
   <section class="sample" id="sample" aria-label="A working sample of Dokkit, on made-up data">
-    <div class="frame">
+    <div class="frame" data-fly="tilt">
       <div class="chrome">
         <span class="org"><span class="mk sm"><svg><use href="#mark"/></svg></span>Brightwater</span>
         <div class="tabs" role="tablist">
@@ -62,54 +62,55 @@
         <div class="list" id="list"></div>
       </div>
     </div>
-    <p class="label">The real first screen, on a made-up company. Open a row, snooze it, mark it seen.</p>
+    <p class="label" data-type>The real first screen, on a made-up company. Open a row, snooze it, mark it seen.</p>
   </section>
 
   <section class="watches" id="what">
-    <h2>What it watches, and when it <span>says so.</span></h2>
+    <h2 data-type="long">What it watches, and when it <span>says so.</span></h2>
     <div class="table" role="table" aria-label="What Dokkit watches">
       <div class="tr th" role="row"><span role="columnheader">Thing</span><span role="columnheader">How it is watched</span><span role="columnheader">It needs you when</span></div>
-      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Websites and APIs</span><span role="cell">An address is asked on the schedule its file sets, from the machine it runs on.</span><span role="cell">Three answers in a row are wrong, or slower than <mark class="warn">the limit its file sets</mark>.</span></div>
-      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Scheduled jobs</span><span role="cell">The job reports a start and an end, or is wrapped with <code>dokkit run</code>.</span><span role="cell">It does not start on time, fails, or runs <mark class="warn">longer than you allow</mark>.</span></div>
-      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Services and processes</span><span role="cell">Windows services, systemd units, ports and named processes.</span><span role="cell">One stops, or fewer are running than <mark class="warn">the count you set</mark>.</span></div>
-      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Disks, memory, certificates</span><span role="cell">Read on every machine with the <code>dokkit</code> program.</span><span role="cell">A disk is <mark class="warn">on course to fill</mark>, or a certificate expires within 30 days.</span></div>
-      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Logs</span><span role="cell">Files it is pointed at, apps that log to Seq, and the libraries. Kept a year, then archived.</span><span role="cell">Never by itself. <mark class="ok">Logs are for looking things up</mark>, one click from each item.</span></div>
-      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Errors</span><span role="cell">From the library, or from Sentry's own SDKs, grouped by type and place.</span><span role="cell">Never by itself. What is new <mark class="ok">since the last deploy</mark> is one click away.</span></div>
-      <div class="tr" role="row"><span role="cell"><i class="s ok"></i>Versions and deploys</span><span role="cell">The version each app reports. When it changes, that is a deploy.</span><span role="cell">Never by itself. What broke since the last deploy is <mark class="ok">one question</mark>.</span></div>
+      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Websites and APIs</span><span role="cell">An address is asked on the schedule its file sets, from the machine it runs on.</span><span role="cell">Three answers in a row are wrong, or slower than <mark class="warn">the limit its file sets</mark>.</span></div>
+      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Scheduled jobs</span><span role="cell">The job reports a start and an end, or is wrapped with <code>dokkit run</code>.</span><span role="cell">It does not start on time, fails, or runs <mark class="warn">longer than you allow</mark>.</span></div>
+      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Services and processes</span><span role="cell">Windows services, systemd units, ports and named processes.</span><span role="cell">One stops, or fewer are running than <mark class="warn">the count you set</mark>.</span></div>
+      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Disks, memory, certificates</span><span role="cell">Read on every machine with the <code>dokkit</code> program.</span><span role="cell">A disk is <mark class="warn">on course to fill</mark>, or a certificate expires within 30 days.</span></div>
+      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Logs</span><span role="cell">Files it is pointed at, apps that log to Seq, and the libraries. Kept a year, then archived.</span><span role="cell">Never by itself. <mark class="ok">Logs are for looking things up</mark>, one click from each item.</span></div>
+      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Errors</span><span role="cell">From the library, or from Sentry's own SDKs, grouped by type and place.</span><span role="cell">Never by itself. What is new <mark class="ok">since the last deploy</mark> is one click away.</span></div>
+      <div class="tr" role="row" data-fly="alt"><span role="cell"><i class="s ok"></i>Versions and deploys</span><span role="cell">The version each app reports. When it changes, that is a deploy.</span><span role="cell">Never by itself. What broke since the last deploy is <mark class="ok">one question</mark>.</span></div>
     </div>
-    <p class="foot">A machine that goes down is <mark class="bad">one page</mark>, not one for every service on it. An issue closes itself when the thing recovers.</p>
+    <p class="foot" data-fly="left">A machine that goes down is <mark class="bad">one page</mark>, not one for every service on it. An issue closes itself when the thing recovers.</p>
   </section>
 
   <section class="doors">
     <div class="door" id="build">
-      <h3>If you build it</h3>
-      <p>An app describes itself in a <code>dokkit.toml</code> in its own repo. Hand an agent <mark class="n">one link</mark> and it can do the wiring: write the file, add the library in your language, and prove it with <code>dokkit check</code>, before any server exists.</p>
-      <ul><li><a href="#build">Prompts for your agent</a></li><li><a href="#build">The Claude Code plugin</a></li><li><a href="#build">Check a file in the browser</a></li><li><a href="#build">Libraries in 11 languages</a></li></ul>
+      <h3 data-type>If you build it</h3>
+      <p data-fly="up">An app describes itself in a <code>dokkit.toml</code> in its own repo. Hand an agent <mark class="n">one link</mark> and it can do the wiring: write the file, add the library in your language, and prove it with <code>dokkit check</code>, before any server exists.</p>
+      <ul data-fly-each><li><span class="soon">Prompts for your agent</span></li><li><span class="soon">The Claude Code plugin</span></li><li><span class="soon">Check a file in the browser</span></li><li><span class="soon">Libraries in 11 languages</span></li></ul>
     </div>
     <div class="door" id="watch">
-      <h3>If you watch it</h3>
-      <p>You decide who hears about what, per service: <mark class="bad">a page</mark> for the job that must run, <mark class="warn">a push</mark> for the slow portal, <mark class="ok">the morning digest</mark> for the rest. On a phone, a read-only app shows it all through a relay the server dials out to.</p>
-      <ul><li><a href="#watch">Where alerts can reach you</a></li><li><a href="#watch">The phone app</a></li><li><a href="#status">Our own status, by Dokkit</a></li></ul>
+      <h3 data-type>If you watch it</h3>
+      <p data-fly="up">You decide who hears about what, per service: <mark class="bad">a page</mark> for the job that must run, <mark class="warn">a push</mark> for the slow portal, <mark class="ok">the morning digest</mark> for the rest. On a phone, a read-only app shows it all through a relay the server dials out to.</p>
+      <ul data-fly-each><li><span class="soon">Where alerts can reach you</span></li><li><span class="soon">The phone app</span></li><li><span class="soon">Our own status, by Dokkit</span></li></ul>
     </div>
     <div class="door" id="trust">
-      <h3>If you have to trust it</h3>
-      <p>The program on each machine <mark class="ok">opens no port</mark>. Work reaches it over a connection it makes itself, and only tasks you accepted can run. Releases are signed, and you can check one yourself. It runs on Postgres on <mark class="n">your own hardware</mark>.</p>
-      <ul><li><a href="#trust">What it can and cannot do</a></li><li><a href="api.html">The API</a></li><li><a href="cli.html">The command line</a></li></ul>
+      <h3 data-type>If you have to trust it</h3>
+      <p data-fly="up">The program on each machine <mark class="ok">opens no port</mark>. Work reaches it over a connection it makes itself, and only tasks you accepted can run. Releases are signed, and you can check one yourself. It runs on Postgres on <mark class="n">your own hardware</mark>.</p>
+      <ul data-fly-each><li><span class="soon">What it can and cannot do</span></li><li><a href="api.html">The API</a></li><li><a href="cli.html">The command line</a></li></ul>
     </div>
   </section>
 </main>
 
 <footer id="status">
   <p class="rel"><i class="s ok"></i><code>v0.1.46</code> · 16 Oct · The database only counts as down after three minutes in a row without an answer. <a href="https://github.com/nathannncurtis/dokkit/releases">Changelog</a></p>
-  <div class="fl">
+  <div class="fl" data-fly="up">
     <a class="brand" href="#top"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
     <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
   </div>
 </footer>
-<script src="home.js?v=3"></script>
+<script src="site.js?v=4"></script>
+<script src="home.js?v=4"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
-<script src="motion.js?v=3"></script>
+<script src="motion.js?v=4"></script>
 </body>
 </html>

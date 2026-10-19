@@ -1,8 +1,8 @@
-// Scroll-led motion for the home page. Without it, or with reduced motion, the page is complete and still.
+// Pages opt in with data-type, data-fly (left|right|up|tilt|alt) and data-fly-each; without this file they are complete and still.
 (() => {
   if (document.documentElement.classList.contains("still") || !window.gsap || !window.ScrollTrigger || !window.Lenis) return;
   gsap.registerPlugin(ScrollTrigger);
-  const $$ = (q, r = document) => [...r.querySelectorAll(q)];
+  const all = (q, r = document) => [...r.querySelectorAll(q)];
   const phone = matchMedia("(max-width: 640px)").matches;
 
   const lenis = new Lenis({ lerp: 0.09 });
@@ -14,10 +14,10 @@
     const a = e.target.closest('a[href^="#"]');
     if (!a || a.getAttribute("href").length < 2) return;
     e.preventDefault();
-    lenis.scrollTo(a.getAttribute("href"), { offset: -72, duration: 1.3 });
+    lenis.scrollTo(a.getAttribute("href"), { offset: -88, duration: 1.2 });
   });
+  window.dokkitScroll = lenis;
 
-  // Typed by the scroll: each letter appears as you read down, and goes again as you scroll back.
   function letters(el) {
     if (/^H\d$/.test(el.tagName)) el.setAttribute("aria-label", el.textContent.replace(/\s+/g, " ").trim());
     const out = [];
@@ -36,12 +36,12 @@
     walk(el);
     return out;
   }
-  $$(".watches h2, .door h3, .label").forEach((el) => {
+  all("[data-type]").forEach((el) => {
     const chars = letters(el);
     el.classList.add("typing");
     let shown = -1;
     ScrollTrigger.create({
-      trigger: el, start: "top 92%", end: el.matches("h2") ? "clamp(top 40%)" : "clamp(top 62%)", scrub: true,
+      trigger: el, start: "top 92%", end: el.dataset.type === "long" ? "clamp(top 40%)" : "clamp(top 62%)", scrub: true,
       onUpdate: ({ progress }) => {
         const n = Math.round(progress * chars.length);
         if (n === shown) return;
@@ -53,24 +53,34 @@
     });
   });
 
-  // Flown in from one side, held while it is read, and let go on the way out.
-  function fly(el, from, out, opts = {}) {
-    const tl = gsap.timeline({ scrollTrigger: { trigger: el, start: opts.start || "top 100%", end: opts.end || "bottom 0%", scrub: 0.7 } });
-    tl.fromTo(el, from, { x: 0, y: 0, rotate: 0, scale: 1, rotateX: 0, opacity: 1, duration: 1, ease: "power3.out" })
-      .to(el, { duration: opts.hold || 1.4 })
+  function fly(el, from, out, hold = 1.4) {
+    const tl = gsap.timeline({ scrollTrigger: { trigger: el, start: "top 100%", end: "clamp(bottom 0%)", scrub: 0.7 } });
+    tl.fromTo(el, from, { x: 0, y: 0, scale: 1, rotateX: 0, opacity: 1, duration: 1, ease: "power3.out" })
+      .to(el, { duration: hold })
       .to(el, { ...out, duration: 0.8, ease: "power2.in" });
   }
   const side = phone ? 40 : 140;
-  fly(document.querySelector(".cmd"), { x: -side, opacity: 0 }, { y: -30, opacity: 0.2 });
-  gsap.set(".frame", { transformPerspective: 1600, transformOrigin: "50% 0%" });
-  fly(document.querySelector(".frame"), { y: 140, rotateX: phone ? 0 : 16, scale: 0.9, opacity: 0.3 }, { scale: 0.95, opacity: 0.35, y: -40 }, { hold: 2.6 });
-  $$(".tr:not(.th)").forEach((row, i) => fly(row, { x: (i % 2 ? -1 : 1) * side, opacity: 0 }, { x: (i % 2 ? 1 : -1) * side * 0.4, opacity: 0 }, { hold: 1.6 }));
-  fly(document.querySelector(".foot"), { x: -side, opacity: 0 }, { opacity: 0.2 });
-  $$(".door").forEach((door) => {
-    fly(door.querySelector("p"), { y: 70, opacity: 0 }, { y: -30, opacity: 0.15 });
-    $$("li", door).forEach((li, i) => fly(li, { x: side * 0.6 + i * 30, opacity: 0 }, { x: -side * 0.3, opacity: 0 }, { hold: 1.8 }));
+  const KINDS = {
+    left: [{ x: -side, opacity: 0 }, { y: -30, opacity: 0.2 }],
+    right: [{ x: side, opacity: 0 }, { x: -side * 0.3, opacity: 0 }],
+    up: [{ y: 70, opacity: 0 }, { y: -30, opacity: 0.15 }],
+    tilt: [{ y: 140, rotateX: phone ? 0 : 16, scale: 0.9, opacity: 0.3 }, { scale: 0.95, opacity: 0.35, y: -40 }],
+  };
+  const alts = all("[data-fly=alt]");
+  all("[data-fly]").forEach((el) => {
+    const kind = el.dataset.fly;
+    if (kind === "alt") {
+      const k = alts.indexOf(el) % 2 ? -1 : 1;
+      return fly(el, { x: k * side, opacity: 0 }, { x: -k * side * 0.4, opacity: 0 }, 1.6);
+    }
+    if (kind === "tilt") gsap.set(el, { transformPerspective: 1600, transformOrigin: "50% 0%" });
+    const [from, out] = KINDS[kind] || KINDS.up;
+    fly(el, from, out, kind === "tilt" ? 2.6 : 1.4);
   });
-  fly(document.querySelector(".fl"), { y: 40, opacity: 0 }, { opacity: 1 }, { end: "bottom 100%", hold: 0.01 });
+  all("[data-fly-each] > li").forEach((li) => {
+    const i = [...li.parentElement.children].indexOf(li);
+    fly(li, { x: side * 0.6 + i * 30, opacity: 0 }, { x: -side * 0.3, opacity: 0 }, 1.8);
+  });
 
   addEventListener("load", () => ScrollTrigger.refresh());
 })();
