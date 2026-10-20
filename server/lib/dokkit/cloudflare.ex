@@ -92,10 +92,12 @@ defmodule Dokkit.Cloudflare do
   defp authoritative(name, value) do
     record = String.to_charlist(record_name(name))
 
+    look = [timeout: 3_000] ++ resolvers()
+
     servers =
       for zone <- candidates(name),
-          host <- :inet_res.lookup(String.to_charlist(zone), :in, :ns, timeout: 3_000),
-          ip <- :inet_res.lookup(host, :in, :a, timeout: 3_000),
+          host <- :inet_res.lookup(String.to_charlist(zone), :in, :ns, look),
+          ip <- :inet_res.lookup(host, :in, :a, look),
           do: {ip, 53}
 
     answers =
@@ -128,6 +130,13 @@ defmodule Dokkit.Cloudflare do
       :no in answers -> :no
       true -> :unreachable
     end
+  end
+
+  # Erlang on Windows reads no name servers from the system, so public ones find the zone's own.
+  defp resolvers do
+    if :inet_db.res_option(:nameservers) == [],
+      do: [nameservers: [{{1, 1, 1, 1}, 53}, {{8, 8, 8, 8}, 53}]],
+      else: []
   end
 
   defp resolver?(name, value) do
