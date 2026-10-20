@@ -3,7 +3,7 @@ defmodule DokkitWeb.Auth do
   use DokkitWeb, :verified_routes
   import Plug.Conn
   import Phoenix.Controller, only: [redirect: 2]
-  alias Dokkit.Accounts
+  alias Dokkit.{Accounts, Demo}
 
   @session_seconds 14 * 86_400
 
@@ -16,8 +16,14 @@ defmodule DokkitWeb.Auth do
 
   def on_mount(:user, _params, session, socket) do
     case user(session) do
-      nil -> {:halt, Phoenix.LiveView.redirect(socket, to: door())}
-      user -> {:cont, socket |> Phoenix.Component.assign(:current_user, user) |> shell()}
+      nil ->
+        {:halt, Phoenix.LiveView.redirect(socket, to: door())}
+
+      user ->
+        socket
+        |> Phoenix.Component.assign(:current_user, user)
+        |> shell()
+        |> DokkitWeb.DemoSeat.keep(session)
     end
   end
 
@@ -70,7 +76,8 @@ defmodule DokkitWeb.Auth do
       open: Dokkit.Issues.open_count(),
       waiting: Dokkit.Found.count(),
       updating: Dokkit.UpdateRun.current(),
-      failed: Dokkit.UpdateRun.failed()
+      failed: Dokkit.UpdateRun.failed(),
+      demo: socket.assigns[:shell][:demo]
     }
 
     socket = Phoenix.Component.assign(socket, :shell, shell)
@@ -114,13 +121,58 @@ defmodule DokkitWeb.Auth do
     end
   end
 
+  @doc "A demo seat signs in as the sample company's owner, without a password."
+  def sign_in_demo(conn, seat) do
+    conn
+    |> configure_session(renew: true)
+    |> clear_session()
+    |> put_session(:demo_seat, seat)
+    |> put_session(:live_socket_id, "demo:#{seat}")
+  end
+
   def sign_out(conn) do
-    if user = conn.assigns[:current_user], do: Accounts.sign_out_everywhere(user)
+    cond do
+      Demo.on?() -> if(seat = get_session(conn, :demo_seat), do: Demo.leave(seat))
+      user = conn.assigns[:current_user] -> Accounts.sign_out_everywhere(user)
+      true -> nil
+    end
 
     configure_session(conn, drop: true)
   end
 
-  def door, do: if(Accounts.any?(), do: ~p"/login", else: ~p"/setup")
+  def door do
+    cond do
+      Demo.on?() -> ~p"/demo"
+      Accounts.any?() -> ~p"/login"
+      true -> ~p"/setup"
+    end
+  end
+
+  @doc "Where a request came from. Behind a proxy every request comes from the proxy, so the address it appended is used."
+  def address(conn) do
+    with true <- Application.get_env(:dokkit, :behind_proxy, false),
+         true <- proxy?(conn.remote_ip),
+         [list | _] <- get_req_header(conn, "x-forwarded-for"),
+         last = list |> String.split(",") |> List.last() |> String.trim(),
+         {:ok, ip} <- :inet.parse_address(String.to_charlist(last)) do
+      ip
+    else
+      _ -> conn.remote_ip
+    end
+  end
+
+  defp proxy?({0, 0, 0, 0, 0, 0xFFFF, hi, lo}),
+    do: proxy?({div(hi, 256), rem(hi, 256), div(lo, 256), rem(lo, 256)})
+
+  # The demo runs in a container, so its proxy reaches it from the container network's gateway.
+  defp proxy?({172, b, _, 1}) when b in 16..31, do: Demo.on?()
+  defp proxy?({127, _, _, _}), do: true
+  defp proxy?({0, 0, 0, 0, 0, 0, 0, 1}), do: true
+  defp proxy?(_), do: false
+
+  defp user(%{"demo_seat" => seat}) do
+    if Demo.on?() and Demo.seated?(seat), do: List.first(Accounts.list())
+  end
 
   defp user(%{"user_id" => id, "signed_at" => at}) when is_integer(at) do
     user = Accounts.get(id)

@@ -89,8 +89,30 @@ defmodule DokkitWeb.Layouts do
       </nav>
 
       <main class="page" id="page" tabindex="-1">
+        <.demo :if={@shell[:demo]} demo={@shell.demo} />
         {render_slot(@inner_block)}
       </main>
+    </div>
+    """
+  end
+
+  defp demo(assigns) do
+    ~H"""
+    <p class="demo-band" role="note">
+      <i class="ph ph-flask" aria-hidden="true"></i>
+      <span>This is the Dokkit demo. Everything in it is made up, and it starts fresh on the hour.</span>
+      <b :if={@demo.note} role="status">{@demo.note}</b>
+    </p>
+    <div
+      :if={@demo.warn}
+      class="still"
+      style={"left: #{elem(@demo.warn, 0)}%; top: #{elem(@demo.warn, 1)}%"}
+      role="alertdialog"
+      aria-labelledby="still-h"
+    >
+      <b id="still-h">Still there?</b>
+      <p>Your seat goes to someone else in a minute.</p>
+      <button class="btn primary" phx-click="demo_here" autofocus>I'm here</button>
     </div>
     """
   end

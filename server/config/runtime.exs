@@ -27,6 +27,9 @@ if log_dir = System.get_env("DOKKIT_LOG_DIR") do
     ]
 end
 
+# The public demo: anyone takes a seat without a password, nothing is sent out, and the sample company is rebuilt hourly.
+if System.get_env("DOKKIT_DEMO") in ~w(1 true), do: config(:dokkit, demo: true)
+
 if System.get_env("PHX_SERVER") do
   config :dokkit, DokkitWeb.Endpoint, server: true
 end

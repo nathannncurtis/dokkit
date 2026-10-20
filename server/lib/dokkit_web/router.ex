@@ -30,6 +30,10 @@ defmodule DokkitWeb.Router do
     post "/logout", SessionController, :delete
     get "/setup", SessionController, :setup
     post "/setup", SessionController, :claim
+    get "/demo", DemoController, :show
+    get "/demo/line", DemoController, :line
+    post "/demo/seat", DemoController, :seat
+    get "/demo/away", DemoController, :away
   end
 
   scope "/", DokkitWeb do

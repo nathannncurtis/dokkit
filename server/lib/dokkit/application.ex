@@ -7,12 +7,14 @@ defmodule Dokkit.Application do
     Dokkit.LoginThrottle.init()
     Dokkit.Slots.init()
     Dokkit.Certificate.load()
-    watch = Application.get_env(:dokkit, :watch, true)
+    demo = Dokkit.Demo.on?()
+    watch = Application.get_env(:dokkit, :watch, true) and not demo
 
     children =
       [Dokkit.Repo, Dokkit.RateLimit, {Phoenix.PubSub, name: Dokkit.PubSub}, DokkitWeb.Endpoint] ++
         ipv6_listener(Application.get_env(:dokkit, DokkitWeb.Endpoint, [])) ++
-        if watch, do: [Dokkit.Alerts, Dokkit.Phones.Sender, Dokkit.Watch], else: []
+        if(watch, do: [Dokkit.Alerts, Dokkit.Phones.Sender, Dokkit.Watch], else: []) ++
+        if demo, do: [Dokkit.Demo], else: []
 
     with {:ok, pid} <-
            Supervisor.start_link(children, strategy: :one_for_one, name: Dokkit.Supervisor) do

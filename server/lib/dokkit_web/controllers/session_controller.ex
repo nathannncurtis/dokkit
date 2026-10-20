@@ -10,6 +10,11 @@ defmodule DokkitWeb.SessionController do
   @shown_once "Recovery codes are shown once, when two-step sign-in is turned on or a new set is made. To get a new set, enter a code and choose Make new recovery codes."
 
   plug :put_layout, false
+  plug :demo_door when action != :delete
+
+  # The demo has no passwords: its door is a seat.
+  defp demo_door(conn, _),
+    do: if(Dokkit.Demo.on?(), do: conn |> redirect(to: ~p"/demo") |> halt(), else: conn)
 
   def new(conn, _) do
     if Accounts.any?(),
@@ -132,7 +137,11 @@ defmodule DokkitWeb.SessionController do
     )
   end
 
-  def delete(conn, _), do: conn |> Auth.sign_out() |> redirect(to: ~p"/login")
+  def delete(conn, _),
+    do:
+      conn
+      |> Auth.sign_out()
+      |> redirect(to: if(Dokkit.Demo.on?(), do: ~p"/demo/away?why=left", else: ~p"/login"))
 
   def setup(conn, _) do
     if Accounts.any?(),
@@ -174,21 +183,5 @@ defmodule DokkitWeb.SessionController do
 
   defp blocked(conn), do: conn |> put_resp_header("retry-after", "600") |> put_status(429)
 
-  # Behind a proxy every request comes from the proxy, so the address it appended is used.
-  defp address(conn) do
-    with true <- Application.get_env(:dokkit, :behind_proxy, false),
-         true <- loopback?(conn.remote_ip),
-         [list | _] <- get_req_header(conn, "x-forwarded-for"),
-         last = list |> String.split(",") |> List.last() |> String.trim(),
-         {:ok, ip} <- :inet.parse_address(String.to_charlist(last)) do
-      ip
-    else
-      _ -> conn.remote_ip
-    end
-  end
-
-  defp loopback?({127, _, _, _}), do: true
-  defp loopback?({0, 0, 0, 0, 0, 0, 0, 1}), do: true
-  defp loopback?({0, 0, 0, 0, 0, 0xFFFF, 0x7F00, _}), do: true
-  defp loopback?(_), do: false
+  defp address(conn), do: Auth.address(conn)
 end

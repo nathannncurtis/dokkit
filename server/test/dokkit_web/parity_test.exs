@@ -146,7 +146,15 @@ defmodule DokkitWeb.ParityTest do
     "GET /password" => "A person changes their own password; a token has none.",
     "POST /password" => "A person changes their own password; a token has none.",
     "GET /add/:token" =>
-      "The new machine fetches its add script with the enrolment token in the address; POST /api/v1/add-script makes it."
+      "The new machine fetches its add script with the enrolment token in the address; POST /api/v1/add-script makes it.",
+    "GET /demo" =>
+      "The public demo's door hands a browser a seat or a place in line; the demo has no API.",
+    "GET /demo/line" =>
+      "The public demo's door hands a browser a seat or a place in line; the demo has no API.",
+    "POST /demo/seat" =>
+      "The public demo's door hands a browser a seat or a place in line; the demo has no API.",
+    "GET /demo/away" =>
+      "The public demo's door hands a browser a seat or a place in line; the demo has no API."
   }
 
   @api_controllers [
