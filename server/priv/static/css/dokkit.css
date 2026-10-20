@@ -720,7 +720,7 @@ input, select { accent-color: var(--brand); caret-color: var(--brand); }
 .notice ul { flex: 1 1 100%; margin: 0; padding-left: 20px; }
 .notice .end { margin-left: auto; }
 @media (prefers-reduced-motion: reduce) { .prog i { transition: none; } }
-.demo-band { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; padding: 8px 28px; font-size: 13px; color: var(--mute); background: var(--raise); border-bottom: 1px solid var(--line); }
+.demo-band { position: sticky; top: 0; z-index: 40; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; padding: 8px 28px; font-size: 13px; color: var(--mute); background: var(--raise); border-bottom: 1px solid var(--line); }
 .demo-band b { margin-left: auto; color: var(--warn); font-weight: 500; }
 .still { position: fixed; z-index: 50; width: min(300px, calc(100vw - 32px)); display: grid; gap: 8px; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.18); }
 .still p { margin: 0; color: var(--mute); }
