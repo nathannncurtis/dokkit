@@ -42,6 +42,11 @@ mac-notification-sys = "0.6"
 objc2 = "0.6"
 block2 = "0.6"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
+notify-rust = { version = "4", default-features = false, features = ["z"] }
+webkit2gtk = "2.0"
+
 [dev-dependencies]
 rcgen = "0.13"
 tokio = { version = "1", features = ["time", "sync", "net", "rt", "macros", "io-util"] }

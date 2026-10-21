@@ -4,6 +4,8 @@ mod settings;
 mod tray;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "linux")]
+mod linux;
 #[cfg(windows)]
 mod webview_pin;
 
@@ -44,8 +46,19 @@ fn secret(id: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(KEYRING_SERVICE, id).map_err(|e| e.to_string())
 }
 
+fn keychain_error(e: keyring::Error) -> String {
+    #[cfg(target_os = "linux")]
+    if matches!(e, keyring::Error::NoStorageAccess(_) | keyring::Error::PlatformFailure(_)) {
+        return linux::KEYCHAIN_HELP.into();
+    }
+    e.to_string()
+}
+
 fn token(id: &str) -> Result<String, String> {
-    secret(id)?.get_password().map_err(|_| "No token is stored for this server.".to_string())
+    secret(id)?.get_password().map_err(|e| match e {
+        keyring::Error::NoEntry => "No token is stored for this server.".to_string(),
+        e => keychain_error(e),
+    })
 }
 
 pub fn paused(app: &AppHandle) -> bool {
@@ -116,6 +129,10 @@ pub fn show_server(app: &AppHandle, id: &str, path: Option<String>) {
             }
             macos::dock(&app);
         }
+        #[cfg(target_os = "linux")]
+        if let (Ok(w), Some(pin)) = (&_built, &server.pin) {
+            linux::pin(w, pin);
+        }
     });
 }
 
@@ -137,7 +154,9 @@ fn toast(app: &AppHandle, server: &Server, issue: &Issue) {
     }
     #[cfg(target_os = "macos")]
     macos::notify(title, issue.title.clone(), move || show_server(&app2, &id, Some(path)));
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(target_os = "linux")]
+    linux::notify(&title, &issue.title, move || show_server(&app2, &id, Some(path)));
+    #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
     {
         use tauri_plugin_notification::NotificationExt;
         let _ = (app2, id, path);
@@ -264,7 +283,7 @@ async fn add_server(
     }
     net::snapshot(&url, &token, pin.as_deref()).await?;
     let id = uuid::Uuid::new_v4().to_string();
-    secret(&id)?.set_password(&token).map_err(|e| e.to_string())?;
+    secret(&id)?.set_password(&token).map_err(keychain_error)?;
     let host = url::Url::parse(&url).ok().and_then(|u| u.host_str().map(String::from)).unwrap_or_default();
     let name = Some(name.trim().to_string()).filter(|n| !n.is_empty()).unwrap_or(host);
     shared(&app).settings.lock().unwrap().servers.push(Server {
@@ -414,4 +433,16 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("run dokkit");
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_secret_service_gets_a_clear_message() {
+        let e = keyring::Error::NoStorageAccess("no bus".into());
+        assert!(keychain_error(e).contains("Secret Service"));
+        assert_eq!(keychain_error(keyring::Error::TooLong("x".into(), 1)), keyring::Error::TooLong("x".into(), 1).to_string());
+    }
 }
