@@ -34,6 +34,8 @@ jobs:
             echo "list=${image}:test" >> "$GITHUB_OUTPUT"
           fi
       - uses: docker/build-push-action@v7
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
         id: build
         with:
           context: server
@@ -395,7 +397,7 @@ jobs:
           apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
           "$apksigner" sign --ks "$RUNNER_TEMP/dokkit.p12" --ks-type PKCS12 --ks-key-alias "$ANDROID_KEY_ALIAS" \
             --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEYSTORE_PASSWORD \
-            --out dokkit-android.apk dokkit-android-unsigned.apk
+            --v4-signing-enabled false --out dokkit-android.apk dokkit-android-unsigned.apk
           rm "$RUNNER_TEMP/dokkit.p12"
           "$apksigner" verify --verbose --print-certs dokkit-android.apk
           sha256sum dokkit-android.apk > dokkit-android.apk.sha256
@@ -551,6 +553,8 @@ jobs:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
           # Six programs and the Windows server, each with its checksum. The phone and desktop apps are added when they built.
+          # Only release files go up; other artifacts (a build record, say) are dropped first.
+          find assets -maxdepth 1 -type f ! -name 'dokkit-*' -print -delete
           found=$(ls assets 2>/dev/null | grep -v -e '^dokkit-ios' -e '^dokkit-android' -e '^dokkit-desktop' | wc -l)
           if [ "$found" -ne 14 ]; then
             echo "::warning::Not published: $found of 14 files were built."
