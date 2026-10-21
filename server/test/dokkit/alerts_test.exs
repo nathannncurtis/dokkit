@@ -306,6 +306,29 @@ defmodule Dokkit.AlertsTest do
     assert Alerts.deliver_pending() == 0
   end
 
+  test "a reopened issue comes back only on the channels it is routed to now", %{
+    key: key,
+    service: service
+  } do
+    Alerts.save(%{"pagerduty_key" => "R0UTE"})
+    Intake.ping(key, "backup", "fail", nil, "")
+    assert Alerts.deliver_pending() == 1
+    Intake.ping(key, "backup", "ok", nil, "")
+    assert Alerts.deliver_pending() == 1
+    Repo.update!(Ecto.Changeset.change(service, route_down: "email"))
+    Intake.ping(key, "backup", "fail", nil, "")
+    assert Alerts.deliver_pending() == 0
+    assert [%Alert{channel: "page", status: :closed}] = Repo.all(Alert)
+  end
+
+  test "a waiting alert is dropped once its service goes to nobody", %{key: key, service: service} do
+    Alerts.save(%{"pagerduty_key" => "R0UTE"})
+    Intake.ping(key, "backup", "fail", nil, "")
+    Repo.update!(Ecto.Changeset.change(service, route_down: "none"))
+    assert Alerts.deliver_pending() == 0
+    assert [%Alert{status: :skipped}] = Repo.all(Alert)
+  end
+
   test "a machine whose rule sends to nobody stays quiet for soon issues too", %{service: service} do
     Alerts.save(%{"pagerduty_key" => "R0UTE", "degraded" => "push"})
     Alerts.add_rule(%{"machine" => "vault", "channel" => "none", "kind" => "", "state" => ""})

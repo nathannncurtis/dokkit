@@ -629,6 +629,21 @@ defmodule Dokkit.Alerts do
     {channels, rule}
   end
 
+  # The channels an issue goes to as things are set now; only production services alert.
+  defp current(%Issue{service: %Service{environment: env}}, _) when env != "production", do: []
+
+  defp current(issue, config) do
+    service = if match?(%Service{}, issue.service), do: issue.service
+    {channels, _} = routed(issue, service, config)
+
+    channels =
+      if issue.soon,
+        do: channels |> Enum.map(&if(&1 == "page", do: "push", else: &1)) |> Enum.uniq(),
+        else: channels
+
+    one_incident(channels, config)
+  end
+
   # A soon issue takes no rule, except one that sends to nobody: a machine set to stay quiet stays quiet.
   defp rule_for(issue, machine) do
     rule = ruled(issue, machine)
@@ -732,17 +747,22 @@ defmodule Dokkit.Alerts do
   An issue that is open again always has a live alert. One that never went out is sent after all.
   One whose page was resolved is paged again, because the resolve closed the incident. One whose
   resolve was never sent, or that has nothing to resolve, stays as it was: nobody is told twice.
-  An issue that now routes to nobody is not paged again.
+  Only channels the issue is routed to now come back, so one that now goes to nobody is not
+  told again.
   """
   def reopened(%Issue{id: id} = issue, now \\ DateTime.utc_now()) do
-    service = Repo.preload(issue, :service).service
-    held = holds?(service, "page", now)
-    quiet = elem(routed(issue, service, config()), 0) == ["none"]
-    live = is_nil(issue.acknowledged_at) and not snoozed?(issue, now) and not quiet
+    issue = Repo.preload(issue, :service)
+    config = config()
+    held = holds?(issue.service, "page", now)
+    wanted = current(issue, config)
+    live = is_nil(issue.acknowledged_at) and not snoozed?(issue, now)
 
     if live,
       do:
-        Repo.update_all(from(a in Alert, where: a.issue_id == ^id and a.status == :skipped),
+        Repo.update_all(
+          from(a in Alert,
+            where: a.issue_id == ^id and a.status == :skipped and a.channel in ^wanted
+          ),
           set: [status: :pending, attempts: 0, error: nil]
         )
 
@@ -752,11 +772,12 @@ defmodule Dokkit.Alerts do
     )
 
     resolved = from(a in Alert, where: a.issue_id == ^id and a.status in [:closing, :closed])
-    resolving = if config()["push_with"] == "pagerduty", do: ["page", "push"], else: ["page"]
+    resolving = if config["push_with"] == "pagerduty", do: ["page", "push"], else: ["page"]
+    again = Enum.filter(resolving, &(&1 in wanted))
 
     if live,
       do:
-        Repo.update_all(from(a in resolved, where: a.channel in ^resolving),
+        Repo.update_all(from(a in resolved, where: a.channel in ^again),
           set: [status: :pending, attempts: 0, error: nil]
         )
 
@@ -823,6 +844,15 @@ defmodule Dokkit.Alerts do
     {:noreply, state}
   end
 
+  # A waiting alert for an issue that now goes to nobody is dropped, not sent.
+  defp rerouted?(%Alert{status: status} = alert, config) when status in [:pending, :failed] do
+    gone = current(alert.issue, config) in [[], ["none"]]
+    if gone, do: Repo.update!(Ecto.Changeset.change(alert, status: :skipped))
+    gone
+  end
+
+  defp rerouted?(_, _), do: false
+
   def deliver_pending do
     config = config()
     settle()
@@ -835,8 +865,9 @@ defmodule Dokkit.Alerts do
                a.updated_at < ago(1, "minute")),
         # A digest alert waits for the day's one mail.
         where: a.channel != "digest",
-        preload: [issue: [:machine, :check]]
+        preload: [issue: [:machine, :check, :service]]
     )
+    |> Enum.reject(&rerouted?(&1, config))
     |> Enum.map(fn alert ->
       action = if alert.status == :closing, do: :close, else: :open
 
