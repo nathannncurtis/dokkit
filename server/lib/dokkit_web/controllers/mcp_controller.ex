@@ -368,7 +368,7 @@ defmodule DokkitWeb.McpController do
      "Change a person's destinations. Takes the id from alert_people. A destination left out stays as it was; an empty one clears it.",
      Map.put(@person, "id", @text), ["id"]},
     {"set_alert_who", "admin",
-     "Name who is told at one level. scope is default, rule, service or check; id is the rule, service or check (not for default); for a check, service and name may be sent instead of id; to is a list of person ids from alert_people, or [\"everyone\"] for the server-wide destinations. An empty list names nobody there, so the level above decides. The check comes before the service, the service before the rule, the rule before the default.",
+     "Name who is told at one level. scope is default, rule, service or check; id is the rule, service or check (not for default); for a check, service and name may be sent instead of id; to is a list of person ids from alert_people, [\"everyone\"] for the server-wide destinations, or [\"oncall\"] for whoever is on call in the chosen PagerDuty schedule. An empty list names nobody there, so the level above decides. The check comes before the service, the service before the rule, the rule before the default.",
      %{
        "scope" => %{"type" => "string", "enum" => Dokkit.People.scopes()},
        "id" => @text,
@@ -376,6 +376,9 @@ defmodule DokkitWeb.McpController do
        "name" => @text,
        "to" => %{"type" => "array", "items" => @text}
      }, ["scope", "to"]},
+    {"alert_oncall", "admin",
+     "The PagerDuty schedules, read with the REST API key in the alert settings, and who is on call now in the chosen schedule, with the person on this server that is. Kept for a minute.",
+     %{}, []},
     {"accept_suggestion", "admin",
      "Send that service's issues to the daily digest from now on. Takes the id from alert_suggestions.",
      %{"id" => @text}, ["id"]},
@@ -574,6 +577,7 @@ defmodule DokkitWeb.McpController do
   defp tool("alert_who", _), do: Dokkit.People.who_list()
   defp tool("set_alert_person", %{"id" => _} = args), do: Api.save_person(args) |> r()
   defp tool("set_alert_who", args), do: Api.save_who(args) |> r()
+  defp tool("alert_oncall", _), do: Dokkit.OnCall.view()
   defp tool("alert_suggestions", _), do: Read.suggestions()
   defp tool("archives", _), do: Read.archives()
   defp tool("keep_messages", %{"id" => id} = args), do: Api.set_keep(id, args["keep"]) |> r()

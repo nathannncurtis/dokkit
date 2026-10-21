@@ -37,6 +37,44 @@ const hooks = {
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 new LiveSocket("/live", Socket, {longPollFallbackMs: 2500, params: {_csrf_token: csrfToken}, hooks}).connect()
 
+let downHits = []
+const downHit = (cell) => {
+  const now = Date.now()
+  downHits = downHits.filter((t) => now - t < 4000).concat(now)
+  const box = document.getElementById("day-game")
+  if (downHits.length < 5 || !box || box.firstChild) return
+  downHits = []
+  const open = () => {
+    const found = document.createElement("p")
+    found.className = "kg-found"
+    found.innerHTML = '<span>You found it.</span><button class="btn" type="button"><i class="ph ph-arrow-left" aria-hidden="true"></i>Back to the last day</button>'
+    const root = document.createElement("div")
+    box.replaceChildren(found, root)
+    const game = window.KeepGreen.mount(root)
+    root.querySelector("[data-k=start]").focus()
+    found.querySelector("button").onclick = () => {
+      game.stop()
+      box.replaceChildren()
+      if (cell.isConnected) cell.focus()
+    }
+  }
+  if (window.KeepGreen) return open()
+  const s = document.createElement("script")
+  s.src = "/js/keep-green.js"
+  s.onload = open
+  document.head.appendChild(s)
+}
+document.addEventListener("click", (e) => {
+  const cell = e.target.closest("#day .lane .bad")
+  if (cell) downHit(cell)
+})
+document.addEventListener("keydown", (e) => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches("#day .lane .bad")) {
+    e.preventDefault()
+    downHit(e.target)
+  }
+})
+
 document.addEventListener("click", (e) => {
   const button = e.target.closest("[data-copy]")
   const source = button && document.querySelector(button.dataset.copy)

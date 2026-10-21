@@ -3,6 +3,10 @@
 The look of Dokkit's web app, and the one the phone apps and every new page follow. The built web app is
 the reference: when it and this page disagree, the app wins.
 
+The phone apps differ from these rules in a few places. Those differences are in **Phone apps only** near the
+end, and they apply to the Android and iOS apps alone; the web app, the site and everything else keep the rules
+as written here.
+
 ## Rules that are not up for debate
 
 - **Add, never replace.** A redesign keeps every control, option, page and behaviour that exists.
@@ -84,6 +88,33 @@ State tints, each a soft surface, an ink for text on it and a solid for marks (l
 - Pages and rows settle in with a short fade and 6px rise; heat-map cells and meters fill in once.
 - Panels fold open and closed with a short slide.
 - Nothing else moves. Everything stops under `prefers-reduced-motion`.
+
+## Phone apps only
+
+These rules are for the Android and iOS apps, and only there they replace the matching rules above. The
+approved direction is "Statement", built in `apps/android/`.
+
+- **Type.** Figtree for everything, technical strings included: machine and service names, ids, times and
+  numbers use Figtree, not IBM Plex Mono. Big figures use the heavy weight.
+- **Colour.** Orange is the only brand colour. There is no teal accent to choose.
+- **Every page opens with a statement card.** A rounded gradient card inset from the edges, tinted by the page's
+  state (rose, amber, peach, sage, or a warm orange on pages without one), with the state as a large sentence.
+  Its tint washes down the whole screen, so it never ends in an edge. As the page scrolls the card settles into
+  a slim pinned card and the content passes under it.
+- **Big cards** with 24 dp corners and generous air sit under it. Tabs (Home, Servers, Settings) live in a
+  floating bar.
+- **The last day** is one capsule per machine, the height of a meter: half hours in the same state merge into one
+  stretch, with a hairline gap only where the state changes. The legend uses the same capsule shape.
+- **Motion can follow the scroll** (the statement card settling); it still never hijacks or snaps the scroll.
+  Beyond that:
+  - The tab bar and the segmented switches share a clear glass lens over the chosen item, on the measured iOS 27
+    springs: it lifts and grows mid-move, leans into the travel, squashes on landing and wobbles once; pressing
+    and dragging moves it under the finger.
+  - Tab pages and lists that change with a switch slide on that same spring, in the direction of travel.
+  - An issue card grows into its service page; the server picker grows out of its button into a window with a
+    soft halo around it.
+  - Numbers count up once, heat maps and charts fill once.
+  - All of it stops under reduced motion.
 
 ## How the design was reached, and how to do it again
 

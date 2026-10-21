@@ -325,4 +325,21 @@ defmodule DokkitWeb.InboxLiveTest do
     {:dictionary, dict} = Process.info(view.pid, :dictionary)
     assert List.keyfind(dict, {:debounce, :page}, 0) == {{:debounce, :page}, :pending}
   end
+
+  test "the last day lets the keyboard reach its newest down cell and keeps a box for the game",
+       %{
+         conn: conn
+       } do
+    m = Repo.insert!(%Machine{name: "inbox-day"})
+    bad_check(m, "api", "production", :custom, :down)
+    {:ok, view, html} = live(conn, "/")
+
+    assert [_] =
+             html
+             |> LazyHTML.from_document()
+             |> LazyHTML.query("#day .lane i.bad[tabindex='0']")
+             |> Enum.to_list()
+
+    assert has_element?(view, "#day > #day-game[phx-update=ignore]")
+  end
 end

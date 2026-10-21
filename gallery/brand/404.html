@@ -12,6 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="site.css?v=20">
+<link rel="stylesheet" href="keep-green.css?v=20">
 <script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m !== "off"; if (!on) document.documentElement.classList.add("still"); })();</script>
 <link rel="stylesheet" href="nav.css?v=1">
 <meta property="og:type" content="website">
@@ -40,23 +41,24 @@
 
 <main id="top" class="page">
   <header class="phead">
-    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><b>Not found</b></p>
-    <h1 class="ptitle">Not found</h1>
-    <p class="plede">That page is not here. The rest of the site is.</p>
+    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><b>This page is down</b></p>
+    <h1 class="ptitle">This page is down</h1>
+    <p class="plede">Keep the rest green?</p>
   </header>
 
   <div class="steps-wrap">
     <nav class="rail" aria-label="On this page">
       <ol>
-        <li><a href="#gone" data-step="gone"><i>1</i>Where to go</a></li>
+        <li><a href="#gone" data-step="gone"><i>1</i>Keep the rest green</a></li>
       </ol>
       <span class="rail-fill" id="railFill" aria-hidden="true"></span>
     </nav>
 
     <div class="steps">
       <section class="step" id="gone">
-        <h2 data-type>Where to go</h2>
-        <p class="big-fact" data-fly="up">Nothing lives at this address. It may have moved, or the link may have a typo in it.</p>
+        <h2 data-type>Keep the rest green</h2>
+        <p class="big-fact" data-fly="up">Nothing lives at this address. It may have moved, or the link may have a typo in it. The rest of the site is up, and <a href="index.html">the start</a> is one click away.</p>
+        <div data-keep-green></div>
       </section>
 
       <section class="next" aria-label="Where to go next">
@@ -79,6 +81,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
 <script src="site.js?v=20"></script>
+<script src="keep-green.js?v=20"></script>
 <script>railFor($$(".step"), $$(".rail a"));</script>
 <script src="motion.js?v=20"></script>
 <script src="nav.js?v=1"></script>
