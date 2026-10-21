@@ -799,7 +799,8 @@ defmodule Dokkit.Alerts do
     retarget(issue)
 
     # A channel added to the route since the issue first opened is told now.
-    if live and not Dokkit.Issues.machine_down?(issue.machine_id) do
+    if live and match?(%Service{}, issue.service) and
+         not Dokkit.Issues.machine_down?(issue.machine_id) do
       have = Repo.all(from a in Alert, where: a.issue_id == ^id, select: a.channel)
       {_, rule} = routed(issue, issue.service, config)
       insert(issue, wanted -- have, &holds?(issue.service, &1, now), rule)
