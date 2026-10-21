@@ -1,13 +1,13 @@
-# A name on dokkit.dev
+# A name on dokkit.page
 
-Any Dokkit server can have a name such as `yours.dokkit.dev`, with a real https certificate, even when the server is on a private network. The name points at the server's own address, private addresses included. The certificate comes from Let's Encrypt, which checks a DNS record and never needs to reach the server.
+Any Dokkit server can have a name such as `yours.dokkit.page`, with a real https certificate, even when the server is on a private network. The name points at the server's own address, private addresses included. The certificate comes from Let's Encrypt, which checks a DNS record and never needs to reach the server.
 
 ## Getting one
 
 1. Go to https://names.dokkit.dev and sign in with GitHub, Google, Microsoft or Apple, or under "More" with GitLab, Discord or Codeberg.
 2. Pick a name: 3 to 40 lower-case letters, digits and hyphens, starting and ending with a letter or digit. An account holds at most 3 names. Each sign-in is its own account: names claimed after signing in with Google are not shown when signing in with GitHub.
 3. The page shows a claim code once. It works once, within seven days.
-4. On the Dokkit server, open Settings, Certificate, and paste the code under "A name on dokkit.dev". Leave the address blank to use the machine's own address, or type the IPv4 address the name should point at. Press Claim.
+4. On the Dokkit server, open Settings, Certificate, and paste the code under "A name on dokkit.page". Leave the address blank to use the machine's own address, or type the IPv4 address the name should point at. Press Claim.
 
 The server then makes a key pair, registers the public half with the claim service using the code, points the name at its address, and gets a certificate. The private key stays on the server.
 
@@ -30,7 +30,7 @@ On the names page each name shows one of:
 
 ## Running the claim service
 
-The service is in `names/`: a Go program with no dependencies outside the standard library. It is the only thing that writes records in the dokkit.dev zone for claimed names. It keeps its state in one JSON file, rewritten on each change.
+The service is in `names/`: a Go program with no dependencies outside the standard library. It is the only thing that writes records in the dokkit.page zone for claimed names. It keeps its state in one JSON file, rewritten on each change.
 
 dokkit.page itself, and www.dokkit.page, answer with a 301 to names.dokkit.dev. That is `names/page/`, an Azure Static Web App on the free plan, deployed by `.github/workflows/page.yml`; the apex is an alias record to the app, so the zone stays on Azure DNS with the names.
 
@@ -49,11 +49,13 @@ Build it with `go build` in `names/`. Settings come from the environment:
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | A Discord application's OAuth2 client. Listed under "More". |
 | `CODEBERG_CLIENT_ID`, `CODEBERG_CLIENT_SECRET` | A Codeberg OAuth2 application. Listed under "More". |
 | `NAMES_BASE_URL` | Default `https://names.dokkit.dev`. |
-| `NAMES_ZONE` | Default `dokkit.dev`. |
+| `NAMES_ZONE` | The zone names are made in. Default `dokkit.page`. |
 | `NAMES_ADDR` | Where it listens. Default `127.0.0.1:8080`. |
 | `NAMES_STATE` | The state file. Default `names.json` in the working folder. |
 | `NAMES_MAX` | How many names it hands out in all. Default 1000. Each name holds up to three record sets, and an Azure DNS zone holds 10,000. |
 | `NAMES_RESERVED` | More names nobody may claim, separated by spaces or commas. Anything already in the zone is refused anyway. |
+| `NAMES_BLOCKED` | More words no name may contain, separated by spaces or commas, added to the built-in list. |
+| `NAMES_BEAT_URL` | The address given out for outside heartbeats. Default `https://beat.dokkit.dev`. |
 | `NAMES_ABUSE_EMAIL` | Where report links go. Default `abuse@dokkit.dev`. |
 
 ### Sign-in
@@ -108,3 +110,7 @@ All are `POST` with a body signed like ACME (JWS, ES256 over P-256): `protected`
 | `/v1/txt/clear` | `kid` | `{}` | Removes the challenge values. |
 
 Addresses may be private but not loopback, link-local, multicast or unspecified. A challenge value is 43 base64url characters and nothing else.
+
+## The outside heartbeat
+
+The same service also keeps heartbeats for servers that use dokkit.dev as their outside heartbeat (the Alerts page, Outside heartbeat). There is no account. `POST /v1/beats` with `label`, `kind` (`ntfy` or `webhook`) and `notify` (an https address) answers with the heartbeat's `url`, `token` and a `key`. `PUT` and `DELETE` on `/v1/beats/<token>` change or remove it and take the key as a bearer token. A call to `/beat/<token>` is the heartbeat. When calls stop for five minutes, the service posts to the ntfy topic or webhook, and again when they resume. It posts only to public addresses, and a heartbeat that has not been called for 30 days is removed. Three new heartbeats an hour are allowed from one address.

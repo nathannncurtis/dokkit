@@ -1,6 +1,6 @@
 # Dokkit for PHP
 
-One file, no packages or extensions, PHP 8.0 or later. `Dokkit::beat`, `job`, `check`, `capture`, `log`.
+One file, no packages or extensions, PHP 8.0 or later. `Dokkit::beat`, `job`, `check`, `metric`, `capture`, `log`, `stats`.
 
 ## Install
 

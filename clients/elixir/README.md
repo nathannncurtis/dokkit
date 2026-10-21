@@ -1,6 +1,6 @@
 # Dokkit for Elixir
 
-One file, no packages, Elixir 1.18 or later. `Dokkit.beat`, `job`, `check`, `capture`, `log`.
+One file, no packages, Elixir 1.18 or later. `Dokkit.beat`, `job`, `check`, `metric`, `capture`, `log`, `stats`.
 
 ## Install
 

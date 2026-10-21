@@ -1,6 +1,6 @@
 # Dokkit for PowerShell
 
-One file, for Windows PowerShell 5.1 and PowerShell 7. `Send-DokkitBeat`, `Invoke-DokkitJob`, `Send-DokkitCheck`, `Send-DokkitError`, `Write-DokkitLog`.
+One file, for Windows PowerShell 5.1 and PowerShell 7. `Send-DokkitBeat`, `Invoke-DokkitJob`, `Send-DokkitCheck`, `Send-DokkitMetric`, `Send-DokkitError`, `Write-DokkitLog`.
 
 ## Install
 
