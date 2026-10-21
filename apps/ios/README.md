@@ -6,7 +6,7 @@ The app is not on the App Store yet. Until it is, you build it and sign it with 
 
 ## Build and install
 
-You need a Mac with Xcode 16 or later, an iPhone on iOS 17 or later, and an Apple ID.
+You need a Mac with Xcode 16 or later, an iPhone on iOS 17 or later, and an Apple ID. Build with Xcode 27.1 or later for the foldable layout below; an older Xcode builds the app without it.
 
 1. Install XcodeGen: `brew install xcodegen`.
 2. In this folder run `xcodegen generate`. It writes `Dokkit.xcodeproj`.
