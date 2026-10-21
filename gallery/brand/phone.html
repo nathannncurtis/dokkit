@@ -95,25 +95,40 @@
 
       <section class="step" id="app">
         <h2 data-type>Get the app</h2>
-        <p class="sub-p">The apps are not on the App Store or Google Play yet. Until they are, each release carries both, unsigned, and you sign them with your own account or key.</p>
+        <p class="sub-p">Install it like any other app: TestFlight on iPhone, a signed file on Android. Building it yourself is still there if you would rather.</p>
         <div class="cards cards-2">
-          <details class="card"><summary>iPhone <small>a Mac with Xcode 16, iOS 17 or later</small></summary><div class="card-body">
+          <details class="card" open><summary>iPhone <small>TestFlight, iOS 17 or later</small></summary><div class="card-body">
             <ol class="do">
-              <li>Install XcodeGen with <code>brew install xcodegen</code>, then run <code>xcodegen generate</code> in <code>apps/ios</code>.</li>
-              <li>Open <code>Dokkit.xcodeproj</code>. Under Signing &amp; Capabilities choose your Team and a bundle identifier of your own.</li>
-              <li>Turn on Developer Mode on the iPhone, connect it, and press Run.</li>
+              <li>On the iPhone, open <a href="https://testflight.apple.com/join/24zrk6Cd">the Dokkit TestFlight link</a>.</li>
+              <li>Install TestFlight from the App Store if it asks, then tap Accept and Install.</li>
             </ol>
-            <p>Signed with a free Apple ID it stops opening after seven days; run it from Xcode again to renew. A paid account lasts a year.</p>
+            <p>No developer account needed. TestFlight offers each new release as an update.</p>
           </div></details>
-          <details class="card"><summary>Android <small>the signed file installs like any app</small></summary><div class="card-body">
+          <details class="card" open><summary>Android <small>Android 8 or later</small></summary><div class="card-body">
             <ol class="do">
-              <li>Take <code>dokkit-android-unsigned.apk</code> from a release, or build it with <code>./build-unsigned.sh</code> in <code>apps/android</code>.</li>
-              <li>Make a key once with <code>keytool</code>, then sign with <code>apksigner sign --ks dokkit.jks</code>.</li>
-              <li>Install it with <code>adb install</code>, or copy it to the phone and open it.</li>
+              <li>On the phone, download <a href="https://github.com/nathannncurtis/dokkit/releases/latest/download/dokkit-android.apk"><code>dokkit-android.apk</code></a> from the latest release.</li>
+              <li>Open it and allow installs from your browser when Android asks.</li>
             </ol>
-            <p>Keep the key: an update must be signed with the same one.</p>
+            <p>It is signed with the Dokkit key, so later releases install over it as updates.</p>
           </div></details>
         </div>
+        <details class="card"><summary>Build it yourself <small>sign with your own account or key</small></summary><div class="card-body">
+          <p>Each release also carries <code>dokkit-ios-unsigned.ipa</code> and <code>dokkit-android-unsigned.apk</code>, and the source is in <code>apps/</code>.</p>
+          <p><b>iPhone</b>, on a Mac with Xcode 16:</p>
+          <ol class="do">
+            <li>Install XcodeGen with <code>brew install xcodegen</code>, then run <code>xcodegen generate</code> in <code>apps/ios</code>.</li>
+            <li>Open <code>Dokkit.xcodeproj</code>. Under Signing &amp; Capabilities choose your Team and a bundle identifier of your own.</li>
+            <li>Turn on Developer Mode on the iPhone, connect it, and press Run.</li>
+          </ol>
+          <p>Signed with a free Apple ID it stops opening after seven days; run it from Xcode again to renew. A paid account lasts a year.</p>
+          <p><b>Android</b>:</p>
+          <ol class="do">
+            <li>Take <code>dokkit-android-unsigned.apk</code> from a release, or build it with <code>./build-unsigned.sh</code> in <code>apps/android</code>.</li>
+            <li>Make a key once with <code>keytool</code>, then sign with <code>apksigner sign --ks dokkit.jks</code>.</li>
+            <li>Install it with <code>adb install</code>, or copy it to the phone and open it.</li>
+          </ol>
+          <p>Keep the key: an update must be signed with the same one. A copy you sign yourself cannot update the Dokkit-signed one, or the other way round.</p>
+        </div></details>
       </section>
 
       <section class="step" id="pair">
