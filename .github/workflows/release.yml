@@ -73,6 +73,53 @@ jobs:
           name: program-${{ matrix.os }}-${{ matrix.arch }}
           path: out/*
 
+  sign-windows:
+    needs: program
+    runs-on: windows-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    env:
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: program-windows-${{ matrix.arch }}
+          path: out
+      - name: No signing secrets
+        if: env.AZURE_CLIENT_SECRET == ''
+        shell: bash
+        run: echo "::warning::No Azure signing secrets are set, so dokkit-windows-${{ matrix.arch }}.exe is not signed."
+      - name: Sign
+        if: env.AZURE_CLIENT_SECRET != ''
+        uses: Azure/trusted-signing-action@0d74250c661747df006298d0fb49944c10f16e03 # v0.5.1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: https://wus2.codesigning.azure.net/
+          trusted-signing-account-name: nathancurtis-signing
+          certificate-profile-name: nathancurtis-signing
+          files: ${{ github.workspace }}\out\dokkit-windows-${{ matrix.arch }}.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Checksum
+        if: env.AZURE_CLIENT_SECRET != ''
+        shell: bash
+        run: |
+          cd out
+          sha256sum "dokkit-windows-${{ matrix.arch }}.exe" > "dokkit-windows-${{ matrix.arch }}.exe.sha256"
+      - uses: actions/upload-artifact@v7
+        if: env.AZURE_CLIENT_SECRET != ''
+        with:
+          name: program-windows-${{ matrix.arch }}
+          path: out/*
+          overwrite: true
+
   mac:
     runs-on: macos-latest
     continue-on-error: true
@@ -219,7 +266,7 @@ jobs:
 
   release:
     if: always() && github.ref_type == 'tag'
-    needs: [image, program, mac, windows-server, ios, android]
+    needs: [image, program, sign-windows, mac, windows-server, ios, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
