@@ -49,7 +49,7 @@
 <div class="review">
   <div class="side">
     <h1><span id="logo"></span> Dokkit for Android</h1>
-    <p class="lede">Five directions in Calm in Ember, all on the same made-up estate. Every screen the app has today is in each one; tap around.</p>
+    <p class="lede">Five directions grown from C, all on the same made-up estate. Every screen the app has today is in each one; tap around and scroll.</p>
     <div class="dirs" role="tablist" aria-label="Directions" id="dirs"></div>
     <div class="ctls">
       <label>What the phone is going through
@@ -84,15 +84,16 @@
 </div>
 <script>
   var DIRS = [
-    ["a", "Inbox", "The web's inbox on a phone: greeting, one sentence, issue cards, the last day."],
-    ["b", "Machines", "Machines lead. Trouble sits inside the machine it is on; services open in a sheet."],
-    ["c", "Hero", "The state fills the top of the screen. Issues swipe one at a time."],
-    ["d", "Sections", "A server chip on top, segments for needs, soon and machines."],
-    ["e", "Today", "A calm feed of what happened, then machines as square tiles."]
+    ["c", "C, the start", "The hero you picked, as it was."],
+    ["f", "Flow", "One gradient runs the whole page; the hero folds into the top bar as you scroll."],
+    ["g", "Wallet", "The state reads like a balance; issues are a deck of big cards that fans out."],
+    ["h", "Depth", "Soft layers drift at different speeds; glass cards; sheets fly out of what you tap."],
+    ["i", "Ribbon", "Sections rise in as they arrive; a floating tab bar; the warm light follows you down."],
+    ["j", "Statement", "Big type, one pinned hero card that settles small; a card opens into its page."]
   ];
   var JUMP = [["Home", "#home"], ["A service", "#service/s-upload"], ["A job", "#service/s-purge"], ["A machine", "#machine/nas"], ["Servers", "#servers"], ["Settings", "#settings"], ["Add a server", "#add"], ["Lock", "#lock"], ["First run", "#first"]];
   var store = { get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
-  var cur = store.get("android-dir") || "a", frame = document.getElementById("frame");
+  var cur = store.get("android-dir2") || "f", frame = document.getElementById("frame");
   var scen = document.getElementById("scenario"), theme = document.getElementById("theme");
   scen.value = store.get("android-scen") || "normal"; theme.value = store.get("android-theme") || "";
   if (theme.value) document.documentElement.dataset.theme = theme.value;
@@ -108,7 +109,7 @@
   }
   document.getElementById("dirs").onclick = function (e) {
     var b = e.target.closest("[data-dir]"); if (!b) return;
-    cur = b.dataset.dir; store.set("android-dir", cur); draw(); load();
+    cur = b.dataset.dir; store.set("android-dir2", cur); draw(); load();
   };
   document.getElementById("jump").innerHTML = JUMP.map(function (j) { return '<button type="button" data-route="' + j[1] + '">' + j[0] + "</button>"; }).join("");
   document.getElementById("jump").onclick = function (e) { var b = e.target.closest("[data-route]"); if (b) load(b.dataset.route); };
