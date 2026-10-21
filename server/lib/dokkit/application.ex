@@ -6,6 +6,7 @@ defmodule Dokkit.Application do
   def start(_type, _args) do
     Dokkit.LoginThrottle.init()
     Dokkit.Slots.init()
+    Dokkit.Errors.init()
     Dokkit.Certificate.load()
     demo = Dokkit.Demo.on?()
     watch = Application.get_env(:dokkit, :watch, true) and not demo
