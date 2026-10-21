@@ -276,7 +276,7 @@ jobs:
             --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEYSTORE_PASSWORD \
             --out dokkit-android.apk dokkit-android-unsigned.apk
           rm "$RUNNER_TEMP/dokkit.p12"
-          "$apksigner" verify --print-certs dokkit-android.apk | grep -E 'Signer #1 certificate (DN|SHA-256)'
+          "$apksigner" verify --verbose --print-certs dokkit-android.apk
           sha256sum dokkit-android.apk > dokkit-android.apk.sha256
       - uses: actions/upload-artifact@v7
         with:
