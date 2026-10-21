@@ -234,10 +234,12 @@ jobs:
   apps-ios:
     needs: changes
     if: needs.changes.outputs.apps-ios == 'true'
-    runs-on: macos-15
+    runs-on: xcode-27
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Use Xcode 27.1
+        run: sudo xcode-select -s /Applications/Xcode_27.1.app && xcodebuild -version && swift --version
       - name: Checks
         working-directory: apps/ios/DokkitKit
         run: set -o pipefail; swift run DokkitChecks 2>&1 | tail -40

@@ -34,6 +34,8 @@ jobs:
             echo "list=${image}:test" >> "$GITHUB_OUTPUT"
           fi
       - uses: docker/build-push-action@v7
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
         id: build
         with:
           context: server
@@ -272,13 +274,15 @@ jobs:
           path: out/*
 
   ios:
-    runs-on: macos-15
+    runs-on: xcode-27
     continue-on-error: true
     timeout-minutes: 30
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v7
+      - name: Use Xcode 27.1
+        run: sudo xcode-select -s /Applications/Xcode_27.1.app && xcodebuild -version && swift --version
       - name: Build the unsigned app
         working-directory: apps/ios
         run: ./build-unsigned.sh
@@ -339,8 +343,10 @@ jobs:
           build=$(date -u +%y%m%d).$(date -u +%H%M%S)
           echo "BUILD_NUMBER=$build" >> "$GITHUB_ENV"
           echo "Uploading $version ($build)"
+          # The profile goes to the app target only (through Signing.xcconfig); package resource bundles cannot take one.
+          echo 'PROVISIONING_PROFILE_SPECIFIER = Dokkit App Store' > Local.xcconfig
           xcodegen generate
-          xcodebuild archive -project Dokkit.xcodeproj -scheme Dokkit -configuration Release -destination generic/platform=iOS             -archivePath build/Dokkit.xcarchive DEVELOPMENT_TEAM=Z46423B3U9 CODE_SIGN_STYLE=Manual             CODE_SIGN_IDENTITY="Apple Distribution" PROVISIONING_PROFILE_SPECIFIER="Dokkit App Store"             MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build"
+          xcodebuild archive -project Dokkit.xcodeproj -scheme Dokkit -configuration Release -destination generic/platform=iOS -archivePath build/Dokkit.xcarchive DEVELOPMENT_TEAM=Z46423B3U9 CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Apple Distribution" MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build"
           xcodebuild -exportArchive -archivePath build/Dokkit.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath build/export
       - name: Upload to TestFlight
         if: steps.gate.outputs.go != 'no'
@@ -350,8 +356,9 @@ jobs:
         env:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
-          python3 -m pip install --quiet pyjwt cryptography
-          python3 apps/ios/testflight.py "$BUILD_NUMBER"
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyjwt cryptography requests
+          "$RUNNER_TEMP/venv/bin/python" apps/ios/testflight.py "$BUILD_NUMBER"
       - name: Remove the keychain
         if: always()
         run: |
@@ -391,7 +398,7 @@ jobs:
           apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
           "$apksigner" sign --ks "$RUNNER_TEMP/dokkit.p12" --ks-type PKCS12 --ks-key-alias "$ANDROID_KEY_ALIAS" \
             --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEYSTORE_PASSWORD \
-            --out dokkit-android.apk dokkit-android-unsigned.apk
+            --v4-signing-enabled false --out dokkit-android.apk dokkit-android-unsigned.apk
           rm "$RUNNER_TEMP/dokkit.p12"
           "$apksigner" verify --verbose --print-certs dokkit-android.apk
           sha256sum dokkit-android.apk > dokkit-android.apk.sha256
@@ -400,9 +407,138 @@ jobs:
           name: phone-android
           path: apps/android/out/*
 
+  desktop:
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/desktop/src-tauri
+    env:
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      MAC_P12: ${{ secrets.MAC_DEVID_P12 }}
+      MAC_P12_PASSWORD: ${{ secrets.MAC_DEVID_P12_PASSWORD }}
+      MAC_IDENTITY: ${{ secrets.MAC_DEVID_IDENTITY }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsecret-1-dev libdbus-1-dev
+      - name: Mac targets
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin/cargo-tauri*
+            ~/.cargo/bin/trusted-signing-cli*
+            apps/desktop/src-tauri/target
+          key: desktop-release-${{ matrix.os }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+      - name: Tauri CLI
+        run: command -v cargo-tauri >/dev/null || cargo install tauri-cli --version "^2" --locked
+      - name: No Windows signing secrets
+        if: runner.os == 'Windows' && env.AZURE_CLIENT_SECRET == ''
+        run: echo "::warning::No Azure signing secrets are set, so the Windows installers are not signed."
+      - name: Signing tool
+        if: runner.os == 'Windows' && env.AZURE_CLIENT_SECRET != ''
+        run: command -v trusted-signing-cli >/dev/null || cargo install trusted-signing-cli --locked
+      - name: No Mac signing secrets
+        if: runner.os == 'macOS' && (env.MAC_P12 == '' || env.MAC_IDENTITY == '')
+        run: echo "::warning::No signing certificate is set, so the Mac app is not signed."
+      - name: Mac keychain
+        if: runner.os == 'macOS' && env.MAC_P12 != '' && env.MAC_IDENTITY != ''
+        run: |
+          keychain=$RUNNER_TEMP/sign.keychain-db
+          pass=$(openssl rand -hex 16)
+          security create-keychain -p "$pass" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$pass" "$keychain"
+          printf '%s' "$MAC_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$MAC_P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          curl -fsSL https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer -o "$RUNNER_TEMP/wwdr.cer" && security import "$RUNNER_TEMP/wwdr.cer" -k "$keychain" || true
+          curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$RUNNER_TEMP/devid.cer" && security import "$RUNNER_TEMP/devid.cer" -k "$keychain" || true
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pass" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          echo "APPLE_SIGNING_IDENTITY=$MAC_IDENTITY" >> "$GITHUB_ENV"
+          if [ -n "$ASC_KEY_P8" ]; then
+            printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
+            echo "APPLE_API_KEY=$ASC_KEY_ID" >> "$GITHUB_ENV"
+            echo "APPLE_API_ISSUER=$ASC_ISSUER_ID" >> "$GITHUB_ENV"
+            echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/asc.p8" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No App Store Connect key is set, so the Mac app is signed but not notarized."
+          fi
+      - name: Build
+        run: |
+          args=()
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            args+=(--config "{\"version\":\"${GITHUB_REF_NAME#v}\"}")
+          fi
+          if [ "$RUNNER_OS" = Windows ] && [ -n "$AZURE_CLIENT_SECRET" ]; then
+            args+=(--config '{"bundle":{"windows":{"signCommand":{"cmd":"trusted-signing-cli","args":["-e","https://wus2.codesigning.azure.net/","-a","nathancurtis-signing","-c","nathancurtis-signing","-d","Dokkit","%1"]}}}}')
+          fi
+          if [ "$RUNNER_OS" = macOS ]; then args+=(--target universal-apple-darwin); fi
+          cargo tauri build "${args[@]}"
+      - name: Sign and notarize the disk image
+        if: runner.os == 'macOS' && env.MAC_P12 != '' && env.MAC_IDENTITY != ''
+        run: |
+          dmg=$(ls target/universal-apple-darwin/release/bundle/dmg/*.dmg)
+          codesign --force --timestamp --sign "$MAC_IDENTITY" "$dmg"
+          app=$(ls -d target/universal-apple-darwin/release/bundle/macos/*.app)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv --verbose=2 "$app" 2>&1 | grep -E 'Identifier|TeamIdentifier|Authority=Developer ID'
+          if [ -n "$ASC_KEY_P8" ]; then
+            xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait --timeout 30m --output-format json > "$RUNNER_TEMP/notary.json"
+            status=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$RUNNER_TEMP/notary.json")
+            echo "Notarization: $status"
+            [ "$status" = Accepted ]
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+            xcrun stapler validate "$app"
+          fi
+      - name: Stable names
+        run: |
+          mkdir -p ../../../out
+          b=target/release/bundle
+          case "$RUNNER_OS" in
+            Windows)
+              cp $b/nsis/*-setup.exe ../../../out/dokkit-desktop-windows-x64-setup.exe
+              cp $b/msi/*.msi ../../../out/dokkit-desktop-windows-x64.msi ;;
+            macOS)
+              cp target/universal-apple-darwin/release/bundle/dmg/*.dmg ../../../out/dokkit-desktop-macos-universal.dmg ;;
+            Linux)
+              cp $b/deb/*.deb ../../../out/dokkit-desktop-linux-amd64.deb
+              cp $b/rpm/*.rpm ../../../out/dokkit-desktop-linux-x86_64.rpm
+              cp $b/appimage/*.AppImage ../../../out/dokkit-desktop-linux-amd64.AppImage ;;
+          esac
+          cd ../../../out
+          for f in dokkit-desktop-*; do
+            if command -v sha256sum >/dev/null; then sha256sum "$f" > "$f.sha256"; else shasum -a 256 "$f" > "$f.sha256"; fi
+          done
+          ls -l
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ runner.os }}
+          path: out/*
+          if-no-files-found: error
+
   release:
     if: always() && github.ref_type == 'tag'
-    needs: [image, program, sign-windows, mac, windows-server, ios, android]
+    needs: [image, program, sign-windows, mac, windows-server, ios, android, desktop]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -417,8 +553,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
-          # Six programs and the Windows server, each with its checksum. The phone apps are added when they built.
-          found=$(ls assets 2>/dev/null | grep -v -e '^dokkit-ios' -e '^dokkit-android' | wc -l)
+          # Six programs and the Windows server, each with its checksum. The phone and desktop apps are added when they built.
+          # Only release files go up; other artifacts (a build record, say) are dropped first.
+          find assets -maxdepth 1 -type f ! -name 'dokkit-*' -print -delete
+          found=$(ls assets 2>/dev/null | grep -v -e '^dokkit-ios' -e '^dokkit-android' -e '^dokkit-desktop' | wc -l)
           if [ "$found" -ne 14 ]; then
             echo "::warning::Not published: $found of 14 files were built."
             ls assets

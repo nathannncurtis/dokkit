@@ -43,7 +43,9 @@ def main(build_number):
         sys.exit(f"Adding the build to the group failed: {r.status_code} {r.text}")
 
     r = call("POST", "/betaAppReviewSubmissions", json={"data": {"type": "betaAppReviewSubmissions", "relationships": {"build": {"data": {"type": "builds", "id": build}}}}})
-    if r.status_code >= 300 and r.status_code != 409:
+    if "ANOTHER_BUILD_IN_REVIEW" in r.text:
+        print("::warning::Another build of this version is already in beta review; this one waits in the group.")
+    elif r.status_code >= 300 and r.status_code != 409:
         sys.exit(f"Submitting for beta review failed: {r.status_code} {r.text}")
 
     r = call("GET", f"/betaGroups/{GROUP_ID}")
