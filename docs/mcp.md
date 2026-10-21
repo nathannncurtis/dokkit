@@ -38,6 +38,9 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `releases` | `read` | Lists the program releases the server holds and whether each is complete. |
 | `certificate` | `read` | Shows the certificates the server serves itself. |
 | `alert_settings` | `read` | Shows the alert settings. Addresses, user names and secrets are only `set` or `not set`. |
+| `settings` | `read` | Shows every value Dokkit decides on its own for the whole server: `values` now, `defaults` that Reset gives, `changed` the ones that differ. |
+| `machine_settings` | `read` | Shows one machine's values (`id`). Each starts at the server-wide one. |
+| `job_settings` | `read` | Shows one job's values (`id`). Each starts at the job's own file, or the server-wide one. |
 | `alert_suggestions` | `read` | Lists issues that keep opening, which the daily digest could take instead. |
 | `logs` | `read-logs` | Searches log lines. |
 | `archives` | `read-logs` | Lists the archived months of logs that can be loaded back. |
@@ -61,6 +64,9 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `downtime_schedules` | `read` | A machine's scheduled planned downtime: each with `id`, `repeat`, `at`, `time`, `days`, `for_seconds`, `reason`, `by` and `next`. |
 | `schedule_downtime` | `act` | Schedules planned downtime that the server starts by itself: `repeat` of `once` (with `at`, an RFC 3339 time), `daily` or `weekly` (with `time`, such as `02:00`, in the night time zone, and for `weekly` `days`, 1 for Monday to 7 for Sunday), `for` (such as `30m`, at most `4h`) and an optional `reason`. A window it starts is not ended early when the machine comes back. |
 | `remove_scheduled_downtime` | `act` | Removes a scheduled planned downtime, by the `schedule` id from `downtime_schedules`. |
+| `set_settings` | `admin` | Changes server-wide values. `values` maps a name from `settings` to a whole number, true or false, or text for a list of lengths; null or an empty text puts one back to its default. A name left out stays as it was. |
+| `set_machine_settings` | `admin` | Changes one machine's values (`id`, `values`), as `set_settings` does. |
+| `set_job_settings` | `admin` | Changes one job's values (`id`, `values`), as `set_settings` does. |
 | `add_rule` | `admin` | Adds an alert rule. |
 | `update_rule` | `admin` | Changes an alert rule. A field left out stays as it was; an empty one clears it. |
 | `delete_rule` | `admin` | Deletes an alert rule. |
@@ -108,7 +114,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 
 ## Built so far
 
-`POST /mcp` with a user token: every tool in the table, 70 in all (25 `read`, 2 `read-logs`, 14 `act`, 29 `admin`), one for each call of the API a token can make. Making a full-control token, pairing and removing phones (`/phones`), moving log lines between services and the browser's own sign-in have no tool: they are Settings and the browser only. A tool the token may not use is not listed.
+`POST /mcp` with a user token: every tool in the first table, 85 in all (29 `read`, 2 `read-logs`, 19 `act`, 35 `admin`), one for each call of the API a token can make. Making a full-control token, pairing and removing phones (`/phones`), moving log lines between services and the browser's own sign-in have no tool: they are Settings and the browser only. A tool the token may not use is not listed.
 
 ## The public MCP at mcp.dokkit.dev
 
