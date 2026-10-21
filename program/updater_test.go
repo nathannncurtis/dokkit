@@ -134,27 +134,29 @@ func writeZip(t *testing.T, path string, files map[string]string) []byte {
 
 // rig is a machine with a fake Windows and a fake Dokkit server.
 type rig struct {
-	t        *testing.T
-	priv     ed25519.PrivateKey
-	dir      string
-	srv      *httptest.Server
-	mu       sync.Mutex
-	wanted   string // the version the server asks for; "" for 204
-	query    string
-	files    map[string]map[string][]byte // version -> file -> bytes
-	sums     map[string][]byte            // overrides the list served for a version
-	results  []outcome
-	failPost bool
-	failPosts int
-	refusePosts int
-	posts     int
-	cutFiles  int
+	t            *testing.T
+	priv         ed25519.PrivateKey
+	dir          string
+	srv          *httptest.Server
+	mu           sync.Mutex
+	wanted       string // the version the server asks for; "" for 204
+	query        string
+	files        map[string]map[string][]byte // version -> file -> bytes
+	sums         map[string][]byte            // overrides the list served for a version
+	results      []outcome
+	failPost     bool
+	failPosts    int
+	refusePosts  int
+	posts        int
+	cutFiles     int
 	serverStarts int
-	failPS   bool
-	noStart  string // a program file content that will not start
-	calls    []string
-	port     bool
-	server   bool
+	failPS       bool
+	noStart      string // a program file content that will not start
+	calls        []string
+	port         bool
+	server       bool
+	limit        int // limit_seconds the server sends; 0 sends none
+	deadline     time.Duration
 }
 
 func newRig(t *testing.T, hostsServer bool) *rig {
@@ -190,8 +192,11 @@ func newRig(t *testing.T, hostsServer bool) *rig {
 			return nil
 		},
 		startServer: func() { r.serverStarts++ },
-		installer: func(_ context.Context, script string) (string, error) {
+		installer: func(ctx context.Context, script string) (string, error) {
 			r.calls = append(r.calls, "install.ps1")
+			if d, ok := ctx.Deadline(); ok {
+				r.deadline = time.Until(d)
+			}
 			if _, err := os.Stat(script); err != nil {
 				t.Errorf("installer script missing: %v", err)
 			}
@@ -226,6 +231,10 @@ func (r *rig) handle(w http.ResponseWriter, q *http.Request) {
 		r.query = q.URL.RawQuery
 		if r.wanted == "" {
 			w.WriteHeader(204)
+			return
+		}
+		if r.limit > 0 {
+			fmt.Fprintf(w, `{"version":%q,"limit_seconds":%d}`, r.wanted, r.limit)
 			return
 		}
 		fmt.Fprintf(w, `{"version":%q}`, r.wanted)
@@ -396,6 +405,23 @@ func TestServerAndProgram(t *testing.T) {
 	updaterRun()
 	if !strings.Contains(r.query, "server=v1.1.0") {
 		t.Fatal(r.query)
+	}
+}
+
+func TestTheServersLimitBoundsTheUpdate(t *testing.T) {
+	for _, tc := range []struct {
+		limit    int
+		min, max time.Duration
+	}{{120, time.Minute, 2 * time.Minute}, {0, 44 * time.Minute, 45 * time.Minute}} {
+		r := newRig(t, true)
+		r.publish("v1.1.0", map[string][]byte{serverZip: r.serverZip()})
+		r.wanted, r.limit = "v1.1.0", tc.limit
+		if code := updaterRun(); code != 0 {
+			t.Fatalf("%d %v", code, r.results)
+		}
+		if r.deadline <= tc.min || r.deadline > tc.max {
+			t.Fatalf("limit %d: the install had %v", tc.limit, r.deadline)
+		}
 	}
 }
 

@@ -109,8 +109,8 @@ func scan(args []string, folders []string) int {
 }
 
 var (
-	scanFirst = 2 * time.Minute
-	scanEvery = 24 * time.Hour
+	scanFirst = newSetting(2 * time.Minute)
+	scanEvery = newSetting(24 * time.Hour)
 )
 
 const scanWork = "dokkit:scan"
