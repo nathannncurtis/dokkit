@@ -8,8 +8,8 @@ web
 
 ## Stack
 
-The product: a Phoenix server on Postgres, a Go program on each watched machine, client libraries in eleven languages.
-The website (dokkit.dev) is not in this repo yet: there is no `site/` folder. The mock of it is `gallery/brand/`.
+The product: a Phoenix server on Postgres, a Go program on each watched machine, client libraries in eleven languages, phone apps for iOS and Android, and a desktop app for Windows, macOS and Linux.
+The website (dokkit.dev) is in this repo, in `gallery/brand/`, and is deployed to Cloudflare by `.github/workflows/pages.yml`.
 
 ## Users
 
@@ -38,15 +38,15 @@ Checks (http, tcp, process, Windows service, systemd unit, beats, jobs on a sche
 - Words: machine, service, check, state, issue, job run, deploy, rule, proposal. The program on each machine is "the `dokkit` program", never an "agent" or "runner".
 - Licence: AGPL for the server, Apache 2.0 for the program and the libraries.
 - Also accepts reports from Sentry's open-source SDKs. That is a compatibility note, never the pitch: no "alternative to", no price comparison, "not affiliated with Sentry".
-- The project hands out no builds signed with anyone's certificate; whoever builds signs their own.
+- Releases are signed: Windows files with Azure Trusted Signing, macOS files with a Developer ID and notarized, the Docker image with cosign. Someone building it themselves signs with their own certificate.
 - Not offered: a hosted version, security monitoring, business analytics.
 
 ## Brand Commitments
 
 - Name: Dokkit, "docket" respelled. A docket is the list of matters waiting for attention.
 - Mark: a D with a dot at its top-left, used exactly as drawn (`server/priv/static/favicon.svg`).
-- Colour: Ember, a warm charcoal with one tangerine accent, in the interface's dark theme and on the website. The light theme keeps a teal accent. Accent and dark base are settings a person can change.
-- The website is meant to be a scrolling site with a working sample of the interface in it; its mock is `gallery/brand/`.
+- Colour: Ember, a warm charcoal with one tangerine accent, in the interface's dark theme and on the website. The light theme keeps a teal accent. Accent and dark base are settings a person can change, and so is every other value Dokkit decides on its own (each has a default and a Reset).
+- The website is a scrolling site with a working sample of the interface in it, in `gallery/brand/`. A live demo of the real interface is at https://demo.dokkit.dev.
 - The website must not look like Sentry's, or like any other monitoring product's.
 - Voice: plain statements, short, no hype.
 - The website speaks to the builder as much as the watcher: wiring an app in is part of building it, and an AI tool can be handed the docs and a token.
