@@ -17,8 +17,14 @@ function chip(state) {
   return el("span", "chip fine", "all fine");
 }
 
+let serversSig = "";
+
 function renderServers() {
   const list = $("servers");
+  const sig = JSON.stringify([view.settings.servers, view.states]);
+  if (sig === serversSig) return;
+  serversSig = sig;
+  const focused = list.contains(document.activeElement) ? document.activeElement.dataset.f : null;
   list.replaceChildren();
   const states = Object.fromEntries(view.states.map((s) => [s.id, s]));
   for (const s of view.settings.servers) {
@@ -29,10 +35,12 @@ function renderServers() {
     const url = el("div", "mono mute url", s.url + (s.pin ? "  (pinned certificate)" : ""));
     const tools = el("div", "tools");
     const open = el("button", "", "Open");
+    open.dataset.f = `${s.id}:open`;
     open.onclick = () => invoke("open_server", { id: s.id });
     const label = el("label", "check");
     const box = el("input");
     box.type = "checkbox";
+    box.dataset.f = `${s.id}:notify`;
     box.checked = s.notify;
     box.onchange = async () => { await invoke("set_server_notify", { id: s.id, notify: box.checked }); await load(); };
     label.append(box, "Notify");
@@ -40,10 +48,12 @@ function renderServers() {
     if (!s.notify) {
       const reset = el("button", "reset", "Reset");
       reset.title = "Default: on";
+      reset.dataset.f = `${s.id}:reset`;
       reset.onclick = async () => { await invoke("set_server_notify", { id: s.id, notify: true }); await load(); };
       tools.append(reset);
     }
     const remove = el("button", "danger", "Remove");
+    remove.dataset.f = `${s.id}:remove`;
     remove.onclick = async () => {
       if (!confirm(`Remove ${s.name}? Its stored token is deleted.`)) return;
       await invoke("remove_server", { id: s.id });
@@ -55,6 +65,7 @@ function renderServers() {
     list.append(li);
   }
   $("no-servers").hidden = view.settings.servers.length > 0;
+  if (focused) [...list.querySelectorAll("[data-f]")].find((e) => e.dataset.f === focused)?.focus();
 }
 
 function renderLede() {
@@ -127,6 +138,7 @@ async function add(pin) {
       $("pin-box").hidden = $("pin-btn").hidden = false;
     } else {
       $("add").reset();
+      $("share-note").hidden = true;
       $("pin-box").hidden = $("pin-btn").hidden = true;
       pending = null;
       await load();
@@ -138,6 +150,12 @@ async function add(pin) {
     $("add-btn").disabled = $("pin-btn").disabled = false;
   }
 }
+
+$("url").oninput = () => {
+  let host = "";
+  try { host = new URL($("url").value.trim()).hostname; } catch {}
+  $("share-note").hidden = !host || !view.settings.servers.some((s) => new URL(s.url).hostname === host);
+};
 
 $("add").onsubmit = (e) => { e.preventDefault(); $("pin-box").hidden = $("pin-btn").hidden = true; add(null); };
 $("pin-btn").onclick = () => add(pending);

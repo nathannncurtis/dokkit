@@ -58,8 +58,10 @@ extern "C" fn challenge(_this: *mut AnyObject, _sel: *mut c_void, _view: *mut An
         let space: *mut AnyObject = msg_send![challenge, protectionSpace];
         let method: *mut AnyObject = msg_send![space, authenticationMethod];
         let host: *mut AnyObject = msg_send![space, host];
+        let port: isize = msg_send![space, port];
         let trust: *mut c_void = msg_send![space, serverTrust];
-        let pin = PINS.lock().unwrap().as_ref().and_then(|m| m.get(&text(host).to_lowercase()).cloned());
+        let key = format!("{}:{port}", text(host).to_lowercase());
+        let pin = PINS.lock().unwrap().as_ref().and_then(|m| m.get(&key).cloned());
         let accept = text(method) == "NSURLAuthenticationMethodServerTrust"
             && !trust.is_null()
             && pin.is_some_and(|pin| leaf_der(trust).is_some_and(|der| logic::pin_matches(&pin, &der)));
@@ -72,9 +74,15 @@ extern "C" fn challenge(_this: *mut AnyObject, _sel: *mut c_void, _view: *mut An
     }
 }
 
-/// Teaches the window's navigation delegate to accept the pinned certificate for this host and nothing else.
-pub fn pin(window: &WebviewWindow, host: &str, pin: &str) {
-    PINS.lock().unwrap().get_or_insert_with(HashMap::new).insert(host.to_lowercase(), pin.to_string());
+pub fn unpin(key: &str) {
+    if let Some(m) = PINS.lock().unwrap().as_mut() {
+        m.remove(key);
+    }
+}
+
+/// Teaches the window's navigation delegate to accept the pinned certificate for this `host:port` and nothing else.
+pub fn pin(window: &WebviewWindow, key: &str, pin: &str) {
+    PINS.lock().unwrap().get_or_insert_with(HashMap::new).insert(key.to_string(), pin.to_string());
     let _ = window.with_webview(|webview| unsafe {
         let view = webview.inner() as *mut AnyObject;
         let delegate: *mut AnyObject = msg_send![view, navigationDelegate];
