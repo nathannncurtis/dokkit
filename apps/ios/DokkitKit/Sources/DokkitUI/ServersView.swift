@@ -100,7 +100,7 @@ struct AddServerView: View {
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 6)
             TextField("dokkit-phone:1:...", text: Binding(get: { model.pasted }, set: { model.pasted = $0 }), axis: .vertical)
                 .font(figtree(13.5, .medium, relativeTo: .footnote))
-                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                .plainCode()
                 .lineLimit(3...8)
                 .padding(14)
                 .frame(minHeight: 84, alignment: .topLeading)
@@ -119,5 +119,16 @@ struct AddServerView: View {
             model.pasted = ""
             done()
         }
+    }
+}
+
+extension View {
+    /// A pasted code is taken as typed: no capitals, no corrections.
+    @ViewBuilder func plainCode() -> some View {
+        #if os(iOS)
+        textInputAutocapitalization(.never).autocorrectionDisabled()
+        #else
+        autocorrectionDisabled()
+        #endif
     }
 }

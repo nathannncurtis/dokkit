@@ -134,8 +134,9 @@ private struct OpenIssue: View {
 
     var body: some View {
         let row = v.issue!
-        let raw = (snap.issues ?? []).first { $0.id == row.id }
-            ?? ((snap.inbox?.needsYou ?? []) + (snap.inbox?.soon ?? []) + (snap.inbox?.snoozed ?? [])).first { $0.id == row.id }
+        let inbox: [Issue] = (snap.inbox?.needsYou ?? []) + (snap.inbox?.soon ?? []) + (snap.inbox?.snoozed ?? [])
+        let all: [Issue] = (snap.issues ?? []) + inbox
+        let raw: Issue? = all.first { $0.id == row.id }
         let tone = raw.map { Words.tone($0, now: now) } ?? Theme.tone(row.level)
         let word = raw.map { Words.word($0, now: now) } ?? row.level.word
         let t = Theme.tint(tone)
