@@ -89,7 +89,8 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `alert_people` | `read` | Lists the people alerts can be told with their own destinations. The ntfy address, Pushover key and routing key are only set or not set. |
 | `alert_who` | `read` | Lists who is told at each level where someone is named. |
 | `set_alert_person` | `admin` | Changes a person's destinations. A field not given stays; an empty one clears it. |
-| `set_alert_who` | `admin` | Names who is told at one level (`default`, `rule`, `service` or `check`): person ids, or `["everyone"]`. |
+| `set_alert_who` | `admin` | Names who is told at one level (`default`, `rule`, `service` or `check`): person ids, `["everyone"]`, or `["oncall"]` for whoever is on call in the chosen PagerDuty schedule. |
+| `alert_oncall` | `admin` | Lists the PagerDuty schedules and who is on call now in the chosen one, and which person here that is. |
 | `test_alert` | `admin` | Sends a test alert by one channel, or to one person's destination with `person`. Answers sent, or one fixed reason. Four at once for each token, then one every 25 seconds; a page, or a push through PagerDuty, stays open for two minutes and then resolves itself, and costs twice as much (two at once, then one every 50 seconds). |
 | `accept_suggestion` | `admin` | Sends a service's issues to the daily digest from now on. |
 | `dismiss_suggestion` | `admin` | Dismisses an alert suggestion. |
