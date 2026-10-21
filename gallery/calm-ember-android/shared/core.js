@@ -45,6 +45,8 @@ window.CORE = (function () {
     var sn = nw.state.snapshot;
     sn.inbox.needs_you = []; sn.inbox.soon = []; sn.inbox.snoozed = []; sn.issues = [];
     sn.services.forEach(function (s) { s.open_issue = null; });
+    var day = P.lastDay;
+    P.lastDay = function (id) { return day(id).map(function (c) { return c === "warn" || c === "bad" ? "ok" : c; }); };
     sn.machines.forEach(function (m) { m.services.forEach(function (s) { if (s.environment === "production" && s.state !== "unknown") s.state = "ok"; }); if (m.id === "front-desk-pc") m.down = false; });
   }
   if (scenario === "stale") nw.state.made_at = P.at(9);

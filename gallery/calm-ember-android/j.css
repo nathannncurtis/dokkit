@@ -1,0 +1,265 @@
+/* Direction J, Statement: one inset gradient card that settles into a pinned card as you scroll; big cards under it. */
+
+@property --p { syntax: "<number>"; inherits: true; initial-value: 0; }
+
+/* ---------- tones: every page takes one ---------- */
+.j-tone-down { --tint: var(--rose); --tint-ink: var(--rose-ink); --tint-solid: var(--rose-solid); }
+.j-tone-degraded { --tint: var(--amber); --tint-ink: var(--amber-ink); --tint-solid: var(--amber-solid); }
+.j-tone-soon { --tint: var(--peach); --tint-ink: var(--peach-ink); --tint-solid: var(--peach-solid); }
+.j-tone-ok { --tint: var(--sage); --tint-ink: var(--sage-ink); --tint-solid: var(--sage-solid); }
+.j-tone-quiet { --tint: var(--mist); --tint-ink: var(--mist-ink); --tint-solid: var(--muted); }
+.j-tone-brand { --tint: var(--brand-soft); --tint-ink: color-mix(in srgb, var(--brand) 70%, var(--ink)); --tint-solid: var(--brand); }
+
+:root { --sheen: rgba(255, 255, 255, .5); --j-ease: cubic-bezier(.2, .8, .2, 1); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sheen: rgba(255, 255, 255, .07); } }
+:root[data-theme="dark"] { --sheen: rgba(255, 255, 255, .07); }
+
+/* The tint washes down the whole phone behind everything, so the hero never ends with an edge. */
+.phone.j { background:
+  radial-gradient(120% 60% at 85% -10%, color-mix(in srgb, var(--tint) 85%, transparent), transparent 70%),
+  linear-gradient(180deg, color-mix(in srgb, var(--tint) 55%, var(--bg)) 0, var(--bg) 62%); }
+.phone.j .statusbar { background: none; }
+
+/* ---------- top bar ---------- */
+.j-top { flex: none; display: flex; align-items: center; gap: 2px; min-height: 56px; padding: 2px 6px 2px 8px; z-index: 6; }
+.j-top-gap { width: 12px; flex: none; }
+.j-top-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.j-top h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: .01em; color: var(--ink-2); line-height: 1.2; }
+.j-top .sub { font-family: var(--mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.j-top .iconbtn { background: color-mix(in srgb, var(--panel) 55%, transparent); margin-left: 6px; width: 44px; height: 44px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 70%, transparent); transition: transform .2s var(--j-ease), background-color .2s; }
+.j-top .iconbtn:active { transform: scale(.92); }
+.j-spin i { animation: spin 1s linear infinite; }
+
+/* ---------- the statement card ---------- */
+#screen { overflow-anchor: none; }
+.j-pin { position: sticky; top: 0; z-index: 4; padding: 4px 12px 10px; }
+/* once pinned, what scrolls under it is softened instead of cut */
+.j-pin::before { content: ""; position: absolute; inset: 0 0 -6px; z-index: -1; opacity: var(--p);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tint) 40%, var(--bg)) 40%, transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  -webkit-mask: linear-gradient(#000 70%, transparent); mask: linear-gradient(#000 70%, transparent); }
+.j-hero { position: relative; overflow: hidden; isolation: isolate;
+  border-radius: calc(30px - 8px * var(--p));
+  padding: calc(24px - 10px * var(--p)) 22px calc(24px - 10px * var(--p));
+  color: var(--ink);
+  background: linear-gradient(140deg, color-mix(in srgb, var(--tint) 100%, var(--panel)) 0%, color-mix(in srgb, var(--tint) 62%, var(--panel)) 100%);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--panel) 70%, transparent) inset, 0 1px 2px rgba(36, 26, 21, .05), 0 calc(10px + 8px * var(--p)) calc(30px + 10px * var(--p)) color-mix(in srgb, var(--tint-solid) calc(14% + 8% * var(--p)), transparent); }
+/* a soft diagonal sheen that drifts slowly across the card */
+.j-hero::before { content: ""; position: absolute; inset: -40%; z-index: -1; pointer-events: none;
+  background: linear-gradient(115deg, transparent 38%, var(--sheen) 50%, transparent 62%);
+  animation: j-sheen 14s ease-in-out infinite alternate; }
+@keyframes j-sheen { from { transform: translateX(-28%); } to { transform: translateX(28%); } }
+.j-hero::after { content: ""; position: absolute; right: -60px; top: -70px; width: 220px; height: 220px; border-radius: 50%; z-index: -1;
+  background: radial-gradient(circle, color-mix(in srgb, var(--tint-solid) 22%, transparent), transparent 70%); }
+.j-fold { max-height: calc((1 - var(--p)) * 160px); opacity: clamp(0, calc(1 - var(--p) * 1.7), 1); overflow: hidden; }
+.j-hrow { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; }
+.j-hic { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; flex: none;
+  background: color-mix(in srgb, var(--panel) 80%, transparent); color: var(--tint-ink); box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+.j-eye { margin: 0; font-size: 14px; font-weight: 600; color: var(--tint-ink); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.j-eye .tag { background: color-mix(in srgb, var(--panel) 80%, transparent); color: var(--tint-ink); }
+.j-eye a { color: inherit; }
+.j-big { margin: 0; font-size: calc(clamp(32px, 9.4vw, 40px) - 14px * var(--p)); line-height: 1.06; font-weight: 800; letter-spacing: -.032em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.j-big.mono { font-family: var(--mono); font-weight: 500; letter-spacing: -.02em; font-size: calc(clamp(26px, 7.6vw, 32px) - 10px * var(--p)); }
+.j-lede { margin: 10px 0 0; font-size: 16.5px; color: var(--ink-2); line-height: 1.45; }
+.j-age { margin: 14px 0 0; display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; color: var(--tint-ink); }
+.j-hero .btn { margin-top: 18px; }
+.j-hero .j-acts { display: flex; flex-direction: column; gap: 6px; margin-top: 18px; }
+.j-hero .j-acts .btn { margin: 0; }
+
+/* the hero settles as the page scrolls: a scroll timeline where there is one, a listener everywhere else */
+@supports (animation-timeline: scroll()) {
+  #screen.j-scroll { animation: j-p linear both; animation-timeline: scroll(self); animation-range: 0 240px; }
+}
+@keyframes j-p { from { --p: 0; } to { --p: 1; } }
+
+/* ---------- body: big cards with air ---------- */
+.j-body { padding: 8px 14px 32px; display: flex; flex-direction: column; gap: 16px; }
+.j-card { background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid color-mix(in srgb, var(--line) 75%, transparent); border-radius: 24px;
+  box-shadow: 0 1px 2px rgba(36, 26, 21, .04), 0 12px 32px rgba(36, 26, 21, .06); }
+.j-pad { padding: 20px 20px 22px; }
+.j-h { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+.j-hsub { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.j-chead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 20px 20px 4px; }
+.j-chead .sub { font-family: var(--mono); font-size: 12.5px; }
+.j-label { margin: 6px 6px -4px; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.j-left, .j-snoozed { display: flex; align-items: center; gap: 8px; margin: 0 6px; font-size: 14px; }
+
+/* cards rise a little as they come into view */
+@supports (animation-timeline: view()) {
+  .j-rise { animation: j-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 55%; }
+}
+@keyframes j-rise { from { transform: translateY(22px) scale(.985); opacity: .55; } }
+
+/* ---------- figures: three numbers, said plainly ---------- */
+.j-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.j-fig { padding: 18px 16px 18px 20px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.j-fig + .j-fig { border-left: 1px solid color-mix(in srgb, var(--line) 75%, transparent); }
+.j-fig b { font-size: 34px; font-weight: 800; letter-spacing: -.03em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.j-fig > span { font-size: 13.5px; color: var(--muted); font-weight: 600; }
+.j-fig.down b { color: var(--rose-ink); } .j-fig.degraded b { color: var(--amber-ink); } .j-fig.soon b { color: var(--peach-ink); } .j-fig.ok b { color: var(--sage-ink); }
+
+/* ---------- issues: one big card each; tapping opens it into its page ---------- */
+.j-seg { background: color-mix(in srgb, var(--bg-2) 80%, transparent); border-radius: 16px; padding: 4px; }
+.j-seg button { min-height: 40px; border-radius: 12px; font-size: 14.5px; transition: background-color .25s var(--j-ease), box-shadow .25s; }
+.j-seg button .mono { font-size: 12px; margin-left: 4px; color: var(--muted); }
+.j-issues { display: flex; flex-direction: column; gap: 14px; }
+.j-issues .issue { border-radius: 24px; padding: 20px; gap: 6px 16px; cursor: pointer; border-color: color-mix(in srgb, var(--line) 75%, transparent);
+  box-shadow: 0 1px 2px rgba(36, 26, 21, .04), 0 12px 32px rgba(36, 26, 21, .06); transition: transform .25s var(--j-ease); }
+.j-issues .issue:active { transform: scale(.985); }
+.j-issues .issue h3 { font-size: 19px; letter-spacing: -.01em; }
+.j-issues .issue .say { font-size: 15.5px; margin-top: 4px; }
+.j-issues .issue .meta { font-size: 12px; opacity: .85; }
+.j-issues .issue .act { margin-top: 14px; }
+.j-issues .issue .btn { border-radius: 14px; min-height: 46px; padding: 10px 18px; }
+
+.j-good { border-radius: 24px; padding: 20px; }
+
+/* ---------- the last day ---------- */
+.j-day-rows { display: grid; gap: 4px; margin: 16px 0 16px; }
+.j-day-rows a { font-size: 12.5px; text-decoration: none; color: var(--ink-2); margin-top: 8px; display: flex; justify-content: space-between; }
+.j-day-rows a:first-child { margin-top: 0; }
+.j-day-rows a span { color: var(--muted); }
+.strip i { border-radius: 1px; }
+.strip.j-fill i { animation: j-cell .45s var(--j-ease) both; animation-delay: calc(var(--i, 0) * 12ms + var(--row, 0) * 50ms); }
+@keyframes j-cell { from { opacity: 0; transform: scale(.3); } }
+
+/* ---------- machines ---------- */
+.j-mlist { overflow: hidden; }
+.j-mrow + .j-mrow { border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent); }
+.j-mhead { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 14px; padding: 16px 20px; min-height: 68px; cursor: pointer; }
+.j-mhead:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.j-mhead .pip { margin: 0 3px; }
+.j-gicon { width: 16px; color: var(--muted); display: grid; place-items: center; font-size: 17px; }
+.j-mtext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.j-mname { font-size: 16px; font-weight: 500; }
+.j-mtext .sub { font-size: 13px; }
+.j-down { color: var(--rose-ink); }
+.j-mhead .chev { color: var(--muted); transition: transform .35s var(--j-ease); }
+.j-mrow.open .chev { transform: rotate(180deg); }
+.j-mrow.open { background: color-mix(in srgb, var(--bg) 50%, transparent); }
+.j-mbody { padding: 2px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
+.j-mrow.open .j-mbody { animation: j-open .4s var(--j-ease) both; }
+@keyframes j-open { from { opacity: 0; transform: translateY(-6px); } }
+.j-meters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.j-notice { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 14px; border-radius: 14px; font-size: 13.5px; }
+.j-svcs { display: flex; flex-direction: column; gap: 4px; }
+.j-svcs.pad-s { padding: 10px; }
+.j-svc { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 6px 12px; border-radius: 14px; text-decoration: none; background: color-mix(in srgb, var(--bg) 70%, var(--panel)); transition: transform .2s var(--j-ease); }
+.j-svc:active { transform: scale(.985); }
+.j-svc .name { flex: 1; min-width: 0; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.j-svc .what { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 99px; }
+.j-svc .what.t-ok { background: none; color: var(--muted); font-weight: 500; }
+.j-more { all: unset; cursor: pointer; min-height: 44px; padding: 0 12px; font-size: 14px; font-weight: 600; color: var(--brand); display: flex; align-items: center; }
+.j-more:focus-visible { outline: 3px solid var(--focus); border-radius: 10px; }
+.j-line { display: flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 13.5px; margin: 0; }
+
+/* ---------- vitals as big figures ---------- */
+.j-vitals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.j-vital { padding: 18px 14px 18px 20px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.j-vital + .j-vital { border-left: 1px solid color-mix(in srgb, var(--line) 75%, transparent); }
+.j-vital .k { font-size: 13px; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.j-vital b { font-size: 30px; font-weight: 800; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.j-vital b small { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 1px; }
+.j-vital.hot b { color: var(--amber-ink); }
+
+/* ---------- service sections ---------- */
+.j-issue { margin: 12px; padding: 18px; border-radius: 18px; display: flex; flex-direction: column; gap: 4px; }
+.j-issue p { margin: 0; }
+.j-issue .tag { background: color-mix(in srgb, var(--panel) 80%, transparent); }
+.j-issue h3 { margin: 6px 0 0; font-size: 19px; color: var(--ink); letter-spacing: -.01em; }
+.j-issue .say { color: var(--ink-2); font-size: 15px; }
+.j-issue .meta { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.j-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.j-flags .tag { background: color-mix(in srgb, var(--panel) 80%, transparent); }
+.j-time { list-style: none; margin: 0; padding: 6px 22px 22px; }
+.j-time li { display: grid; grid-template-columns: 14px 1fr; gap: 14px; padding-bottom: 16px; position: relative; }
+.j-time li::before { content: ""; position: absolute; left: 6px; top: 18px; bottom: 0; width: 2px; background: color-mix(in srgb, var(--line) 80%, transparent); }
+.j-time li:last-child { padding-bottom: 0; }
+.j-time li:last-child::before { display: none; }
+.j-time .dot { width: 14px; height: 14px; border-radius: 50%; margin-top: 4px; box-shadow: inset 0 0 0 2px currentColor; }
+.j-time p { margin: 0; font-size: 15px; }
+.j-time .sub { font-size: 12px; }
+.j-check { display: flex; gap: 14px; padding: 14px 20px; align-items: flex-start; }
+.j-check + .j-check { border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent); }
+.j-check p { margin: 0; }
+.j-cname { font-size: 14px; font-weight: 500; }
+.j-cstate { display: inline-block; background: none !important; font-size: 13px; font-weight: 600; }
+.j-check .sub { font-size: 13px; }
+.j-dl { margin: 0; padding: 12px 20px 20px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 18px; font-size: 14px; }
+.j-dl dt { color: var(--muted); }
+.j-dl dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.j-prog { padding: 0 20px 20px; }
+.j-logs { padding: 10px; }
+.j-chart .spark { height: 88px; margin-top: 16px; }
+.j-chart .spark i { border-radius: 3px 3px 0 0; }
+.j-chart.j-fillc .spark i { animation: j-bar .6s var(--j-ease) both; animation-delay: calc(var(--i, 0) * 18ms); transform-origin: bottom; }
+@keyframes j-bar { from { transform: scaleY(0); } }
+
+/* ---------- shared screens, dressed in the same card ---------- */
+.j-center { min-height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 16px 14px 24px; }
+.j-center .j-hero { padding: 30px 24px 26px; }
+.j-center .j-big { font-size: clamp(32px, 9.4vw, 40px); }
+.j-center .j-mark { margin-bottom: 18px; }
+.j-body .pad-screen { padding: 0; }
+.j-body .panel { border-radius: 24px; border-color: color-mix(in srgb, var(--line) 75%, transparent); box-shadow: 0 1px 2px rgba(36, 26, 21, .04), 0 12px 32px rgba(36, 26, 21, .06); }
+.j-body .panel-head { padding: 18px 20px; }
+.j-body .srv-main { padding: 14px 20px; }
+.j-body .btn.primary { min-height: 52px; border-radius: 16px; font-size: 16px; box-shadow: 0 8px 22px color-mix(in srgb, var(--brand) 30%, transparent); }
+.j-body details.fold > summary { padding: 18px 20px; min-height: 64px; }
+.j-body details.fold .fold-body { padding: 0 20px 18px; }
+.j-body .camera { border-radius: 24px; }
+.j-body .banner { border-radius: 18px; padding: 14px 16px; }
+.j-add .pad-screen > .lede:first-child { display: none; }
+
+/* ---------- bottom nav ---------- */
+.j-nav { flex: none; display: flex; margin: 0 12px 2px; padding: 6px 4px; border-radius: 24px; z-index: 6;
+  background: color-mix(in srgb, var(--panel) 82%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 70%, transparent), 0 10px 30px rgba(36, 26, 21, .10); }
+.j-nav a { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; text-decoration: none; color: var(--muted); font-size: 12.5px; font-weight: 600; min-height: 52px; justify-content: center; }
+.j-nav .pill { width: 56px; height: 30px; border-radius: 99px; display: grid; place-items: center; font-size: 21px; transition: background-color .3s var(--j-ease), transform .3s var(--j-ease); }
+.j-nav a[aria-current="page"] { color: var(--ink); }
+.j-nav a[aria-current="page"] .pill { background: var(--brand-soft); color: var(--brand); }
+.j-nav a:active .pill { transform: scale(.9); }
+
+/* ---------- pull to refresh ---------- */
+.j-ptr { position: absolute; left: 0; right: 0; top: 0; height: 0; display: grid; justify-items: center; z-index: 8; pointer-events: none; }
+.j-ptr-dot { margin-top: calc(var(--pull, 0px) - 44px); width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--panel); color: var(--brand); box-shadow: var(--shadow); font-size: 20px; opacity: 0; transition: opacity .15s; }
+.j-ptr[style] .j-ptr-dot, .j-ptr.show .j-ptr-dot { opacity: 1; }
+.j-ptr.show .j-ptr-dot { margin-top: 14px; transition: margin-top .3s var(--j-ease), opacity .15s; }
+.j-ptr.show .j-ptr-dot i, .j-ptr.ready .j-ptr-dot i { animation: spin 1s linear infinite; }
+
+/* ---------- server picker ---------- */
+.j-pick { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 12px 16px; border-radius: 16px; cursor: pointer; }
+.j-pick > span { display: flex; flex-direction: column; }
+.j-pick[aria-current] { background: var(--brand-soft); }
+.j-pick i { color: var(--brand); font-size: 20px; }
+.j-pick:focus-visible { outline: 3px solid var(--focus); }
+#layer .sheet { border-radius: 28px 28px 0 0; padding-bottom: 32px; }
+#layer .dialog { border-radius: 28px; }
+
+/* ---------- the card opening into its page ---------- */
+::view-transition-group(j-morph) { animation-duration: .45s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+::view-transition-old(j-morph), ::view-transition-new(j-morph) { height: 100%; object-fit: cover; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .3s; }
+.j-fly { position: fixed; z-index: 50; pointer-events: none; border-radius: 24px; }
+
+/* ---------- page settle ---------- */
+.j-settle > * { animation: settle .5s var(--j-ease) both; }
+.j-settle > :nth-child(2) { animation-delay: .05s; }
+.j-settle > :nth-child(3) { animation-delay: .1s; }
+.j-settle > :nth-child(n+4) { animation-delay: .15s; }
+
+@media (max-width: 380px) {
+  .j-meters { gap: 8px; }
+  .j-fig, .j-vital { padding-left: 14px; padding-right: 10px; }
+  .j-fig b { font-size: 30px; } .j-vital b { font-size: 26px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .j-pin { position: relative; }
+  .j-pin::before { display: none; }
+  .j-hero::before { transform: none; }
+}
+
+.j-body { animation: settle .55s var(--j-ease) .06s both; }
+.j-pin { animation: settle .5s var(--j-ease) both; }
