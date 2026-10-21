@@ -1,7 +1,7 @@
 defmodule DokkitWeb do
   @moduledoc "What every controller, page and component starts from: `use DokkitWeb, :live_view`."
 
-  def static_paths, do: ~w(assets css vendor favicon.svg robots.txt)
+  def static_paths, do: ~w(assets css js vendor favicon.svg robots.txt)
 
   @doc "The error answer of the API."
   def fail(conn, status, code, message) do
