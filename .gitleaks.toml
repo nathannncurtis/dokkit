@@ -2,5 +2,10 @@
 useDefault = true
 
 [allowlist]
-description = "Made-up keys for the debug-only demo relay at demo.dokkit.invalid"
-paths = ['''^apps/android/app/src/debug/kotlin/dev/dokkit/phone/Transports\.kt$''']
+description = "Made-up keys for the debug-only demo relay at demo.dokkit.invalid, and the public Cloudflare analytics beacon in every site page"
+paths = [
+  '''^apps/android/app/src/debug/kotlin/dev/dokkit/phone/Transports\.kt$''',
+  '''^apps/ios/Dokkit/Debug/DemoRelay\.swift$''',
+]
+regexTarget = "line"
+regexes = ['''data-cf-beacon='\{"token": "[0-9a-f]{32}"\}'''']
