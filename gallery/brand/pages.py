@@ -426,7 +426,7 @@ def privacy_page():
           <li>Each name you claim, when you claimed it, the public key your server registered, the addresses your server set for it, and when it last checked in.</li>
           <li>A sign-in cookie, only while you are signed in, to keep you signed in and to stop forged requests.</li>
         </ul>
-        <p class="note">A name's records are public DNS, so anyone can look up the address it points to. Released or lapsed names are deleted, with their records. Your address is held in memory for a few minutes to limit how often one connection can make requests, and is not written down.</p>"""
+        <p class="note">A name's records are public DNS, kept and served by Azure DNS, so anyone can look up the address it points to. Released or lapsed names are deleted, with their records. Your address is held in memory for a few minutes to limit how often one connection can make requests, and is not written down.</p>"""
     relay = """        <ul class="did">
           <li>The shared relay at relay.dokkit.dev keeps a mailbox for each server that signs up: sealed snapshots it cannot read, and the time each arrived. A mailbox with no upload for 30 days is deleted with its contents.</li>
           <li>The public MCP at mcp.dokkit.dev reads what an agent sends it, answers, and keeps nothing.</li>

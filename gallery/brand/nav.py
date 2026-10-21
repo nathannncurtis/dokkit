@@ -122,6 +122,32 @@ BEACON = """<script defer src="https://static.cloudflareinsights.com/beacon.min.
 NOINDEX = {"navbar.html"}
 
 
+ICON = re.search(r'^ICON = "([^"]+)"', open(os.path.join(here, "pages.py"), encoding="utf-8").read(), re.M).group(1)
+
+
+# The generated docs pages carry no description of their own.
+DOCS_DESC = {"api.html": "Every call in the Dokkit API, with what to send and what comes back.",
+             "cli.html": "Every dokkit command and what it does."}
+
+
+def head(page, s):
+    """The head tags every page needs, added where a page was written without them (the docs pages)."""
+    if '<meta name="description"' not in s:
+        line = DOCS_DESC.get(page)
+        if line:
+            d = html.escape(line, quote=True)
+            s = s.replace("</title>", f'</title>\n<meta name="description" content="{d}">', 1)
+            s = re.sub(r'(<meta property="og:description" content=")[^"]*', lambda m: m.group(1) + d, s, count=1)
+    adds = [('name="color-scheme"', '<meta name="color-scheme" content="dark">'),
+            ('name="theme-color"', '<meta name="theme-color" content="#1e1917">'),
+            ('rel="icon"', f'<link rel="icon" href="{ICON}">'),
+            ('rel="apple-touch-icon"', '<link rel="apple-touch-icon" href="apple-touch-icon.png">')]
+    for key, tag in adds:
+        if key not in s:
+            s = s.replace("</head>", tag + "\n</head>", 1)
+    return s
+
+
 def social(page, s):
     """Link-preview tags and the visit counter, added once to every page."""
     if 'property="og:image"' not in s:
@@ -178,7 +204,7 @@ def apply(path):
         else:
             s = s.replace("</main>", f"{p}\n</main>", 1)
     if page not in NOINDEX:
-        s = social(page, s)
+        s = social(page, head(page, s))
     open(path, "w", encoding="utf-8", newline="\n").write(s)
     return True
 
