@@ -95,7 +95,7 @@ defmodule Dokkit.LogsTest do
     assert html =~ "Clear the service filter"
   end
 
-  test "the Logs page sorts by any column, filters by machine, service and time, and exports what it shows",
+  test "the Logs page sorts by any column, filters by machine, service and time, and exports every match, newest first",
        %{conn: conn, service: service} do
     other = Repo.insert!(%Machine{name: "attic"})
     now = DateTime.utc_now()
@@ -145,10 +145,10 @@ defmodule Dokkit.LogsTest do
     csv = signed_in(conn) |> get("/logs.csv?sort=level&dir=asc") |> response(200)
 
     assert csv ==
-             "time,level,machine,service,message\r\n" <>
+             "﻿time,level,machine,service,message\r\n" <>
                "#{DateTime.to_iso8601(DateTime.add(now, -300))},info,vault,Upload portal,alpha upload\r\n" <>
-               "#{DateTime.to_iso8601(DateTime.add(now, -12_000))},warn,attic,,charlie disk\r\n" <>
-               "#{DateTime.to_iso8601(DateTime.add(now, -1800))},error,vault,Upload portal,\"'=bravo, \"\"quoted\"\"\"\r\n"
+               "#{DateTime.to_iso8601(DateTime.add(now, -1800))},error,vault,Upload portal,\"'=bravo, \"\"quoted\"\"\"\r\n" <>
+               "#{DateTime.to_iso8601(DateTime.add(now, -12_000))},warn,attic,,charlie disk\r\n"
 
     csv = signed_in(conn) |> get("/logs.csv?m=#{other.id}") |> response(200)
     assert csv =~ "charlie disk" and not (csv =~ "alpha")

@@ -234,7 +234,7 @@ defmodule DokkitWeb.InboxLive do
           </div>
         </div>
 
-        <div :if={@tab == :now} class="allgood" id="fine">
+        <div :if={@tab == :now and @fine.services > 0} class="allgood" id="fine">
           <span class="ic" aria-hidden="true"><.ic name="check-circle" /></span>
           <div>
             <p>{fine(@fine)}</p>
@@ -539,7 +539,9 @@ defmodule DokkitWeb.InboxLive do
   defp planned_names(list),
     do: Enum.map_join(list, ", ", &"#{&1.name} until #{hm(&1.planned.until)} UTC")
 
-  defp estate(%{planned: %{until: until}, attention: 0}), do: "planned downtime until #{hm(until)} UTC"
+  defp estate(%{planned: %{until: until}, attention: 0}),
+    do: "planned downtime until #{hm(until)} UTC"
+
   defp estate(%{attention: 1}), do: "1 needs a look"
   defp estate(%{attention: n}) when n > 1, do: "#{n} need a look"
   defp estate(%{soon: n}) when n > 0, do: "#{n} soon"

@@ -1,7 +1,7 @@
 defmodule DokkitWeb.LogsController do
-  @moduledoc "The Logs page's lines as a CSV file: every line its filter matches, in its order."
+  @moduledoc "The Logs page's lines as a CSV file: every line its filter matches, newest first."
   use DokkitWeb, :controller
-  alias Dokkit.{Logs, Repo}
+  alias Dokkit.Logs
 
   def csv(conn, params) do
     conn =
@@ -10,26 +10,27 @@ defmodule DokkitWeb.LogsController do
       |> put_resp_header("content-disposition", ~s(attachment; filename="dokkit-logs.csv"))
       |> send_chunked(200)
 
-    {:ok, conn} =
-      Repo.transaction(
-        fn ->
-          {:ok, conn} = chunk(conn, "time,level,machine,service,message\r\n")
+    # The mark tells Excel the file is UTF-8.
+    {:ok, conn} = chunk(conn, "\uFEFFtime,level,machine,service,message\r\n")
 
-          params
-          |> DokkitWeb.LogsLive.options()
-          |> Logs.stream()
-          |> Stream.chunk_every(500)
-          |> Enum.reduce_while(conn, fn lines, conn ->
-            case chunk(conn, Enum.map(lines, &row/1)) do
-              {:ok, conn} -> {:cont, conn}
-              {:error, _} -> {:halt, conn}
-            end
-          end)
-        end,
-        timeout: :infinity
-      )
-
-    conn
+    try do
+      params
+      |> DokkitWeb.LogsLive.options()
+      |> Keyword.delete(:order)
+      |> Logs.stream()
+      |> Stream.chunk_every(500)
+      |> Enum.reduce_while(conn, fn lines, conn ->
+        case chunk(conn, Enum.map(lines, &row/1)) do
+          {:ok, conn} -> {:cont, conn}
+          {:error, _} -> {:halt, conn}
+        end
+      end)
+    rescue
+      e in [DBConnection.ConnectionError, Postgrex.Error] ->
+        # The status line has already gone, so the file itself says it is incomplete.
+        {_, conn} = chunk(conn, ",,,,EXPORT STOPPED EARLY: #{cell(Exception.message(e))}\r\n")
+        conn
+    end
   end
 
   defp row(l) do

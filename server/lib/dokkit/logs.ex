@@ -70,26 +70,50 @@ defmodule Dokkit.Logs do
   def subscribe, do: Phoenix.PubSub.subscribe(Dokkit.PubSub, "logs")
 
   @doc """
-  Newest first. Options: q, level (that level and worse), service, machine, from, to, limit, and
-  order, a column (at, level, machine, service, msg) and :asc or :desc.
+  The newest lines that match (200 unless `limit`), shown in `order`: a column (at, level,
+  machine, service, msg) and :asc or :desc. Options: q, level (that level and worse), service,
+  machine, from, to. Only the newest are fetched, so sorting never reads the whole table.
   """
   def list(opts \\ []) do
-    opts |> query() |> limit(^(opts[:limit] || 200)) |> Repo.all()
+    opts |> query() |> limit(^(opts[:limit] || 200)) |> Repo.all() |> sorted(opts[:order])
   end
 
-  @doc "Every line that matches, in order, for `list/1`'s options without a limit. Inside a transaction."
+  @doc "Every line that matches, newest first, fetched 1,000 at a time so no connection is held."
   def stream(opts) do
-    opts
-    |> query()
-    |> exclude(:preload)
-    |> Repo.stream(max_rows: 1000)
-    |> Stream.chunk_every(1000)
-    |> Stream.flat_map(&Repo.preload(&1, [:machine, :service]))
+    Stream.unfold(nil, fn
+      :done ->
+        nil
+
+      before ->
+        page = opts |> Keyword.put(:before, before) |> query() |> limit(1000) |> Repo.all()
+
+        case page do
+          [] -> nil
+          lines when length(lines) < 1000 -> {lines, :done}
+          lines -> {lines, lines |> List.last() |> then(&{&1.at, &1.id})}
+        end
+    end)
+    |> Stream.concat()
   end
+
+  defp sorted(lines, nil), do: lines
+  defp sorted(lines, {:at, :desc}), do: lines
+  defp sorted(lines, {:at, :asc}), do: Enum.reverse(lines)
+  defp sorted(lines, {:level, dir}), do: Enum.sort_by(lines, &level_rank(&1.level), dir)
+
+  defp sorted(lines, {:machine, dir}),
+    do: Enum.sort_by(lines, &(&1.machine && &1.machine.name), dir)
+
+  defp sorted(lines, {:service, dir}),
+    do: Enum.sort_by(lines, &(&1.service && &1.service.name), dir)
+
+  defp sorted(lines, {:msg, dir}), do: Enum.sort_by(lines, & &1.msg, dir)
+
+  defp level_rank(level), do: Enum.find_index(@levels, &(&1 == level)) || length(@levels)
 
   defp query(opts) do
-    query = from l in Log, preload: [:machine, :service]
-    query = ordered(query, opts[:order] || {:at, :desc})
+    query =
+      from l in Log, preload: [:machine, :service], order_by: [desc: l.at, desc: l.id]
 
     query = if opts[:service], do: where(query, [l], l.service_id == ^opts[:service]), else: query
     query = if opts[:machine], do: where(query, [l], l.machine_id == ^opts[:machine]), else: query
@@ -120,31 +144,6 @@ defmodule Dokkit.Logs do
         )
     end
   end
-
-  defp ordered(query, {:at, dir}), do: order_by(query, [l], [{^dir, l.at}, {^dir, l.id}])
-
-  defp ordered(query, {:level, dir}),
-    do:
-      order_by(query, [l], [
-        {^dir, fragment("array_position(?::text[], ?)", ^@levels, l.level)},
-        desc: l.at,
-        desc: l.id
-      ])
-
-  defp ordered(query, {:machine, dir}),
-    do:
-      query
-      |> join(:inner, [l], m in assoc(l, :machine), as: :m)
-      |> order_by([l, m: m], [{^dir, m.name}, desc: l.at, desc: l.id])
-
-  defp ordered(query, {:service, dir}),
-    do:
-      query
-      |> join(:left, [l], s in assoc(l, :service), as: :s)
-      |> order_by([l, s: s], [{^dir, s.name}, desc: l.at, desc: l.id])
-
-  defp ordered(query, {:msg, dir}),
-    do: order_by(query, [l], [{^dir, l.msg}, desc: l.at, desc: l.id])
 
   @move_batch 20_000
 

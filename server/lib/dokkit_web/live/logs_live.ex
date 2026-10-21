@@ -126,8 +126,12 @@ defmodule DokkitWeb.LogsLive do
     ~p"/logs?#{query}"
   end
 
-  defp services(machines, machine) do
-    for m <- machines, machine in ["", m.id], s <- m.services, s.slug != "machine" do
+  # A machine's own row is offered only when a link chose it, so the filter it came with stays.
+  defp services(machines, machine, chosen) do
+    for m <- machines,
+        machine in ["", m.id],
+        s <- m.services,
+        s.slug != "machine" or s.id == chosen do
       {if(machine == "", do: "#{s.name} on #{m.name}", else: s.name), s.id}
     end
   end
@@ -174,7 +178,7 @@ defmodule DokkitWeb.LogsLive do
         levels: @levels,
         windows: @windows,
         columns: @columns,
-        service_opts: services(assigns.machines, assigns.filter.machine),
+        service_opts: services(assigns.machines, assigns.filter.machine, assigns.filter.service),
         csv: ~p"/logs.csv?#{Enum.reject(assigns.params, &(elem(&1, 1) in [nil, ""]))}"
       )
 
