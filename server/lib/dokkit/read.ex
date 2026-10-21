@@ -200,7 +200,8 @@ defmodule Dokkit.Read do
 
   def machine(id) do
     with %{} = m <- Enum.find(machines(), &(&1.id == id)) do
-      config = Dokkit.Alerts.config()
+      v = Dokkit.Values.all({:machine, id})
+      limit = fn row -> if v[row <> "_on"], do: to_string(v[row <> "_limit"]), else: "" end
 
       Map.merge(m, %{
         silent: silent(Dokkit.Estate.machine(id)),
@@ -211,8 +212,8 @@ defmodule Dokkit.Read do
         metrics: Dokkit.Numbers.machine_latest(id),
         services: services(%{"machine" => id}),
         thresholds: %{
-          disk_used_percent: config["disk_limit"],
-          memory_used_percent: config["memory_limit"]
+          disk_used_percent: limit.("disk"),
+          memory_used_percent: limit.("memory")
         }
       })
     end

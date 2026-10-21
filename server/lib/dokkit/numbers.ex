@@ -4,9 +4,8 @@ defmodule Dokkit.Numbers do
   A threshold check goes bad when its metric is over its limit.
   """
   import Ecto.Query
-  alias Dokkit.{Check, Issues, Metric, Repo, Service}
+  alias Dokkit.{Check, Issues, Metric, Repo, Service, Values}
 
-  @keep_days 30
   @disk "disk.used_percent."
   @max_document 256 * 1024
 
@@ -30,27 +29,36 @@ defmodule Dokkit.Numbers do
         where: fragment("?->>'metric' = ?", c.config, ^name),
         preload: [service: s]
 
-    if is_nil(service) and not Repo.exists?(thresholds), do: machine_check(machine_id, name)
+    values = Values.all({:machine, machine_id})
+    own = own_limit?(name, machine_id)
+
+    # A machine's own limit is watched even where a file declares one for the same number.
+    if is_nil(service) and
+         not Repo.exists?(from c in thresholds, where: fragment("? \\? 'limit_from'", c.config)) and
+         (own or not Repo.exists?(thresholds)),
+       do: machine_check(machine_id, name, values)
 
     # A threshold in a service's file reads that service's number, or the machine's.
     all = Repo.all(thresholds)
-    limit_of = &limit/1
-    declared? = Enum.any?(all, &(&1.source == :file and is_number(limit_of.(&1))))
+    limit_of = &limit_with(&1, values)
+    declared? = not own and Enum.any?(all, &(&1.source == :file and is_number(limit_of.(&1))))
 
     for check <- all,
         is_nil(service) or check.service_id == service.id do
       limit = limit_of.(check)
+      check = readings(check, values)
 
-      # A declared threshold replaces the built-in one, which then reads as fine.
-      if is_number(limit) and value > limit and not (declared? and check.source != :file),
-        do:
-          Issues.record(check, over_state(check, value),
-            at: at,
-            value: value / 1,
-            title: machine_title(check.config["limit_from"], name),
-            note: over_note(name, value, limit) <> full_in(check.config["full_in_days"])
-          ),
-        else: Issues.record(check, :ok, at: at, value: value / 1)
+      # A declared threshold replaces the built-in one, which then reads as fine; a machine's own setting replaces both.
+      if is_number(limit) and value > limit and not (declared? and check.source != :file) and
+           not (own and check.source == :file),
+         do:
+           Issues.record(check, over_state(check, value, values),
+             at: at,
+             value: value / 1,
+             title: machine_title(check.config["limit_from"], name),
+             note: over_note(name, value, limit) <> full_in(check.config["full_in_days"])
+           ),
+         else: Issues.record(check, :ok, at: at, value: value / 1)
     end
 
     :ok
@@ -58,13 +66,36 @@ defmodule Dokkit.Numbers do
 
   def record(_, _, _, _, _), do: {:error, "bad_line", "A metric needs a name and a number."}
 
-  @machine_limits [{"disk.used_percent.", "disk_limit"}, {"memory.used_percent", "memory_limit"}]
+  @machine_limits [
+    {"disk.used_percent.", "disk_limit"},
+    {"memory.used_percent", "memory_limit"},
+    {"cpu.percent", "cpu_limit"}
+  ]
+  @limit_rows %{"disk_limit" => "disk", "memory_limit" => "memory", "cpu_limit" => "cpu"}
 
-  # A machine's own disk and memory are watched without anyone declaring it, against the
-  # limits on the Alerts page. A threshold a file declares for the same number replaces this.
-  defp machine_check(machine_id, name) do
-    with {_, from} <-
-           Enum.find(@machine_limits, fn {start, _} -> String.starts_with?(name, start) end) do
+  defp limit_from(name) do
+    Enum.find_value(@machine_limits, fn {start, from} ->
+      if name == start or (String.ends_with?(start, ".") and String.starts_with?(name, start)),
+        do: from
+    end)
+  end
+
+  defp own_limit?(name, machine_id) do
+    case limit_from(name) do
+      nil ->
+        false
+
+      from ->
+        own = Values.own({:machine, machine_id})
+        Map.has_key?(own, from) or Map.has_key?(own, @limit_rows[from] <> "_on")
+    end
+  end
+
+  # A machine's own disk, memory and processor are watched without anyone declaring it, against
+  # the limits in Settings. A threshold a file declares for the same number replaces this.
+  defp machine_check(machine_id, name, values) do
+    with from when is_binary(from) <- limit_from(name),
+         true <- from != "cpu_limit" or values["cpu_on"] do
       service =
         Repo.get_by(Service, machine_id: machine_id, slug: "machine") ||
           Repo.insert!(%Service{
@@ -82,9 +113,25 @@ defmodule Dokkit.Numbers do
     end
   end
 
-  # Over a limit from the Alerts page is a struggle, and a failure from 98 percent. A limit a file declares is a failure.
-  defp over_state(%Check{config: %{"limit_from" => _}}, value) when value < 98, do: :degraded
-  defp over_state(_, _), do: :down
+  # Over a limit from Settings is a struggle, and a failure from its down level. A limit a file declares is a failure.
+  defp over_state(%Check{config: %{"limit_from" => from}}, value, values) do
+    down = values[@limit_rows[from] <> "_down"]
+    if is_nil(down) or value < down, do: :degraded, else: :down
+  end
+
+  defp over_state(_, _, _), do: :down
+
+  # Readings in a row as the machine's settings say. The minutes of the processor become readings.
+  defp readings(%Check{config: %{"limit_from" => from} = config} = check, values) do
+    n =
+      if from == "cpu_limit",
+        do: max(1, ceil(values["cpu_minutes"] * 60 / values["report_seconds"])),
+        else: values[@limit_rows[from] <> "_after"]
+
+    %{check | fail_after: n, config: Map.put(config, "own_fail_after", true)}
+  end
+
+  defp readings(check, _), do: check
 
   defp over_note(@disk <> _, value, limit),
     do: "It is #{num(value)} percent full. The limit is #{num(limit)}."
@@ -110,19 +157,29 @@ defmodule Dokkit.Numbers do
     do: "Disk #{String.replace_prefix(name, "disk.used_percent.", "")} is nearly full"
 
   defp machine_title("memory_limit", _), do: "Memory is nearly all in use"
+  defp machine_title("cpu_limit", _), do: "The processor is busy"
   defp machine_title(_, _), do: nil
 
-  @doc "A check's limit, from its own config or the Alerts page; nil when there is none."
-  def limit(%Check{config: config}), do: config["limit"] || machine_limit(config["limit_from"])
+  @doc "A check's limit, from its own config or its machine's settings; nil when there is none."
+  def limit(%Check{} = check) do
+    values =
+      check.config["limit_from"] &&
+        Values.all(
+          {:machine,
+           Repo.one(from s in Service, where: s.id == ^check.service_id, select: s.machine_id)}
+        )
 
-  # nil when the limit on the Alerts page is blank, which switches it off.
-  defp machine_limit(nil), do: nil
+    limit_with(check, values)
+  end
 
-  defp machine_limit(setting) do
-    case Float.parse(Dokkit.Alerts.config()[setting] || "") do
-      {limit, _} -> limit
-      :error -> nil
-    end
+  defp limit_with(%Check{config: config}, values),
+    do: config["limit"] || machine_limit(config["limit_from"], values)
+
+  # nil when the limit is switched off.
+  defp machine_limit(nil, _), do: nil
+
+  defp machine_limit(setting, values) do
+    if values[@limit_rows[setting] <> "_on"], do: values[setting] / 1
   end
 
   @doc "Keeps a service's latest stats document and the numbers worth charting from it."
@@ -148,11 +205,6 @@ defmodule Dokkit.Numbers do
 
   def stats(_, _, _), do: {:error, "bad_line", "Needs a stats document with schema 1."}
 
-  @forecast_days 14
-  # Once soon, it stays soon until the line is this far from the limit, so noise does not flap it.
-  @close_days 16
-  @longest_full 60
-
   @doc """
   Every half hour: a disk under its limit that is rising over at least 4 days of readings,
   in the whole of its last 7 days and in each half of them, and whose slowest such rise carries
@@ -160,17 +212,19 @@ defmodule Dokkit.Numbers do
   rise. It closes when the line is more than 16 days from the limit, the limit is switched off,
   or the readings stop; an over-limit issue of a disk that is no longer reported closes too.
   A disk over its limit says in its note when it will be full, if that is within 60 days.
+  Each number is a setting. Once soon, a disk stays soon until it is further than the second
+  number of days from its limit, so noise does not flap it.
   """
   def forecast(now \\ DateTime.utc_now()) do
-    limit = machine_limit("disk_limit")
-
-    middle = DateTime.add(now, -div(7 * 86_400, 2))
+    server = Values.all()
+    window = server["forecast_window_days"] * 86_400
+    middle = DateTime.add(now, -div(window, 2))
 
     rows =
       Repo.all(
         from m in Metric,
           where: is_nil(m.service_id) and like(m.name, ^(@disk <> "%")),
-          where: m.at > ^DateTime.add(now, -7 * 86_400),
+          where: m.at > ^DateTime.add(now, -window),
           group_by: [m.machine_id, m.name],
           select: %{
             machine_id: m.machine_id,
@@ -209,25 +263,37 @@ defmodule Dokkit.Numbers do
       )
       |> Map.new(&{{&1.service.machine_id, &1.name}, &1})
 
+    values = Map.new(ids, &{&1, Values.all({:machine, &1})})
+    limit_of = fn id -> machine_limit("disk_limit", values[id]) end
+
     soon_ids =
-      for r <- rows, limit, watched = checks[{r.machine_id, r.name}], reduce: [] do
+      for r <- rows,
+          limit = limit_of.(r.machine_id),
+          watched = checks[{r.machine_id, r.name}],
+          reduce: [] do
         kept ->
+          v = values[r.machine_id]
           per_day = if Enum.all?(r.slopes), do: Enum.min(r.slopes) * 86_400, else: 0
 
           known =
-            DateTime.diff(r.last, r.first) >= 4 * 86_400 and DateTime.diff(now, r.last) <= 86_400 and
-              per_day > 0
+            DateTime.diff(r.last, r.first) >= server["forecast_min_days"] * 86_400 and
+              DateTime.diff(now, r.last) <= 86_400 and per_day > 0
 
           days = fn target -> max(1, round((target - r.current) / per_day)) end
           disk = String.replace_prefix(r.name, @disk, "")
           over? = r.current >= limit
 
           full =
-            if known and over? and r.current < 100 and days.(100) <= @longest_full, do: days.(100)
+            if known and over? and r.current < 100 and days.(100) <= v["forecast_full_days"],
+              do: days.(100)
 
           name = "forecast." <> r.name
           check = checks[{r.machine_id, name}]
-          horizon = if check && check.state == :degraded, do: @close_days, else: @forecast_days
+
+          horizon =
+            if check && check.state == :degraded,
+              do: v["forecast_clear_days"],
+              else: v["forecast_days"]
 
           soon =
             if known and not over? and r.current + per_day * horizon >= limit, do: days.(limit)
@@ -279,10 +345,10 @@ defmodule Dokkit.Numbers do
               preload: [service: s]
           ),
         {c.service.machine_id, c.name} not in fresh,
-        do: Issues.record(%{c | passes: c.fail_after}, :ok, at: now)
+        do: Issues.record(%{c | passes: Issues.fail_after(c)}, :ok, at: now)
 
     # A full-in-days note whose disk has no limit or no readings now is stale.
-    live = for r <- rows, limit, c = checks[{r.machine_id, r.name}], do: c.id
+    live = for r <- rows, limit_of.(r.machine_id), c = checks[{r.machine_id, r.name}], do: c.id
 
     for c <-
           Repo.all(
@@ -385,6 +451,7 @@ defmodule Dokkit.Numbers do
   end
 
   def prune(now) do
-    Repo.delete_all(from m in Metric, where: m.at < ^DateTime.add(now, -@keep_days * 86_400))
+    days = Values.get("metrics_days")
+    Repo.delete_all(from m in Metric, where: m.at < ^DateTime.add(now, -days * 86_400))
   end
 end
