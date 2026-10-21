@@ -2,6 +2,8 @@ mod logic;
 mod net;
 mod settings;
 mod tray;
+#[cfg(target_os = "macos")]
+mod macos;
 #[cfg(windows)]
 mod webview_pin;
 
@@ -73,6 +75,8 @@ pub fn open_settings(app: &AppHandle) {
             .inner_size(720.0, 760.0)
             .min_inner_size(480.0, 480.0)
             .build();
+        #[cfg(target_os = "macos")]
+        macos::dock(&app);
     });
 }
 
@@ -93,15 +97,24 @@ pub fn show_server(app: &AppHandle, id: &str, path: Option<String>) {
             let _ = w.show();
             let _ = w.unminimize();
             let _ = w.set_focus();
+            #[cfg(target_os = "macos")]
+            macos::dock(&app);
             return;
         }
-        let _built = WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(target))
+        let _built = WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(target.clone()))
             .title(format!("{} - Dokkit", server.name))
             .inner_size(1280.0, 860.0)
             .build();
         #[cfg(windows)]
         if let (Ok(w), Some(pin)) = (&_built, &server.pin) {
             webview_pin::apply(w, pin);
+        }
+        #[cfg(target_os = "macos")]
+        {
+            if let (Ok(w), Some(pin), Some(host)) = (&_built, &server.pin, target.host_str()) {
+                macos::pin(w, host, pin);
+            }
+            macos::dock(&app);
         }
     });
 }
@@ -122,7 +135,9 @@ fn toast(app: &AppHandle, server: &Server, issue: &Issue) {
             })
             .show();
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    macos::notify(title, issue.title.clone(), move || show_server(&app2, &id, Some(path)));
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         use tauri_plugin_notification::NotificationExt;
         let _ = (app2, id, path);
@@ -348,6 +363,8 @@ pub fn run() {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 let _ = window.hide();
+                #[cfg(target_os = "macos")]
+                macos::dock(window.app_handle());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -369,6 +386,13 @@ pub fn run() {
                 paused_until: Mutex::default(),
                 wake: Wake::new(),
             });
+            #[cfg(target_os = "macos")]
+            {
+                if !tauri::is_dev() {
+                    macos::set_bundle(&app.config().identifier);
+                }
+                macos::dock(app.handle());
+            }
             tray::build(app.handle())?;
             apply_autostart(app.handle(), autostart);
             if ids.is_empty() {

@@ -18,7 +18,7 @@ The token is kept in the operating system's keychain. Other settings are a JSON 
 
 ## Build
 
-You need Rust and the Tauri CLI (`cargo install tauri-cli --version "^2" --locked`). On Windows, WebView2 must be installed.
+You need Rust and the Tauri CLI (`cargo install tauri-cli --version "^2" --locked`). On Windows, WebView2 must be installed. On macOS you need the Xcode command line tools.
 
 ```
 cd apps/desktop/src-tauri
@@ -26,6 +26,14 @@ cargo test
 cargo tauri build
 ```
 
-The installers land in `src-tauri/target/release/bundle/`. `icons/make.py` redraws the app and tray icons from `server/priv/static/favicon.svg`; `cargo tauri icon icons/app.png -o src-tauri/icons` rebuilds the bundle icons.
+The installers land in `src-tauri/target/release/bundle/` (`.dmg` and `.app` on macOS, set in `tauri.macos.conf.json`). `icons/make.py` redraws the app and tray icons from `server/priv/static/favicon.svg`; `cargo tauri icon icons/app.png -o src-tauri/icons` rebuilds the bundle icons.
 
 The server windows are plain web content: only the bundled settings page can call the app's commands (see `src-tauri/capabilities/`).
+
+## macOS
+
+- The app lives in the menu bar and has no Dock icon until a window is open. The menu-bar icon keeps its colour (green, red, grey) instead of being a template image, which macOS would draw in one shade.
+- The token is kept in the Keychain. Start at login adds a LaunchAgent.
+- Clicking a notification opens the issue. Notifications come from the app's bundle, so they appear from the installed `.app`, not from `cargo run`.
+- A pinned certificate is honoured in the server window through the web view's authentication challenge, for that server's host only.
+- Builds are not notarized, so Gatekeeper asks for a right-click, Open the first time.
