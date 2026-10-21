@@ -388,7 +388,9 @@ defmodule Dokkit.Estate do
           wanted =
             for(
               {name, c} <- checks,
-              do: {name, c["type"], Map.drop(c, config_drop(c["type"])), c["fail_after"] || 3}
+              do:
+                {name, c["type"], own_fail_after(Map.drop(c, config_drop(c["type"])), c),
+                 c["fail_after"] || 3}
             ) ++
               for(j <- jobs, do: {j["id"], "job", Map.drop(j, ["id"]), 1})
 
@@ -470,6 +472,12 @@ defmodule Dokkit.Estate do
   end
 
   def declare(_, _), do: {:error, "A declaration needs [service] with an id."}
+
+  # A check that names its own fail_after keeps it when the server's default changes.
+  defp own_fail_after(config, %{"fail_after" => n}) when is_integer(n),
+    do: Map.put(config, "own_fail_after", true)
+
+  defp own_fail_after(config, _), do: config
 
   # Process and service checks are named by type, so their own name stays in the config.
   defp config_drop(type) when type in ~w(process windows-service systemd), do: ~w(type fail_after)
@@ -618,10 +626,12 @@ defmodule Dokkit.Estate do
             Repo.get_by(Check, service_id: service.id, name: name) ||
               %Check{service_id: service.id, name: name}
 
-          after_n =
+          {after_n, config} =
             if is_integer(fail_after) and fail_after in 1..100,
-              do: fail_after,
-              else: check.fail_after
+              do: {fail_after, Map.put(config, "own_fail_after", true)},
+              else:
+                {check.fail_after,
+                 Map.take(check.config || %{}, ["own_fail_after"]) |> Map.merge(config)}
 
           Repo.insert_or_update!(
             Ecto.Changeset.change(check, type: type, config: config, fail_after: after_n)

@@ -3,13 +3,15 @@ defmodule DokkitWeb.QuietBand do
   use Phoenix.Component
   import DokkitWeb.Show, only: [ic: 1]
 
-  @lengths [
-    {"15m", "15 minutes"},
-    {"30m", "30 minutes"},
-    {"1h", "1 hour"},
-    {"2h", "2 hours"},
-    {"4h", "4 hours"}
-  ]
+  @doc "The lengths offered, as set in Settings, none longer than the most."
+  def lengths do
+    {:ok, list} = Dokkit.Values.choices("quiet_choices")
+    most = Dokkit.Quiet.most()
+    for {s, words} <- list, s <= most, do: {short(s), words}
+  end
+
+  defp short(s) when rem(s, 3600) == 0, do: "#{div(s, 3600)}h"
+  defp short(s), do: "#{div(s, 60)}m"
 
   attr :machine, :string, required: true
   attr :planned, :any, default: nil
@@ -17,7 +19,7 @@ defmodule DokkitWeb.QuietBand do
   attr :disabled, :boolean, default: false
 
   def band(assigns) do
-    assigns = assign(assigns, lengths: @lengths)
+    assigns = assign(assigns, lengths: lengths())
 
     ~H"""
     <div :if={@planned} class="foot" id={"quiet-#{@machine}"} role="status">
@@ -26,7 +28,7 @@ defmodule DokkitWeb.QuietBand do
           ": " <> @planned.reason}.
         Alerts for this machine are off until then.
       </span>
-      
+
       <span class="end">
         <button
           class="btn sm"
@@ -50,7 +52,7 @@ defmodule DokkitWeb.QuietBand do
       <select class="inp" name="quiet[for]" aria-label="For how long">
         <option :for={{value, text} <- @lengths} value={value}>{text}</option>
       </select>
-      
+
       <input
         class="inp"
         style="flex: 1 1 160px"
@@ -79,7 +81,7 @@ defmodule DokkitWeb.QuietBand do
   def schedules(assigns) do
     assigns =
       assign(assigns,
-        lengths: @lengths,
+        lengths: lengths(),
         repeats: @repeats,
         days: @days,
         repeat: assigns.form["repeat"] || "once",
@@ -102,16 +104,16 @@ defmodule DokkitWeb.QuietBand do
           </option>
         </select>
       </label>
-      
+
       <label :if={@repeat == "once"}>
         When ({@zone})
         <input class="inp" type="datetime-local" name="schedule[at]" value={@form["at"]} />
       </label>
-      
+
       <label :if={@repeat != "once"}>
         At ({@zone}) <input class="inp" type="time" name="schedule[time]" value={@form["time"]} />
       </label>
-      
+
       <label>
         For
         <select class="inp" name="schedule[for]">
@@ -120,7 +122,7 @@ defmodule DokkitWeb.QuietBand do
           </option>
         </select>
       </label>
-      
+
       <span :if={@repeat == "weekly"} role="group" aria-label="On these days" class="acts">
         <label :for={{name, n} <- @days} style="display: flex; align-items: center; gap: 4px">
           <input
@@ -131,12 +133,12 @@ defmodule DokkitWeb.QuietBand do
           /> {name}
         </label>
       </span>
-      
+
       <label style="flex: 1 1 160px">
         Why (optional)
         <input class="inp" name="schedule[reason]" maxlength="200" value={@form["reason"]} />
       </label>
-       <button class="btn sm" type="submit" disabled={@disabled}>Schedule</button>
+      <button class="btn sm" type="submit" disabled={@disabled}>Schedule</button>
       <span :if={@error} class="bad" role="alert">{@error}</span>
     </form>
 
@@ -144,7 +146,7 @@ defmodule DokkitWeb.QuietBand do
       <span style="flex: 1 1 260px">
         {s.text}.{s.next && " Next start #{s.next}."}
       </span>
-      
+
       <span class="end">
         <button
           class="btn sm"
