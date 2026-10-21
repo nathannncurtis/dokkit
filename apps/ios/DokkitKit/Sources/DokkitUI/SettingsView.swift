@@ -7,10 +7,11 @@ private struct Setting {
     let defaultText: String
     let same: (AppSettings, AppSettings) -> Bool
     let copy: (AppSettings, AppSettings) -> AppSettings
-    let control: (Binding<AppSettings>) -> AnyView
+    // On the main actor, where the controls are built; older SDKs do not assume it.
+    let control: @MainActor (Binding<AppSettings>) -> AnyView
 }
 
-private func number(_ title: String, _ sub: String, _ before: String, _ after: String, _ range: ClosedRange<Int>, step: Int, _ kp: WritableKeyPath<AppSettings, Int>) -> Setting {
+private func number(_ title: String, _ sub: String, _ before: String, _ after: String, _ range: ClosedRange<Int>, step: Int, _ kp: WritableKeyPath<AppSettings, Int> & Sendable) -> Setting {
     let d = AppSettings()[keyPath: kp]
     return Setting(
         title: title, sub: sub, defaultText: "\(before) \(d) \(after)".replacingOccurrences(of: " %", with: "%"),
@@ -19,7 +20,7 @@ private func number(_ title: String, _ sub: String, _ before: String, _ after: S
         control: { b in AnyView(Stepper2(value: Binding(get: { b.wrappedValue[keyPath: kp] }, set: { b.wrappedValue[keyPath: kp] = $0 }), range: range, step: step, before: before, after: after, title: title)) })
 }
 
-private func choice<T: Equatable & Sendable>(_ title: String, _ sub: String, _ options: [T], word: @escaping @Sendable (T) -> String, _ kp: WritableKeyPath<AppSettings, T>) -> Setting {
+private func choice<T: Equatable & Sendable>(_ title: String, _ sub: String, _ options: [T], word: @escaping @Sendable (T) -> String, _ kp: WritableKeyPath<AppSettings, T> & Sendable) -> Setting {
     Setting(
         title: title, sub: sub, defaultText: word(AppSettings()[keyPath: kp]),
         same: { $0[keyPath: kp] == $1[keyPath: kp] },
