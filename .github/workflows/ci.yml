@@ -131,6 +131,12 @@ jobs:
           # mix_audit reports every known advisory; it has no severity filter.
           mix escript.install hex mix_audit 2.1.5 --force
           ~/.mix/escripts/mix_audit < /dev/null
+      - name: Sobelow, Phoenix security checks
+        timeout-minutes: 5
+        run: |
+          mix archive.install hex sobelow 0.13.0 --force
+          # CSP is ignored until the security-headers change sets one.
+          mix sobelow --exit high --threshold high --skip --ignore Config.CSP
 
   program:
     needs: changes

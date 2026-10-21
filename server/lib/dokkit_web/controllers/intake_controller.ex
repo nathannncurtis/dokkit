@@ -285,6 +285,9 @@ defmodule DokkitWeb.IntakeController do
 
   def ping(conn, _), do: fail(conn, 404, "not_found", "No such address.")
 
+  # Its own name so a GET is never mistaken for the POST by CSRF checks; the key in the path is the only credential.
+  def ping_get(conn, params), do: ping(conn, params)
+
   defp bearer(conn) do
     with ["Bearer " <> text] <- get_req_header(conn, "authorization"),
          {:ok, key} <- Keys.verify(text, [:machine, :app]) do
