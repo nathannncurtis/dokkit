@@ -7,6 +7,7 @@
     <.live_title default="Dokkit" suffix=" · Dokkit">{assigns[:page_title]}</.live_title>
     <link rel="icon" type="image/svg+xml" href={~p"/favicon.svg"} />
     <link phx-track-static rel="stylesheet" href={~p"/vendor/phosphor.css"} />
+    <link rel="preload" href={~p"/vendor/figtree-latin-wght-normal.woff2"} as="font" type="font/woff2" crossorigin />
     <link phx-track-static rel="stylesheet" href={~p"/css/dokkit.css"} />
     <script>
       var dokkitState = {};
@@ -16,12 +17,12 @@
           value ? dokkitState[key] = value : delete dokkitState[key];
           try { localStorage.setItem("dokkit-look", JSON.stringify(dokkitState)); } catch (e) {}
         }
-        var s = dokkitState, dark = s.theme ? s.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+        var s = dokkitState, dark = s.theme === "device" ? matchMedia("(prefers-color-scheme: dark)").matches : s.theme !== "light";
         var base = ["neutral", "plum", "slate", "ember"].indexOf(s.base) < 0 ? "ember" : s.base;
-        var accent = ["violet", "orange", "blue", "teal"].indexOf(s.accent) < 0 ? (dark ? "orange" : "teal") : s.accent;
-        document.documentElement.className = [dark ? "t-dark" : "", dark && base !== "neutral" ? "d-" + base : "", accent !== "violet" ? "a-" + accent : ""].filter(Boolean).join(" ");
+        var accent = ["violet", "orange", "blue", "teal"].indexOf(s.accent) < 0 ? "orange" : s.accent;
+        document.documentElement.className = [dark ? "t-dark" : "", base !== "neutral" ? "d-" + base : "", accent !== "violet" ? "a-" + accent : ""].filter(Boolean).join(" ");
         document.querySelectorAll("[data-look]").forEach(function (b) {
-          var k = b.dataset.look, v = k === "base" ? base : k === "accent" ? accent : s.theme || "";
+          var k = b.dataset.look, v = k === "base" ? base : k === "accent" ? accent : s.theme || "dark";
           b.classList.toggle("on", v === b.dataset.value);
           b.setAttribute("aria-pressed", v === b.dataset.value);
         });
