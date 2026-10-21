@@ -5,7 +5,7 @@
 
 /* SITE */
   Static pages, written by hand; two Python scripts keep their bars, tags and sitemap in step.
-  Hosted on GitHub Pages, deployed from the repo.
+  Hosted on Cloudflare, deployed from the repo by GitHub Actions.
   Type: Bricolage Grotesque, Hanken Grotesk and IBM Plex, from Google Fonts.
   Motion: GSAP and Lenis. Switch it off and it stays off.
   No cookies. Analytics count visits, not people.

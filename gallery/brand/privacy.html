@@ -62,9 +62,10 @@
       <section class="step" id="site">
         <h2 data-type>This site</h2>
         <ul class="did">
-          <li>dokkit.dev is a static site served by GitHub Pages. It sets no cookies and has no forms that send anything.</li>
+          <li>dokkit.dev is a static site served by Cloudflare. It sets no cookies and has no forms that send anything.</li>
           <li>It counts visits with Cloudflare Web Analytics: which page was seen, roughly where from, and how fast it loaded. That counter sets no cookies and keeps nothing that identifies you.</li>
-          <li>Its pages load fonts from Google Fonts and scripts from cdnjs and unpkg, and the counter from Cloudflare, so those services see your address when a page loads, as GitHub does for the page itself.</li>
+          <li>Its pages load fonts from Google Fonts and scripts from cdnjs and unpkg, so those services see your address when a page loads, as Cloudflare does for the page itself.</li>
+          <li>The install scripts (<code>install.sh</code>, <code>compose.yml</code>, <code>get.sh</code>, <code>get.ps1</code>, <code>install.ps1</code>) are counted from Cloudflare's request totals, kept as a number per week: how many downloads, not who made them.</li>
           <li>The Check a file and Move over pages work entirely in your browser. What you type or drop there is not sent anywhere.</li>
         </ul>
       </section>
