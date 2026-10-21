@@ -238,6 +238,14 @@ defmodule DokkitWeb.MachineLive do
     end
   end
 
+  defp lede(true, _, _), do: "This machine is down. What it last reported is below."
+  defp lede(_, %{}, 0), do: "In planned downtime, so nothing on it alerts until it ends."
+  defp lede(_, _, 0), do: "All good. Nothing here needs a look."
+  defp lede(_, _, n), do: "#{plural(n, "thing needs", "things need")} a look here."
+
+  defp plural(1, one, _), do: "1 #{one}"
+  defp plural(n, _, many), do: "#{n} #{many}"
+
   def render(assigns) do
     assigns =
       assign(assigns,
@@ -265,6 +273,7 @@ defmodule DokkitWeb.MachineLive do
             state={if @down, do: :down, else: if(@attention > 0, do: :degraded, else: :ok)}
           /> {@machine.name}
         </h1>
+        <p class="lede">{lede(@down, @planned, @attention)}</p>
         
         <div class="end">
           <button

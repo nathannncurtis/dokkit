@@ -347,6 +347,7 @@ defmodule DokkitWeb.AlertsLive do
     <Layouts.app active={:alerts} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Alerts</h1>
+        <p class="lede">Who hears about what, how, and when. Night hours hold all but what is down.</p>
       </div>
 
       <div :if={@suggestions != []} class="body set" style="padding-bottom: 0">

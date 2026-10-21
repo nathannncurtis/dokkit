@@ -22,11 +22,20 @@ defmodule DokkitWeb.ErrorsLive do
     end
   end
 
+  defp lede([]), do: "No errors have been reported. Apps send theirs here as they happen."
+
+  defp lede(errors),
+    do: "#{plural(length(errors), "kind of error", "kinds of error")}, the most recent first."
+
+  defp plural(1, one, _), do: "1 #{one}"
+  defp plural(n, _, many), do: "#{n} #{many}"
+
   def render(%{error: nil} = assigns) do
     ~H"""
     <Layouts.app active={:errors} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Errors</h1>
+        <p class="lede">{lede(@errors)}</p>
       </div>
 
       <div class="body">

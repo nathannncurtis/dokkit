@@ -87,11 +87,28 @@ defmodule DokkitWeb.EverythingLive do
   defp windows?(m),
     do: m.kind == :enrolled and String.contains?(String.downcase(m.os || ""), "windows")
 
+  defp lede(machines, down) do
+    machines = Enum.filter(machines, &(&1.kind != :group))
+    services = for m <- machines, s <- m.services, s.slug != "machine", do: s
+
+    head =
+      "#{plural(length(services), "service", "services")} on #{plural(length(machines), "machine", "machines")}, in one place."
+
+    case length(down) do
+      0 -> head <> " None of the machines is down."
+      n -> head <> " #{plural(n, "machine is", "machines are")} down."
+    end
+  end
+
+  defp plural(1, one, _), do: "1 #{one}"
+  defp plural(n, _, many), do: "#{n} #{many}"
+
   def render(assigns) do
     ~H"""
     <Layouts.app active={:all} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Everything</h1>
+        <p class="lede">{lede(@machines, @down)}</p>
         
         <div class="end">
           <button

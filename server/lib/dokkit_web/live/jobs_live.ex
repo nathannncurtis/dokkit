@@ -28,6 +28,26 @@ defmodule DokkitWeb.JobsLive do
 
   defp load(socket), do: assign(socket, jobs: Estate.jobs())
 
+  defp lede(:new, _),
+    do: "Tell Dokkit when a job should run, and it says when a run is missed or fails."
+
+  defp lede(_, []), do: "No jobs yet. Add one and Dokkit watches every run."
+
+  defp lede(_, jobs) do
+    running = Enum.count(jobs, &(&1.last && &1.last.result == :running))
+    failed = Enum.count(jobs, &(&1.last && &1.last.result == :fail))
+
+    "#{plural(length(jobs), "job", "jobs")} on a schedule." <>
+      if(running > 0, do: " #{running} running now.", else: "") <>
+      if(failed > 0,
+        do: " #{plural(failed, "last run", "last runs")} failed.",
+        else: " Every last run went fine."
+      )
+  end
+
+  defp plural(1, one, _), do: "1 #{one}"
+  defp plural(n, _, many), do: "#{n} #{many}"
+
   def render(assigns) do
     ~H"""
     <Layouts.app active={:jobs} shell={@shell} user={@current_user}>
@@ -37,6 +57,7 @@ defmodule DokkitWeb.JobsLive do
       
       <div class="head">
         <h1 tabindex="-1">{@page_title}</h1>
+        <p class="lede">{lede(@live_action, @jobs)}</p>
         
         <div :if={@live_action == :index} class="end">
           <.link class="btn primary" patch={~p"/jobs/new"}><.ic name="plus" />New job</.link>

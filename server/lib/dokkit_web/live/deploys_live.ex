@@ -45,6 +45,9 @@ defmodule DokkitWeb.DeploysLive do
     on |> Map.values() |> Enum.max_by(&Dokkit.Deploys.number/1)
   end
 
+  defp lede(:versions), do: "Which version of each service runs on which machine."
+  defp lede(_), do: "What went out, where and when, newest first."
+
   def render(assigns) do
     assigns = assign(assigns, cols: @cols)
 
@@ -52,6 +55,7 @@ defmodule DokkitWeb.DeploysLive do
     <Layouts.app active={@live_action} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">{@page_title}</h1>
+        <p class="lede">{lede(@live_action)}</p>
       </div>
       
       <div :if={@live_action == :versions} class="body">
