@@ -1833,6 +1833,105 @@ Who is told at each level. Where someone is named: the default, a rule, a servic
 
 `403` The key may not do this.
 
+### GET /api/v1/settings
+
+The values for the whole server. Every value Dokkit decides on its own, server-wide: how alerts are retried and repeated, the defaults for every machine and job, how services are checked, what is kept and for how long, and sign-in limits. `values` is each value now, `defaults` the built-in value and `changed` the names that differ. `disk_on`, `disk_limit`, `memory_on` and `memory_limit` are the same limits as `disk_limit` and `memory_limit` in `/api/v1/alerts`. Takes a user token (`dku_`) with the `read` scope.
+
+
+`200` The values.
+
+```json
+{
+  "values": {
+    "disk_on": true,
+    "disk_limit": 85,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "defaults": {
+    "disk_on": true,
+    "disk_limit": 90,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "changed": [
+    "disk_limit"
+  ]
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+### GET /api/v1/machines/{id}/settings
+
+The values for one machine. The values that can differ by machine: disk, memory and processor alerts, when it counts as gone quiet, the disk forecast, how often the program reports and scans. `defaults` is the server-wide value each falls back to. The program on the machine is sent its reporting and scanning values with its checks. Takes a user token (`dku_`) with the `read` scope.
+
+- `id` (path): The id of the machine.
+
+`200` The values.
+
+```json
+{
+  "values": {
+    "disk_on": true,
+    "disk_limit": 85,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "defaults": {
+    "disk_on": true,
+    "disk_limit": 90,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "changed": [
+    "disk_limit"
+  ]
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`404` Not found.
+
+### GET /api/v1/jobs/{id}/settings
+
+The values for one job. The values that can differ by job: its grace, when it has run too long, whether a missed run alerts, and how long its runs are kept. `defaults` is what the job's own file or timing says, else the server-wide value. Takes a user token (`dku_`) with the `read` scope.
+
+- `id` (path): The id of the job, which is its service id.
+
+`200` The values.
+
+```json
+{
+  "values": {
+    "disk_on": true,
+    "disk_limit": 85,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "defaults": {
+    "disk_on": true,
+    "disk_limit": 90,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "changed": [
+    "disk_limit"
+  ]
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`404` Not found.
+
 ## Act
 
 Snooze and acknowledge issues, route and hold services, accept found things, keep error text and set when a job is late. User token with `act`.
@@ -2899,6 +2998,31 @@ Send:
 
 `422` The body does not fit.
 
+### POST /api/v1/phones/relay/shared
+
+Use the shared relay. Asks the shared relay for a new mailbox and saves its address, mailbox and upload key as the relay, then makes one upload and says whether the relay took it, as setting the relay does. The shared relay is `https://relay.dokkit.dev` unless `DOKKIT_SHARED_RELAY` names another. A different mailbox removes every phone. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.
+
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`200` The relay, and what the upload did.
+
+```json
+{
+  "address": "https://relay.example.com",
+  "mailbox": "92bea4d52a1d53f0c8111edf39e26a89",
+  "key": "set",
+  "last_good_upload": "2026-10-13T09:01:00Z",
+  "last_error": null,
+  "uploaded": true,
+  "result": "The relay took the snapshot."
+}
+```
+
+`422` The shared relay made no mailbox, or what it gave could not be saved.
+
 ### DELETE /api/v1/phones/{id}
 
 Remove a phone. Removes a phone and uploads at once without its slot, so its token stops working. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.
@@ -3518,6 +3642,59 @@ Get a certificate now. Gets a certificate for `acme_name` now, whatever the one 
 
 `422` It failed. The message says why; the same sentence is kept as `renewal` in `GET /certificate`.
 
+### GET /api/v1/certificate/name
+
+The name on dokkit.dev. The name this server holds through the dokkit.dev claim service, empty when none: the address set for it (empty means this machine's own), the address last sent, and whether that worked. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.
+
+
+`200` The name.
+
+```json
+{
+  "name": "home.dokkit.dev",
+  "address": "",
+  "sent": "192.168.1.20",
+  "ok": true,
+  "note": "home.dokkit.dev points at 192.168.1.20"
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+### POST /api/v1/certificate/name
+
+Claim a name on dokkit.dev. With `code`, the one-time claim code from names.dokkit.dev: the server makes a key, registers it with the claim service, makes the name `acme_name` and points the name at `address`, or at this machine's own address when that is empty. From then on the server sends its address once a day, which keeps the name from lapsing, and certificates for the name are proved through the claim service. Without `code`, only the address changes. Follow with `POST /certificate/renew`. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.
+
+
+Send:
+
+```
+{
+  "code": "k3j5w2x7q4m6p2r8t5v3y7z2",
+  "address": ""
+}
+```
+
+`200` The name after the change.
+
+```json
+{
+  "name": "home.dokkit.dev",
+  "address": "",
+  "sent": "192.168.1.20",
+  "ok": true,
+  "note": "home.dokkit.dev points at 192.168.1.20"
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` It failed. The message says why.
+
 ### POST /api/v1/dependencies
 
 Add something outside that is depended on. Adds a service of kind `dependency`. With `check` (`{type: http, url}` or `{type: tcp, address: host:port}`) it is put on `machine`, an enrolled machine whose dokkit runs the check; without a check it belongs to the group machine Outside. Answers as `GET /services/{id}` does. Takes a user token (`dku_`) with the `admin` scope.
@@ -3632,7 +3809,7 @@ Send:
 
 ### PUT /api/v1/alerts/who
 
-Name who is told at one level. `to` is a list of person ids, or `["everyone"]`, which is the server-wide destinations and behaves as before. An empty list names nobody at that level, so the level above decides. Takes a user token (`dku_`) with the `admin` scope.
+Name who is told at one level. `to` is a list of person ids, `["everyone"]`, which is the server-wide destinations and behaves as before, or `["oncall"]`: everyone on call in the PagerDuty schedule chosen in the alert settings when the alert is sent, each told on their own destinations, matched by email. If nobody here matches or PagerDuty cannot be reached, the server-wide destinations are told. An empty list names nobody at that level, so the level above decides. Takes a user token (`dku_`) with the `admin` scope.
 
 
 Send:
@@ -3705,6 +3882,202 @@ Send:
 `404` Not found.
 
 `422` Refused, with the reason.
+
+### POST /api/v1/alerts/heartbeat/shared
+
+Use dokkit.dev as the outside heartbeat. Asks dokkit.dev for a heartbeat address, with no account, and saves it as heartbeat_url. dokkit.dev tells this server's ntfy topic (one without a token) or webhook when the calls stop for five minutes, and again when they start. Called again, or when those alert settings change, it points the same heartbeat at the new place. The service is `https://beat.dokkit.dev` unless `DOKKIT_SHARED_HEARTBEAT` names another. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.
+
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`200` The heartbeat in use.
+
+`422` dokkit.dev made no heartbeat, or this server has nothing for it to send to.
+
+### DELETE /api/v1/alerts/heartbeat/shared
+
+Stop using dokkit.dev as the outside heartbeat. Removes the heartbeat at dokkit.dev and clears heartbeat_url. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.
+
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`200` Stopped.
+
+### PUT /api/v1/settings
+
+Change the values for the whole server. Changes server-wide values. A pair that must agree (such as enrol_hours and enrol_max_hours, silent_minutes and report_seconds, update_run_minutes and updater_minutes) is checked only when one of the two is sent. A value a machine or job sets for itself stays. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `admin` scope.
+
+
+Send:
+
+```
+{
+  "disk_limit": 85,
+  "cpu_on": true,
+  "snooze_choices": "1h, 4h, 1d",
+  "remind_minutes": null
+}
+```
+
+`200` The values after the change, as in the GET.
+
+```json
+{
+  "values": {
+    "disk_on": true,
+    "disk_limit": 85,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "defaults": {
+    "disk_on": true,
+    "disk_limit": 90,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "changed": [
+    "disk_limit"
+  ]
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` A value is not right. The message says which.
+
+### PUT /api/v1/machines/{id}/settings
+
+Change the values for one machine. Changes one machine's values. A machine's own disk or memory limit replaces a threshold its dokkit.toml declares for the same number. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `admin` scope.
+
+- `id` (path): The id of the machine.
+
+Send:
+
+```
+{
+  "disk_limit": 85,
+  "cpu_on": true,
+  "snooze_choices": "1h, 4h, 1d",
+  "remind_minutes": null
+}
+```
+
+`200` The values after the change, as in the GET.
+
+```json
+{
+  "values": {
+    "disk_on": true,
+    "disk_limit": 85,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "defaults": {
+    "disk_on": true,
+    "disk_limit": 90,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "changed": [
+    "disk_limit"
+  ]
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` A value is not right. The message says which.
+
+`404` Not found.
+
+### PUT /api/v1/jobs/{id}/settings
+
+Change the values for one job. Changes one job's values. They replace the job's own grace and max_runtime while they are set. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `admin` scope.
+
+- `id` (path): The id of the job, which is its service id.
+
+Send:
+
+```
+{
+  "disk_limit": 85,
+  "cpu_on": true,
+  "snooze_choices": "1h, 4h, 1d",
+  "remind_minutes": null
+}
+```
+
+`200` The values after the change, as in the GET.
+
+```json
+{
+  "values": {
+    "disk_on": true,
+    "disk_limit": 85,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "defaults": {
+    "disk_on": true,
+    "disk_limit": 90,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "changed": [
+    "disk_limit"
+  ]
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` A value is not right. The message says which.
+
+`404` Not found.
+
+### GET /api/v1/alerts/oncall
+
+PagerDuty schedules and who is on call. Asks PagerDuty, with the REST API key in the alert settings, for the account's schedules and for everyone on call now in the chosen schedule, and says which person on this server each is. An answer is kept for a minute; a failure is not. `error` says why something could not be read. Takes a user token (`dku_`) with the `admin` scope.
+
+
+`200` OK.
+
+```json
+{
+  "schedules": [
+    {
+      "id": "PSCHED1",
+      "name": "Primary"
+    }
+  ],
+  "schedule": "PSCHED1",
+  "oncall": [
+    {
+      "name": "Ada Lovelace",
+      "email": "ada@example.com",
+      "person": {
+        "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f4",
+        "name": "ada"
+      }
+    }
+  ],
+  "error": null
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
 
 ## MCP
 

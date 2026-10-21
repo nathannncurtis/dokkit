@@ -4,7 +4,7 @@
   Site: nathancurtis.me
 
 /* SITE */
-  Static pages, written by hand; two Python scripts keep their bars, tags and sitemap in step.
+  Static pages, written by hand; Python scripts keep their bars, tags, sitemap, changelog and the files for AI tools in step.
   Hosted on Cloudflare, deployed from the repo by GitHub Actions.
   Type: Bricolage Grotesque, Hanken Grotesk and IBM Plex, from Google Fonts.
   Motion: GSAP and Lenis. Switch it off and it stays off.

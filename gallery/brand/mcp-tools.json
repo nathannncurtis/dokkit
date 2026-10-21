@@ -681,7 +681,24 @@
     "args": [],
     "name": "renew_certificate",
     "scope": "admin",
-    "description": "Get a certificate for acme_name now from the certificate authority, proving the name with a DNS record at Cloudflare. It can take a few minutes. Answers with the certificates, or the reason it failed.",
+    "description": "Get a certificate for acme_name now from the certificate authority, proving the name with a DNS record at Cloudflare, or through the names.dokkit.dev claim service for a name claimed there. It can take a few minutes. Answers with the certificates, or the reason it failed.",
+    "required": []
+  },
+  {
+    "args": [],
+    "name": "dokkit_name",
+    "scope": "admin",
+    "description": "The name on dokkit.page this server holds through the claim service, if any: the name, the address set for it (empty means this machine's own), the address last sent, and whether that worked.",
+    "required": []
+  },
+  {
+    "args": [
+      "address",
+      "code"
+    ],
+    "name": "claim_dokkit_name",
+    "scope": "admin",
+    "description": "Claim a name on dokkit.page with the one-time claim code from names.dokkit.dev: this server registers a key with the claim service, makes the name acme_name and points it at address (empty for this machine's own). Without a code, changes only the address. Follow with renew_certificate.",
     "required": []
   },
   {
@@ -905,11 +922,18 @@
     ],
     "name": "set_alert_who",
     "scope": "admin",
-    "description": "Name who is told at one level. scope is default, rule, service or check; id is the rule, service or check (not for default); for a check, service and name may be sent instead of id; to is a list of person ids from alert_people, or [\"everyone\"] for the server-wide destinations. An empty list names nobody there, so the level above decides. The check comes before the service, the service before the rule, the rule before the default.",
+    "description": "Name who is told at one level. scope is default, rule, service or check; id is the rule, service or check (not for default); for a check, service and name may be sent instead of id; to is a list of person ids from alert_people, [\"everyone\"] for the server-wide destinations, or [\"oncall\"] for whoever is on call in the chosen PagerDuty schedule. An empty list names nobody there, so the level above decides. The check comes before the service, the service before the rule, the rule before the default.",
     "required": [
       "scope",
       "to"
     ]
+  },
+  {
+    "args": [],
+    "name": "alert_oncall",
+    "scope": "admin",
+    "description": "The PagerDuty schedules, read with the REST API key in the alert settings, and who is on call now in the chosen schedule, with the person on this server that is. Kept for a minute.",
+    "required": []
   },
   {
     "args": [
@@ -942,6 +966,72 @@
     "description": "Load an archived month of logs back for a week. Takes the name from archives.",
     "required": [
       "name"
+    ]
+  },
+  {
+    "args": [],
+    "name": "settings",
+    "scope": "read",
+    "description": "Every value Dokkit decides on its own for the whole server: values is each one now, defaults what Reset gives, changed the ones that differ.",
+    "required": []
+  },
+  {
+    "args": [
+      "values"
+    ],
+    "name": "set_settings",
+    "scope": "admin",
+    "description": "Change server-wide values. values maps a name from settings to a whole number, true or false, or text for a list of lengths; null or an empty text puts one back to its default. Names left out stay as they were.",
+    "required": [
+      "values"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "machine_settings",
+    "scope": "read",
+    "description": "One machine's values: each starts at the server-wide one. Takes the id from machines.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "id",
+      "values"
+    ],
+    "name": "set_machine_settings",
+    "scope": "admin",
+    "description": "Change one machine's values, as set_settings does. Takes the id from machines.",
+    "required": [
+      "id",
+      "values"
+    ]
+  },
+  {
+    "args": [
+      "id"
+    ],
+    "name": "job_settings",
+    "scope": "read",
+    "description": "One job's values: each starts at the job's own file, or the server-wide one. Takes the id from jobs.",
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "args": [
+      "id",
+      "values"
+    ],
+    "name": "set_job_settings",
+    "scope": "admin",
+    "description": "Change one job's values, as set_settings does. Takes the id from jobs.",
+    "required": [
+      "id",
+      "values"
     ]
   }
 ]
