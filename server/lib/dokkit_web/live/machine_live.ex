@@ -273,6 +273,7 @@ defmodule DokkitWeb.MachineLive do
             state={if @down, do: :down, else: if(@attention > 0, do: :degraded, else: :ok)}
           /> {@machine.name}
         </h1>
+        
         <p class="lede">{lede(@down, @planned, @attention)}</p>
         
         <div class="end">
@@ -434,7 +435,9 @@ defmodule DokkitWeb.MachineLive do
               
               <dt :if={@machine.updater_checked_at}>Updater last checked</dt>
               
-              <dd :if={@machine.updater_checked_at} class="mono">{Calendar.strftime(@machine.updater_checked_at, "%b %-d %H:%M:%S")} UTC</dd>
+              <dd :if={@machine.updater_checked_at} class="mono">
+                {Calendar.strftime(@machine.updater_checked_at, "%b %-d %H:%M:%S")} UTC
+              </dd>
               
               <dt :if={@machine.hosts_server}>Server</dt>
               

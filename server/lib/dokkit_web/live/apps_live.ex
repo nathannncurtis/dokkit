@@ -61,7 +61,10 @@ defmodule DokkitWeb.AppsLive do
         do: " #{plural(attention, "thing needs", "things need")} a look.",
         else: " Nothing needs a look."
       ) <>
-      if(silent != [], do: " #{plural(length(silent), "has", "have")} not reported yet.", else: "")
+      if(silent != [],
+        do: " #{plural(length(silent), "has", "have")} not reported yet.",
+        else: ""
+      )
   end
 
   defp plural(1, one, _), do: "1 #{one}"
@@ -72,6 +75,7 @@ defmodule DokkitWeb.AppsLive do
     <Layouts.app active={:apps} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Apps</h1>
+        
         <p class="lede">{lede(@reported, @silent)}</p>
       </div>
       
