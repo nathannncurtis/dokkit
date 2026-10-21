@@ -356,8 +356,9 @@ jobs:
         env:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
-          python3 -m pip install --quiet pyjwt cryptography
-          python3 apps/ios/testflight.py "$BUILD_NUMBER"
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyjwt cryptography requests
+          "$RUNNER_TEMP/venv/bin/python" apps/ios/testflight.py "$BUILD_NUMBER"
       - name: Remove the keychain
         if: always()
         run: |
