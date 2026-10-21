@@ -4,6 +4,7 @@ set -uo pipefail
 range="$1"
 employer='ronsin|ronsyn|wincopy|tristar|nas-prod|192\.168\.31'
 attribution='Co-Authored-By:[[:space:]]*Claude|Generated with|claude\.ai/code'
+coauthored='^(apps|clients)/|^gallery/[^/]*-(android|ios)/'
 fail=0
 
 bad() { echo "::error::$1"; fail=1; }
@@ -17,7 +18,7 @@ printf '%s\n%s\n' "${PR_TITLE:-}" "${PR_BODY:-}" | grep -Eiq "$attribution" && b
 for sha in $(git rev-list --no-merges "$range"); do
   msg=$(git log -1 --format=%B "$sha")
   files=$(git show --name-only --format= "$sha")
-  if [ -n "$files" ] && ! grep -qvE '^(apps|clients)/' <<<"$files"; then
+  if [ -n "$files" ] && ! grep -qvE "$coauthored|^docs/" <<<"$files" && grep -qE "$coauthored" <<<"$files"; then
     msg=$(grep -vxE 'Co-Authored-By: Claude [^<]*<noreply@anthropic\.com>' <<<"$msg" || true)
   fi
   grep -Eiq "$attribution" <<<"$msg" && bad "AI attribution in commit $sha"

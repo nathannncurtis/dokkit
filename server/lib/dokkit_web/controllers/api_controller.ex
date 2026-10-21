@@ -453,6 +453,8 @@ defmodule DokkitWeb.ApiController do
 
   def set_alert_settings(conn, params), do: reply(conn, save_alerts(params))
 
+  def alert_oncall(conn, _), do: reply(conn, Dokkit.OnCall.view())
+
   def alert_people(conn, _), do: list(conn, %{items: Dokkit.People.view(), next: nil})
 
   def save_person(%{"id" => id} = params) do
@@ -885,7 +887,8 @@ defmodule DokkitWeb.ApiController do
   end
 
   # What a call needs follows from the call: reading needs read, log contents need
-  # read-logs, keys, people, rules, alert settings, checks, restart, updating the program,
+  # read-logs, keys, people, rules, alert settings, the PagerDuty on-call lookup, checks,
+  # restart, updating the program,
   # restoring logs, and making a job need admin, and anything else
   # changes something.
   def needs(method, path) do
@@ -897,6 +900,9 @@ defmodule DokkitWeb.ApiController do
         "admin"
 
       {_, "logs", "retention"} ->
+        "admin"
+
+      {"GET", "alerts", "oncall"} ->
         "admin"
 
       {"GET", "logs", _} ->

@@ -13710,7 +13710,7 @@
                             "items": {
                               "type": "string"
                             },
-                            "description": "Person ids, or [\"everyone\"] for the server-wide destinations."
+                            "description": "Person ids, [\"everyone\"] for the server-wide destinations, or [\"oncall\"] for whoever is on call in the chosen PagerDuty schedule."
                           }
                         }
                       }
@@ -13786,7 +13786,7 @@
         "tags": [
           "Admin"
         ],
-        "description": "`to` is a list of person ids, or `[\"everyone\"]`, which is the server-wide destinations and behaves as before. An empty list names nobody at that level, so the level above decides. Takes a user token (`dku_`) with the `admin` scope.",
+        "description": "`to` is a list of person ids, `[\"everyone\"]`, which is the server-wide destinations and behaves as before, or `[\"oncall\"]`: everyone on call in the PagerDuty schedule chosen in the alert settings when the alert is sent, each told on their own destinations, matched by email. If nobody here matches or PagerDuty cannot be reached, the server-wide destinations are told. An empty list names nobody at that level, so the level above decides. Takes a user token (`dku_`) with the `admin` scope.",
         "requestBody": {
           "required": true,
           "content": {
@@ -13811,7 +13811,7 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "Person ids, or [\"everyone\"] for the server-wide destinations."
+                    "description": "Person ids, [\"everyone\"] for the server-wide destinations, or [\"oncall\"] for whoever is on call in the chosen PagerDuty schedule."
                   },
                   "service": {
                     "type": "string",
@@ -13863,7 +13863,7 @@
                       "items": {
                         "type": "string"
                       },
-                      "description": "Person ids, or [\"everyone\"] for the server-wide destinations."
+                      "description": "Person ids, [\"everyone\"] for the server-wide destinations, or [\"oncall\"] for whoever is on call in the chosen PagerDuty schedule."
                     }
                   }
                 },
@@ -15164,6 +15164,144 @@
           }
         ]
       }
+    },
+    "/api/v1/alerts/oncall": {
+      "get": {
+        "operationId": "getAlertOncall",
+        "summary": "PagerDuty schedules and who is on call",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Asks PagerDuty, with the REST API key in the alert settings, for the account's schedules and for everyone on call now in the chosen schedule, and says which person on this server each is. An answer is kept for a minute; a failure is not. `error` says why something could not be read. Takes a user token (`dku_`) with the `admin` scope.",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schedules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "schedule": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "oncall": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "person": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "description": "The person on this server with that email, or null when there is none and the server-wide destinations are told.",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "schedules": [
+                    {
+                      "id": "PSCHED1",
+                      "name": "Primary"
+                    }
+                  ],
+                  "schedule": "PSCHED1",
+                  "oncall": [
+                    {
+                      "name": "Ada Lovelace",
+                      "email": "ada@example.com",
+                      "person": {
+                        "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f4",
+                        "name": "ada"
+                      }
+                    }
+                  ],
+                  "error": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -16209,6 +16347,17 @@
           "night_zone": {
             "type": "string",
             "description": "A time zone name such as America/Los_Angeles, in which the night and the digest time are kept. While it is empty the night is read in UTC plus night_offset."
+          },
+          "pagerduty_api_key": {
+            "type": "string",
+            "enum": [
+              "set",
+              "not set"
+            ]
+          },
+          "pagerduty_schedule": {
+            "type": "string",
+            "description": "The id of the PagerDuty schedule whose on-call person \"oncall\" means."
           }
         }
       },
@@ -16404,6 +16553,14 @@
           "night_zone": {
             "type": "string",
             "description": "A time zone name such as America/Los_Angeles, in which the night and the digest time are kept. While it is empty the night is read in UTC plus night_offset."
+          },
+          "pagerduty_api_key": {
+            "type": "string",
+            "description": "A PagerDuty REST API key, read-only is enough. Used to list schedules and read who is on call."
+          },
+          "pagerduty_schedule": {
+            "type": "string",
+            "description": "The id of a schedule from GET /api/v1/alerts/oncall."
           }
         }
       },
