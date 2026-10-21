@@ -13,8 +13,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v7
+      - uses: sigstore/cosign-installer@v4.1.2
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -32,10 +34,16 @@ jobs:
             echo "list=${image}:test" >> "$GITHUB_OUTPUT"
           fi
       - uses: docker/build-push-action@v7
+        id: build
         with:
           context: server
           push: ${{ github.ref_type == 'tag' }}
           tags: ${{ steps.tags.outputs.list }}
+      - name: Sign the image
+        if: github.ref_type == 'tag'
+        run: |
+          image=$(echo "${{ steps.tags.outputs.list }}" | cut -d, -f1 | cut -d: -f1)
+          cosign sign --yes "${image}@${{ steps.build.outputs.digest }}"
 
   program:
     runs-on: ubuntu-latest
@@ -191,6 +199,7 @@ jobs:
         working-directory: server
     env:
       MIX_ENV: prod
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v7
       - uses: erlef/setup-beam@v1
@@ -213,6 +222,26 @@ jobs:
           foreach ($f in 'bin\dokkit.bat', 'install.ps1') {
             if (-not (Test-Path "_build\prod\rel\dokkit\$f")) { throw "$f is not in the release" }
           }
+      - name: No signing secrets
+        if: env.AZURE_CLIENT_SECRET == ''
+        shell: bash
+        run: echo "::warning::No Azure signing secrets are set, so the server programs are not signed."
+      - name: Sign
+        if: env.AZURE_CLIENT_SECRET != ''
+        uses: Azure/trusted-signing-action@0d74250c661747df006298d0fb49944c10f16e03 # v0.5.1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: https://wus2.codesigning.azure.net/
+          trusted-signing-account-name: nathancurtis-signing
+          certificate-profile-name: nathancurtis-signing
+          files-folder: ${{ github.workspace }}\server\_build\prod\rel\dokkit
+          files-folder-filter: exe,dll
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
       - name: Zip
         shell: bash
         run: |
