@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The demo is full · Dokkit</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2728%27 fill=%27%23ff9a4d%27/%3E%3Cpath fill=%27%232a1203%27 d=%27M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="../shared/phosphor.css">
+<link rel="stylesheet" href="../shared/calm-ember-reference.css">
+<link rel="stylesheet" href="style.css">
+<script>try { var t = localStorage.getItem("dokkit-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <a class="brand-link" href="https://dokkit.dev/" aria-label="Dokkit"><span class="mark"><svg viewBox="0 0 100 100" fill="currentColor" aria-hidden="true"><circle cx="27.5" cy="30.5" r="5.4"></circle><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"></path></svg></span></a>
+    <div class="title">
+      <h1>The demo is full</h1>
+      <p>Keep this tab open. It takes you in the moment a seat is free, even mid-game.</p>
+    </div>
+    <button class="theme" id="theme" type="button" aria-label="Switch to light theme"><i class="ph ph-sun" aria-hidden="true"></i></button>
+  </header>
+
+  <section class="console" aria-labelledby="gh">
+    <div class="ticker" role="status" aria-live="polite">
+      <span class="tk place-tk"><span class="pulse" aria-hidden="true"></span><span class="place mono" id="place">4</span><b id="placeText">You're 4th in line</b></span>
+      <span class="tk"><span class="k">seats</span> <span class="mono">80/80</span><span class="seats" id="seats" aria-hidden="true"></span></span>
+      <span class="tk"><span class="mono" id="freed">3</span> <span class="k">freed in 5 min</span></span>
+      <span class="tk"><span class="k">checked</span> <span class="mono" id="ago">just now</span></span>
+      <button class="linkish" id="skip" type="button">Mock: skip to my turn</button>
+    </div>
+
+    <div class="deck">
+      <div class="screen">
+        <div class="screen-head">
+          <h2 id="gh">Keep it green</h2>
+          <p class="sub">48 services drift from green to amber to red. Fix them before five go red at once.</p>
+        </div>
+        <div class="board-wrap">
+          <div class="board" id="board" role="group" aria-label="Services, 48 squares"></div>
+          <div class="cover" id="cover">
+            <div class="cover-box">
+              <p class="cover-h" id="coverH">A quiet half hour, for now</p>
+              <p class="cover-p" id="coverP">Click or tap an amber or red square to fix it. On a keyboard, arrows move and Enter fixes. P pauses.</p>
+              <div class="cover-btns">
+                <button class="btn primary" id="start" type="button"><i class="ph ph-play" aria-hidden="true"></i><span id="startText">Start</span></button>
+                <label class="check"><input type="checkbox" id="calm"> Calm mode</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="screen-foot">
+          <div class="legend">
+            <span><b></b>Up</span><span><b class="warn"></b>Slow: fix it</span><span><b class="bad"></b>Down: fix it fast</span>
+          </div>
+          <button class="btn" id="pause" type="button" disabled><i class="ph ph-pause" aria-hidden="true"></i><span>Pause</span></button>
+        </div>
+      </div>
+
+      <dl class="gauges" aria-label="Readouts">
+        <div class="gauge"><dt>Uptime kept</dt><dd><span class="mono" id="score">0</span><small>min</small></dd></div>
+        <div class="gauge"><dt>Fixes</dt><dd><span class="mono" id="fixes">0</span></dd></div>
+        <div class="gauge"><dt>Red now</dt><dd><span class="mono" id="reds">0</span><small>/ 5</small></dd></div>
+        <div class="gauge"><dt>Best</dt><dd><span class="mono" id="best">0</span><small>min</small></dd></div>
+      </dl>
+    </div>
+    <p class="sr" id="say" aria-live="polite"></p>
+  </section>
+
+  <footer class="notes">
+    <p><i class="ph ph-hourglass-medium" aria-hidden="true"></i>Seats open when someone leaves, or after 6 minutes of doing nothing.</p>
+    <p><i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>The demo starts fresh on the hour, with made-up data.</p>
+    <p><i class="ph ph-compass" aria-hidden="true"></i><span>Rather not wait? <a href="https://dokkit.dev/">Look around the sample on dokkit.dev</a></span></p>
+  </footer>
+</main>
+
+<dialog class="turn" id="turn" aria-labelledby="turnH">
+  <span class="ic lg t-ok"><i class="ph ph-armchair" aria-hidden="true"></i></span>
+  <h2 id="turnH">A seat is free</h2>
+  <p>It's held for you for <b class="mono" id="hold">2:00</b>. The game is paused.</p>
+  <p class="kept" id="kept"></p>
+  <button class="btn primary big" id="take" type="button">Take your seat <i class="ph ph-arrow-right" aria-hidden="true"></i></button>
+</dialog>
+
+<script src="game.js"></script>
+</body>
+</html>
