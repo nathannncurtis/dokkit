@@ -296,6 +296,7 @@ defmodule Dokkit.Alert do
 
     field :attempts, :integer, default: 0
     field :error, :string
+    field :oncall, :boolean, default: false
     belongs_to :issue, Dokkit.Issue
     timestamps()
   end
