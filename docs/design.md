@@ -15,8 +15,8 @@ as written here.
   as its default and can be changed, per machine, service or job where that makes sense. Each
   setting shows its default and a Reset next to it.
 - **Theme follows the system** until someone picks light or dark. Light and dark are both warm.
-- **Orange, not teal.** The brand colour is orange in both themes. Teal survives only as one accent a
-  person can choose.
+- **Orange, not teal.** The brand colour is orange in both themes. Violet, blue and teal survive only as
+  accents a person can choose.
 - **State is the loudest thing on screen.** Something that needs a person looks like it; things that
   are fine go quiet.
 - **Motion is subtle and never in the way.** No scroll-linked animation, no scroll hijacking, and all
@@ -58,7 +58,7 @@ State tints, each a soft surface, an ink for text on it and a solid for marks (l
 
 - Figtree for everything people read; IBM Plex Mono for technical strings (machine and service
   names, ids, times, numbers that line up).
-- Page title 34px, weight 800, tight tracking; a lede sentence under it at 18px.
+- Page title 30px, weight 800, tight tracking; a lede sentence under it at 17px.
 - Panels 16px radius, small controls 12px, pills fully round. Soft shadows, never hard edges.
 - Icons are Phosphor; state icons sit in a tinted circle (44px, 56px on hero headers).
 
@@ -134,4 +134,4 @@ This process produced the approved look; repeat it for the phone apps or any new
 3. Let the owner mix: the winner here was one direction's layout in another's colours.
 4. Then change one thing at a time as the owner names it, refreshing the same page.
 5. Only then build it into the product, keeping every existing behaviour (rule 1).
-6. Delete the mocks once it is built. The product is the reference from then on; git history keeps them.
+6. Delete the mocks once it is built. The product is the reference from then on; git history keeps them. None are kept in the repository.

@@ -2,11 +2,15 @@
 
 A read-only view of a Dokkit server, for a server that is not on the internet. It shows what needs attention and the state of every machine and service, from the sealed snapshots a relay holds. It cannot change anything on the server and sends no notifications.
 
-The app is not on Google Play yet. Until it is, you build it and sign it with your own key.
+The app is not on Google Play. Every release carries `dokkit-android.apk`, signed with the Dokkit key, and `dokkit-android-unsigned.apk` for anyone who wants to sign it with their own key. Each has a `.sha256` file beside it.
+
+## Install a release
+
+Copy `dokkit-android.apk` to the phone and open it; Android asks once to let that app install files. Or from a computer: `adb install dokkit-android.apk`. An update has to be signed with the same key as the app it replaces, so do not mix the Dokkit-signed file with one you signed yourself.
 
 ## Build
 
-You need JDK 17, the Android SDK (platform 35 and its build tools) and Gradle 8.11 or later.
+You need JDK 17, the Android SDK (platform 37 and its build tools) and Gradle 9.6.0, the version the workflow uses.
 
 ```
 cd apps/android
@@ -15,9 +19,9 @@ cd apps/android
 
 The script runs the unit tests, builds the release app without signing it, and leaves `out/dokkit-android-unsigned.apk` and `out/dokkit-android-unsigned.apk.sha256`. It stops with an error if a test fails or if the merged manifest asks for a permission the app is not meant to have.
 
-The workflow `.github/workflows/android.yml` does the same on a GitHub runner when you start it by hand, and keeps the files as the artifact `phone-android`.
+The workflow `.github/workflows/android.yml` does the same on a GitHub runner when you start it by hand, and keeps the files as the artifact `phone-android`. The release workflow builds the same way, signs the result with the Dokkit key and attaches both files to the release.
 
-## Sign and install
+## Sign it yourself
 
 The unsigned file is already aligned. Make a key once, then sign:
 
@@ -28,7 +32,7 @@ apksigner verify dokkit-android.apk
 adb install dokkit-android.apk
 ```
 
-`apksigner` is in the `build-tools` folder of the Android SDK. Keep `dokkit.jks`: an update must be signed with the same key as the app it replaces. To install without a cable, copy `dokkit-android.apk` to the phone and open it; Android asks once to let that app install files.
+`apksigner` is in the `build-tools` folder of the Android SDK. Keep `dokkit.jks`: an update must be signed with the same key as the app it replaces.
 
 ## Pair it
 
