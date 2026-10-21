@@ -34,7 +34,7 @@ class Palette(
 
 private val light = Palette(
     bg = Color(0xFFFAFAFA), panel = Color(0xFFFFFFFF), line = Color(0xFFE6E6EA), ink = Color(0xFF18181B),
-    mute = Color(0xFF6B6B76), chip = Color(0xFFF0F0F3), brand = Color(0xFF0F766E), brandInk = Color(0xFFFFFFFF),
+    mute = Color(0xFF6B6B76), chip = Color(0xFFF0F0F3), brand = Color(0xFFF28A3A), brandInk = Color(0xFF2A1203),
     ok = Color(0xFF147A3A), warn = Color(0xFFA14A08), bad = Color(0xFFC81E1E),
 )
 

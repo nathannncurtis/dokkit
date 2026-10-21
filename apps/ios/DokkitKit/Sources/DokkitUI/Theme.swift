@@ -37,7 +37,7 @@ public enum Look {
 }
 
 enum Theme {
-    // The web interface's own defaults: the light theme with the teal accent, and the Ember dark base with the orange one.
+    // The web interface's own defaults: Ember in both themes, with the orange accent.
     static let bg = Color(light: 0xfafafa, dark: 0x1e1917)
     static let panel = Color(light: 0xffffff, dark: 0x27201d)
     static let raise = Color(light: 0xf6f6f7, dark: 0x332a26)
@@ -45,8 +45,8 @@ enum Theme {
     static let ink = Color(light: 0x18181b, dark: 0xf7f1ec)
     static let mute = Color(light: 0x6b6b76, dark: 0xb9a99e)
     static let chip = Color(light: 0xf0f0f3, dark: 0x3a2f2a)
-    static let brand = Color(light: 0x0f766e, dark: 0xff9a4d)
-    static let brandInk = Color(light: 0xffffff, dark: 0x2a1203)
+    static let brand = Color(light: 0xf28a3a, dark: 0xff9a4d)
+    static let brandInk = Color(light: 0x2a1203, dark: 0x2a1203)
     static let ok = Color(light: 0x147a3a, dark: 0x4ade80)
     static let warn = Color(light: 0xa14a08, dark: 0xfbbf24)
     static let bad = Color(light: 0xc81e1e, dark: 0xf87171)
