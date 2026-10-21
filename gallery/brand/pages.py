@@ -476,11 +476,13 @@ privacy_page()
 
 
 def not_found():
-    body = """        <p class="big-fact" data-fly="up">Nothing lives at this address. It may have moved, or the link may have a typo in it.</p>"""
+    body = """        <p class="big-fact" data-fly="up">Nothing lives at this address. It may have moved, or the link may have a typo in it. The rest of the site is up, and <a href="index.html">the start</a> is one click away.</p>
+        <div data-keep-green></div>"""
     page("404.html", "Not found · Dokkit", "Nothing lives at this address.",
-         [], "Not found", "That page is not here. The rest of the site is.",
-         [("gone", "Where to go")], step("gone", "Where to go", body),
-         [("index.html", "Back to the start", "What Dokkit is, and the working sample"), ("install.html", "Install", "Get it running"), ("changelog.html", "Changelog", "What changed, release by release")])
+         [], "This page is down", "Keep the rest green?",
+         [("gone", "Keep the rest green")], step("gone", "Keep the rest green", body),
+         [("index.html", "Back to the start", "What Dokkit is, and the working sample"), ("install.html", "Install", "Get it running"), ("changelog.html", "Changelog", "What changed, release by release")],
+         js="keep-green.js", css="keep-green.css")
     # served at any missing path, so every relative link must resolve from the root
     f = os.path.join(os.path.dirname(os.path.abspath(__file__)), "404.html")
     s = open(f, encoding="utf-8").read()
