@@ -1,0 +1,420 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      server: ${{ steps.f.outputs.server }}
+      program: ${{ steps.f.outputs.program }}
+      clients: ${{ steps.f.outputs.clients }}
+      apps-ios: ${{ steps.f.outputs.apps-ios }}
+      apps-android: ${{ steps.f.outputs.apps-android }}
+      site: ${{ steps.f.outputs.site }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: f
+        with:
+          filters: |
+            server:
+              - 'server/**'
+              - 'spec/**'
+              - '.zap/**'
+              - '.github/workflows/ci.yml'
+            program:
+              - 'program/**'
+              - '.github/workflows/ci.yml'
+            clients:
+              - 'clients/**'
+              - 'server/**'
+              - '.dependency-check/**'
+              - '.github/workflows/ci.yml'
+            apps-ios:
+              - 'apps/ios/**'
+              - '.github/workflows/ci.yml'
+            apps-android:
+              - 'apps/android/**'
+              - '.dependency-check/**'
+              - '.github/workflows/ci.yml'
+            site:
+              - 'gallery/brand/**'
+              - 'spec/openapi.json'
+              - '.zap/**'
+              - '.github/workflows/ci.yml'
+
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Range
+        id: range
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then BASE="$HEAD~1"; fi
+          echo "range=$BASE..$HEAD" >> "$GITHUB_OUTPUT"
+      - name: Names, attribution and workflow rules
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: bash .github/scripts/rules.sh "${{ steps.range.outputs.range }}"
+      - name: Secrets
+        run: |
+          v=8.30.1
+          curl -sSL -o gl.tgz "https://github.com/gitleaks/gitleaks/releases/download/v$v/gitleaks_${v}_linux_x64.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gl.tgz" | sha256sum -c -
+          mkdir gl && tar -xzf gl.tgz -C gl
+          ./gl/gitleaks git --redact --no-banner --log-opts="${{ steps.range.outputs.range }}" .
+
+  server:
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MIX_ENV: test
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          otp-version: '29.1.1'
+          elixir-version: '1.20.4'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            server/deps
+            server/_build
+          key: server-test-otp29.1.1-ex1.20.4-${{ hashFiles('server/mix.lock') }}
+          restore-keys: server-test-otp29.1.1-ex1.20.4-
+      - run: mix deps.get
+      - run: mix compile --warnings-as-errors
+      - run: mix format --check-formatted
+      - run: mix test
+      - name: Retired and vulnerable packages
+        timeout-minutes: 5
+        run: |
+          mix hex.audit
+          # mix_audit reports every known advisory; it has no severity filter.
+          mix escript.install hex mix_audit 2.1.5 --force
+          ~/.mix/escripts/mix_audit < /dev/null
+
+  program:
+    needs: changes
+    if: needs.changes.outputs.program == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: program
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: program/go.mod
+          cache-dependency-path: program/go.sum
+      - name: gofmt
+        if: matrix.os == 'ubuntu-latest'
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Known vulnerabilities in reachable code
+        if: matrix.os == 'ubuntu-latest'
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  clients:
+    needs: changes
+    if: needs.changes.outputs.clients == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          otp-version: '29.1.1'
+          elixir-version: '1.20.4'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: program/go.mod
+          cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: server/deps
+          key: clients-deps-otp29.1.1-ex1.20.4-${{ hashFiles('server/mix.lock') }}
+      - run: mix deps.get
+        working-directory: server
+      - name: Conformance
+        run: python clients/conformance/run.py --server-dir server --deps-path "$PWD/server/deps"
+      - name: Server log
+        if: failure()
+        run: tail -80 /tmp/dokkit_conformance/server.log
+
+  clients-swift:
+    needs: changes
+    if: needs.changes.outputs.clients == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: clients/swift
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: swift build
+      - run: swift test
+
+  apps-ios:
+    needs: changes
+    if: needs.changes.outputs.apps-ios == 'true'
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checks
+        working-directory: apps/ios/DokkitKit
+        run: set -o pipefail; swift run DokkitChecks 2>&1 | tail -40
+      - name: Build the unsigned app
+        working-directory: apps/ios
+        run: ./build-unsigned.sh
+
+  apps-android:
+    needs: changes
+    if: needs.changes.outputs.apps-android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          gradle-version: '8.11.1'
+      - name: Tests and unsigned build
+        working-directory: apps/android
+        run: ./build-unsigned.sh
+
+  site:
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The site copy is updated in a site PR, since merging one deploys dokkit.dev; until then this only warns.
+      - name: openapi.json matches the spec
+        run: cmp -s spec/openapi.json gallery/brand/openapi.json || echo "::warning file=gallery/brand/openapi.json::The site's openapi.json differs from spec/openapi.json; copy it over in a site PR."
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: --offline --no-progress --root-dir ${{ github.workspace }}/gallery/brand 'gallery/brand/**/*.html'
+          fail: true
+
+  zap-site:
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Serve the site here
+        run: |
+          python3 -m http.server 8080 --bind 127.0.0.1 --directory gallery/brand > /dev/null 2>&1 &
+          for i in $(seq 30); do curl -sf http://127.0.0.1:8080/ > /dev/null && break; sleep 1; done
+      - uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: http://localhost:8080
+          rules_file_name: .zap/rules.tsv
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-site
+      - name: Fail on High
+        run: |
+          n=$(jq '[.site[].alerts[] | select(.riskcode == "3")] | length' report_json.json)
+          jq -r '.site[].alerts[] | select(.riskcode == "3") | "HIGH \(.name) \(.alertRef)"' report_json.json
+          [ "$n" -eq 0 ]
+
+  zap-server:
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      MIX_ENV: dev
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          otp-version: '29.1.1'
+          elixir-version: '1.20.4'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            server/deps
+            server/_build
+          key: server-dev-otp29.1.1-ex1.20.4-${{ hashFiles('server/mix.lock') }}
+      - run: mix deps.get
+        working-directory: server
+      - name: Start the server on the invented sample company
+        working-directory: server
+        run: |
+          nohup mix run --no-start priv/sample.exs > "$RUNNER_TEMP/sample.log" 2>&1 &
+          for i in $(seq 300); do curl -sf http://127.0.0.1:4010/ > /dev/null && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/sample.log"; exit 1
+      - name: Mint an API token
+        id: token
+        working-directory: server
+        env:
+          ZAP_TOKEN_FILE: ${{ runner.temp }}/zap-token
+        run: |
+          mix run --no-start ../.zap/token.exs
+          t=$(cat "$ZAP_TOKEN_FILE")
+          echo "::add-mask::$t"
+          echo "opts=-O http://localhost:4010 -z \"-config replacer.full_list(0).description=auth -config replacer.full_list(0).enabled=true -config replacer.full_list(0).matchtype=REQ_HEADER -config replacer.full_list(0).matchstring=Authorization -config replacer.full_list(0).replacement='Bearer $t'\"" >> "$GITHUB_OUTPUT"
+      # The page scan is unauthenticated: it sees the sign-in page and public routes only.
+      - uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: http://localhost:4010
+          rules_file_name: .zap/rules.tsv
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-server-pages
+      - name: Fail on High (pages)
+        run: |
+          n=$(jq '[.site[].alerts[] | select(.riskcode == "3")] | length' report_json.json)
+          jq -r '.site[].alerts[] | select(.riskcode == "3") | "HIGH \(.name) \(.alertRef)"' report_json.json
+          [ "$n" -eq 0 ]
+      - uses: zaproxy/action-api-scan@5158fe4d9d8fcc75ea204db81317cce7f9e5453d # v0.10.0
+        with:
+          target: spec/openapi.json
+          format: openapi
+          rules_file_name: .zap/rules.tsv
+          cmd_options: ${{ steps.token.outputs.opts }}
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-server-api
+      - name: Fail on High (API)
+        run: |
+          n=$(jq '[.site[].alerts[] | select(.riskcode == "3")] | length' report_json.json)
+          jq -r '.site[].alerts[] | select(.riskcode == "3") | "HIGH \(.name) \(.alertRef)"' report_json.json
+          [ "$n" -eq 0 ]
+
+  deps-owasp:
+    needs: changes
+    if: needs.changes.outputs.clients == 'true' || needs.changes.outputs.apps-android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      NVD_KEY: ${{ secrets.NVD_API_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: OSV-Scanner
+        run: |
+          v=2.7.0
+          curl -sSL -o osv-scanner "https://github.com/google/osv-scanner/releases/download/v$v/osv-scanner_linux_amd64"
+          echo "160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b  osv-scanner" | sha256sum -c -
+          chmod +x osv-scanner
+          mkdir -p reports
+          ./osv-scanner scan source -r --config .osv-scanner.toml --format json --output-file reports/osv.json clients apps/android || true
+          # CVSS 7.0 and above is High or Critical; the scanner has no fixed-version filter, so a fix may not exist yet.
+          n=$(jq '[.results[]?.packages[]?.groups[]? | select((.max_severity | tonumber? // 0) >= 7)] | length' reports/osv.json)
+          jq -r '.results[]?.packages[]? | .package.name as $p | .groups[]? | select((.max_severity | tonumber? // 0) >= 7) | "\($p) \(.ids | join(",")) \(.max_severity)"' reports/osv.json
+          [ "$n" -eq 0 ]
+      # OWASP Dependency-Check needs an NVD API key; it runs when the NVD_API_KEY secret is set.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: env.NVD_KEY != ''
+        with:
+          path: ~/dc-data
+          key: dc-data-${{ github.run_id }}
+          restore-keys: dc-data-
+      - name: Dependency-Check
+        if: env.NVD_KEY != ''
+        run: |
+          v=13.0.0
+          curl -sSL -o dc.zip "https://github.com/dependency-check/DependencyCheck/releases/download/v$v/dependency-check-$v-release.zip"
+          echo "44d920d1ec03e948df862a253f0912782a31b9beee8a7c8895b9cb95760176ed  dc.zip" | sha256sum -c -
+          unzip -q dc.zip
+          mkdir -p reports ~/dc-data
+          ./dependency-check/bin/dependency-check.sh --project dokkit --scan clients --scan apps/android             --format HTML --format JSON --out reports --data ~/dc-data             --suppression .dependency-check/suppressions.xml --failOnCVSS 7 --nvdApiKey "$NVD_KEY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: dependency-reports
+          path: reports
+          if-no-files-found: ignore
+
+  ci-ok:
+    needs: [changes, rules, server, program, clients, clients-swift, apps-ios, apps-android, site, zap-site, zap-server, deps-owasp]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or was skipped
+        run: |
+          [ "${{ contains(needs.*.result, 'failure') }}" = false ] && [ "${{ contains(needs.*.result, 'cancelled') }}" = false ]

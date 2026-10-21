@@ -45,7 +45,7 @@ func TestInheritanceIsRemovedFromTheFolderAloneThenTheInsideIsReset(t *testing.T
 			}
 		}
 	}
-	if strings.Join(steps[2], " ") != `C:\d\* /reset /T /C` {
+	if strings.Join(steps[2], " ") != filepath.Join(`C:\d`, "*")+` /reset /T /C` {
 		t.Fatal(steps[2])
 	}
 }
