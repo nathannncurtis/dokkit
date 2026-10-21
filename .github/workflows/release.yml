@@ -329,6 +329,135 @@ jobs:
           name: phone-android
           path: apps/android/out/*
 
+  desktop:
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/desktop/src-tauri
+    env:
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      MAC_P12: ${{ secrets.MAC_DEVID_P12 }}
+      MAC_P12_PASSWORD: ${{ secrets.MAC_DEVID_P12_PASSWORD }}
+      MAC_IDENTITY: ${{ secrets.MAC_DEVID_IDENTITY }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsecret-1-dev libdbus-1-dev
+      - name: Mac targets
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin/cargo-tauri*
+            ~/.cargo/bin/trusted-signing-cli*
+            apps/desktop/src-tauri/target
+          key: desktop-release-${{ matrix.os }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+      - name: Tauri CLI
+        run: command -v cargo-tauri >/dev/null || cargo install tauri-cli --version "^2" --locked
+      - name: No Windows signing secrets
+        if: runner.os == 'Windows' && env.AZURE_CLIENT_SECRET == ''
+        run: echo "::warning::No Azure signing secrets are set, so the Windows installers are not signed."
+      - name: Signing tool
+        if: runner.os == 'Windows' && env.AZURE_CLIENT_SECRET != ''
+        run: command -v trusted-signing-cli >/dev/null || cargo install trusted-signing-cli --locked
+      - name: No Mac signing secrets
+        if: runner.os == 'macOS' && (env.MAC_P12 == '' || env.MAC_IDENTITY == '')
+        run: echo "::warning::No signing certificate is set, so the Mac app is not signed."
+      - name: Mac keychain
+        if: runner.os == 'macOS' && env.MAC_P12 != '' && env.MAC_IDENTITY != ''
+        run: |
+          keychain=$RUNNER_TEMP/sign.keychain-db
+          pass=$(openssl rand -hex 16)
+          security create-keychain -p "$pass" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$pass" "$keychain"
+          printf '%s' "$MAC_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$MAC_P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          curl -fsSL https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer -o "$RUNNER_TEMP/wwdr.cer" && security import "$RUNNER_TEMP/wwdr.cer" -k "$keychain" || true
+          curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$RUNNER_TEMP/devid.cer" && security import "$RUNNER_TEMP/devid.cer" -k "$keychain" || true
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pass" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          echo "APPLE_SIGNING_IDENTITY=$MAC_IDENTITY" >> "$GITHUB_ENV"
+          if [ -n "$ASC_KEY_P8" ]; then
+            printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
+            echo "APPLE_API_KEY=$ASC_KEY_ID" >> "$GITHUB_ENV"
+            echo "APPLE_API_ISSUER=$ASC_ISSUER_ID" >> "$GITHUB_ENV"
+            echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/asc.p8" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No App Store Connect key is set, so the Mac app is signed but not notarized."
+          fi
+      - name: Build
+        run: |
+          args=()
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            args+=(--config "{\"version\":\"${GITHUB_REF_NAME#v}\"}")
+          fi
+          if [ "$RUNNER_OS" = Windows ] && [ -n "$AZURE_CLIENT_SECRET" ]; then
+            args+=(--config '{"bundle":{"windows":{"signCommand":{"cmd":"trusted-signing-cli","args":["-e","https://wus2.codesigning.azure.net/","-a","nathancurtis-signing","-c","nathancurtis-signing","-d","Dokkit","%1"]}}}}')
+          fi
+          if [ "$RUNNER_OS" = macOS ]; then args+=(--target universal-apple-darwin); fi
+          cargo tauri build "${args[@]}"
+      - name: Sign and notarize the disk image
+        if: runner.os == 'macOS' && env.MAC_P12 != '' && env.MAC_IDENTITY != ''
+        run: |
+          dmg=$(ls target/universal-apple-darwin/release/bundle/dmg/*.dmg)
+          codesign --force --timestamp --sign "$MAC_IDENTITY" "$dmg"
+          app=$(ls -d target/universal-apple-darwin/release/bundle/macos/*.app)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv --verbose=2 "$app" 2>&1 | grep -E 'Identifier|TeamIdentifier|Authority=Developer ID'
+          if [ -n "$ASC_KEY_P8" ]; then
+            xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait --timeout 30m --output-format json > "$RUNNER_TEMP/notary.json"
+            status=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$RUNNER_TEMP/notary.json")
+            echo "Notarization: $status"
+            [ "$status" = Accepted ]
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+            xcrun stapler validate "$app"
+          fi
+      - name: Stable names
+        run: |
+          mkdir -p ../../../out
+          b=target/release/bundle
+          case "$RUNNER_OS" in
+            Windows)
+              cp $b/nsis/*-setup.exe ../../../out/dokkit-desktop-windows-x64-setup.exe
+              cp $b/msi/*.msi ../../../out/dokkit-desktop-windows-x64.msi ;;
+            macOS)
+              cp target/universal-apple-darwin/release/bundle/dmg/*.dmg ../../../out/dokkit-desktop-macos-universal.dmg ;;
+            Linux)
+              cp $b/deb/*.deb ../../../out/dokkit-desktop-linux-amd64.deb
+              cp $b/rpm/*.rpm ../../../out/dokkit-desktop-linux-x86_64.rpm
+              cp $b/appimage/*.AppImage ../../../out/dokkit-desktop-linux-amd64.AppImage ;;
+          esac
+          cd ../../../out
+          for f in dokkit-desktop-*; do
+            if command -v sha256sum >/dev/null; then sha256sum "$f" > "$f.sha256"; else shasum -a 256 "$f" > "$f.sha256"; fi
+          done
+          ls -l
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ runner.os }}
+          path: out/*
+          if-no-files-found: error
+
   release:
     if: always() && github.ref_type == 'tag'
     needs: [image, program, sign-windows, mac, windows-server, ios, android, desktop]
