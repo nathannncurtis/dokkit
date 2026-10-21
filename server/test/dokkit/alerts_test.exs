@@ -62,9 +62,9 @@ defmodule Dokkit.AlertsTest do
     assert [%{alerts: [%Alert{status: :failed, error: "PagerDuty has no routing key yet."}]}] =
              Issues.open_list()
 
-    Alerts.save(%{"down" => "push", "pagerduty_key" => "R0UTE"})
-    assert Alerts.config()["down"] == "push"
-    Alerts.save(%{"down" => "push"})
+    Alerts.save(%{"down" => "page", "pagerduty_key" => "R0UTE"})
+    assert Alerts.config()["down"] == "page"
+    Alerts.save(%{"down" => "page"})
     assert Alerts.config()["pagerduty_key"] == "R0UTE"
 
     Repo.update_all(Alert, set: [updated_at: DateTime.add(DateTime.utc_now(), -120)])
@@ -265,7 +265,7 @@ defmodule Dokkit.AlertsTest do
         since: DateTime.utc_now()
       })
 
-    Repo.insert!(%Alert{issue_id: issue.id, channel: "webhook", status: :failed, attempts: 1})
+    Repo.insert!(%Alert{issue_id: issue.id, channel: "page", status: :failed, attempts: 1})
     assert Alerts.deliver_pending() == 0
     Repo.update_all(Alert, set: [updated_at: DateTime.add(DateTime.utc_now(), -120)])
     assert Alerts.deliver_pending() >= 1
@@ -290,6 +290,99 @@ defmodule Dokkit.AlertsTest do
     assert [%Alert{status: :pending, attempts: 0}] = Repo.all(Alert)
     assert Alerts.deliver_pending() == 1
     assert [%Alert{status: :sent}] = Repo.all(Alert)
+  end
+
+  test "a resolved page is not sent again when the service now goes to nobody", %{
+    key: key,
+    service: service
+  } do
+    Alerts.save(%{"pagerduty_key" => "R0UTE"})
+    Intake.ping(key, "backup", "fail", nil, "")
+    assert Alerts.deliver_pending() == 1
+    Intake.ping(key, "backup", "ok", nil, "")
+    assert Alerts.deliver_pending() == 1
+    Repo.update!(Ecto.Changeset.change(service, route_down: "none"))
+    Intake.ping(key, "backup", "fail", nil, "")
+    assert Alerts.deliver_pending() == 0
+  end
+
+  test "a reopened issue is told on the channels it is routed to now, not the old page", %{
+    key: key,
+    service: service
+  } do
+    Alerts.save(%{"pagerduty_key" => "R0UTE"})
+    Intake.ping(key, "backup", "fail", nil, "")
+    assert Alerts.deliver_pending() == 1
+    Intake.ping(key, "backup", "ok", nil, "")
+    assert Alerts.deliver_pending() == 1
+    Repo.update!(Ecto.Changeset.change(service, route_down: "email"))
+    Intake.ping(key, "backup", "fail", nil, "")
+    Alerts.deliver_pending()
+
+    assert [{"email", _}, {"page", :closed}] =
+             Repo.all(from a in Alert, order_by: a.channel, select: {a.channel, a.status})
+  end
+
+  test "an issue that reopens while its machine is down tells nobody new", %{
+    key: key,
+    service: service
+  } do
+    Alerts.save(%{"pagerduty_key" => "R0UTE"})
+
+    Repo.insert!(%Dokkit.Issue{
+      machine_id: service.machine_id,
+      kind: "machine",
+      state: :down,
+      title: "vault stopped reporting",
+      since: DateTime.utc_now()
+    })
+
+    Intake.ping(key, "backup", "fail", nil, "")
+    Intake.ping(key, "backup", "ok", nil, "")
+    Intake.ping(key, "backup", "fail", nil, "")
+
+    assert Repo.all(from a in Alert, join: i in assoc(a, :issue), where: i.kind != "machine") ==
+             []
+  end
+
+  test "a failed alert that reached nobody is dropped once its service goes to nobody", %{
+    key: key,
+    service: service
+  } do
+    Intake.ping(key, "backup", "fail", nil, "")
+    Alerts.deliver_pending()
+    assert [%Alert{status: :failed}] = Repo.all(Alert)
+    Repo.update!(Ecto.Changeset.change(service, route_down: "none"))
+    Repo.update_all(Alert, set: [updated_at: DateTime.add(DateTime.utc_now(), -120)])
+    Alerts.save(%{"pagerduty_key" => "R0UTE"})
+    assert Alerts.deliver_pending() == 0
+    assert [%Alert{status: :skipped}] = Repo.all(Alert)
+  end
+
+  test "a waiting alert is dropped once its service goes to nobody", %{key: key, service: service} do
+    Alerts.save(%{"pagerduty_key" => "R0UTE"})
+    Intake.ping(key, "backup", "fail", nil, "")
+    Repo.update!(Ecto.Changeset.change(service, route_down: "none"))
+    assert Alerts.deliver_pending() == 0
+    assert [%Alert{status: :skipped}] = Repo.all(Alert)
+  end
+
+  test "a machine whose rule sends to nobody stays quiet for soon issues too", %{service: service} do
+    Alerts.save(%{"pagerduty_key" => "R0UTE", "degraded" => "push"})
+    Alerts.add_rule(%{"machine" => "vault", "channel" => "none", "kind" => "", "state" => ""})
+
+    issue =
+      Repo.insert!(%Dokkit.Issue{
+        machine_id: service.machine_id,
+        service_id: service.id,
+        kind: "forecast",
+        state: :degraded,
+        soon: true,
+        title: "Disk fills in about 8 days",
+        since: DateTime.utc_now()
+      })
+
+    assert Alerts.plan(issue, Repo.get!(Service, service.id)) == []
   end
 
   test "a snoozed issue that reopens does not send its skipped alert", %{key: key} do
