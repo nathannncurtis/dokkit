@@ -32,6 +32,8 @@ On the names page each name shows one of:
 
 The service is in `names/`: a Go program with no dependencies outside the standard library. It is the only thing that writes records in the dokkit.dev zone for claimed names. It keeps its state in one JSON file, rewritten on each change.
 
+dokkit.page itself, and www.dokkit.page, answer with a 301 to names.dokkit.dev. That is `names/page/`, an Azure Static Web App on the free plan, deployed by `.github/workflows/page.yml`; the apex is an alias record to the app, so the zone stays on Azure DNS with the names.
+
 Build it with `go build` in `names/`. Settings come from the environment:
 
 | Variable | Meaning |
