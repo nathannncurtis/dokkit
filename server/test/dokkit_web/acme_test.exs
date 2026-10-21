@@ -270,6 +270,32 @@ defmodule DokkitWeb.AcmeTest do
       assert %{ok: true} = Certificate.view().renewal
     end
 
+    test "how early it renews and how soon it tries again are settings" do
+      {:ok, _} = Dokkit.Values.save(:server, %{"acme_renew_days" => 40, "acme_retry_hours" => 2})
+      configure()
+      FakeAcme.start(self(), mode: :invalid)
+      not_after = upload_for_name(100)
+      start = DateTime.add(not_after, -35 * 86_400)
+
+      Acme.tick(start)
+      assert {:post, "/acct"} in calls()
+      Acme.tick(DateTime.add(start, 3600))
+      assert calls() == []
+      Acme.tick(DateTime.add(start, 3 * 3600))
+      assert {:post, "/acct"} in calls()
+    end
+
+    test "this server warns of its own certificate as early as Settings says" do
+      not_after = upload_for_name(100)
+      now = %{DateTime.add(not_after, -25 * 86_400) | microsecond: {0, 6}}
+      Dokkit.Self.tick(now, %{})
+      assert %{state: :ok} = Repo.get_by!(Dokkit.Check, name: "certificate")
+
+      {:ok, _} = Dokkit.Values.save(:server, %{"cert_warn_days" => 30})
+      Dokkit.Self.tick(now, %{})
+      assert %{state: :degraded} = Repo.get_by!(Dokkit.Check, name: "certificate")
+    end
+
     test "renews when there is no certificate for the name" do
       configure()
       FakeAcme.start(self())

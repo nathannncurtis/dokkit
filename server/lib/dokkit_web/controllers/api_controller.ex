@@ -347,6 +347,49 @@ defmodule DokkitWeb.ApiController do
 
   def set_job_timing(conn, params), do: reply(conn, job_timing(params))
 
+  @doc "The scope of a settings call, from its address: the server, a machine or a job."
+  def values_scope(%{"id" => id}, :machine) do
+    case Dokkit.Estate.machine(id) do
+      %{kind: kind} = m when kind in [:enrolled, :seen] -> {:machine, m.id}
+      _ -> nil
+    end
+  end
+
+  def values_scope(%{"id" => id}, :job) do
+    with %{} = s <- Dokkit.Estate.service(id),
+         true <- Enum.any?(s.checks, &(&1.type == :job)) do
+      {:job, s.id}
+    else
+      _ -> nil
+    end
+  end
+
+  def values_scope(_, :server), do: :server
+
+  def values_view(params, kind) do
+    case values_scope(params, kind) do
+      nil -> not_found()
+      scope -> Dokkit.Values.view(scope)
+    end
+  end
+
+  def save_values(params, kind) do
+    with scope when scope != nil <- values_scope(params, kind),
+         {:ok, view} <- Dokkit.Values.save(scope, Map.delete(params, "id")) do
+      view
+    else
+      nil -> not_found()
+      {:error, why} -> {:error, "bad_settings", why}
+    end
+  end
+
+  def settings(conn, params), do: reply(conn, values_view(params, :server))
+  def put_settings(conn, params), do: reply(conn, save_values(params, :server))
+  def machine_settings(conn, params), do: reply(conn, values_view(params, :machine))
+  def put_machine_settings(conn, params), do: reply(conn, save_values(params, :machine))
+  def job_settings(conn, params), do: reply(conn, values_view(params, :job))
+  def put_job_settings(conn, params), do: reply(conn, save_values(params, :job))
+
   defp texts?(params, keys), do: Enum.all?(keys, &is_binary(params[&1] || ""))
 
   def phones(conn, _),
@@ -868,7 +911,9 @@ defmodule DokkitWeb.ApiController do
       {"GET", _, _} ->
         "read"
 
-      {_, area, _} when area in ["rules", "alerts", "releases", "certificate"] ->
+      {_, area, last}
+      when area in ["rules", "alerts", "releases", "certificate", "settings"] or
+             last == "settings" ->
         "admin"
 
       {"POST", area, area} when area in ["jobs", "apps", "dependencies"] ->

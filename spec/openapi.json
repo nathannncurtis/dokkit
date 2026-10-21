@@ -14451,6 +14451,720 @@
         }
       }
     },
+    "/api/v1/settings": {
+      "get": {
+        "operationId": "getSettings",
+        "summary": "The values for the whole server",
+        "tags": [
+          "Read"
+        ],
+        "description": "Every value Dokkit decides on its own, server-wide: how alerts are retried and repeated, the defaults for every machine and job, how services are checked, what is kept and for how long, and sign-in limits. `values` is each value now, `defaults` the built-in value and `changed` the names that differ. `disk_on`, `disk_limit`, `memory_on` and `memory_limit` are the same limits as `disk_limit` and `memory_limit` in `/api/v1/alerts`. Takes a user token (`dku_`) with the `read` scope.",
+        "responses": {
+          "200": {
+            "description": "The values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                },
+                "example": {
+                  "values": {
+                    "disk_on": true,
+                    "disk_limit": 85,
+                    "disk_after": 3,
+                    "disk_down": 98
+                  },
+                  "defaults": {
+                    "disk_on": true,
+                    "disk_limit": 90,
+                    "disk_after": 3,
+                    "disk_down": 98
+                  },
+                  "changed": [
+                    "disk_limit"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "operationId": "setSettings",
+        "summary": "Change the values for the whole server",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Changes server-wide values. A pair that must agree (such as enrol_hours and enrol_max_hours, silent_minutes and report_seconds, update_run_minutes and updater_minutes) is checked only when one of the two is sent. A value a machine or job sets for itself stays. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `admin` scope.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "example": {
+                "disk_limit": 85,
+                "cpu_on": true,
+                "snooze_choices": "1h, 4h, 1d",
+                "remind_minutes": null
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The values after the change, as in the GET.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                },
+                "example": {
+                  "values": {
+                    "disk_on": true,
+                    "disk_limit": 85,
+                    "disk_after": 3,
+                    "disk_down": 98
+                  },
+                  "defaults": {
+                    "disk_on": true,
+                    "disk_limit": 90,
+                    "disk_after": 3,
+                    "disk_down": 98
+                  },
+                  "changed": [
+                    "disk_limit"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not right. The message says which.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_settings",
+                    "message": "disk_limit is a whole number from 1 to 100."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/machines/{id}/settings": {
+      "get": {
+        "operationId": "getMachineSettings",
+        "summary": "The values for one machine",
+        "tags": [
+          "Read"
+        ],
+        "description": "The values that can differ by machine: disk, memory and processor alerts, when it counts as gone quiet, the disk forecast, how often the program reports and scans. `defaults` is the server-wide value each falls back to. The program on the machine is sent its reporting and scanning values with its checks. Takes a user token (`dku_`) with the `read` scope.",
+        "responses": {
+          "200": {
+            "description": "The values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                },
+                "example": {
+                  "values": {
+                    "disk_on": true,
+                    "disk_limit": 85,
+                    "disk_after": 3,
+                    "disk_down": 98
+                  },
+                  "defaults": {
+                    "disk_on": true,
+                    "disk_limit": 90,
+                    "disk_after": 3,
+                    "disk_down": 98
+                  },
+                  "changed": [
+                    "disk_limit"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the machine.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ]
+      },
+      "put": {
+        "operationId": "setMachineSettings",
+        "summary": "Change the values for one machine",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Changes one machine's values. A machine's own disk or memory limit replaces a threshold its dokkit.toml declares for the same number. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `admin` scope.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "example": {
+                "disk_limit": 85,
+                "cpu_on": true,
+                "snooze_choices": "1h, 4h, 1d",
+                "remind_minutes": null
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The values after the change, as in the GET.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                },
+                "example": {
+                  "values": {
+                    "disk_on": true,
+                    "disk_limit": 85,
+                    "disk_after": 3,
+                    "disk_down": 98
+                  },
+                  "defaults": {
+                    "disk_on": true,
+                    "disk_limit": 90,
+                    "disk_after": 3,
+                    "disk_down": 98
+                  },
+                  "changed": [
+                    "disk_limit"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not right. The message says which.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_settings",
+                    "message": "disk_limit is a whole number from 1 to 100."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the machine.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/{id}/settings": {
+      "get": {
+        "operationId": "getJobSettings",
+        "summary": "The values for one job",
+        "tags": [
+          "Read"
+        ],
+        "description": "The values that can differ by job: its grace, when it has run too long, whether a missed run alerts, and how long its runs are kept. `defaults` is what the job's own file or timing says, else the server-wide value. Takes a user token (`dku_`) with the `read` scope.",
+        "responses": {
+          "200": {
+            "description": "The values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                },
+                "example": {
+                  "values": {
+                    "disk_on": true,
+                    "disk_limit": 85,
+                    "disk_after": 3,
+                    "disk_down": 98
+                  },
+                  "defaults": {
+                    "disk_on": true,
+                    "disk_limit": 90,
+                    "disk_after": 3,
+                    "disk_down": 98
+                  },
+                  "changed": [
+                    "disk_limit"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the job, which is its service id.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ]
+      },
+      "put": {
+        "operationId": "setJobSettings",
+        "summary": "Change the values for one job",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Changes one job's values. They replace the job's own grace and max_runtime while they are set. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `admin` scope.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "example": {
+                "disk_limit": 85,
+                "cpu_on": true,
+                "snooze_choices": "1h, 4h, 1d",
+                "remind_minutes": null
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The values after the change, as in the GET.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                },
+                "example": {
+                  "values": {
+                    "disk_on": true,
+                    "disk_limit": 85,
+                    "disk_after": 3,
+                    "disk_down": 98
+                  },
+                  "defaults": {
+                    "disk_on": true,
+                    "disk_limit": 90,
+                    "disk_after": 3,
+                    "disk_down": 98
+                  },
+                  "changed": [
+                    "disk_limit"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not right. The message says which.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_settings",
+                    "message": "disk_limit is a whole number from 1 to 100."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the job, which is its service id.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ]
+      }
+    },
     "/api/v1/alerts/oncall": {
       "get": {
         "operationId": "getAlertOncall",
@@ -16025,6 +16739,26 @@
           "acme_directory": {
             "type": "string",
             "description": "An https address. `https://acme-staging-v02.api.letsencrypt.org/directory` is Let's Encrypt's staging directory."
+          }
+        }
+      },
+      "Settings": {
+        "type": "object",
+        "properties": {
+          "values": {
+            "type": "object",
+            "description": "Each value now."
+          },
+          "defaults": {
+            "type": "object",
+            "description": "What each value goes back to on reset."
+          },
+          "changed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The names whose value differs from its default."
           }
         }
       }

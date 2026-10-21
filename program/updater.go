@@ -212,7 +212,10 @@ func updateOnce(ctx context.Context, c *client) int {
 	if exists(where.serverBin) {
 		q.Set("server", st.serverVersion())
 	}
-	var ans struct{ Version string }
+	var ans struct {
+		Version      string
+		LimitSeconds int64 `json:"limit_seconds"`
+	}
 	code, err := c.call("GET", "/api/v1/update?"+q.Encode(), "", nil, &ans)
 	st.Checked = now()
 	switch {
@@ -230,6 +233,11 @@ func updateOnce(ctx context.Context, c *client) int {
 		return 1
 	}
 	logf("asked to move to %s", ans.Version)
+	if ans.LimitSeconds > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), time.Duration(ans.LimitSeconds)*time.Second)
+		defer cancel()
+	}
 	res := apply(ctx, c, ans.Version, &st)
 	st.Last, st.LastAt, st.Unsent = &res, now(), &res
 	saveState(st)

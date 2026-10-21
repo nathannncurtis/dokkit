@@ -211,7 +211,12 @@ defmodule DokkitWeb.IntakeController do
 
   @doc "The checks added in the interface, for the program on that machine to run."
   def checks(conn, _params) do
-    with {:ok, machine} <- machine(conn), do: json(conn, %{items: Dokkit.Found.checks(machine)})
+    with {:ok, machine} <- machine(conn),
+         do:
+           json(conn, %{
+             items: Dokkit.Found.checks(machine),
+             settings: Dokkit.Values.for_program(machine)
+           })
   end
 
   @doc "The found jobs whose runs the program reads from the machine's own record."
@@ -236,8 +241,11 @@ defmodule DokkitWeb.IntakeController do
   def update(conn, params) do
     with {:ok, machine} <- machine(conn) do
       case Dokkit.Releases.ask(machine, params) do
-        nil -> send_resp(conn, 204, "")
-        version -> json(conn, %{version: version})
+        nil ->
+          send_resp(conn, 204, "")
+
+        version ->
+          json(conn, %{version: version, limit_seconds: Dokkit.Values.get("updater_minutes") * 60})
       end
     end
   end

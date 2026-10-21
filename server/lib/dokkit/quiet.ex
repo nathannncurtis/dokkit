@@ -3,12 +3,11 @@ defmodule Dokkit.Quiet do
   import Ecto.Query
   alias Dokkit.{Check, Machine, QuietWindow, Repo}
 
-  @most 4 * 3600
   @silent_seconds 90
   @units %{"s" => 1, "m" => 60, "h" => 3600}
   @reported ~w(http tcp process windows-service systemd custom)a
 
-  def most, do: @most
+  def most, do: Dokkit.Values.get("quiet_max_hours") * 3600
 
   def machine_exists?(id), do: match?(%Machine{kind: :enrolled}, machine(id))
 
@@ -20,7 +19,7 @@ defmodule Dokkit.Quiet do
 
       [_, n, unit] ->
         seconds = String.to_integer(n) * @units[if(unit == "", do: "s", else: unit)]
-        if seconds in 1..@most, do: {:ok, seconds}, else: :error
+        if seconds in 1..most(), do: {:ok, seconds}, else: :error
 
       _ ->
         :error
@@ -56,7 +55,7 @@ defmodule Dokkit.Quiet do
     else
       :error ->
         {:error, "bad_duration",
-         "for is a duration up to #{div(@most, 3600)}h, such as 15m, or 0 to end it."}
+         "for is a duration up to #{div(most(), 3600)}h, such as 15m, or 0 to end it."}
 
       _ ->
         {:error, "not_found", "No such thing."}

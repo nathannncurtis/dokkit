@@ -24,14 +24,15 @@ defmodule Dokkit.Keys do
     {text, key}
   end
 
-  @enrol_life 4 * 3600
-  @enrol_most 72 * 3600
-
-  def enrol_life, do: @enrol_life
-  def enrol_most_hours, do: div(@enrol_most, 3600)
+  def enrol_life, do: Dokkit.Values.get("enrol_hours") * 3600
+  def enrol_most_hours, do: Dokkit.Values.get("enrol_max_hours")
 
   @doc "An enrolment token for one machine name (or none), good for `seconds`."
-  def mint_enrol(label, seconds \\ @enrol_life) when seconds in 1..@enrol_most do
+  def mint_enrol(label, seconds \\ nil)
+  def mint_enrol(label, nil), do: mint_enrol(label, enrol_life())
+
+  def mint_enrol(label, seconds) when is_integer(seconds) and seconds > 0 do
+    seconds = min(seconds, enrol_most_hours() * 3600)
     mint(:enrol, %{expires_at: DateTime.add(DateTime.utc_now(), seconds), label: label})
   end
 

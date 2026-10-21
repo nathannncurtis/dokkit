@@ -1,7 +1,7 @@
 defmodule DokkitWeb.SettingsLive do
   use DokkitWeb, :live_view
   alias Dokkit.{Accounts, Keys, Phones}
-  alias DokkitWeb.ApiController
+  alias DokkitWeb.{ApiController, ValuesForm}
 
   @key_cols "--cols:minmax(0,1.4fr) 110px 150px 150px 96px;--ncols:minmax(140px,1fr) 96px 124px 124px 88px;--minw:640px"
   @roles [{"Member", "member"}, {"Viewer", "viewer"}, {"Owner", "owner"}]
@@ -27,7 +27,8 @@ defmodule DokkitWeb.SettingsLive do
          ret_result: nil,
          ret_n: 0,
          phone_error: nil,
-         phone_new: nil
+         phone_new: nil,
+         values_result: nil
        )
      )}
   end
@@ -239,6 +240,12 @@ defmodule DokkitWeb.SettingsLive do
       end
     end)
   end
+
+  def handle_event("values_save", params, socket),
+    do: owner(socket, fn -> assign(socket, values_result: ValuesForm.save(:server, params)) end)
+
+  def handle_event("values_reset", params, socket),
+    do: owner(socket, fn -> assign(socket, values_result: ValuesForm.reset(:server, params)) end)
 
   def handle_event("retention_change", %{"retention" => r}, socket),
     do: {:noreply, retention(socket, r)}
@@ -1080,6 +1087,26 @@ defmodule DokkitWeb.SettingsLive do
               </span>
             </dd>
           </dl>
+        </div>
+
+        <div class="vals" id="values">
+          <h2 class="vals-h">Everything Dokkit decides on its own</h2>
+
+          <p class="mute">
+            Each starts at today's value. Night hours, the digest and who is told stay on the Alerts page; how long logs stay live is in Logs above.
+          </p>
+
+          <ValuesForm.fold
+            :for={{group, icon, title, sub} <- Dokkit.Values.groups()}
+            id={"set-#{group}"}
+            group={group}
+            scope={:server}
+            icon={icon}
+            title={title}
+            sub={sub}
+            disabled={!@owner}
+            result={@values_result}
+          />
         </div>
       </div>
     </Layouts.app>

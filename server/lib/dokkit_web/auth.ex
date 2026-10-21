@@ -5,8 +5,6 @@ defmodule DokkitWeb.Auth do
   import Phoenix.Controller, only: [redirect: 2]
   alias Dokkit.{Accounts, Demo}
 
-  @session_seconds 14 * 86_400
-
   def fetch_user(conn, _), do: assign(conn, :current_user, user(get_session(conn)))
 
   def require_user(%{assigns: %{current_user: nil}} = conn, _),
@@ -177,8 +175,9 @@ defmodule DokkitWeb.Auth do
   defp user(%{"user_id" => id, "signed_at" => at}) when is_integer(at) do
     user = Accounts.get(id)
 
-    if user && at >= user.sessions_after && Accounts.stamp() - at < @session_seconds * 1_000_000,
-      do: user
+    if user && at >= user.sessions_after &&
+         Accounts.stamp() - at < Dokkit.Values.get("session_days") * 86_400 * 1_000_000,
+       do: user
   end
 
   defp user(_), do: nil

@@ -91,7 +91,7 @@ func parallel(n int, f func(i int)) {
 var startService func(name string) error
 
 // restarted is when each service was last started here, so one that will not stay up is
-// tried once in ten minutes and no more.
+// tried once per restartGap and no more.
 var (
 	restarted   = map[string]time.Time{}
 	restartedMu sync.Mutex
@@ -117,7 +117,7 @@ func (c *check) tryRestart() bool {
 	}
 	key := c.unitKey(c.Name)
 	restartedMu.Lock()
-	if !c.restart || start == nil || time.Since(restarted[key]) < 10*time.Minute {
+	if !c.restart || start == nil || time.Since(restarted[key]) < restartGap.get() {
 		restartedMu.Unlock()
 		return false
 	}
@@ -250,7 +250,7 @@ func (c *check) every() time.Duration {
 	if c.Type == "expiry" {
 		return time.Hour
 	}
-	return 30 * time.Second
+	return checkEvery.get()
 }
 
 // certAddr is the host:port date_from names, or "" when it names a file.
@@ -349,7 +349,7 @@ func (c *check) timeout() time.Duration {
 	if d, err := time.ParseDuration(c.Timeout); err == nil && d > 0 {
 		return d
 	}
-	return 5 * time.Second
+	return checkTimeout.get()
 }
 
 func (c *check) run() result {
@@ -454,7 +454,7 @@ func expiryResult(until, at time.Time) result {
 	switch {
 	case left < 0:
 		return result{state: "down", value: days, note: "ran out on " + until.Format("Jan 2 2006")}
-	case left <= 30:
+	case left <= expiryWarn.get().Hours()/24:
 		return result{state: "degraded", value: days, note: fmt.Sprintf("runs out in %.0f days, on %s", days, until.Format("Jan 2 2006"))}
 	}
 	return result{ok: true, value: days}
@@ -713,10 +713,12 @@ func (w *watcher) pull() {
 			Config        map[string]any
 			Restart       bool
 		}
+		Settings serverSettings
 	}
 	if status, err := w.c.call("GET", "/api/v1/checks", "", nil, &a); err != nil || status != 200 {
 		return
 	}
+	a.Settings.apply()
 	old := map[[2]string]time.Time{}
 	for _, d := range w.added {
 		old[[2]string{d.Service.ID, d.Check[0].name}] = d.Check[0].next
@@ -835,7 +837,7 @@ func (c *client) watch() int {
 	for {
 		at := time.Now()
 		ran := 0
-		if at.Sub(beat) >= beatEvery {
+		if at.Sub(beat) >= beatEvery.get() {
 			beat = at
 			w.reload()
 			w.refresh()

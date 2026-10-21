@@ -3,7 +3,7 @@ defmodule DokkitWeb.JobsLive do
   alias Dokkit.Estate
 
   def mount(_params, _session, socket),
-    do: {:ok, assign(socket, added: nil, error: nil, form: %{})}
+    do: {:ok, assign(socket, added: nil, error: nil, form: %{}, values_result: nil)}
 
   def handle_params(_params, _uri, socket) do
     title = if socket.assigns.live_action == :new, do: "New job", else: "Jobs"
@@ -23,6 +23,22 @@ defmodule DokkitWeb.JobsLive do
     else
       {:error, text} -> {:noreply, assign(socket, error: text, form: params)}
       false -> {:noreply, assign(socket, error: "An owner adds jobs.", form: params)}
+    end
+  end
+
+  def handle_event(event, %{"target" => id} = params, socket)
+      when event in ~w(values_save values_reset) do
+    job = Enum.find(socket.assigns.jobs, &(&1.service.id == id))
+
+    if socket.assigns.current_user.role != :owner or is_nil(job) do
+      {:noreply, socket}
+    else
+      result =
+        if event == "values_save",
+          do: DokkitWeb.ValuesForm.save({:job, id}, params),
+          else: DokkitWeb.ValuesForm.reset({:job, id}, params)
+
+      {:noreply, assign(load(socket), values_result: result)}
     end
   end
 
@@ -203,6 +219,18 @@ defmodule DokkitWeb.JobsLive do
             <.ic name="caret-right" />
           </.link>
         </div>
+
+        <DokkitWeb.ValuesForm.fold
+          :for={j <- @jobs}
+          id={"job-#{j.service.id}"}
+          group="jobs"
+          scope={{:job, j.service.id}}
+          target={j.service.id}
+          title={"Settings for #{Dokkit.Intake.label(j.service, j.check.name)}"}
+          sub="When it counts as late, too long or missed. Each starts at the job's own file, or the default for every job."
+          disabled={@current_user.role != :owner}
+          result={@values_result}
+        />
       </div>
     </Layouts.app>
     """

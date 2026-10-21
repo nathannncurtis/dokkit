@@ -4,7 +4,6 @@ defmodule Dokkit.Slots do
   alias Dokkit.{Machine, MachineSlot, Repo}
 
   @table :dokkit_slots
-  @keep_days 30
   @step 1800
 
   def init, do: :ets.new(@table, [:named_table, :public, :set])
@@ -48,7 +47,8 @@ defmodule Dokkit.Slots do
     :ets.select_delete(@table, [{{:_, :"$1"}, [{:<, :"$1", DateTime.to_unix(slot(now))}], [true]}])
 
     Repo.delete_all(
-      from s in MachineSlot, where: s.slot < ^DateTime.add(now, -@keep_days * 86_400)
+      from s in MachineSlot,
+        where: s.slot < ^DateTime.add(now, -Dokkit.Values.get("slots_days") * 86_400)
     )
   end
 end
