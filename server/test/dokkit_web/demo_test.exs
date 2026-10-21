@@ -33,7 +33,16 @@ defmodule DokkitWeb.DemoTest do
     other = %{build_conn() | remote_ip: {10, 0, 0, 2}}
     other = get(other, ~p"/demo")
     assert html_response(other, 200) =~ "The demo is full"
-    assert html_response(other, 200) =~ "You're 1st in line"
+    html = html_response(other, 200)
+    assert html =~ "You're 1st in line"
+    assert html =~ ~s(id="taken">1/1<)
+    assert html =~ "freed in 5 min"
+    assert html =~ ~s(src="/js/keep-green.js)
+    assert html =~ ~r/<dialog[^>]*id="turn-box"(?![^>]*\sopen)/
+
+    assert html =~
+             ~r/<form id="turn" method="post" action="\/demo\/seat">\s*<input type="hidden" name="_csrf_token"/
+
     other = recycle(other)
 
     assert %{"state" => "waiting", "place" => 1, "taken" => 1} =
@@ -43,6 +52,10 @@ defmodule DokkitWeb.DemoTest do
     assert redirected_to(left) == ~p"/demo/away?why=left"
 
     assert %{"state" => "turn"} = json_response(get(recycle(other), ~p"/demo/line"), 200)
+    turn = html_response(get(recycle(other), ~p"/demo"), 200)
+    assert turn =~ "It's your turn"
+    assert turn =~ ~r/<dialog[^>]*id="turn-box"[^>]*\sopen/
+    assert turn =~ "Take your seat"
     taken = post(recycle(other), ~p"/demo/seat")
     assert redirected_to(taken) == ~p"/"
   end

@@ -64,6 +64,7 @@ defmodule DokkitWeb.InboxLive do
 
   defp load(socket) do
     %{needs_you: now, soon: soon, other: other} = Issues.groups()
+    day = Dokkit.Read.day()
 
     assign(socket,
       now: now,
@@ -74,7 +75,8 @@ defmodule DokkitWeb.InboxLive do
       fine: Issues.fine(),
       night: Dokkit.Alerts.night_ends(),
       planned: Enum.filter(socket.assigns.shell.machines, & &1.planned),
-      day: Dokkit.Read.day(),
+      day: day,
+      egg: last_down(day.machines),
       linked: Enum.map(socket.assigns.shell.machines, & &1.id),
       apps: for(m <- socket.assigns.shell.machines, m.kind == :group, do: m.id),
       picked: MapSet.intersection(socket.assigns.picked, MapSet.new(now ++ soon, & &1.id))
@@ -270,6 +272,7 @@ defmodule DokkitWeb.InboxLive do
                   <i
                     :for={{c, n} <- Enum.with_index(m.cells)}
                     class={cell_class(c)}
+                    tabindex={{m.id, n} == @egg && "0"}
                     role="img"
                     title={cell_title(m.name, @day.from, n, c)}
                     aria-label={cell_title(m.name, @day.from, n, c)}
@@ -292,6 +295,7 @@ defmodule DokkitWeb.InboxLive do
               </p>
             </div>
           </div>
+          <div id="day-game" phx-update="ignore"></div>
         </div>
 
         <div class="card">
@@ -439,6 +443,11 @@ defmodule DokkitWeb.InboxLive do
     ]
     |> Enum.filter(& &1)
     |> Enum.join(", ")
+  end
+
+  defp last_down(machines) do
+    for(m <- machines, {"down", n} <- Enum.with_index(m.cells), do: {m.id, n})
+    |> Enum.max_by(&elem(&1, 1), fn -> nil end)
   end
 
   defp cell_class("down"), do: "bad"
