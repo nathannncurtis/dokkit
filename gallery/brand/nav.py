@@ -24,6 +24,7 @@ MENU = [
     ("Alerts & phone", [
         ("alerts.html", "Alerts", "Paging, push, email, chat and more", False),
         ("phone.html", "Phone app", "What needs you, from anywhere", False),
+        ("desktop.html", "Desktop app", "Your server in a window, with a tray", False),
     ]),
     ("Project", [
         ("security.html", "Security", "What it can and cannot do", False),
