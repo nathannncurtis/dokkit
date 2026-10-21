@@ -90,7 +90,7 @@ defmodule DokkitWeb.Router do
 
     post "/report", IntakeController, :report
     post "/errors", IntakeController, :error
-    get "/in/:key/job/:name/:event", IntakeController, :ping, log: false
+    get "/in/:key/job/:name/:event", IntakeController, :ping_get, log: false
     post "/in/:key/job/:name/:event", IntakeController, :ping, log: false
     options "/report", IntakeController, :report
     options "/errors", IntakeController, :error
@@ -205,6 +205,7 @@ defmodule DokkitWeb.Router do
     delete "/machines/:id/quiet/schedules/:schedule", ApiController, :remove_quiet_schedule
     get "/alerts", ApiController, :alert_settings
     put "/alerts", ApiController, :set_alert_settings
+    get "/alerts/oncall", ApiController, :alert_oncall
     post "/alerts/test", ApiController, :test_alert
     post "/alerts/heartbeat/shared", ApiController, :use_shared_heartbeat
     delete "/alerts/heartbeat/shared", ApiController, :stop_shared_heartbeat
