@@ -50,6 +50,7 @@ public final class AppModel {
     /// "servers/paste", "settings/2", "home/picking", "home/first", with "@harbor-lab" to show that server.
     public func debugOpen(_ route: String) {
         let at = route.split(separator: "@", maxSplits: 1).map(String.init)
+        guard !at.isEmpty else { return }
         if at.count > 1, let s = servers.first(where: { $0.name == at[1] }) { selectedID = s.id }
         let parts = at[0].split(separator: "/").map(String.init)
         tab = ["home": 0, "servers": 1, "settings": 2][parts.first ?? ""] ?? 0
