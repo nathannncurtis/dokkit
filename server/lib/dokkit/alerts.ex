@@ -984,7 +984,7 @@ defmodule Dokkit.Alerts do
 
     Repo.delete_all(from t in Dokkit.AlertTarget, where: t.alert_id == ^alert.id and not t.opened)
 
-    last = reached == [] and alert.attempts + 1 >= @max_attempts
+    last = reached == [] and alert.attempts + 1 >= Values.get("send_tries")
 
     case last or Dokkit.OnCall.people(config) do
       true ->
