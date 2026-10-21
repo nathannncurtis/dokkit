@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dokkit on your phone</title>
+<meta name="description" content="A read-only Dokkit on iPhone and Android, for a server that is not on the internet, through a relay that cannot read what it holds.">
+<meta name="theme-color" content="#1e1917">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css?v=19">
+<script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m !== "off"; if (!on) document.documentElement.classList.add("still"); })();</script>
+<link rel="stylesheet" href="nav.css?v=1">
+<link rel="stylesheet" href="phone-device.css?v=1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Dokkit">
+<meta property="og:title" content="Dokkit on your phone">
+<meta property="og:description" content="A read-only Dokkit on iPhone and Android, for a server that is not on the internet, through a relay that cannot read what it holds.">
+<meta property="og:url" content="https://dokkit.dev/phone.html">
+<meta property="og:image" content="https://dokkit.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Dokkit mark and name on dark brown, with the line: one place that says what needs a look.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://dokkit.dev/phone.html">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="dark">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 100 100"><circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="shackle"/><rect x="4.5" y="10" width="15" height="11" rx="2.5" fill="currentColor"/></symbol>
+</svg>
+
+<header class="nb" id="nb">
+  <a class="nb-brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+  <button type="button" class="nb-burger" aria-expanded="false" aria-controls="nb-nav" aria-label="Menu"><i></i></button>
+  <nav class="nb-nav" id="nb-nav" aria-label="Site"><div class="nb-group"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m0">Get started<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m0"><a class="nb-item" href="install.html"><b>Install</b><small>The server, then the program on each machine</small></a><a class="nb-item" href="move.html"><b>Move over</b><small>From Healthchecks, Uptime Kuma or ping URLs</small></a><a class="nb-item" href="check.html"><b>Check a file</b><small>Write a dokkit.toml and see what it watches</small></a><span class="nb-item nb-soon" aria-disabled="true"><b>Live demo<em>soon</em></b><small>The real server on a sample company</small></span></div></div><div class="nb-group"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m1">Build<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m1"><a class="nb-item" href="agents.html"><b>Agents</b><small>Let a coding agent wire your app in</small></a><a class="nb-item" href="libraries.html"><b>Libraries</b><small>The same calls in eleven languages</small></a><a class="nb-item" href="mcp-tools.html"><b>MCP tools</b><small>Every tool an agent can use</small></a><a class="nb-item" href="api.html"><b>API</b><small>Every call, for scripts</small></a><a class="nb-item" href="cli.html"><b>Command line</b><small>Every dokkit command</small></a></div></div><div class="nb-group nb-here"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m2">Alerts &amp; phone<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m2"><a class="nb-item" href="alerts.html"><b>Alerts</b><small>Paging, push, email, chat and more</small></a><a class="nb-item" href="phone.html" aria-current="page"><b>Phone app</b><small>What needs you, from anywhere</small></a></div></div><div class="nb-group"><button type="button" class="nb-top" aria-expanded="false" aria-controls="nb-m3">Project<i aria-hidden="true"></i></button><div class="nb-menu" id="nb-m3"><a class="nb-item" href="security.html"><b>Security</b><small>What it can and cannot do</small></a><a class="nb-item" href="changelog.html"><b>Changelog</b><small>Every release</small></a><span class="nb-item nb-soon" aria-disabled="true"><b>Status<em>soon</em></b><small>dokkit.dev's own status</small></span><a class="nb-item" href="https://github.com/nathannncurtis/dokkit"><b>Source</b><small>The code on GitHub</small></a></div></div></nav>
+  <button type="button" class="motion" id="motion" aria-pressed="true">Motion <b>on</b></button><a class="nb-claim" href="https://names.dokkit.dev/">Claim a name</a>
+</header>
+
+<main id="top" class="page">
+  <header class="phead">
+    <p class="crumb"><a href="index.html">Dokkit</a><span aria-hidden="true">/</span><span>Alerts &amp; phone</span><span aria-hidden="true">/</span><b>Phone</b></p>
+    <h1 class="ptitle">Phone</h1>
+    <p class="plede">See what needs you, and whether the hardware is up, from your phone, even though your server is not on the internet. The apps are <mark class="n">read-only</mark>, for iPhone and Android.</p>
+  </header>
+
+  <div class="steps-wrap">
+    <nav class="rail" aria-label="On this page">
+      <ol>
+        <li><a href="#how" data-step="how"><i>1</i>How it reaches you</a></li>
+        <li><a href="#relay" data-step="relay"><i>2</i>Pick a relay</a></li>
+        <li><a href="#app" data-step="app"><i>3</i>Get the app</a></li>
+        <li><a href="#pair" data-step="pair"><i>4</i>Pair it</a></li>
+      </ol>
+      <span class="rail-fill" id="railFill" aria-hidden="true"></span>
+    </nav>
+
+    <div class="steps">
+      <section class="step" id="how">
+        <h2 data-type>How it reaches you</h2>
+        <div class="cap" id="pcap" aria-hidden="true"><span>Your server seals a snapshot, every minute.</span><span>A relay holds it, and cannot open it.</span><span>Your phone opens it. Nothing goes back.</span></div>
+        <div class="flow" id="flow">
+          <div class="node" id="nServer"><span class="mk sm"><svg><use href="#mark"/></svg></span><b>Your server</b><small>on your network</small></div>
+          <div class="wire"><i></i></div>
+          <div class="node" id="nRelay"><b>A relay</b><small>on any public host</small><em class="blind">cannot read it</em></div>
+          <div class="wire"><i></i></div>
+          <div class="node phone-node" id="nPhone">
+            <div class="handset dv" id="handset" role="region" aria-label="A working demo of the Dokkit app, on made-up data"><img class="dv-fallback" src="img/phone-demo-home.webp" width="600" height="1299" alt="The Dokkit app on a sample company: three things need you"></div>
+            <div class="dv-pick">
+              <div class="tool-tabs" role="group" aria-label="Show it on"><button type="button" data-dv="android" aria-pressed="true">Android</button><button type="button" data-dv="iphone" aria-pressed="false">iPhone</button><button type="button" data-dv="duo" aria-pressed="false">iPhone Duo</button></div>
+              <div class="tool-tabs fold" role="group" aria-label="The Duo" hidden><button type="button" data-fold="folded" aria-pressed="true">Folded</button><button type="button" data-fold="open" aria-pressed="false">Open</button></div>
+              <p class="dv-note">A demo on a made-up company. Tap around; nothing leaves this page.</p>
+            </div>
+          </div>
+          <div class="env" id="env" aria-hidden="true"><svg><use href="#lock"/></svg></div>
+        </div>
+        <ul class="did">
+          <li>The server only ever dials out, to the relay. It opens no port for the phone.</li>
+          <li>Each phone has its own key and its own copy. The relay sees sealed bytes and the time they arrived.</li>
+          <li>The apps change nothing on the server and send no notifications. Alerts still come the ways you set on the Alerts page.</li>
+        </ul>
+      </section>
+
+      <section class="step" id="relay">
+        <h2 data-type>Pick a relay</h2>
+        <p class="big-fact" data-fly="up">The easy way: in Dokkit, open <mark class="n">Settings, Phones</mark> and choose <mark class="ok">Use the shared relay</mark>. Dokkit makes a mailbox at relay.dokkit.dev and fills in the rest.</p>
+        <p class="note">The shared relay holds sealed snapshots it cannot read, like any relay. A mailbox that gets no upload for 30 days is removed; press the button again for a new one.</p>
+        <details class="card"><summary>Or run a relay of your own <small>3 steps</small></summary><div class="card-body">
+          <p>The relay is a mode of the same <code>dokkit</code> program, on any host your phone and your server can both reach.</p>
+          <ol class="do steps-cmd">
+            <li>On that host, make a mailbox for your server. It prints the mailbox address and its upload key, once:<div class="cmd"><code id="cRelayAdd">dokkit relay add home</code><button type="button" class="copy" data-copy="cRelayAdd">Copy</button></div></li>
+            <li>Serve it behind the https proxy you already run there:<div class="cmd"><code id="cRelayServe">dokkit relay serve --http 127.0.0.1:8080</code><button type="button" class="copy" data-copy="cRelayServe">Copy</button></div></li>
+            <li>In Dokkit, open <mark class="n">Settings, Phones</mark> and paste the mailbox address and the upload key.</li>
+          </ol>
+        </div></details>
+      </section>
+
+      <section class="step" id="app">
+        <h2 data-type>Get the app</h2>
+        <p class="sub-p">Install it like any other app: TestFlight on iPhone, a signed file on Android. Building it yourself is still there if you would rather.</p>
+        <div class="cards cards-2">
+          <details class="card" open><summary>iPhone <small>TestFlight, iOS 17 or later</small></summary><div class="card-body">
+            <ol class="do">
+              <li>On the iPhone, open <a href="https://testflight.apple.com/join/24zrk6Cd">the Dokkit TestFlight link</a>.</li>
+              <li>Install TestFlight from the App Store if it asks, then tap Accept and Install.</li>
+            </ol>
+            <p>No developer account needed. TestFlight offers each new release as an update.</p>
+          </div></details>
+          <details class="card" open><summary>Android <small>Android 8 or later</small></summary><div class="card-body">
+            <ol class="do">
+              <li>On the phone, download <a href="https://github.com/nathannncurtis/dokkit/releases/latest/download/dokkit-android.apk"><code>dokkit-android.apk</code></a> from the latest release.</li>
+              <li>Open it and allow installs from your browser when Android asks.</li>
+            </ol>
+            <p>It is signed with the Dokkit key, so later releases install over it as updates.</p>
+          </div></details>
+        </div>
+        <details class="card"><summary>Build it yourself <small>sign with your own account or key</small></summary><div class="card-body">
+          <p>Each release also carries <code>dokkit-ios-unsigned.ipa</code> and <code>dokkit-android-unsigned.apk</code>, and the source is in <code>apps/</code>.</p>
+          <p><b>iPhone</b>, on a Mac with Xcode 16:</p>
+          <ol class="do">
+            <li>Install XcodeGen with <code>brew install xcodegen</code>, then run <code>xcodegen generate</code> in <code>apps/ios</code>.</li>
+            <li>Open <code>Dokkit.xcodeproj</code>. Under Signing &amp; Capabilities choose your Team and a bundle identifier of your own.</li>
+            <li>Turn on Developer Mode on the iPhone, connect it, and press Run.</li>
+          </ol>
+          <p>Signed with a free Apple ID it stops opening after seven days; run it from Xcode again to renew. A paid account lasts a year. The layout for a foldable iPhone needs Xcode 27.1; an older Xcode builds the app without it.</p>
+          <p><b>Android</b>:</p>
+          <ol class="do">
+            <li>Take <code>dokkit-android-unsigned.apk</code> from a release, or build it with <code>./build-unsigned.sh</code> in <code>apps/android</code>.</li>
+            <li>Make a key once with <code>keytool</code>, then sign with <code>apksigner sign --ks dokkit.jks</code>.</li>
+            <li>Install it with <code>adb install</code>, or copy it to the phone and open it.</li>
+          </ol>
+          <p>Keep the key: an update must be signed with the same one. A copy you sign yourself cannot update the Dokkit-signed one, or the other way round.</p>
+        </div></details>
+      </section>
+
+      <section class="step" id="pair">
+        <h2 data-type>Pair it</h2>
+        <ol class="do" data-fly="up">
+          <li>In Dokkit, open <mark class="n">Settings, Phones, Add a phone</mark>. A code is shown once, for two minutes.</li>
+          <li>In the app, choose Servers, Add a server, and point the camera at it. Or paste the code.</li>
+        </ol>
+        <p class="aside" data-fly="left">One phone can follow several servers. Remove a server in the app and its key, token and saved snapshot are deleted from the phone.</p>
+      </section>
+      <nav class="pager" aria-label="Where to go next"><a class="pg-prev" href="alerts.html"><small>Back</small><b>Alerts</b></a><a class="pg-next" href="security.html"><small>Next</small><b>Security</b><span>What it can and cannot do</span></a></nav>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="fl">
+    <a class="brand" href="index.html"><span class="mk"><svg><use href="#mark"/></svg></span>Dokkit</a>
+    <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
+  </div>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="site.js?v=18"></script>
+<script src="phone-device.js?v=1"></script>
+<script src="phone-live.js?v=1"></script>
+<script src="phone.js?v=19"></script>
+<script src="motion.js?v=18"></script>
+<script src="nav.js?v=1"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "9c697efa266343149d988907066e0008"}'></script>
+</body>
+</html>

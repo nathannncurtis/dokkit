@@ -1,0 +1,39 @@
+/* The device around the live app: neutral frames drawn in CSS, at the device's size in points, scaled to fit. */
+.dv { position: relative; flex: none; }
+.dv-scale { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.dv-body { position: absolute; box-sizing: border-box; background: linear-gradient(145deg, #3b332f, #1c1715 55%, #2a2320); box-shadow: inset 0 0 0 1.5px #574b45, inset 0 0 0 4px #14100e, 0 40px 60px -30px #000c, 0 12px 24px -12px #000a; transform-origin: 50% 50%; }
+.dv-screen { position: relative; width: 100%; height: 100%; overflow: clip; background: #0c0a09; isolation: isolate; }
+.dv-app { display: block; border: 0; background: #0c0a09; }
+.dv-screen .screen-off { position: absolute; inset: 0; z-index: 3; background: #0c0a09; clip-path: none; opacity: 0; pointer-events: none; }
+/* The camera: a punch hole, a pill, or the Duo cover screen's corner lens. */
+.dv-punch, .dv-pill, .dv-corner, .dv-hinge { position: absolute; z-index: 4; pointer-events: none; opacity: 0; }
+.dv-punch { left: 50%; top: 22px; width: 15px; height: 15px; margin-left: -7.5px; border-radius: 50%; background: #050404; box-shadow: inset 0 0 0 2px #1b1715; }
+.dv-pill { left: 50%; top: 20px; width: 118px; height: 34px; margin-left: -59px; border-radius: 20px; background: #050404; }
+.dv-corner { right: 30px; top: 26px; width: 26px; height: 26px; border-radius: 50%; background: #050404; box-shadow: inset 0 0 0 3px #1b1715; }
+.dv-hinge { left: 0; top: 18%; bottom: 18%; width: 5px; border-radius: 0 3px 3px 0; background: linear-gradient(90deg, #0d0b0a, #4a403b); }
+/* The fold of the open book, a shade across it rather than a line. */
+.dv-crease { position: absolute; z-index: 2; pointer-events: none; opacity: 0; }
+.dv-crease.v { left: 50%; top: 0; bottom: 0; width: 28px; margin-left: -14px; background: linear-gradient(90deg, transparent, #0006 44%, #fff1 50%, #0006 56%, transparent); }
+.dv-crease.h { top: 50%; left: 0; right: 0; height: 28px; margin-top: -14px; background: linear-gradient(180deg, transparent, #0006 44%, #fff1 50%, #0006 56%, transparent); }
+
+/* Without scripts: a framed still of Home, and no switch. */
+.handset .dv-fallback { display: block; width: 250px; height: auto; border: 9px solid #231d1a; border-radius: 40px; box-shadow: inset 0 0 0 1px #574b45, 0 40px 60px -30px #000c; filter: none; }
+html:not(.js) .dv-pick { display: none; }
+
+/* The switch under the device. */
+.dv-pick { display: grid; gap: 8px; justify-items: center; margin-top: 18px; }
+.dv-pick .tool-tabs { justify-content: center; flex-wrap: nowrap; gap: 4px; }
+.dv-pick .tool-tabs button { padding: 5px 11px; font-size: 13.5px; white-space: nowrap; }
+.dv-pick .tool-tabs.fold button { padding: 4px 12px; font-size: 13px; }
+.dv-pick .tool-tabs.fold[hidden] { display: none; }
+.dv-note { color: var(--mute); font-size: 13px; text-align: center; max-width: 34ch; }
+
+/* On the phone page: the device sits where the photo was; open, the Duo takes its own row under the server and relay. */
+.handset.dv { max-width: none; width: auto; }
+.dv-pick .tool-tabs button[aria-pressed="true"] { color: var(--acc-ink); background: var(--acc); border-color: transparent; font-weight: 600; }
+@media (min-width: 901px) {
+  .flow.wide { grid-template-columns: 1fr 70px 1fr; row-gap: 0; }
+  .flow.wide > .wire:nth-child(4) { grid-column: 3; grid-row: 2; width: 2px; height: 40px; justify-self: center; background: repeating-linear-gradient(180deg, var(--line) 0 6px, transparent 6px 12px); }
+  .flow.wide > #nPhone { grid-column: 1 / -1; grid-row: 3; }
+}
+.dv-app:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
