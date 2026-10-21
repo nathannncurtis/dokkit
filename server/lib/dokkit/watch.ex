@@ -3,7 +3,7 @@ defmodule Dokkit.Watch do
   use GenServer
   import Ecto.Query
   require Logger
-  alias Dokkit.{Check, Issues, JobRun, Repo}
+  alias Dokkit.{Check, Issues, JobRun, Repo, Values}
   alias DokkitWeb.Show
 
   @every :timer.minutes(1)
@@ -19,9 +19,8 @@ defmodule Dokkit.Watch do
   end
 
   # After a server outage, machines have had no chance to report yet.
-  @settle_seconds 180
-
-  def settled?(booted, now), do: DateTime.diff(now, booted) >= @settle_seconds
+  def settled?(booted, now),
+    do: DateTime.diff(now, booted) >= Values.get("warmup_minutes") * 60
 
   def handle_info(:sweep, booted) do
     Process.send_after(self(), :sweep, @every)
@@ -35,6 +34,8 @@ defmodule Dokkit.Watch do
       ) ++
         [
           fn -> if Dokkit.Alerts.release(now) > 0, do: Dokkit.Alerts.flush() end,
+          fn -> if Dokkit.Alerts.remind(now) > 0, do: Dokkit.Alerts.flush() end,
+          fn -> Dokkit.Errors.calm() end,
           fn -> Dokkit.Alerts.settle(now) end,
           fn -> Dokkit.Alerts.resolve_tests(now) end,
           fn -> Dokkit.Work.expire() end,
@@ -65,8 +66,6 @@ defmodule Dokkit.Watch do
   end
 
   @keep_batches_hours 24
-  @keep_hosts_days 30
-  @keep_runs_days 90
 
   @doc "Drops numbers past their keep time, spent batch ids, app hosts never seen again, and old job and work runs."
   def prune(now) do
@@ -83,11 +82,12 @@ defmodule Dokkit.Watch do
       from m in Dokkit.Machine,
         as: :machine,
         where:
-          m.kind == :seen and m.last_seen_at < ^DateTime.add(now, -@keep_hosts_days * 86_400) and
+          m.kind == :seen and
+            m.last_seen_at < ^DateTime.add(now, -Values.get("hosts_days") * 86_400) and
             not exists(from s in Dokkit.Service, where: s.machine_id == parent_as(:machine).id)
     )
 
-    runs_before = DateTime.add(now, -@keep_runs_days * 86_400)
+    runs_before = DateTime.add(now, -Values.get("job_keep_days") * 86_400)
 
     # Each check keeps its newest run and newest good run: the Jobs page and "did not run" read them.
     keep_jobs =
@@ -103,12 +103,21 @@ defmodule Dokkit.Watch do
         order_by: [r.check_id, desc: r.finished_at],
         select: r.id
 
-    Repo.delete_all(
-      from r in JobRun,
-        where:
-          coalesce(r.finished_at, r.started_at) < ^runs_before and
-            r.id not in subquery(keep_jobs) and r.id not in subquery(keep_good)
-    )
+    own = own_keep()
+
+    for {cutoff, ids} <- [
+          {runs_before, nil}
+          | Enum.map(own, fn {id, days} -> {DateTime.add(now, -days * 86_400), [id]} end)
+        ] do
+      Repo.delete_all(
+        from r in JobRun,
+          join: c in assoc(r, :check),
+          where: ^runs_of(ids, Map.keys(own)),
+          where:
+            coalesce(r.finished_at, r.started_at) < ^cutoff and
+              r.id not in subquery(keep_jobs) and r.id not in subquery(keep_good)
+      )
+    end
 
     keep_work =
       from r in Dokkit.WorkRun,
@@ -123,6 +132,18 @@ defmodule Dokkit.Watch do
             r.id not in subquery(keep_work)
     )
   end
+
+  # The jobs (by service id) that keep their runs for their own number of days.
+  defp own_keep do
+    for %{key: "values:job:" <> id, value: %{"job_keep_days" => days}} <-
+          Repo.all(from s in Dokkit.Setting, where: like(s.key, "values:job:%")),
+        into: %{},
+        do: {id, days}
+  end
+
+  defp runs_of(nil, []), do: dynamic(true)
+  defp runs_of(nil, own), do: dynamic([_, c], c.service_id not in ^own)
+  defp runs_of(ids, _), do: dynamic([_, c], c.service_id in ^ids)
 
   @doc "Returns how many jobs and beats it flagged."
   def sweep(now \\ DateTime.utc_now(), booted \\ nil) do
@@ -165,22 +186,27 @@ defmodule Dokkit.Watch do
        ) do
     every = config["every_seconds"] || 60
     quiet = DateTime.diff(now, later(last, booted))
+    v = Values.all()
 
-    if quiet > every * 2 + 60,
+    if quiet > every * v["beat_misses"] + v["beat_slack_seconds"],
       do:
         {"#{check.service.name}: #{check.name} went quiet",
          "No beat for #{div(quiet, 60)} min. One was expected every #{every} s."}
   end
 
   defp verdict(%Check{type: :beat}, _, _), do: nil
-  defp verdict(check, now, booted), do: missed(check, now, booted) || overran(check, now)
+
+  defp verdict(check, now, booted) do
+    v = Values.all({:job, check.service_id})
+    (v["job_missed"] && missed(check, now, booted, v)) || overran(check, now, v)
+  end
 
   # Time the server was down is not time the app was quiet.
   defp later(time, nil), do: time
   defp later(time, booted), do: Enum.max([time, booted], DateTime)
 
   # Schedules are read as UTC until jobs carry a timezone.
-  defp missed(%Check{config: %{"schedule" => cron} = config} = check, now, booted)
+  defp missed(%Check{config: %{"schedule" => cron}} = check, now, booted, v)
        when is_binary(cron) do
     with {:ok, expr} <- Crontab.CronExpression.Parser.parse(cron),
          {:ok, due} <- Crontab.Scheduler.get_previous_run_date(expr, DateTime.to_naive(now)),
@@ -190,7 +216,7 @@ defmodule Dokkit.Watch do
          due = DateTime.from_naive!(due, "Etc/UTC"),
          true <- DateTime.compare(check.inserted_at, due) == :lt,
          true <- is_nil(booted) or DateTime.compare(booted, due) == :lt,
-         true <- DateTime.diff(now, due) > seconds(config["grace"], 1800),
+         true <- DateTime.diff(now, due) > grace(check, v),
          false <-
            Repo.exists?(
              from r in JobRun,
@@ -207,7 +233,15 @@ defmodule Dokkit.Watch do
     _ -> nil
   end
 
-  defp missed(_, _, _), do: nil
+  defp missed(_, _, _, _), do: nil
+
+  # In seconds, so a grace of 90s in a file is not rounded to minutes.
+  defp grace(check, v) do
+    if check.config["grace"] &&
+         not Map.has_key?(Values.own({:job, check.service_id}), "job_grace_minutes"),
+       do: seconds(check.config["grace"], v["job_grace_minutes"] * 60),
+       else: v["job_grace_minutes"] * 60
+  end
 
   defp last_good(check) do
     run =
@@ -232,8 +266,14 @@ defmodule Dokkit.Watch do
   defp took_ms(_), do: nil
 
   @doc "The title and note for a finished run that took longer than the job's max_runtime, else nil."
-  def ran_long(%Check{config: %{"max_runtime" => max}} = check, %JobRun{} = run, label) do
-    limit = seconds(max, 3600) * 1000
+  def ran_long(%Check{} = check, %JobRun{} = run, label) do
+    case max_runtime(check, Values.all({:job, check.service_id})) do
+      nil -> nil
+      {max, seconds} -> ran_long(check, run, label, max, seconds * 1000)
+    end
+  end
+
+  defp ran_long(check, run, label, max, limit) do
     ms = took_ms(run)
 
     if ms && ms > limit do
@@ -252,10 +292,27 @@ defmodule Dokkit.Watch do
     end
   end
 
-  def ran_long(_, _, _), do: nil
+  # The limit as it is written, and in seconds: the job's own setting, else its max_runtime, else the default when switched on.
+  defp max_runtime(check, v) do
+    if v["job_max_on"] do
+      own = Values.own({:job, check.service_id})
+      text = check.config["max_runtime"]
 
-  defp overran(%Check{config: %{"max_runtime" => max}} = check, now) do
-    limit = DateTime.add(now, -seconds(max, 3600))
+      if text && not Map.has_key?(own, "job_max_minutes"),
+        do: {text, seconds(text, v["job_max_minutes"] * 60)},
+        else: {"#{v["job_max_minutes"]}m", v["job_max_minutes"] * 60}
+    end
+  end
+
+  defp overran(check, now, v) do
+    case max_runtime(check, v) do
+      nil -> nil
+      {max, seconds} -> overran(check, now, max, seconds)
+    end
+  end
+
+  defp overran(check, now, max, seconds) do
+    limit = DateTime.add(now, -seconds)
 
     newest =
       Repo.one(
@@ -271,8 +328,6 @@ defmodule Dokkit.Watch do
          {"#{Dokkit.Intake.label(check.service, check.name)} has run too long",
           "Longer than #{max}"}
   end
-
-  defp overran(_, _), do: nil
 
   def seconds(text, default) do
     case is_binary(text) && Regex.run(~r/^(\d+)([smhd])$/, text) do
