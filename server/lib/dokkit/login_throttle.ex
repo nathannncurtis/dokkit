@@ -5,9 +5,6 @@ defmodule Dokkit.LoginThrottle do
   """
   @table :dokkit_login_throttle
   @window 600
-  @per_pair 10
-  @per_address 30
-  @per_name 10
 
   def init, do: :ets.new(@table, [:named_table, :public, :set])
 
@@ -17,12 +14,13 @@ defmodule Dokkit.LoginThrottle do
     pair = hit({:pair, name, address})
     addr = hit({:address, address})
     by_name = hit({:name, name})
+    v = Dokkit.Values.all()
 
     cond do
-      pair > @per_pair or addr > @per_address ->
+      pair > v["login_pair"] or addr > v["login_address"] ->
         :blocked
 
-      by_name > @per_name ->
+      by_name > v["login_name"] ->
         Process.sleep(1000)
         :ok
 
