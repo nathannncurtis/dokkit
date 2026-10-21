@@ -1,6 +1,6 @@
 # Dokkit for .NET
 
-`Dokkit` is one file for .NET Standard 2.0 with no packages: `Beat`, `Job`, `Check`, `Capture`, `Log`. `Dokkit.Logging` adds the logging provider.
+`Dokkit` is one file for .NET Standard 2.0 with no packages: the static class `Dokkit.Client` with `Start`, `Beat`, `Job`, `Check`, `Metric`, `Capture`, `Log`, `Stats`. `Dokkit.Logging` adds the logging provider.
 
 ## Install
 

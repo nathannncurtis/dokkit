@@ -1,6 +1,6 @@
 # Dokkit for Go
 
-One file, standard library only. `Beat`, `Job`, `Check`, `Capture`, `Log`.
+One file, standard library only. `Beat`, `Job`, `Check`, `Metric`, `Capture`, `Log`, `Stats`.
 
 ## Install
 
