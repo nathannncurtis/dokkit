@@ -56,13 +56,13 @@ defmodule Dokkit.UpdateRunTest do
     assert [%{name: "b"}] = UpdateRun.failed(@t0)
   end
 
-  test "a machine silent for 20 minutes has failed, so the screen cannot stay up" do
+  test "a machine silent for 50 minutes (the updater's 45 and 5 more) has failed, so the screen cannot stay up" do
     machine("a")
-    assert %{done: 0} = UpdateRun.current(DateTime.add(@t0, 1199))
-    assert UpdateRun.current(DateTime.add(@t0, 1200)) == nil
+    assert %{done: 0} = UpdateRun.current(DateTime.add(@t0, 2999))
+    assert UpdateRun.current(DateTime.add(@t0, 3000)) == nil
 
-    assert [%{state: :failed, note: "did not report back within 20 minutes"}] =
-             UpdateRun.failed(DateTime.add(@t0, 1200))
+    assert [%{state: :failed, note: "did not report back within 50 minutes"}] =
+             UpdateRun.failed(DateTime.add(@t0, 3000))
   end
 
   test "an older finished run is not part of a newer one" do

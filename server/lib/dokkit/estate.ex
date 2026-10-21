@@ -682,7 +682,9 @@ defmodule Dokkit.Estate do
         Map.drop(check.config, Enum.map(timing, &elem(&1, 0)))
         |> Map.merge(Map.reject(Map.new(timing), &(elem(&1, 1) == "")))
 
-      {:ok, Repo.update!(Ecto.Changeset.change(check, config: config))}
+      check = Repo.update!(Ecto.Changeset.change(check, config: config))
+      Dokkit.Values.forget()
+      {:ok, check}
     else
       {:error, @duration_error}
     end

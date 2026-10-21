@@ -148,18 +148,26 @@ defmodule Dokkit.ValuesTest do
       assert machine_check(m, "memory.used_percent").state == :degraded
     end
 
-    test "the processor alert is off until switched on, then counts its minutes" do
+    test "the processor alert is on at 90% for 10 minutes, can be switched off, and counts its minutes" do
       m = machine("v-cpu")
+      off = machine("v-cpu-off")
       now = DateTime.utc_now()
-      Numbers.record(m.id, nil, "cpu.percent", 99, now)
-      refute machine_check(m, "cpu.percent")
+      set({:machine, off.id}, %{"cpu_on" => false})
+      Numbers.record(off.id, nil, "cpu.percent", 99, now)
+      refute machine_check(off, "cpu.percent")
 
-      set({:machine, m.id}, %{"cpu_on" => true, "cpu_limit" => 50, "cpu_minutes" => 2})
-      Numbers.record(m.id, nil, "cpu.percent", 70, now)
+      for _ <- 1..9, do: Numbers.record(m.id, nil, "cpu.percent", 95, now)
       refute machine_check(m, "cpu.percent").state == :degraded
-      Numbers.record(m.id, nil, "cpu.percent", 70, now)
+      Numbers.record(m.id, nil, "cpu.percent", 95, now)
       assert %{state: :degraded} = machine_check(m, "cpu.percent")
       assert [%{title: "The processor is busy"}] = Issues.open_list()
+
+      own = machine("v-cpu-own")
+      set({:machine, own.id}, %{"cpu_limit" => 50, "cpu_minutes" => 2})
+      Numbers.record(own.id, nil, "cpu.percent", 70, now)
+      refute machine_check(own, "cpu.percent").state == :degraded
+      Numbers.record(own.id, nil, "cpu.percent", 70, now)
+      assert %{state: :degraded} = machine_check(own, "cpu.percent")
     end
 
     test "each machine goes quiet after its own number of minutes" do
@@ -409,14 +417,17 @@ defmodule Dokkit.ValuesTest do
       assert Repo.aggregate(Dokkit.ErrorEvent, :count) == 4
     end
 
-    test "a burst of errors opens an issue only when switched on, and closes when calm" do
+    test "a burst of errors opens an issue at 10 by default, is a setting, and closes when calm" do
       s = service(machine("v-burst"), "app")
-      for _ <- 1..3, do: Errors.report(s, %{"type" => "Boom"})
+      for _ <- 1..9, do: Errors.report(s, %{"type" => "Boom"})
       assert Issues.open_list() == []
-
-      set(%{"error_alert_on" => true, "error_alert_count" => 3})
-      for _ <- 1..3, do: Errors.report(s, %{"type" => "Boom"})
+      Errors.report(s, %{"type" => "Boom"})
       assert [%{title: "app is raising errors"}] = Issues.open_list()
+
+      quiet = service(machine("v-burst-off"), "app")
+      set(%{"error_alert_on" => false})
+      for _ <- 1..12, do: Errors.report(quiet, %{"type" => "Boom"})
+      assert [_] = Issues.open_list()
 
       set(%{"error_alert_on" => false})
       Errors.calm()
@@ -454,14 +465,25 @@ defmodule Dokkit.ValuesTest do
       assert Alerts.deliver_pending() == 0
     end
 
-    test "reminders are off until switched on, then go again on the channels told", %{
+    test "reminders are on every 30 minutes, can be switched off, and go on the channels told", %{
       issue: issue
     } do
-      Repo.update_all(Alert, set: [status: :sent])
-      age(60)
       noon = %{DateTime.utc_now() | hour: 12, minute: 0}
+
+      sent = fn minutes ->
+        Repo.update_all(Alert,
+          set: [status: :sent, updated_at: DateTime.add(noon, -minutes * 60)]
+        )
+      end
+
+      sent.(20)
       assert Alerts.remind(noon) == 0
-      set(%{"remind_on" => true, "remind_minutes" => 30})
+      set(%{"remind_on" => false})
+      sent.(60)
+      assert Alerts.remind(noon) == 0
+      assert Alerts.remind(%{noon | hour: 23}) == 0
+      set(%{"remind_on" => true})
+      assert Alerts.remind(%{noon | hour: 23}) == 0
       assert Alerts.remind(noon) == 1
 
       assert [%{channel: "push", status: :pending}] =
@@ -469,8 +491,7 @@ defmodule Dokkit.ValuesTest do
 
       assert Alerts.remind(noon) == 0
       Issues.acknowledge([issue.id])
-      Repo.update_all(Alert, set: [status: :sent])
-      age(60)
+      sent.(60)
       assert Alerts.remind(noon) == 0
     end
 
@@ -563,10 +584,10 @@ defmodule Dokkit.ValuesTest do
         machine("v-upd",
           program_version: "v1",
           wanted_version: "v2",
-          update_started_at: DateTime.add(now, -30 * 60)
+          update_started_at: DateTime.add(now, -55 * 60)
         )
 
-      assert {:failed, "did not report back within 20 minutes"} = Dokkit.UpdateRun.status(m, now)
+      assert {:failed, "did not report back within 50 minutes"} = Dokkit.UpdateRun.status(m, now)
       set(%{"update_run_minutes" => 60})
       assert {:waiting, nil} = Dokkit.UpdateRun.status(m, now)
     end
@@ -591,29 +612,60 @@ defmodule Dokkit.ValuesTest do
       assert %{"error" => %{"code" => "bad_settings"}} =
                as.(admin) |> put("/api/v1/settings", %{"session_days" => 0}) |> json_response(422)
 
+      assert as.(act)
+             |> put("/api/v1/machines/#{m.id}/settings", %{"silent_minutes" => 9})
+             |> json_response(403)
+
       assert %{"values" => %{"silent_minutes" => 9}} =
-               as.(act)
+               as.(admin)
                |> put("/api/v1/machines/#{m.id}/settings", %{"silent_minutes" => 9})
                |> json_response(200)
 
       assert %{"defaults" => %{"silent_minutes" => 3}} =
                as.(read) |> get("/api/v1/machines/#{m.id}/settings") |> json_response(200)
 
-      assert as.(act) |> put("/api/v1/machines/nope/settings", %{}) |> json_response(404)
+      assert as.(admin) |> put("/api/v1/machines/nope/settings", %{}) |> json_response(404)
 
       {s, _} = job("v-api-job", %{})
 
+      assert as.(act)
+             |> put("/api/v1/jobs/#{s.id}/settings", %{"job_missed" => false})
+             |> json_response(403)
+
       assert %{"values" => %{"job_missed" => false}} =
-               as.(act)
+               as.(admin)
                |> put("/api/v1/jobs/#{s.id}/settings", %{"job_missed" => false})
                |> json_response(200)
+    end
+
+    test "a member sees a machine's and a job's settings but cannot change them", %{conn: conn} do
+      member = Repo.insert!(%Dokkit.User{name: "v-member", password_hash: "-", role: :member})
+
+      conn =
+        Plug.Test.init_test_session(conn, %{
+          "user_id" => member.id,
+          "signed_at" => Dokkit.Accounts.stamp()
+        })
+
+      m = machine("v-member-m")
+      {:ok, view, html} = live(conn, "/machines/#{m.id}")
+      assert html =~ "Settings for v-member-m"
+
+      render_submit(view, "values_save", %{
+        "group" => "machines",
+        "values" => %{"silent_minutes" => "9"}
+      })
+
+      assert Values.own({:machine, m.id}) == %{}
     end
 
     test "Settings, a machine's page and Jobs show the folds, save and reset", %{conn: conn} do
       conn = signed_in(conn)
       {:ok, view, html} = live(conn, "/settings")
       assert html =~ "Defaults for every machine"
-      assert html =~ "Default: Off"
+      assert html =~ "Default: On, every 30 minutes"
+      assert html =~ "Default: On, slow at 90% for 10 minutes"
+      assert html =~ "Default: On, when 10 errors arrive within 15 minutes"
 
       html =
         view |> form("#set-alerts-form", %{"values" => %{"send_tries" => "3"}}) |> render_submit()
@@ -645,9 +697,98 @@ defmodule Dokkit.ValuesTest do
       assert Values.get("job_keep_days", {:job, s.id}) == 5
     end
 
-    test "the public demo turns the server-wide settings off" do
-      assert DokkitWeb.DemoSeat.off?(DokkitWeb.SettingsLive, "values_save")
-      assert DokkitWeb.DemoSeat.off?(DokkitWeb.SettingsLive, "values_reset")
+    test "the public demo turns every settings save and reset off" do
+      for view <- [DokkitWeb.SettingsLive, DokkitWeb.MachineLive, DokkitWeb.JobsLive],
+          event <- ~w(values_save values_reset),
+          do: assert(DokkitWeb.DemoSeat.off?(view, event))
+    end
+  end
+
+  describe "review fixes" do
+    test "values are read through a cache that a save empties" do
+      old = Application.get_env(:dokkit, :values_cache_ms)
+      Application.put_env(:dokkit, :values_cache_ms, 60_000)
+      on_exit(fn -> Application.put_env(:dokkit, :values_cache_ms, old) end)
+      Values.forget()
+
+      assert Values.get("send_tries") == 5
+      Dokkit.Setting.put("values", %{"send_tries" => 9})
+      assert Values.get("send_tries") == 5
+      set(%{"send_tries" => 7})
+      assert Values.get("send_tries") == 7
+      Values.forget()
+    end
+
+    test "a limit stored with a fraction stays as it is" do
+      Alerts.save(%{"disk_limit" => "87.5"})
+      assert Values.get("disk_limit") == 87.5
+      assert Values.view(:server)["values"]["disk_limit"] == 87.5
+    end
+
+    test "a stored value that breaks a pair blocks only saves of that pair" do
+      Alerts.save(%{"disk_limit" => "99"})
+      set(%{"send_tries" => 3})
+
+      assert {:error, "disk_down is at or above disk_limit."} =
+               Values.save(:server, %{"disk_down" => 97})
+
+      assert {:error, _} = Alerts.update(%{"disk_limit" => "150"})
+      assert {:ok, _, _} = Alerts.update(%{"disk_limit" => ""})
+    end
+
+    test "going quiet is longer than two reports, and the server waits for the updater" do
+      assert {:error, "silent_minutes is at least" <> _} =
+               Values.save(:server, %{"silent_minutes" => 2})
+
+      assert {:error, "silent_minutes is at least" <> _} =
+               Values.save(:server, %{"report_seconds" => 600})
+
+      set(%{"report_seconds" => 30, "silent_minutes" => 2})
+
+      assert {:error, "update_run_minutes is at least updater_minutes" <> _} =
+               Values.save(:server, %{"update_run_minutes" => 30})
+
+      set(%{"updater_minutes" => 20, "update_run_minutes" => 25})
+    end
+
+    test "a max_runtime that cannot be read is still flagged after an hour" do
+      {_, c} = job("v-job-bad", %{"max_runtime" => "soon"})
+      started = DateTime.add(DateTime.utc_now(), -90 * 60)
+      Repo.insert!(%JobRun{check_id: c.id, run: "r", result: :running, started_at: started})
+      assert Watch.sweep() == 1
+    end
+
+    test "a burst writes once, closes only its own check, and a declare keeps it" do
+      m = machine("v-burst2")
+      {mkey, _} = Keys.mint(:machine, %{machine_id: m.id})
+      s = service(m, "app")
+      mine = check(s, name: "errors", state: :down, fail_after: 1)
+      set(%{"error_alert_on" => true, "error_alert_count" => 2})
+
+      for _ <- 1..2, do: Errors.report(s, %{"type" => "Boom"})
+      burst = Repo.get_by!(Check, name: "errors.burst")
+      at = burst.checked_at
+      for _ <- 1..5, do: Errors.report(s, %{"type" => "Boom"})
+      assert Repo.reload!(burst).checked_at == at
+
+      put_req_header(build_conn(), "authorization", "Bearer " <> mkey)
+      |> put("/api/v1/declare", %{schema: 1, service: %{id: "app", name: "app"}, check: []})
+      |> json_response(200)
+
+      assert Repo.reload(burst)
+      set(%{"error_alert_on" => false})
+      Errors.calm()
+      assert Repo.reload!(burst).state == :ok
+      assert Repo.reload!(mine).state == :down
+    end
+
+    test "enrolment codes are capped at the most, and a limit with no machine does not raise" do
+      set(%{"enrol_hours" => 2, "enrol_max_hours" => 3})
+      {_, key} = Keys.mint_enrol("pc", 24 * 3600)
+      assert DateTime.diff(key.expires_at, DateTime.utc_now()) in (3 * 3600 - 60)..(3 * 3600)
+
+      check = %Check{config: %{"limit_from" => "disk_limit"}, service: %Service{machine_id: nil}}
+      assert Numbers.limit(check) == 90.0
     end
   end
 end

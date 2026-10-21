@@ -160,6 +160,7 @@ defmodule Dokkit.Alerts do
       |> unblank()
 
     Setting.put("alerts", new)
+    Values.forget()
 
     new
   end
@@ -199,7 +200,7 @@ defmodule Dokkit.Alerts do
         {:error, "Every setting is text."}
 
       error =
-          bad_choice(params) || night_error(params) || zone_error(params) ||
+          bad_choice(params) || limit_error(params) || night_error(params) || zone_error(params) ||
             bad_recipients(params) || bad_address(params) ->
         {:error, error}
 
@@ -209,6 +210,21 @@ defmodule Dokkit.Alerts do
         Dokkit.SharedBeat.follow(config)
         {:ok, config, note}
     end
+  end
+
+  # Only what is sent is checked, so a limit stored before this rule still saves around it.
+  defp limit_error(params) do
+    Enum.find_value(@kept_blank, fn k ->
+      with v when is_binary(v) <- params[k],
+           v when v != "" <- String.trim(v) do
+        case Float.parse(v) do
+          {n, ""} when n >= 1 and n <= 100 -> nil
+          _ -> "#{k} is a number from 1 to 100, or empty to switch it off."
+        end
+      else
+        _ -> nil
+      end
+    end)
   end
 
   defp bad_choice(params) do

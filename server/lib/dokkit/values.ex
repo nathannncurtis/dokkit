@@ -37,8 +37,8 @@ defmodule Dokkit.Values do
       id: "cpu",
       scope: :machine,
       title: "Processor",
-      sub: "Tell me when the processor stays busy. New: off until you turn it on.",
-      toggle: {"cpu_on", false},
+      sub: "Tell me when the processor stays busy..",
+      toggle: {"cpu_on", true},
       fields: [{"cpu_limit", 90, 1, 100}, {"cpu_minutes", 10, 1, 1440}],
       words: ["Slow at", "% for", "minutes"]
     },
@@ -238,8 +238,8 @@ defmodule Dokkit.Values do
       id: "burst",
       scope: :server,
       title: "Error alerts",
-      sub: "Open an issue when a service's errors burst. New: off until you turn it on.",
-      toggle: {"error_alert_on", false},
+      sub: "Open an issue when a service's errors burst..",
+      toggle: {"error_alert_on", true},
       fields: [{"error_alert_count", 10, 1, 100_000}, {"error_alert_minutes", 15, 1, 1440}],
       words: ["When", "errors arrive within", "minutes"]
     },
@@ -258,8 +258,8 @@ defmodule Dokkit.Values do
       scope: :server,
       title: "Remind me",
       sub:
-        "Alert again while an issue stays open and nobody has seen it. Not at night, and not by page, since PagerDuty keeps its own incident open. New: off until you turn it on.",
-      toggle: {"remind_on", false},
+        "Alert again while an issue stays open and nobody has seen it. Not at night, and not by page, since PagerDuty keeps its own incident open..",
+      toggle: {"remind_on", true},
       fields: [{"remind_minutes", 30, 5, 1440}],
       words: ["Every", "minutes"]
     },
@@ -413,7 +413,7 @@ defmodule Dokkit.Values do
       title: "Updates",
       sub:
         "How long a machine has to report back after an update starts, and how long its updater may take: at most 55 minutes, since Windows stops the updater task after an hour.",
-      fields: [{"update_run_minutes", 20, 1, 1440}, {"updater_minutes", 45, 1, 55}],
+      fields: [{"update_run_minutes", 50, 1, 1440}, {"updater_minutes", 45, 1, 55}],
       words: ["", "minutes to report,", "minutes to install"]
     }
   ]
@@ -463,32 +463,48 @@ defmodule Dokkit.Values do
   @doc "One value as it applies to the scope."
   def get(key, scope \\ :server), do: Map.fetch!(all(scope), key)
 
-  @doc "A server value read at most every few seconds by the same process, for paths that run once per line."
-  def quick(key) do
-    now = System.monotonic_time(:millisecond)
+  @table :dokkit_values
 
-    case Process.get({__MODULE__, key}) do
-      {value, at} when now - at < 5000 ->
-        value
+  def init, do: :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
 
-      _ ->
-        value = get(key)
-        Process.put({__MODULE__, key}, {value, now})
-        value
-    end
+  @doc "Every value as it applies to the scope, read through a cache of a few seconds that a save empties."
+  def all(scope \\ :server), do: elem(cached(scope), 0)
+
+  @doc "What was changed for exactly this scope."
+  def own(scope), do: elem(cached(scope), 1)
+
+  @doc "Empties the cache, after anything that changes a value."
+  def forget do
+    :ets.delete_all_objects(@table)
+    :ok
+  rescue
+    ArgumentError -> :ok
   end
 
-  @doc "Every value as it applies to the scope."
-  def all(scope \\ :server), do: Map.merge(base(scope), own(scope))
+  # Hot paths (each metric line, request, error report and job) read values; the cache keeps that off the database.
+  defp cached(scope) do
+    ttl = Application.get_env(:dokkit, :values_cache_ms, 5000)
+    now = System.monotonic_time(:millisecond)
+
+    case ttl > 0 && :ets.lookup(@table, scope) do
+      [{_, pair, at}] when now - at < ttl ->
+        pair
+
+      _ ->
+        own = own_now(scope)
+        pair = {Map.merge(base(scope), own), own}
+        if ttl > 0, do: :ets.insert(@table, {scope, pair, now})
+        pair
+    end
+  end
 
   @doc "What a value goes back to on Reset: the built-in default for the server, else what the server or the job's own file says."
   def base(:server), do: defaults()
   def base({:machine, _}), do: all(:server)
   def base({:job, id}), do: Map.merge(all(:server), from_job(id))
 
-  @doc "What was changed for exactly this scope."
-  def own(:server), do: Map.merge(from_alerts_changed(), stored(:server))
-  def own(scope), do: stored(scope)
+  defp own_now(:server), do: Map.merge(from_alerts_changed(), stored(:server))
+  defp own_now(scope), do: stored(scope)
 
   defp stored(scope), do: Map.take(Setting.get(key(scope)), keys())
 
@@ -499,7 +515,7 @@ defmodule Dokkit.Values do
   defp alerts_values(config) do
     Enum.reduce(@alerts, %{}, fn {_, {on, limit}}, acc ->
       case Float.parse(config[limit] || "") do
-        {n, _} -> Map.merge(acc, %{on => true, limit => round(n)})
+        {n, _} -> Map.merge(acc, %{on => true, limit => if(n == trunc(n), do: trunc(n), else: n)})
         :error -> Map.put(acc, on, false)
       end
     end)
@@ -511,20 +527,36 @@ defmodule Dokkit.Values do
     |> Map.new()
   end
 
+  @doc "Every job's own values in one read, as %{service id => values}."
+  def job_overrides do
+    import Ecto.Query
+
+    for %{key: "values:job:" <> id, value: v} <-
+          Repo.all(from s in Setting, where: like(s.key, "values:job:%")),
+        into: %{},
+        do: {id, Map.take(v, keys())}
+  end
+
+  @doc "A job's values from its check and its own values, with no read of its own."
+  def for_job(%{config: config}, own),
+    do: all(:server) |> Map.merge(from_config(config)) |> Map.merge(own)
+
   defp from_job(service_id) do
     case job_check(service_id) do
-      %{config: config} ->
-        grace = config["grace"] && Dokkit.Watch.seconds(config["grace"], nil)
-        max = config["max_runtime"] && Dokkit.Watch.seconds(config["max_runtime"], nil)
-
-        %{}
-        |> put_if(grace, "job_grace_minutes", grace && div(grace, 60))
-        |> put_if(max, "job_max_on", true)
-        |> put_if(max, "job_max_minutes", max && max(1, div(max, 60)))
-
-      nil ->
-        %{}
+      %{config: config} -> from_config(config)
+      nil -> %{}
     end
+  end
+
+  defp from_config(config) do
+    grace = config["grace"] && Dokkit.Watch.seconds(config["grace"], nil)
+    max = config["max_runtime"] && Dokkit.Watch.seconds(config["max_runtime"], nil)
+
+    # A max_runtime that cannot be read still turns the limit on, at the default length.
+    %{}
+    |> put_if(grace, "job_grace_minutes", grace && div(grace, 60))
+    |> put_if(config["max_runtime"], "job_max_on", true)
+    |> put_if(max, "job_max_minutes", max && max(1, div(max, 60)))
   end
 
   defp put_if(map, nil, _, _), do: map
@@ -548,6 +580,7 @@ defmodule Dokkit.Values do
   `{:ok, view}` or `{:error, text}`.
   """
   def save(scope, params) when is_map(params) do
+    forget()
     allowed = for r <- @rows, shown?(r, scope), f <- fields(r), into: MapSet.new(), do: elem(f, 0)
     given = Map.take(params, MapSet.to_list(allowed))
     unknown = Map.keys(params) -- MapSet.to_list(allowed)
@@ -556,8 +589,9 @@ defmodule Dokkit.Values do
          {:ok, parsed} <- parse_all(given),
          base = base(scope),
          parsed = Map.new(parsed, fn {k, v} -> {k, if(v == base[k], do: :reset, else: v)} end),
-         :ok <- together(Map.merge(all(scope), Map.new(parsed, &settled(&1, base)))) do
+         :ok <- together(Map.merge(all(scope), Map.new(parsed, &settled(&1, base))), parsed) do
       write(scope, parsed)
+      forget()
       {:ok, view(scope)}
     end
   end
@@ -626,30 +660,45 @@ defmodule Dokkit.Values do
       else: {:error, "#{key} is a whole number from #{min} to #{max}."}
   end
 
-  defp together(v) do
-    cond do
-      v["enrol_hours"] > v["enrol_max_hours"] ->
-        {:error, "enrol_hours is at most enrol_max_hours."}
+  # Each pair is checked only when one of its values is being saved, so a stored value that was
+  # fine before never blocks an unrelated save.
+  defp pairs do
+    [
+      {~w(enrol_hours enrol_max_hours), "enrol_hours is at most enrol_max_hours.",
+       &(&1["enrol_hours"] <= &1["enrol_max_hours"])},
+      {~w(forecast_days forecast_clear_days),
+       "forecast_clear_days is at least forecast_days, or a warning would flap.",
+       &(&1["forecast_clear_days"] >= &1["forecast_days"])},
+      {~w(forecast_min_days forecast_window_days),
+       "forecast_min_days is at most forecast_window_days.",
+       &(&1["forecast_min_days"] <= &1["forecast_window_days"])},
+      {~w(disk_limit disk_down), "disk_down is at or above disk_limit.",
+       &(&1["disk_down"] >= &1["disk_limit"])},
+      {~w(memory_limit memory_down), "memory_down is at or above memory_limit.",
+       &(&1["memory_down"] >= &1["memory_limit"])},
+      {~w(silent_minutes report_seconds),
+       "silent_minutes is at least two reports and a minute: silent_minutes * 60 >= 2 * report_seconds + 60.",
+       &(&1["silent_minutes"] * 60 >= 2 * &1["report_seconds"] + 60)},
+      {~w(update_run_minutes updater_minutes),
+       "update_run_minutes is at least updater_minutes and 5 more, so an update still running is not called failed.",
+       &(&1["update_run_minutes"] >= &1["updater_minutes"] + 5)},
+      {~w(quiet_choices quiet_max_hours), "quiet_choices are at most quiet_max_hours.",
+       &quiet_fits?/1}
+    ]
+  end
 
-      v["forecast_clear_days"] < v["forecast_days"] ->
-        {:error, "forecast_clear_days is at least forecast_days, or a warning would flap."}
+  defp together(v, parsed) do
+    saving = Map.keys(parsed)
 
-      v["forecast_min_days"] > v["forecast_window_days"] ->
-        {:error, "forecast_min_days is at most forecast_window_days."}
+    Enum.find_value(pairs(), :ok, fn {keys, why, ok?} ->
+      if Enum.any?(keys, &(&1 in saving)) and not ok?.(v), do: {:error, why}
+    end)
+  end
 
-      v["disk_down"] < v["disk_limit"] or v["memory_down"] < v["memory_limit"] ->
-        {:error, "Down is at or above the slow limit."}
-
-      true ->
-        case choices("quiet_choices", v["quiet_choices"]) do
-          {:ok, list} ->
-            if Enum.all?(list, &(elem(&1, 0) <= v["quiet_max_hours"] * 3600)),
-              do: :ok,
-              else: {:error, "quiet_choices are at most quiet_max_hours."}
-
-          :error ->
-            :ok
-        end
+  defp quiet_fits?(v) do
+    case choices("quiet_choices", v["quiet_choices"]) do
+      {:ok, list} -> Enum.all?(list, &(elem(&1, 0) <= v["quiet_max_hours"] * 3600))
+      :error -> true
     end
   end
 

@@ -140,7 +140,9 @@ defmodule DokkitWeb.EnrolLive do
       </div>
       <div class="head">
         <h1 tabindex="-1">Add a machine</h1>
-        <p class="lede">Put the Dokkit program on a machine and it starts reporting within a minute.</p>
+        <p class="lede">
+          Put the Dokkit program on a machine and it starts reporting within a minute.
+        </p>
       </div>
       <div class="body set">
         <div :if={@os != "windows"} class="card">
@@ -208,9 +210,15 @@ defmodule DokkitWeb.EnrolLive do
             </div>
             <div class="foot">
               <span :if={@os == "windows"}>
-                One line to paste on the machine, in PowerShell opened as administrator. It works once and runs out in 24 hours.
+                One line to paste on the machine, in PowerShell opened as administrator. It works once and runs out in {min(
+                  24,
+                  Dokkit.Keys.enrol_most_hours()
+                )} hours.
               </span>
-              <span :if={@os != "windows"}>The token works once and runs out in 4 hours.</span>
+              <span :if={@os != "windows"}>The token works once and runs out in {div(
+                Dokkit.Keys.enrol_life(),
+                3600
+              )} hours.</span>
               <span class="end">
                 <button
                   :if={@os == "windows"}

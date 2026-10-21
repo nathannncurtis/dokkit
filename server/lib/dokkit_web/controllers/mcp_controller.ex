@@ -394,13 +394,13 @@ defmodule DokkitWeb.McpController do
     {"machine_settings", "read",
      "One machine's values: each starts at the server-wide one. Takes the id from machines.",
      %{"id" => @text}, ["id"]},
-    {"set_machine_settings", "act",
+    {"set_machine_settings", "admin",
      "Change one machine's values, as set_settings does. Takes the id from machines.",
      %{"id" => @text, "values" => %{"type" => "object"}}, ["id", "values"]},
     {"job_settings", "read",
      "One job's values: each starts at the job's own file, or the server-wide one. Takes the id from jobs.",
      %{"id" => @text}, ["id"]},
-    {"set_job_settings", "act",
+    {"set_job_settings", "admin",
      "Change one job's values, as set_settings does. Takes the id from jobs.",
      %{"id" => @text, "values" => %{"type" => "object"}}, ["id", "values"]}
   ]

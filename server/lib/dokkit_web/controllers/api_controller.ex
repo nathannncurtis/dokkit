@@ -905,7 +905,9 @@ defmodule DokkitWeb.ApiController do
       {"GET", _, _} ->
         "read"
 
-      {_, area, _} when area in ["rules", "alerts", "releases", "certificate", "settings"] ->
+      {_, area, last}
+      when area in ["rules", "alerts", "releases", "certificate", "settings"] or
+             last == "settings" ->
         "admin"
 
       {"POST", area, area} when area in ["jobs", "apps", "dependencies"] ->
