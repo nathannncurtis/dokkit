@@ -2,6 +2,7 @@
 import argparse
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -36,6 +37,10 @@ def elixir_path():
     return os.pathsep.join(d for d in dirs if os.path.isdir(d))
 
 
+def with_elixir(path):
+    return os.pathsep.join(x for x in (elixir_path(), path) if x)
+
+
 def sql(a, query):
     env = dict(os.environ, PGPASSWORD=a.pgpass)
     r = subprocess.run([PSQL, "-U", a.pguser, "-h", a.pghost, "-d", a.db, "-X", "-A", "-t", "-c", query],
@@ -64,13 +69,14 @@ def start_server(a):
                MIX_BUILD_PATH=a.build_path or os.path.join(WORK, "build"))
     if a.deps_path:
         env["MIX_DEPS_PATH"] = a.deps_path
-    env["PATH"] = elixir_path() + os.pathsep + env["PATH"]
+    env["PATH"] = with_elixir(env["PATH"])
     mix = shutil.which("mix", path=env["PATH"])
     if not mix:
         sys.exit("mix not found")
     log = open(os.path.join(WORK, "server.log"), "w")
     proc = subprocess.Popen([mix, "run", "--no-start", os.path.join(HERE, "server.exs")],
-                            cwd=a.server_dir, env=env, stdout=log, stderr=subprocess.STDOUT)
+                            cwd=a.server_dir, env=env, stdout=log, stderr=subprocess.STDOUT,
+                            start_new_session=os.name != "nt")
     for _ in range(600):
         if proc.poll() is not None:
             sys.exit("server exited; see %s" % log.name)
@@ -82,6 +88,12 @@ def start_server(a):
 
 
 def stop_server(a, proc):
+    if os.name != "nt":
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        return
     pids = {proc.pid}
     pid = listener_pid(a.port)
     if pid:
@@ -112,7 +124,7 @@ def runners(a, tmp):
     sh = tool("bash", extra=[r"C:\Program Files\Git\bin\bash.exe"])
     r["shell"] = (sh and tool("curl") and sh, lambda t: ([sh, "main.sh", t], p("shell"), {}))
     ex = tool("elixir", extra=[r"C:\Program Files\Elixir\bin\elixir.bat"])
-    r["elixir"] = (ex, lambda t: ([ex, "main.exs", t], p("elixir"), {"PATH": elixir_path() + os.pathsep + os.environ["PATH"]}))
+    r["elixir"] = (ex, lambda t: ([ex, "main.exs", t], p("elixir"), {"PATH": with_elixir(os.environ["PATH"])}))
     return r
 
 

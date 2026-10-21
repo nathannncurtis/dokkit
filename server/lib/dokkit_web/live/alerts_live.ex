@@ -84,36 +84,6 @@ defmodule DokkitWeb.AlertsLive do
   def handle_event("beat_shared", _, socket), do: beat(socket, &Dokkit.SharedBeat.use/0)
   def handle_event("beat_stop", _, socket), do: beat(socket, &Dokkit.SharedBeat.stop/0)
 
-  defp beat(socket, change) do
-    socket =
-      if owner?(socket) do
-        result = change.()
-
-        config = Alerts.config()
-
-        assign(socket,
-          config: config,
-          beat: Dokkit.SharedBeat.current(),
-          beat_result:
-            case result do
-              {:ok, _} ->
-                {:ok,
-                 "This server now calls #{URI.parse(config["heartbeat_url"]).host} every minute."}
-
-              :ok ->
-                {:ok, "Stopped. Nothing is told when this server goes quiet."}
-
-              {:error, why} ->
-                {:error, why}
-            end
-        )
-      else
-        socket
-      end
-
-    {:noreply, socket}
-  end
-
   def handle_event("changed", %{"alerts" => params}, socket),
     do: {:noreply, typed(socket, params, nil)}
 
@@ -206,6 +176,36 @@ defmodule DokkitWeb.AlertsLive do
     else
       {:noreply, socket}
     end
+  end
+
+  defp beat(socket, change) do
+    socket =
+      if owner?(socket) do
+        result = change.()
+
+        config = Alerts.config()
+
+        assign(socket,
+          config: config,
+          beat: Dokkit.SharedBeat.current(),
+          beat_result:
+            case result do
+              {:ok, _} ->
+                {:ok,
+                 "This server now calls #{URI.parse(config["heartbeat_url"]).host} every minute."}
+
+              :ok ->
+                {:ok, "Stopped. Nothing is told when this server goes quiet."}
+
+              {:error, why} ->
+                {:error, why}
+            end
+        )
+      else
+        socket
+      end
+
+    {:noreply, socket}
   end
 
   def handle_async(:imessage, {:ok, {key, answer}}, socket),
