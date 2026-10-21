@@ -1,0 +1,52 @@
+[package]
+name = "dokkit-desktop"
+version = "0.1.0"
+edition = "2021"
+description = "Dokkit for the desktop"
+license = "Apache-2.0"
+
+[lib]
+name = "dokkit_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-window-state = "2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+tokio = { version = "1", features = ["time", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+url = "2"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+uuid = { version = "1", features = ["v4"] }
+keyring = "3"
+
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+tauri-winrt-notification = "0.7"
+webview2-com = "0.39"
+windows-core = "0.62"
+base64 = "0.22"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+mac-notification-sys = "0.6"
+objc2 = "0.6"
+block2 = "0.6"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
+notify-rust = { version = "4", default-features = false, features = ["z"] }
+webkit2gtk = "2.0"
+
+[dev-dependencies]
+rcgen = "0.13"
+tokio = { version = "1", features = ["time", "sync", "net", "rt", "macros", "io-util"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }

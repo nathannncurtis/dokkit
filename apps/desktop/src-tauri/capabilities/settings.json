@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "settings",
+  "description": "Only the bundled settings page may call the app's commands. Server windows get none.",
+  "windows": ["settings"],
+  "permissions": [
+    "allow-get-state",
+    "allow-add-server",
+    "allow-remove-server",
+    "allow-set-server-notify",
+    "allow-set-settings",
+    "allow-open-server"
+  ]
+}
