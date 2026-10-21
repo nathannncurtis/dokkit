@@ -156,6 +156,31 @@ defmodule Dokkit.LogsTest do
     assert build_conn() |> get("/logs.csv") |> redirected_to() =~ "/login"
   end
 
+  test "the export pages through more than a thousand lines, ties included, without loss or repeats",
+       %{service: service} do
+    at = DateTime.utc_now()
+
+    rows =
+      for i <- 1..2_501 do
+        %{
+          at: DateTime.add(at, -div(i, 3), :second),
+          received_at: at,
+          machine_id: service.machine_id,
+          service_id: service.id,
+          level: "info",
+          msg: "line #{i}",
+          fields: %{},
+          cut: false
+        }
+      end
+
+    Logs.insert(rows)
+    lines = Logs.stream([]) |> Enum.to_list()
+    assert length(lines) == 2_501
+    assert lines |> Enum.map(& &1.id) |> Enum.uniq() |> length() == 2_501
+    assert Enum.map(lines, & &1.at) == Enum.sort(Enum.map(lines, & &1.at), {:desc, DateTime})
+  end
+
   test "a machine's own service chosen by a link stays chosen in the filter", %{
     conn: conn,
     service: service
