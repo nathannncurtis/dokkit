@@ -74,7 +74,12 @@ struct UnlockGate<Content: View>: View {
             return
         }
         do {
-            unlocked = try await ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Open Dokkit")
+            // The callback form, so the context never leaves this actor; older SDKs flag the async form as a data race.
+            unlocked = try await withCheckedThrowingContinuation { (done: CheckedContinuation<Bool, Error>) in
+                ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Open Dokkit") { ok, error in
+                    if let error { done.resume(throwing: error) } else { done.resume(returning: ok) }
+                }
+            }
             message = nil
         } catch {
             message = "Dokkit stayed locked."
