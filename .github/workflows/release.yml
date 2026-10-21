@@ -103,7 +103,7 @@ jobs:
         run: echo "::warning::No Azure signing secrets are set, so dokkit-windows-${{ matrix.arch }}.exe is not signed."
       - name: Sign
         if: env.AZURE_CLIENT_SECRET != ''
-        uses: Azure/trusted-signing-action@0d74250c661747df006298d0fb49944c10f16e03 # v0.5.1
+        uses: Azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -245,7 +245,7 @@ jobs:
         run: echo "::warning::No Azure signing secrets are set, so the server programs are not signed."
       - name: Sign
         if: env.AZURE_CLIENT_SECRET != ''
-        uses: Azure/trusted-signing-action@0d74250c661747df006298d0fb49944c10f16e03 # v0.5.1
+        uses: Azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
