@@ -450,14 +450,14 @@ defmodule DokkitWeb.AlertsLive do
                   {@oncall.error}
                 </span>
                 
-                <span :if={@oncall && @oncall.oncall} class="hint" role="status">
-                  On call now: {@oncall.oncall.name} ({@oncall.oncall.email}), {if @oncall.oncall.person,
-                    do: "told as #{@oncall.oncall.person.name}.",
-                    else: "who is nobody on this server, so the destinations here are told."}
+                <span :for={u <- (@oncall && @oncall.oncall) || []} class="hint" role="status">
+                  On call now: {u.name} ({u.email}), {if u.person,
+                    do: "told as #{u.person.name}.",
+                    else: "who is nobody on this server."}
                 </span>
                 
                 <span class="hint">
-                  For "Whoever is on call in PagerDuty" under People, a rule, a service or a check. The key is a read-only REST API key. When an alert goes out, the person on call in the schedule is told on their own destinations, matched by their email. When nobody here matches, or PagerDuty cannot be reached, the destinations on this page are told.
+                  For "Whoever is on call in PagerDuty" under People, a rule, a service or a check. The key is a read-only REST API key. When an alert goes out, everyone on call in the schedule is told on their own destinations, matched by their email. When nobody here matches, or PagerDuty cannot be reached, the destinations on this page are told.
                 </span>
               </dd>
             </dl>

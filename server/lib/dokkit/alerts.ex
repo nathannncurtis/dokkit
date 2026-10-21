@@ -916,16 +916,30 @@ defmodule Dokkit.Alerts do
     |> length()
   end
 
-  # Whoever is on call when it is sent is told; with nobody to match, the server-wide destinations are.
+  # Whoever is on call at each try is told. With nobody to match, or when the last try comes and
+  # nobody was reached, the server-wide destinations are.
   defp targets(%Alert{oncall: true, channel: channel} = alert, :open, config)
        when channel != "webhook" do
-    with [] <- People.targets(alert.id),
-         {:ok, p} <- Dokkit.OnCall.person(config) do
-      People.target(alert.id, [p.id])
-      People.targets(alert.id)
-    else
-      :none -> []
-      targets -> targets
+    reached = Enum.filter(People.targets(alert.id), & &1.opened)
+
+    Repo.delete_all(from t in Dokkit.AlertTarget, where: t.alert_id == ^alert.id and not t.opened)
+
+    last = reached == [] and alert.attempts + 1 >= @max_attempts
+
+    case last or Dokkit.OnCall.people(config) do
+      true ->
+        Logger.warning(
+          "On call in PagerDuty: nobody on call could be reached, so the last try goes to the server-wide destinations."
+        )
+
+        []
+
+      {:ok, people} ->
+        People.target(alert.id, Enum.map(people, & &1.id))
+        People.targets(alert.id)
+
+      :none ->
+        reached
     end
   end
 
@@ -1491,10 +1505,10 @@ defmodule Dokkit.Alerts do
   defp local_ip?(_), do: false
 
   @doc "Reads JSON from an https address, with the same checks as a send. `{:ok, body}` or `{:error, text}`."
-  def get_json(url, headers) do
+  def get_json(url, headers, extra \\ []) do
     opts =
       [headers: headers, retry: :transient, max_retries: 2, receive_timeout: 10_000] ++
-        [redirect: false] ++ Application.get_env(:dokkit, :req_options, [])
+        [redirect: false] ++ extra ++ Application.get_env(:dokkit, :req_options, [])
 
     with {:ok, host} <- https_host(url), {:ok, ips} <- resolve(host) do
       {pinned, opts} = pin(url, opts, ips)
