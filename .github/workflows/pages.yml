@@ -3,7 +3,7 @@ name: site
 on:
   push:
     branches: [main]
-    paths: ['gallery/brand/**', 'program/get.sh', 'program/get.ps1', 'server/install.sh', 'server/rel/overlays/install.ps1', 'server/compose.yml', '.github/workflows/pages.yml']
+    paths: ['gallery/brand/**', 'program/get.sh', 'program/get.ps1', 'server/install.sh', 'server/rel/overlays/install.ps1', 'server/compose.yml']
   workflow_dispatch:
 
 concurrency:
