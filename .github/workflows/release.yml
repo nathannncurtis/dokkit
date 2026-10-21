@@ -543,6 +543,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v8
         continue-on-error: true
         with:
@@ -551,6 +554,8 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
           # Six programs and the Windows server, each with its checksum. The phone and desktop apps are added when they built.
@@ -576,7 +581,9 @@ jobs:
             echo "::warning::No release signing key is set, so this release cannot be installed by the updater."
           fi
           cd ..
+          python3 .github/scripts/release-notes.py "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md" || true
+          [ -s "$RUNNER_TEMP/notes.md" ] || echo "Dokkit $GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
-            --notes "Dokkit $GITHUB_REF_NAME"
+            --notes-file "$RUNNER_TEMP/notes.md"
