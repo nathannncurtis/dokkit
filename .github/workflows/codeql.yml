@@ -42,7 +42,6 @@ jobs:
           config: |
             paths-ignore:
               - gallery/calm-ember/**
-              - gallery/calm-ember-*/**
               - gallery/variants/**
       - if: matrix.language == 'swift'
         run: |
