@@ -852,14 +852,18 @@ defmodule Dokkit.Alerts do
     {:noreply, state}
   end
 
-  # An alert not yet tried whose channel the issue no longer routes to is dropped, not sent.
-  defp rerouted?(%Alert{status: :pending, attempts: 0} = alert, config) do
-    gone = alert.channel not in current(alert.issue, config)
+  # A waiting alert whose channel the issue no longer routes to is dropped, not sent.
+  defp rerouted?(%Alert{status: status} = alert, config) when status in [:pending, :failed] do
+    gone = alert.channel not in current(alert.issue, config) and not reached?(alert)
     if gone, do: Repo.update!(Ecto.Changeset.change(alert, status: :skipped))
     gone
   end
 
   defp rerouted?(_, _), do: false
+
+  # A failed alert that already opened an incident for someone must stay, so its resolve goes out.
+  defp reached?(%Alert{id: id}),
+    do: Repo.exists?(from t in Dokkit.AlertTarget, where: t.alert_id == ^id and t.opened)
 
   def deliver_pending do
     config = config()

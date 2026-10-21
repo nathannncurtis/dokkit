@@ -62,9 +62,9 @@ defmodule Dokkit.AlertsTest do
     assert [%{alerts: [%Alert{status: :failed, error: "PagerDuty has no routing key yet."}]}] =
              Issues.open_list()
 
-    Alerts.save(%{"down" => "push", "pagerduty_key" => "R0UTE"})
-    assert Alerts.config()["down"] == "push"
-    Alerts.save(%{"down" => "push"})
+    Alerts.save(%{"down" => "page", "pagerduty_key" => "R0UTE"})
+    assert Alerts.config()["down"] == "page"
+    Alerts.save(%{"down" => "page"})
     assert Alerts.config()["pagerduty_key"] == "R0UTE"
 
     Repo.update_all(Alert, set: [updated_at: DateTime.add(DateTime.utc_now(), -120)])
@@ -265,7 +265,7 @@ defmodule Dokkit.AlertsTest do
         since: DateTime.utc_now()
       })
 
-    Repo.insert!(%Alert{issue_id: issue.id, channel: "webhook", status: :failed, attempts: 1})
+    Repo.insert!(%Alert{issue_id: issue.id, channel: "page", status: :failed, attempts: 1})
     assert Alerts.deliver_pending() == 0
     Repo.update_all(Alert, set: [updated_at: DateTime.add(DateTime.utc_now(), -120)])
     assert Alerts.deliver_pending() >= 1
@@ -343,6 +343,20 @@ defmodule Dokkit.AlertsTest do
 
     assert Repo.all(from a in Alert, join: i in assoc(a, :issue), where: i.kind != "machine") ==
              []
+  end
+
+  test "a failed alert that reached nobody is dropped once its service goes to nobody", %{
+    key: key,
+    service: service
+  } do
+    Intake.ping(key, "backup", "fail", nil, "")
+    Alerts.deliver_pending()
+    assert [%Alert{status: :failed}] = Repo.all(Alert)
+    Repo.update!(Ecto.Changeset.change(service, route_down: "none"))
+    Repo.update_all(Alert, set: [updated_at: DateTime.add(DateTime.utc_now(), -120)])
+    Alerts.save(%{"pagerduty_key" => "R0UTE"})
+    assert Alerts.deliver_pending() == 0
+    assert [%Alert{status: :skipped}] = Repo.all(Alert)
   end
 
   test "a waiting alert is dropped once its service goes to nobody", %{key: key, service: service} do
