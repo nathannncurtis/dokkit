@@ -156,6 +156,26 @@ defmodule Dokkit.LogsTest do
     assert build_conn() |> get("/logs.csv") |> redirected_to() =~ "/login"
   end
 
+  test "a machine's own service chosen by a link stays chosen in the filter", %{
+    conn: conn,
+    service: service
+  } do
+    own =
+      Repo.insert!(%Service{
+        machine_id: service.machine_id,
+        slug: "machine",
+        name: "The machine itself"
+      })
+
+    {:ok, view, html} = live(signed_in(conn), "/logs?s=#{own.id}")
+
+    assert html =~
+             ~r/<option[^>]*selected[^>]*value="#{own.id}"|<option[^>]*value="#{own.id}"[^>]*selected/
+
+    html = view |> form("#log-filter", %{q: "x", s: own.id}) |> render_change()
+    assert html =~ own.id
+  end
+
   defp order(html) do
     Regex.scan(~r/<td class="msg">([^<]*)/, html, capture: :all_but_first) |> List.flatten()
   end

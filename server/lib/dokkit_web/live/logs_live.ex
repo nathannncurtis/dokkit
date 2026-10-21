@@ -178,7 +178,12 @@ defmodule DokkitWeb.LogsLive do
         levels: @levels,
         windows: @windows,
         columns: @columns,
-        service_opts: services(assigns.machines, assigns.filter.machine, assigns.filter.service),
+        service_opts:
+          services(
+            assigns.machines,
+            assigns.filter.machine,
+            assigns.filter.service && assigns.filter.service.id
+          ),
         csv: ~p"/logs.csv?#{Enum.reject(assigns.params, &(elem(&1, 1) in [nil, ""]))}"
       )
 

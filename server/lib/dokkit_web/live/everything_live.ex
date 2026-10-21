@@ -89,10 +89,10 @@ defmodule DokkitWeb.EverythingLive do
 
   defp lede(machines, down) do
     machines = Enum.filter(machines, &(&1.kind != :group))
-    services = for m <- machines, s <- m.services, s.slug != "machine", do: s
+    watched = for m <- machines, s <- m.services, s.slug != "machine", do: s
 
     head =
-      "#{plural(length(services), "service", "services")} on #{plural(length(machines), "machine", "machines")}, in one place."
+      "#{plural(length(watched), "thing", "things")} watched on #{plural(length(machines), "machine", "machines")}, in one place."
 
     case length(down) do
       0 -> head <> " None of the machines is down."
@@ -109,7 +109,7 @@ defmodule DokkitWeb.EverythingLive do
       <div class="head">
         <h1 tabindex="-1">Everything</h1>
         <p class="lede">{lede(@machines, @down)}</p>
-        
+
         <div class="end">
           <button
             :if={@current_user.role == :owner and @movable > 1}
@@ -120,7 +120,7 @@ defmodule DokkitWeb.EverythingLive do
           >
             <.ic name="arrow-circle-up" />Update all to {@held}
           </button>
-          
+
           <.link class="btn" navigate={~p"/machines/new"}><.ic name="hard-drives" />Add a machine</.link>
           <button
             class="btn"
@@ -131,10 +131,10 @@ defmodule DokkitWeb.EverythingLive do
           >
             <.ic name="plugs" />Add a dependency
           </button>
-           <.link class="btn primary" navigate={~p"/jobs/new"}><.ic name="plus" />New job</.link>
+          <.link class="btn primary" navigate={~p"/jobs/new"}><.ic name="plus" />New job</.link>
         </div>
       </div>
-      
+
       <div class="body">
         <div :if={@shell.failed != []} class="notice" id="update-failed" role="status">
           <b><.ic name="warning" />{failed_title(@shell.failed)}</b>
@@ -150,10 +150,10 @@ defmodule DokkitWeb.EverythingLive do
 
         <form :if={@dep_open} class="card" id="dependency-form" phx-submit="dependency">
           <h2>Add a dependency</h2>
-          
+
           <dl class="kv">
             <dt>Name</dt>
-            
+
             <dd>
               <input
                 class="inp"
@@ -165,13 +165,13 @@ defmodule DokkitWeb.EverythingLive do
                 aria-label="Name"
               />
             </dd>
-            
+
             <dt>Checked from</dt>
-            
+
             <dd>
               <select class="inp" name="dep[machine]" aria-label="Checked from">
                 <option value="">No check yet (kept under Outside)</option>
-                
+
                 <option
                   :for={m <- @machines}
                   :if={m.kind == :enrolled}
@@ -181,20 +181,20 @@ defmodule DokkitWeb.EverythingLive do
                   {m.name}
                 </option>
               </select>
-               <span class="hint">The machine whose dokkit runs the check.</span>
+              <span class="hint">The machine whose dokkit runs the check.</span>
             </dd>
-            
+
             <dt>Check</dt>
-            
+
             <dd>
               <select class="inp" name="dep[type]" aria-label="Check type">
                 <option value="">None</option>
-                
+
                 <option value="http" selected={@dep["type"] == "http"}>Web address</option>
-                
+
                 <option value="tcp" selected={@dep["type"] == "tcp"}>Port</option>
               </select>
-              
+
               <input
                 class="inp mono"
                 style="flex: 1 1 260px"
@@ -205,7 +205,7 @@ defmodule DokkitWeb.EverythingLive do
               />
             </dd>
           </dl>
-          
+
           <div class="foot">
             <span :if={@dep_error} class="bad" role="alert">{@dep_error}</span>
             <span :if={@current_user.role != :owner} class="hint">An owner adds dependencies.</span>
@@ -214,31 +214,34 @@ defmodule DokkitWeb.EverythingLive do
             </span>
           </div>
         </form>
-        
+
         <div class="card">
           <div :if={@machines == []} class="empty">
             <.ic name="squares-four" />Nothing is being watched yet. Add a job to start.
           </div>
-          
+
           <div :if={@machines != []} class="lh cols-all">
             <span>Service</span><span>Version</span><span>Listens</span><span>Kind</span><span></span><span>State</span><span></span>
           </div>
-          
+
           <%= for m <- @machines do %>
             <div class="mg" role="group" aria-labelledby={"mh-#{m.id}"}>
               <div class="grp" id={"m-#{m.id}"}>
                 <span id={"mh-#{m.id}"} style="display:flex; align-items:center; gap:8px"><span
-                    :if={@planned[m.id] && m.id not in @down}
-                    class="lvl away"
-                    role="img"
-                    aria-label="Planned downtime"
-                  ></span><.lvl
-                    :if={!@planned[m.id] || m.id in @down}
-                    state={if m.id in @down, do: :down, else: worst(m.services)}
-                  /><.link navigate={home(m)}>{m.name}</.link></span>
+                  :if={@planned[m.id] && m.id not in @down}
+                  class="lvl away"
+                  role="img"
+                  aria-label="Planned downtime"
+                ></span><.lvl
+                  :if={!@planned[m.id] || m.id in @down}
+                  state={if m.id in @down, do: :down, else: worst(m.services)}
+                /><.link navigate={home(m)}>{m.name}</.link></span>
                 <span :if={m.os} class="mute" style="font-weight:400">{m.os}</span>
                 <span class="end">
-                  <span :if={@planned[m.id]} class="tag">Planned downtime until {Calendar.strftime(@planned[m.id].until, "%H:%M")} UTC</span>
+                  <span :if={@planned[m.id]} class="tag">Planned downtime until {Calendar.strftime(
+                    @planned[m.id].until,
+                    "%H:%M"
+                  )} UTC</span>
                   <span :if={m.id in @down} class="tag warn">Stopped reporting {at(m.last_seen_at)} UTC</span>
                   <span :if={count(m.services, :bad) > 0} class="tag warn">{need(
                     count(m.services, :bad)
@@ -255,7 +258,7 @@ defmodule DokkitWeb.EverythingLive do
                   </span>
                 </span>
               </div>
-              
+
               <DokkitWeb.QuietBand.band
                 machine={m.id}
                 planned={@planned[m.id]}
@@ -267,8 +270,10 @@ defmodule DokkitWeb.EverythingLive do
                   Program {m.program_version || "unknown"}{m.hosts_server &&
                     " / Server #{m.server_version || "unknown"}"}
                 </span>
-                
-                <span :if={Dokkit.Releases.outcome(m)} class={["st", m.update_ok == false && "warn"]}>{Dokkit.Releases.outcome(m)}</span>
+
+                <span :if={Dokkit.Releases.outcome(m)} class={["st", m.update_ok == false && "warn"]}>{Dokkit.Releases.outcome(
+                  m
+                )}</span>
                 <span class="end">
                   <button
                     :if={@current_user.role == :owner and Dokkit.Releases.movable?(m, @held)}
@@ -281,19 +286,19 @@ defmodule DokkitWeb.EverythingLive do
                   </button>
                 </span>
               </div>
-              
+
               <div :if={!m.has_updater and windows?(m)} class="foot" id={"upd-#{m.id}"}>
                 <span>No updater on this machine. On it, from an administrator prompt:
                 <code>dokkit updater install</code></span>
               </div>
-              
+
               <div :if={m.services == []} class="kid-none">
                 Nothing is running on this machine yet.
               </div>
-              
+
               <.link :for={s <- m.services} class="li slim kid cols-all" navigate={~p"/s/#{s.id}"}>
                 <div class="ti"><.lvl state={s.state} /><span>{s.name}</span></div>
-                 <span class="mono mute">{s.version}</span> <span class="mono mute">{s.listens}</span>
+                <span class="mono mute">{s.version}</span> <span class="mono mute">{s.listens}</span>
                 <span class="mute">{kind(s.kind)}</span> <span></span>
                 <span class={["tag", s.state in [:degraded, :down] && "warn"]}>{(!s.watched &&
                                                                                    "Not watched") ||

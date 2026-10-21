@@ -122,7 +122,7 @@ defmodule Dokkit.Logs do
 
     query =
       case opts[:before] do
-        {at, id} -> where(query, [l], l.at < ^at or (l.at == ^at and l.id < ^id))
+        {at, id} -> where(query, [l], l.at <= ^at and (l.at < ^at or l.id < ^id))
         _ -> query
       end
 

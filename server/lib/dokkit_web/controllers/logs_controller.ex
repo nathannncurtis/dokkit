@@ -11,8 +11,13 @@ defmodule DokkitWeb.LogsController do
       |> send_chunked(200)
 
     # The mark tells Excel the file is UTF-8.
-    {:ok, conn} = chunk(conn, "\uFEFFtime,level,machine,service,message\r\n")
+    case chunk(conn, "\uFEFFtime,level,machine,service,message\r\n") do
+      {:ok, conn} -> rows(conn, params)
+      {:error, _} -> conn
+    end
+  end
 
+  defp rows(conn, params) do
     try do
       params
       |> DokkitWeb.LogsLive.options()
@@ -26,10 +31,12 @@ defmodule DokkitWeb.LogsController do
         end
       end)
     rescue
-      e in [DBConnection.ConnectionError, Postgrex.Error] ->
+      e ->
         # The status line has already gone, so the file itself says it is incomplete.
-        {_, conn} = chunk(conn, ",,,,EXPORT STOPPED EARLY: #{cell(Exception.message(e))}\r\n")
-        conn
+        case chunk(conn, ",,,,EXPORT STOPPED EARLY: #{cell(Exception.message(e))}\r\n") do
+          {:ok, conn} -> conn
+          {:error, _} -> conn
+        end
     end
   end
 
