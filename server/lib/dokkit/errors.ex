@@ -4,10 +4,12 @@ defmodule Dokkit.Errors do
   Message text is kept only for a service set to keep it.
   """
   import Ecto.Query
-  alias Dokkit.{ErrorEvent, ErrorGroup, Repo, Service}
+  alias Dokkit.{Check, ErrorEvent, ErrorGroup, Issues, Repo, Service, Values}
 
   @max_frames 100
-  @keep 100
+  @bursts :dokkit_error_bursts
+
+  def init, do: :ets.new(@bursts, [:named_table, :public, :set])
 
   @doc "Takes one report for a service."
   def report(%Service{} = service, %{"type" => type} = report) when is_binary(type) do
@@ -50,8 +52,9 @@ defmodule Dokkit.Errors do
         returning: [:id, :count]
       )
 
-    # A group keeps its first reports and then one in a hundred, so a crash loop cannot fill the table.
-    if group.count <= @keep or rem(group.count, 100) == 0 do
+    # A group keeps its first reports and then one in so many, so a crash loop cannot fill the table.
+    if group.count <= Values.quick("errors_first") or
+         rem(group.count, Values.quick("errors_every")) == 0 do
       Repo.insert!(%ErrorEvent{
         group_id: group.id,
         at: at,
@@ -64,11 +67,63 @@ defmodule Dokkit.Errors do
       })
     end
 
+    burst(service, at)
     Dokkit.Issues.changed(false)
     :ok
   end
 
   def report(_, _), do: {:error, "bad_report", "An error needs a type."}
+
+  defp minute, do: div(System.os_time(:second), 60)
+
+  defp burst(service, at) do
+    v = Values.all()
+
+    if v["error_alert_on"] do
+      key = {service.id, minute()}
+      :ets.update_counter(@bursts, key, 1, {key, 0})
+      n = recent(service.id, v["error_alert_minutes"])
+
+      if n >= v["error_alert_count"],
+        do:
+          Issues.record(burst_check(service), :degraded,
+            at: at,
+            value: n / 1,
+            title: "#{service.name} is raising errors",
+            note: "#{n} errors in the last #{v["error_alert_minutes"]} minutes."
+          )
+    end
+  end
+
+  defp recent(service_id, minutes) do
+    now = minute()
+
+    Enum.sum(
+      for m <- (now - minutes + 1)..now,
+          [{_, n}] <- [:ets.lookup(@bursts, {service_id, m})],
+          do: n
+    )
+  end
+
+  defp burst_check(service) do
+    Repo.get_by(Check, service_id: service.id, name: "errors") ||
+      Repo.insert!(%Check{service_id: service.id, name: "errors", type: :custom, fail_after: 1})
+  end
+
+  @doc "Each minute: a burst of errors that has calmed down, or whose alert is switched off, closes."
+  def calm do
+    v = Values.all()
+    old = minute() - 1440
+    :ets.select_delete(@bursts, [{{{:_, :"$1"}, :_}, [{:<, :"$1", old}], [true]}])
+
+    for c <-
+          Repo.all(
+            from c in Check, where: c.name == "errors" and c.type == :custom and c.state != :ok
+          ),
+        not v["error_alert_on"] or
+          recent(c.service_id, v["error_alert_minutes"]) < v["error_alert_count"],
+        do: Issues.record(c, :ok)
+  end
 
   defp frames(list) when is_list(list) do
     for %{} = f <- Enum.take(list, -@max_frames) do

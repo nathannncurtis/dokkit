@@ -15,7 +15,6 @@ defmodule Dokkit.Logs do
             name <- names,
             into: %{},
             do: {name, level}
-  @max_msg 64 * 1024
 
   def levels, do: @levels
 
@@ -44,8 +43,9 @@ defmodule Dokkit.Logs do
         else: (is_map(line["fields"]) && line["fields"]) || %{}
 
     extra = if clef? and line["@x"], do: Map.put(extra, "exception", line["@x"]), else: extra
-    cut = byte_size(msg) > @max_msg
-    big = byte_size(Jason.encode!(extra)) > @max_msg
+    longest = Dokkit.Values.quick("longest_line_kb") * 1024
+    cut = byte_size(msg) > longest
+    big = byte_size(Jason.encode!(extra)) > longest
 
     %{
       at: time(line["t"] || line["@t"] || line["at"], DateTime.utc_now()),
@@ -53,7 +53,7 @@ defmodule Dokkit.Logs do
       machine_id: machine_id,
       service_id: service_id,
       level: if(level in @levels, do: level, else: "info"),
-      msg: if(cut, do: msg |> binary_part(0, @max_msg) |> String.replace_invalid(""), else: msg),
+      msg: if(cut, do: msg |> binary_part(0, longest) |> String.replace_invalid(""), else: msg),
       fields: if(big, do: %{}, else: extra),
       cut: cut or big
     }
@@ -389,8 +389,6 @@ defmodule Dokkit.Logs do
     if File.exists?(next), do: free(path, n + 1), else: next
   end
 
-  @restored_days 7
-
   # Months loaded back, each with the time it may be archived again.
   defp restored do
     for {name, until} <-
@@ -437,7 +435,7 @@ defmodule Dokkit.Logs do
     if back[name] && DateTime.compare(back[name], now) == :gt do
       0
     else
-      until = DateTime.add(now, @restored_days * 86_400)
+      until = DateTime.add(now, Dokkit.Values.get("restored_days") * 86_400)
       value = Map.new(back, fn {k, v} -> {k, DateTime.to_iso8601(v)} end)
 
       rows = rows(path)
