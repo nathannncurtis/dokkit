@@ -19,23 +19,23 @@ defmodule DokkitWeb.MachineCards do
                   {text}
                 </option>
               </select>
-               <.ic name="caret-down" />
+              <.ic name="caret-down" />
             </span>
           </form>
         </span>
       </h2>
-      
+
       <p :if={@history == []} class="lead">
         No readings yet. This machine's disks, memory and processor appear here once it reports them.
       </p>
-      
+
       <div :for={h <- @history} class="chart" id={"history-" <> h.name}>
         <div class="top">
           <b>{title(h.name)}</b>
           <span class="mono">{latest(h.points) && "#{Float.round(latest(h.points), 1)}%"}</span>
           <span :if={h.note} class="st warn">{h.note}</span>
         </div>
-         <DokkitWeb.Show.line points={h.points} limit={h.limit} label={title(h.name)} />
+        <DokkitWeb.Show.line points={h.points} limit={h.limit} label={title(h.name)} />
       </div>
     </div>
     """
@@ -56,11 +56,11 @@ defmodule DokkitWeb.MachineCards do
           {if @procs.list.at, do: "Taken #{at(@procs.list.at)} UTC", else: "None received yet"}
         </span>
       </h2>
-      
+
       <p :if={!@procs.list.at} class="lead">
         No process list yet. The installed program sends one about once a minute.
       </p>
-      
+
       <div :if={@procs.list.at} class="p-ctl">
         <form phx-change="procs_filter" phx-submit="procs_filter" id="procs-form">
           <input
@@ -74,7 +74,7 @@ defmodule DokkitWeb.MachineCards do
             phx-debounce="300"
           />
         </form>
-        
+
         <span role="group" aria-label="Sort by" style="display: flex; gap: 8px">
           <button
             class={["btn sm", @procs_sort == "memory" && "primary"]}
@@ -85,7 +85,7 @@ defmodule DokkitWeb.MachineCards do
           >
             Memory
           </button>
-          
+
           <button
             class={["btn sm", @procs_sort == "cpu" && "primary"]}
             type="button"
@@ -97,24 +97,24 @@ defmodule DokkitWeb.MachineCards do
           </button>
         </span>
       </div>
-      
+
       <p :if={@procs.list.at && @procs.list.items == []} class="lead">
         No process matches.
       </p>
-      
+
       <div :if={@procs.list.items != []} class="lh p-row">
         <span>Name</span><span class="r">PID</span><span class="r">Memory</span><span class="r">Processor</span><span class="p-path">Path</span>
       </div>
-      
+
       <div :for={p <- @procs.list.items} class="li slim p-row" id={"proc-#{p["pid"]}"}>
         <span title={p["name"]}>{p["name"]}</span> <span class="mono r">{p["pid"]}</span>
         <span class="mono r">
           {mb(p["memory_bytes"])}{p["memory_percent"] && " · #{Float.round(p["memory_percent"], 1)}%"}
         </span>
-         <span class="mono r">{percent(p["cpu_percent"])}</span>
+        <span class="mono r">{percent(p["cpu_percent"])}</span>
         <span class="mono p-path" title={p["path"]}>{p["path"]}</span>
       </div>
-      
+
       <div :if={@procs.list.at} class="foot">
         <button
           :if={@procs.list.count > 50 || @procs_all}
@@ -124,16 +124,16 @@ defmodule DokkitWeb.MachineCards do
         >
           {if @procs_all, do: "Show the top 50", else: "Show all #{@procs.list.count}"}
         </button>
-        
+
         <button class="btn sm ghost" type="button" phx-click="procs_history">
           {if @procs_history, do: "Hide the last hour", else: "Show the last hour"}
         </button>
       </div>
-      
+
       <p :if={@procs_history && @procs.history == []} class="lead">
         Nothing was kept for the last hour.
       </p>
-      
+
       <div
         :for={h <- @procs.history}
         :if={@procs_history}

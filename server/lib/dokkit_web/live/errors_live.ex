@@ -46,6 +46,7 @@ defmodule DokkitWeb.ErrorsLive do
     <Layouts.app active={:errors} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Errors</h1>
+
         <p class="lede">{lede(@errors, assigns[:more])}</p>
       </div>
 
@@ -73,9 +74,10 @@ defmodule DokkitWeb.ErrorsLive do
             </div>
             <span></span>
             <div class="num">{g.count}<small>reports</small></div>
+
             <span class="tag" title={g.host || g.service.machine.name}>{g.host ||
-              g.service.machine.name}</span>
-            <span class="mono">{at(g.last_seen)}</span> <.ic name="caret-right" />
+              g.service.machine.name}</span> <span class="mono">{at(g.last_seen)}</span>
+            <.ic name="caret-right" />
           </.link>
         </div>
       </div>

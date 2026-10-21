@@ -138,13 +138,19 @@ defmodule DokkitWeb.EnrolLive do
       <div class="crumb">
         <.link navigate={~p"/all"}>Everything</.link><.ic name="caret-right" /><span>Add a machine</span>
       </div>
+
       <div class="head">
         <h1 tabindex="-1">Add a machine</h1>
-        <p class="lede">Put the Dokkit program on a machine and it starts reporting within a minute.</p>
+
+        <p class="lede">
+          Put the Dokkit program on a machine and it starts reporting within a minute.
+        </p>
       </div>
+
       <div class="body set">
         <div :if={@os != "windows"} class="card">
           <h2>1. Get the program on the machine</h2>
+
           <p class="lead">
             Skip this if the machine already has the dokkit program. On Linux or macOS:
           </p>
@@ -155,9 +161,11 @@ defmodule DokkitWeb.EnrolLive do
           <h2>
             {if @os == "windows", do: "Get the script for it", else: "2. Make a one-use token for it"}
           </h2>
+
           <p :if={@current_user.role != :owner} class="lead">
             Only the owner can make a token.
           </p>
+
           <form phx-submit="token" phx-change="form" id="token-form">
             <div class="form">
               <label>
@@ -170,6 +178,7 @@ defmodule DokkitWeb.EnrolLive do
                   disabled={@current_user.role != :owner}
                 />
               </label>
+
               <label>
                 System
                 <span :for={
@@ -184,6 +193,7 @@ defmodule DokkitWeb.EnrolLive do
                   /> {label}
                 </span>
               </label>
+
               <label :if={@os != "windows"}>
                 How it will run
                 <span>
@@ -195,6 +205,7 @@ defmodule DokkitWeb.EnrolLive do
                     disabled={@current_user.role != :owner}
                   /> As a service: starts with the machine and keeps running
                 </span>
+
                 <span>
                   <input
                     type="radio"
@@ -206,6 +217,7 @@ defmodule DokkitWeb.EnrolLive do
                 </span>
               </label>
             </div>
+
             <div class="foot">
               <span :if={@os == "windows"}>
                 One line to paste on the machine, in PowerShell opened as administrator. It works once and runs out in 24 hours.
@@ -220,6 +232,7 @@ defmodule DokkitWeb.EnrolLive do
                 >
                   {if @script, do: "Make another", else: "Make the command"}
                 </button>
+
                 <button
                   :if={@os != "windows"}
                   class="btn primary"
@@ -239,11 +252,14 @@ defmodule DokkitWeb.EnrolLive do
 
         <div :if={@script && @key} class="card" id="script-card">
           <h2>Paste this on the machine</h2>
+
           <p class="lead">In PowerShell opened as administrator:</p>
+
           <div class="once">
             <pre class="mono" id="script-line" style="margin: 0; white-space: pre-wrap">{@command}</pre>
             <button class="btn sm" type="button" data-copy="#script-line">Copy</button>
           </div>
+
           <p class="lead">
             It fetches the program from this server, checks its signature, enrols the machine, installs the
             service and the updater, and checks it reports. Where the line cannot be used,
@@ -256,15 +272,18 @@ defmodule DokkitWeb.EnrolLive do
             there;
             it offers to delete itself at the end.
           </p>
+
           <div class="foot" id="script-state">
             <span :if={@machine}>
               <.ic name="check-circle" />
               <.link navigate={~p"/machines/#{@machine.id}"}>{@machine.name}</.link> is in.
             </span>
+
             <span :if={!@machine and @key.revoked_at}>The script's token was revoked. Download another.</span>
             <span :if={!@machine and !@key.revoked_at and Keys.left(@key, @now)}>
               Waiting for the machine. The script's token runs out in {Keys.left(@key, @now)}.
             </span>
+
             <span :if={!@machine and !@key.revoked_at and !Keys.left(@key, @now)}>
               The script's token has run out. Download another.
             </span>
@@ -278,11 +297,13 @@ defmodule DokkitWeb.EnrolLive do
             <pre class="mono" id={"enrol-line-#{n}"} style="margin: 0; white-space: pre-wrap">{line}</pre>
             <button class="btn sm" type="button" data-copy={"#enrol-line-#{n}"}>Copy</button>
           </div>
+
           <div class="foot">
             <span class="end">
               <button class="btn sm" type="button" data-copy="#enrol-commands">Copy both</button>
             </span>
           </div>
+
           <p :if={@mode == "service"} class="lead">
             Run both lines in a terminal opened as administrator, or with <code>sudo</code>
             on Linux; installing the service needs that once. To have it read a folder of
@@ -290,21 +311,26 @@ defmodule DokkitWeb.EnrolLive do
             files, run <code>dokkit folder add &lt;folder&gt;</code>
             there as well; the service picks the list up within a minute.
           </p>
+
           <p :if={@mode == "login"} class="lead">
             The second line stays running. Leave that terminal open, or start it again after a restart.
           </p>
+
           <div class="foot" id="enrol-state">
             <span :if={@machine}>
               <.ic name="check-circle" /> Token <span class="mono">{@key.hint}</span>
               became <.link navigate={~p"/machines/#{@machine.id}"}>{@machine.name}</.link>
               and is spent. It reports once a minute; three minutes of silence opens an issue.
             </span>
+
             <span :if={!@machine and @key.revoked_at}>
               The token was revoked. Make another one above.
             </span>
+
             <span :if={!@machine and !@key.revoked_at and Keys.left(@key, @now)}>
               Waiting for the machine. The token runs out in {Keys.left(@key, @now)}, and it is shown only now.
             </span>
+
             <span :if={!@machine and !@key.revoked_at and !Keys.left(@key, @now)}>
               The token has run out. Make another one above.
             </span>
@@ -313,17 +339,20 @@ defmodule DokkitWeb.EnrolLive do
 
         <div :if={@current_user.role == :owner and @waiting != []} class="card" id="waiting">
           <h2>Tokens waiting<span class="cnt">{length(@waiting)}</span></h2>
+
           <p class="lead">Made and not used yet. Revoke one that is no longer wanted.</p>
+
           <div class="lh cols-key" style={@cols}>
             <span>Token</span><span>For</span><span>Made</span><span>Time left</span><span></span>
           </div>
+
           <div :for={k <- @waiting} class="li slim cols-key" style={@cols} id={"waiting-#{k.id}"}>
             <div>
               <div class="ti"><span>{k.label || "Unnamed"}</span></div>
+
               <div class="sub mono">{k.hint}</div>
             </div>
-            <span class="tag">Enrolment token</span>
-            <span class="mono">{at(k.inserted_at)}</span>
+            <span class="tag">Enrolment token</span> <span class="mono">{at(k.inserted_at)}</span>
             <span class="mono left">{Keys.left(k, @now)}</span>
             <button
               class="btn sm"
