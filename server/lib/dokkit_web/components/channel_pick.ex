@@ -32,7 +32,7 @@ defmodule DokkitWeb.ChannelPick do
           disabled={@disabled}
         /> {text}
       </label>
-       <span :if={@selected == [] and @blank} class="hint" style="flex-basis: auto">{@blank}</span>
+      <span :if={@selected == [] and @blank} class="hint" style="flex-basis: auto">{@blank}</span>
     </span>
     """
   end

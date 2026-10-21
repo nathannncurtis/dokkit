@@ -15,13 +15,13 @@ defmodule DokkitWeb.SessionHTML do
       <form class="card" method="post" action={@action}>
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
         <h1><Layouts.mark />{@title}</h1>
-        
+
         <p :if={@lead != []} class="mute">{render_slot(@lead)}</p>
-        
+
         <p :if={@error} class="bad" role="alert">
           <i class="ph ph-warning" aria-hidden="true"></i>{@error}
         </p>
-         {render_slot(@inner_block)}
+        {render_slot(@inner_block)}
         <button class="btn primary" type="submit" name={@value && "do"} value={@value}>
           {@button}
         </button>
@@ -36,7 +36,7 @@ defmodule DokkitWeb.SessionHTML do
       <label>
         Name<input class="inp" name="name" value={@name} autocomplete="username" required autofocus />
       </label>
-      
+
       <label>
         Password<input
           class="inp"
@@ -80,7 +80,7 @@ defmodule DokkitWeb.SessionHTML do
           autofocus
         /> <small class="mute">Or one of your recovery codes.</small>
       </label>
-       <a href={~p"/login"}>Start again</a>
+      <a href={~p"/login"}>Start again</a>
     </.door>
     """
   end
@@ -97,17 +97,17 @@ defmodule DokkitWeb.SessionHTML do
       <:lead>
         Signing in now asks for your password and then a code from your authenticator app. Nothing more to do here.
       </:lead>
-      
+
       <p :if={@used} class="notice" role="status">
         <i class="ph ph-key" aria-hidden="true"></i>You signed in with a recovery code.
       </p>
-      
+
       <p id="recovery-left">{recovery_left(@left)}</p>
-       <.code_field />
+      <.code_field />
       <small class="mute">
         Enter a current code to turn two-step sign-in off, or to make a new set of recovery codes. A new set ends the old one.
       </small>
-       <button class="btn" type="submit" name="do" value="codes">Make new recovery codes</button>
+      <button class="btn" type="submit" name="do" value="codes">Make new recovery codes</button>
       <a href={~p"/settings"}>Back to settings</a>
     </.door>
     """
@@ -117,9 +117,9 @@ defmodule DokkitWeb.SessionHTML do
     ~H"""
     <.door title="Turn on two-step sign-in" error={@error} action={~p"/two-step"} button="Turn on">
       <:lead>Scan this with your authenticator app, then enter the code it shows.</:lead>
-      
+
       <div class="qr">{Phoenix.HTML.raw(@qr)}</div>
-       <small class="mute">Or type this key into the app: <code class="mono">{@secret}</code></small>
+      <small class="mute">Or type this key into the app: <code class="mono">{@secret}</code></small>
       <input type="hidden" name="do" value="on" /> <.code_field />
       <a href={~p"/settings"}>Back to settings</a>
     </.door>
@@ -140,11 +140,11 @@ defmodule DokkitWeb.SessionHTML do
     <main class="door">
       <section class="card">
         <h1><Layouts.mark />Save your recovery codes</h1>
-        
+
         <p class="mute">
           Two-step sign-in is on. If you lose your authenticator app, each of these codes signs you in once, in place of its code. They are shown only now and cannot be shown again. Keep them somewhere safe.
         </p>
-         <pre class="codes mono" id="recovery-codes">{Enum.join(@codes, "\n")}</pre>
+        <pre class="codes mono" id="recovery-codes">{Enum.join(@codes, "\n")}</pre>
         <div class="row">
           <button class="btn" type="button" data-copy="#recovery-codes">Copy</button>
           <a
@@ -156,7 +156,7 @@ defmodule DokkitWeb.SessionHTML do
             Download
           </a>
         </div>
-         <a class="btn primary" href={~p"/two-step"}>I have saved them</a>
+        <a class="btn primary" href={~p"/two-step"}>I have saved them</a>
       </section>
     </main>
     """
@@ -166,7 +166,7 @@ defmodule DokkitWeb.SessionHTML do
     ~H"""
     <.door title="Change your password" error={@error} action={~p"/password"} button="Change password">
       <:lead :if={@done}>Your password is changed. Other devices are signed out.</:lead>
-      
+
       <label>
         Current password<input
           class="inp"
@@ -177,7 +177,7 @@ defmodule DokkitWeb.SessionHTML do
           autofocus
         />
       </label>
-      
+
       <label>
         New password<input
           class="inp"
@@ -188,7 +188,7 @@ defmodule DokkitWeb.SessionHTML do
           required
         /> <small class="mute">At least {Dokkit.Accounts.min_password()} characters.</small>
       </label>
-       <a href={~p"/settings"}>Back to settings</a>
+      <a href={~p"/settings"}>Back to settings</a>
     </.door>
     """
   end
@@ -199,7 +199,7 @@ defmodule DokkitWeb.SessionHTML do
       <:lead>
         This server has no account yet. It printed a setup code in its log when it started. Enter it here, so that nobody else on the network can claim the server first.
       </:lead>
-      
+
       <label>
         Setup code<input
           class="inp mono"
@@ -210,11 +210,11 @@ defmodule DokkitWeb.SessionHTML do
           autofocus
         />
       </label>
-      
+
       <label>
         Name<input class="inp" name="name" value={@name} autocomplete="username" required />
       </label>
-      
+
       <label>
         Password<input
           class="inp"

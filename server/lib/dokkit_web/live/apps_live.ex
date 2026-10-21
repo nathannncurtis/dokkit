@@ -40,7 +40,7 @@ defmodule DokkitWeb.AppsLive do
       <div class="ti">
         <.lvl state={r.service.state} /><span>{r.service.name}</span>
       </div>
-       <span class="mono mute">{r.service.version}</span>
+      <span class="mono mute">{r.service.version}</span>
       <span class="mono mute">{(r.last && "#{at(r.last)} UTC") || "Never"}</span>
       <span class={["tag", r.service.state in [:degraded, :down] && "warn"]}>{(!r.service.watched &&
                                                                                  "Not watched") ||
@@ -75,22 +75,22 @@ defmodule DokkitWeb.AppsLive do
     <Layouts.app active={:apps} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Apps</h1>
-        
+
         <p class="lede">{lede(@reported, @silent)}</p>
       </div>
-      
+
       <div class="body">
         <div class="card">
           <div :if={@reported == [] and @silent == []} class="empty">
             <.ic name="app-window" />No app has reported yet.
           </div>
-          
+
           <div :if={@reported != []} class="lh cols-all ap">
             <span>Service</span><span>Version</span><span>Last reported</span><span>State</span><span>Attention</span><span></span>
           </div>
-           <.rows rows={@reported} />
+          <.rows rows={@reported} />
           <div :if={@silent != []} class="grp bare" id="no-signal">No signal yet</div>
-           <.rows rows={@silent} />
+          <.rows rows={@silent} />
         </div>
       </div>
     </Layouts.app>

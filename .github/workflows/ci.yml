@@ -199,7 +199,7 @@ jobs:
       - run: mix deps.get
         working-directory: server
       - name: Conformance
-        run: python clients/conformance/run.py --server-dir server --deps-path server/deps
+        run: python clients/conformance/run.py --server-dir server --deps-path "$PWD/server/deps"
       - name: Server log
         if: failure()
         run: tail -80 /tmp/dokkit_conformance/server.log
@@ -370,7 +370,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+      NVD_KEY: ${{ secrets.NVD_API_KEY }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -386,7 +386,7 @@ jobs:
           unzip -q dc.zip
           mkdir -p dc-report ~/dc-data
           key=()
-          [ -n "$NVD_API_KEY" ] && key=(--nvdApiKey "$NVD_API_KEY")
+          [ -n "$NVD_KEY" ] && key=(--nvdApiKey "$NVD_KEY")
           ./dependency-check/bin/dependency-check.sh --project dokkit --scan clients --scan apps/android \
             --format HTML --format JSON --out dc-report --data ~/dc-data \
             --suppression .dependency-check/suppressions.xml --failOnCVSS 7 "${key[@]}"
