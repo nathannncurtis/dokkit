@@ -1,1 +1,15 @@
 # id	IGNORE|WARN|FAIL	name. One line of reason above each accepted rule.
+# The site is static files on GitHub Pages, which cannot set response headers, and the scan serves it with python.
+10038	IGNORE	Content Security Policy (CSP) Header Not Set
+10020	IGNORE	Missing Anti-clickjacking Header
+10021	IGNORE	X-Content-Type-Options Header Missing
+10063	IGNORE	Permissions Policy Header Not Set
+10036	IGNORE	Server Leaks Version Information via "Server" HTTP Response Header Field
+90004	IGNORE	Cross-Origin policy headers (COEP, COOP, CORP)
+# The site loads its own pinned scripts from a CDN on purpose.
+90003	IGNORE	Sub Resource Integrity Attribute Missing
+10017	IGNORE	Cross-Domain JavaScript Source File Inclusion
+# The server scan runs the dev build of the server, which shows debug pages and an inline-script policy for live reload.
+10023	IGNORE	Information Disclosure - Debug Error Messages
+# App keys are write-only and used from browser pages, so the API answers cross-origin on purpose.
+10098	IGNORE	Cross-Domain Misconfiguration

@@ -14,6 +14,7 @@ defmodule DokkitWeb.Layouts do
       <div class="up">
         <.mark />
         <h1 id="updating-h" tabindex="-1">Updating to {@shell.updating.version}</h1>
+        
         <div
           class="prog"
           role="progressbar"
@@ -26,10 +27,13 @@ defmodule DokkitWeb.Layouts do
         >
           <i></i>
         </div>
+        
         <p class="up-count">{@shell.updating.done} of {@shell.updating.total} finished</p>
+        
         <p class="up-restart" role="status">
           <.ic name="arrows-clockwise" />Dokkit is restarting. This screen carries on when it answers.
         </p>
+        
         <ul class="up-list">
           <li :for={m <- @shell.updating.machines} id={"updating-#{m.id}"}>
             <span>{m.name}</span>
@@ -51,6 +55,7 @@ defmodule DokkitWeb.Layouts do
           <.link class="org" navigate={~p"/"}>
             <.mark /> <span><b>Dokkit</b></span>
           </.link>
+          
           <button
             class="theme"
             type="button"
@@ -60,10 +65,10 @@ defmodule DokkitWeb.Layouts do
             <i class="ph ph-sun" aria-hidden="true"></i><i class="ph ph-moon-stars" aria-hidden="true"></i>
           </button>
         </div>
-
+        
         <%= for {heading, items} <- nav() do %>
           <h3>{heading}</h3>
-
+          
           <.link
             :for={{id, icon, label, path} <- items}
             class={["nav", @active == id && "on"]}
@@ -76,16 +81,19 @@ defmodule DokkitWeb.Layouts do
             >{count(@shell, id)}</span>
           </.link>
         <% end %>
-
+        
         <h3 :if={machines(@shell) != []}>Machines</h3>
-
+        
         <.link :for={m <- machines(@shell)} class="nav" navigate={~p"/machines/#{m.id}"}>
           <span class={["dot", attention(m) > 0 && "warn"]}></span>{m.name}<span
             :if={attention(m) > 0}
             class="q"
-          >{attention(m)}</span><span :if={attention(m) == 0 and soon(m) > 0} class="q">{soon(m)} soon</span><span :if={attention(m) == 0 and soon(m) == 0 and Map.get(m, :planned)} class="q">planned</span>
+          >{attention(m)}</span><span :if={attention(m) == 0 and soon(m) > 0} class="q">{soon(m)} soon</span><span
+            :if={attention(m) == 0 and soon(m) == 0 and Map.get(m, :planned)}
+            class="q"
+          >planned</span>
         </.link>
-        <span class="grow"></span>
+         <span class="grow"></span>
         <div class="me">
           <span class="av">{@user.name |> String.slice(0, 2) |> String.upcase()}</span>
           <span>{@user.name}</span>
@@ -97,10 +105,9 @@ defmodule DokkitWeb.Layouts do
           </form>
         </div>
       </nav>
-
+      
       <main class="page" id="page" tabindex="-1">
-        <.demo :if={@shell[:demo]} demo={@shell.demo} />
-        {render_slot(@inner_block)}
+        <.demo :if={@shell[:demo]} demo={@shell.demo} /> {render_slot(@inner_block)}
       </main>
     </div>
     """
@@ -113,6 +120,7 @@ defmodule DokkitWeb.Layouts do
       <span>This is the Dokkit demo. Everything in it is made up, and it starts fresh on the hour.</span>
       <b :if={@demo.note} role="status">{@demo.note}</b>
     </p>
+
     <div
       :if={@demo.warn}
       class="still"
@@ -122,7 +130,7 @@ defmodule DokkitWeb.Layouts do
     >
       <b id="still-h">Still there?</b>
       <p>Your seat goes to someone else in a minute.</p>
-      <button class="btn primary" phx-click="demo_here" autofocus>I'm here</button>
+       <button class="btn primary" phx-click="demo_here" autofocus>I'm here</button>
     </div>
     """
   end
@@ -181,7 +189,7 @@ defmodule DokkitWeb.Layouts do
     <span class="mark">
       <svg viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">
         <circle cx="27.5" cy="30.5" r="5.4"></circle>
-
+        
         <path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z">
         </path>
       </svg>

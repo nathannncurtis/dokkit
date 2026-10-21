@@ -55,6 +55,7 @@ defmodule DokkitWeb.DeploysLive do
     <Layouts.app active={@live_action} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">{@page_title}</h1>
+        
         <p class="lede">{lede(@live_action)}</p>
       </div>
       
