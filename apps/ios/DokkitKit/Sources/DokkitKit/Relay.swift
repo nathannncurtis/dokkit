@@ -22,8 +22,10 @@ public enum FetchResult: Sendable, Equatable {
 
 public struct RelayClient: Sendable {
     private let session: URLSession
+    private let timeout: @Sendable () -> TimeInterval
 
-    public init(session: URLSession? = nil) {
+    public init(session: URLSession? = nil, timeout: @escaping @Sendable () -> TimeInterval = { 20 }) {
+        self.timeout = timeout
         if let session {
             self.session = session
         } else {
@@ -43,6 +45,7 @@ public struct RelayClient: Sendable {
             throw RelayError.notHTTPS
         }
         var req = URLRequest(url: url)
+        req.timeoutInterval = timeout()
         req.setValue("Bearer \(p.token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         if let etag { req.setValue(etag, forHTTPHeaderField: "If-None-Match") }

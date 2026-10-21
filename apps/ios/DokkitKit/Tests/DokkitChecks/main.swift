@@ -38,6 +38,11 @@ await run("HomeTests.countLines") { try await HomeTests().countLines() }
 await run("HomeTests.hiddenThings") { try await HomeTests().hiddenThings() }
 await run("HomeTests.sorting") { try await HomeTests().sorting() }
 await run("HomeTests.downtimeAndStatus") { try await HomeTests().downtimeAndStatus() }
+await run("SettingsTests.defaultsAreTodaysValues") { try await SettingsTests().defaultsAreTodaysValues() }
+await run("SettingsTests.roundTripsAndClamps") { try await SettingsTests().roundTripsAndClamps() }
+await run("SettingsTests.lateSettingMovesTheWarning") { try await SettingsTests().lateSettingMovesTheWarning() }
+await run("SettingsTests.sentencesAndNextSteps") { try await SettingsTests().sentencesAndNextSteps() }
+await run("SettingsTests.homeLedeAndCards") { try await SettingsTests().homeLedeAndCards() }
 
 print("\(assertions) assertions, \(failures) failed")
 exit(failures == 0 ? 0 : 1)
