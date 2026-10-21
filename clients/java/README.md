@@ -1,6 +1,6 @@
 # Dokkit for Java
 
-One file, no dependencies, Java 11 or later, in the package `dev.dokkit`. `beat`, `job`, `check`, `capture`, `log`. Kotlin and Scala use it as it is.
+One file, no dependencies, Java 11 or later, in the package `dev.dokkit`. `beat`, `job`, `check`, `metric`, `capture`, `log`, `stats`. Kotlin and Scala use it as it is.
 
 ## Install
 

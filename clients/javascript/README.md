@@ -1,6 +1,6 @@
 # Dokkit for JavaScript
 
-One file, no packages, for Node 18 or later and for browsers. `beat`, `job`, `check`, `capture`, `log`. Types are in `dokkit.d.ts`.
+One file, no packages, for Node 18 or later and for browsers. `beat`, `job`, `check`, `metric`, `capture`, `log`, `stats`. Types are in `dokkit.d.ts`.
 
 ## Install
 

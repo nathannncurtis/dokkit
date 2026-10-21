@@ -1,6 +1,6 @@
 # Dokkit for Swift
 
-One file, Foundation only, for iOS 13 and macOS 10.15 or later. `Dokkit.beat`, `job`, `check`, `capture`, `log`. It builds with Swift 6.4 on macOS.
+One file, Foundation only, for iOS 13 and macOS 10.15 or later. `Dokkit.beat`, `job`, `check`, `metric`, `capture`, `log`, `stats`. It builds with Swift 6.4 on macOS.
 
 ## Install
 

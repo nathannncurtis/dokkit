@@ -2,9 +2,9 @@
 
 A read-only view of a Dokkit server, for a server that is not on the internet. It shows what needs attention and the state of every machine and service, from the sealed snapshots a relay holds. It cannot change anything on the server and sends no notifications.
 
-The app is not on the App Store yet. Until it is, you build it and sign it with your own Apple account.
+The app is not on the App Store. Join the public TestFlight beta at https://testflight.apple.com/join/24zrk6Cd to install it on an iPhone; each release is uploaded there. Every release also carries `dokkit-ios-unsigned.ipa` and its `.sha256` file for anyone who wants to sign it with their own Apple account.
 
-## Build and install
+## Build and install it yourself
 
 You need a Mac with Xcode 16 or later, an iPhone on iOS 17 or later, and an Apple ID. Build with Xcode 27.1 or later for the foldable layout below; an older Xcode builds the app without it.
 
@@ -45,10 +45,10 @@ Debug builds also take launch arguments, so a simulator can be walked through ev
 | Argument | What |
 |---|---|
 | `-dokkitDemo YES` | Pairs both demo servers. |
-| `-dokkitRoute home/machine/db-01` | Opens a screen: `home`, `home/service/<id>`, `home/machine/<id>`, `home/picking`, `home/first`, `servers`, `servers/add`, `servers/paste`, `settings/<group>`. Add `@harbor-lab` to show that server. |
+| `-dokkitRoute home/machine/db-01` | Opens a screen: `home`, `home/service/<id>`, `home/machine/<id>`, `home/picking`, `home/first`, `servers`, `servers/add`, `servers/paste`, `settings/<n>`, where `<n>` is the number of the settings group. Add `@harbor-lab` to show that server. |
 | `-dokkitShowLock YES` | Shows the lock screen without asking to unlock. |
 
-For example: `xcrun simctl launch booted to.nathancurtis.dokkit -dokkitDemo YES -dokkitRoute home/service/s-purge`. None of this is in a release build.
+For example: `xcrun simctl launch booted dev.dokkit.phone -dokkitDemo YES -dokkitRoute home/service/s-purge`. None of this is in a release build.
 
 ## What is in this folder
 
@@ -57,7 +57,15 @@ For example: `xcrun simctl launch booted to.nathancurtis.dokkit -dokkitDemo YES 
 | `DokkitKit/` | Swift package. `DokkitKit` holds everything that is not a screen: snapshot models, opening a sealed snapshot, pairing codes, the relay client, the Keychain and file stores, and what each screen shows. `DokkitUI` holds the SwiftUI screens. |
 | `Dokkit/` | The app: `@main`, `Info.plist`, the camera scanner, the unlock gate, assets. `Dokkit/Debug/` is the demo relay and its snapshots, left out of release builds. |
 | `project.yml` | XcodeGen description of the app target. |
+| `Signing.xcconfig` | Team and bundle identifier for the app target; includes `Local.xcconfig` when it exists. |
+| `ExportOptions.plist` | Export settings for the App Store Connect build. |
+| `build-unsigned.sh` | Builds the app for a device without signing and packs `out/dokkit-ios-unsigned.ipa`. |
+| `testflight.py` | Adds an uploaded build to the public TestFlight group and submits it for beta review. |
 | `sync-fixtures.sh` | Copies the spec's test fixtures into the package. |
+
+## How it ships
+
+The release workflow archives the app with the Dokkit distribution certificate, uploads it to App Store Connect, then runs `testflight.py` to add it to the public group. The version is the release tag; the build number is the UTC date and time. The workflow `.github/workflows/ios.yml`, started by hand, runs the checks and the unsigned build and keeps the files as the artifact `phone-ios`.
 
 ## Checks
 
