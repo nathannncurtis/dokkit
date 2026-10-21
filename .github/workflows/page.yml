@@ -1,0 +1,29 @@
+name: page
+
+on:
+  push:
+    branches: [main]
+    paths: ['names/page/**', '.github/workflows/page.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: page
+  cancel-in-progress: true
+
+# dokkit.page itself: a 301 to names.dokkit.dev, served by an Azure Static Web App on the free plan.
+# The zone stays on Azure DNS with the names; the apex is an alias record to this app.
+jobs:
+  deploy:
+    if: github.repository == 'nathannncurtis/dokkit'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_PAGE_TOKEN }}
+          action: upload
+          app_location: names/page
+          skip_app_build: true
+          skip_api_build: true
