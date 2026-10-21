@@ -19,8 +19,8 @@ defmodule Dokkit.Alerts do
     "night_to" => "7",
     "night_offset" => "0"
   }
-  @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user smtp_password twilio_token)
-  @plain ~w(disk_limit memory_limit ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to digest_at heartbeat_url imessage_machine imessage_to twilio_sid twilio_from sms_to self_down self_degraded night_zone)
+  @secrets ~w(pagerduty_key pagerduty_api_key ntfy_token pushover_token pushover_user smtp_password twilio_token)
+  @plain ~w(disk_limit memory_limit ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to digest_at heartbeat_url imessage_machine imessage_to twilio_sid twilio_from sms_to self_down self_degraded night_zone pagerduty_schedule)
   @choices ~w(down degraded self_down self_degraded)
   @max_attempts 5
   @imessage_wait 300
@@ -675,7 +675,11 @@ defmodule Dokkit.Alerts do
     who =
       People.audience(check: issue.check_id, service: issue.service_id, rule: rule && rule["id"])
 
-    ids = if who == :everyone, do: [], else: who
+    ids = if who in [:everyone, :oncall], do: [], else: who
+
+    Repo.update_all(from(a in Alert, where: a.issue_id == ^issue.id and a.status == :pending),
+      set: [oncall: who == :oncall]
+    )
 
     for a <- Repo.all(from a in Alert, where: a.issue_id == ^issue.id and a.status == :pending) do
       Repo.delete_all(
@@ -687,19 +691,21 @@ defmodule Dokkit.Alerts do
   end
 
   defp insert(issue, channels, held?, rule) do
+    who =
+      People.audience(check: issue.check_id, service: issue.service_id, rule: rule && rule["id"])
+
     for channel <- channels, sends?(channel) do
       status = if held?.(channel), do: :held, else: :pending
-      alert = Repo.insert!(%Alert{issue_id: issue.id, channel: channel, status: status})
 
-      People.target(
-        alert.id,
-        People.audience(
-          check: issue.check_id,
-          service: issue.service_id,
-          rule: rule && rule["id"]
-        )
-      )
+      alert =
+        Repo.insert!(%Alert{
+          issue_id: issue.id,
+          channel: channel,
+          status: status,
+          oncall: who == :oncall
+        })
 
+      People.target(alert.id, who)
       alert
     end
   end
@@ -885,7 +891,7 @@ defmodule Dokkit.Alerts do
       action = if alert.status == :closing, do: :close, else: :open
 
       about = about(alert.issue)
-      sent = deliver(alert, action, about, config, People.targets(alert.id))
+      sent = deliver(alert, action, about, config, targets(alert, action, config))
 
       change =
         case sent do
@@ -909,6 +915,21 @@ defmodule Dokkit.Alerts do
     end)
     |> length()
   end
+
+  # Whoever is on call when it is sent is told; with nobody to match, the server-wide destinations are.
+  defp targets(%Alert{oncall: true, channel: channel} = alert, :open, config)
+       when channel != "webhook" do
+    with [] <- People.targets(alert.id),
+         {:ok, p} <- Dokkit.OnCall.person(config) do
+      People.target(alert.id, [p.id])
+      People.targets(alert.id)
+    else
+      :none -> []
+      targets -> targets
+    end
+  end
+
+  defp targets(alert, _, _), do: People.targets(alert.id)
 
   defp deliver(alert, :open, about, config, [_ | _] = targets) when alert.channel == "imessage" do
     to = targets |> Enum.flat_map(&recipients(&1.person.imessage)) |> Enum.uniq()
@@ -1468,6 +1489,25 @@ defmodule Dokkit.Alerts do
 
   defp local_ip?({first, _, _, _, _, _, _, _}), do: first in 0xFE80..0xFEBF
   defp local_ip?(_), do: false
+
+  @doc "Reads JSON from an https address, with the same checks as a send. `{:ok, body}` or `{:error, text}`."
+  def get_json(url, headers) do
+    opts =
+      [headers: headers, retry: :transient, max_retries: 2, receive_timeout: 10_000] ++
+        [redirect: false] ++ Application.get_env(:dokkit, :req_options, [])
+
+    with {:ok, host} <- https_host(url), {:ok, ips} <- resolve(host) do
+      {pinned, opts} = pin(url, opts, ips)
+
+      case Req.get(pinned, opts) do
+        {:ok, %{status: s, body: body}} when s in 200..299 and is_map(body) -> {:ok, body}
+        {:ok, %{status: s}} -> failed(host, "answered #{s}")
+        {:error, e} -> failed(host, Exception.message(e))
+      end
+    end
+  rescue
+    e -> failed(url |> URI.parse() |> Map.get(:host), Exception.message(e))
+  end
 
   defp post(url, opts) do
     {say, opts} = Keyword.pop(opts, :say, false)

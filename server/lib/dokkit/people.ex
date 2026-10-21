@@ -50,8 +50,10 @@ defmodule Dokkit.People do
   @fields ~w(email phone imessage ntfy_url pushover_user pagerduty_key)
   @hidden ~w(ntfy_url pushover_user pagerduty_key)
   @scopes ~w(default rule service check)
+  @lone ~w(everyone oncall)
 
   def fields, do: @fields
+  def lone, do: @lone
   def hidden, do: @hidden
   def scopes, do: @scopes
 
@@ -134,8 +136,9 @@ defmodule Dokkit.People do
   def who(scope, id \\ ""), do: rows()[{scope, id}]
 
   @doc """
-  Names who is told at one level: a list of person ids, `["everyone"]`, or `[]` to name
-  nobody there so the level above decides.
+  Names who is told at one level: a list of person ids, `["everyone"]`, `["oncall"]` for
+  whoever is on call in the PagerDuty schedule, or `[]` to name nobody there so the level
+  above decides.
   """
   def set_who(scope, id, to) do
     id = id || ""
@@ -145,12 +148,12 @@ defmodule Dokkit.People do
         {:error, "scope is one of #{Enum.join(@scopes, ", ")}."}
 
       not is_list(to) or not Enum.all?(to, &is_binary/1) ->
-        {:error, "to is a list of person ids, or [\"everyone\"]."}
+        {:error, "to is a list of person ids, [\"everyone\"] or [\"oncall\"]."}
 
-      "everyone" in to and length(to) > 1 ->
-        {:error, "everyone stands alone."}
+      lone = Enum.find(@lone, &(&1 in to and length(Enum.uniq(to)) > 1)) ->
+        {:error, "#{lone} stands alone."}
 
-      bad = Enum.find(to -- ["everyone"], &(not known_person?(&1))) ->
+      bad = Enum.find(to -- @lone, &(not known_person?(&1))) ->
         {:error, "#{bad} is not a person on this server."}
 
       not known_scope?(scope, id) ->
@@ -202,7 +205,7 @@ defmodule Dokkit.People do
     do: Repo.delete_all(from w in AlertWho, where: w.scope == ^scope and w.scope_id == ^id)
 
   @doc """
-  Who an alert goes to: `:everyone`, or the ids of the people named. The most specific level
+  Who an alert goes to: `:everyone`, `:oncall`, or the ids of the people named. The most specific level
   that names someone decides: the check, then the service, then the rule, then the default.
   People who no longer exist are dropped; if none is left it goes to everyone.
   """
@@ -221,6 +224,7 @@ defmodule Dokkit.People do
   def audience_rows, do: rows()
 
   defp decided(["everyone"]), do: :everyone
+  defp decided(["oncall"]), do: :oncall
 
   defp decided(ids) do
     case Repo.all(from u in User, where: u.id in ^ids, select: u.id) do
@@ -230,7 +234,7 @@ defmodule Dokkit.People do
   end
 
   @doc "Records the people an alert goes to."
-  def target(alert_id, :everyone), do: alert_id
+  def target(alert_id, lone) when lone in [:everyone, :oncall], do: alert_id
 
   def target(alert_id, ids) do
     Repo.insert_all(AlertTarget, for(id <- ids, do: %{alert_id: alert_id, person_id: id}),
