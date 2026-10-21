@@ -11,7 +11,7 @@ A desktop app for a Dokkit server. Its window is the server's own web app, so ev
 
 ## Add a server
 
-1. On the server, open Settings, then Keys, and make a user token with the read scope. It starts with `dku_`.
+1. On the server, open Settings, then "Access for scripts and AI tools", tick Read and choose "Make a user token". It starts with `dku_`.
 2. In the app's Settings window, enter the server's address, paste the token and choose Add server.
 
 The token is kept in the operating system's keychain. Other settings are a JSON file in the app's config folder. Server addresses must be `https`; plain `http` is accepted only for localhost and local network addresses, and only when you tick the box.
@@ -36,7 +36,7 @@ The server windows are plain web content: only the bundled settings page can cal
 - The token is kept in the Keychain. Start at login adds a LaunchAgent.
 - Clicking a notification opens the issue. Notifications come from the app's bundle, so they appear from the installed `.app`, not from `cargo run`.
 - A pinned certificate is honoured in the server window through the web view's authentication challenge, for that server's host only.
-- Builds are not notarized, so Gatekeeper asks for a right-click, Open the first time.
+- Release builds are signed with Developer ID and notarized. A build you make yourself is not, so Gatekeeper asks for a right-click, Open the first time.
 
 ## Linux
 
