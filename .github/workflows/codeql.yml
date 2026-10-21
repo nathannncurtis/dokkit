@@ -38,6 +38,12 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
+          # Design mocks are static pages on made-up data; the site in gallery/brand is still scanned.
+          config: |
+            paths-ignore:
+              - gallery/calm-ember/**
+              - gallery/calm-ember-*/**
+              - gallery/variants/**
       - if: matrix.language == 'swift'
         run: |
           swift build --package-path clients/swift
