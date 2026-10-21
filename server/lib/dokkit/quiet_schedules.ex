@@ -3,7 +3,6 @@ defmodule Dokkit.QuietSchedules do
   import Ecto.Query
   alias Dokkit.{Alerts, Quiet, QuietSchedule, Repo}
 
-  @repeats ~w(once daily weekly)
   @weekdays ~w(Mon Tue Wed Thu Fri Sat Sun)
   @time ~r/^([01]\d|2[0-3]):[0-5]\d$/
 
