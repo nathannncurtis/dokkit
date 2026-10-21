@@ -10,30 +10,48 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
-# dokkit.dev: the site, and the install scripts its commands fetch.
+# dokkit.dev: the site, and the install scripts its commands fetch, served by Cloudflare as static files.
+# The Worker's config is written here, so the repo carries no wrangler file of its own.
 jobs:
   deploy:
     if: github.repository == 'nathannncurtis/dokkit'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - name: Assemble
         run: |
           mkdir site
           cp -r gallery/brand/. site/
           rm -f site/*.py site/*.exs
           cp program/get.sh program/get.ps1 server/install.sh server/rel/overlays/install.ps1 server/compose.yml site/
-          echo dokkit.dev > site/CNAME
-      - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
+          # The home page at /, and every page at both /name.html and /name, as on GitHub Pages.
+          { echo "/ /index.html 200"
+            for f in site/*.html; do n=$(basename "$f" .html); [ "$n" = index ] || [ "$n" = 404 ] || echo "/$n /$n.html 301"; done; } > site/_redirects
+          for f in index.html 404.html privacy.html get.sh install.sh compose.yml robots.txt sitemap.xml llms.txt .well-known/security.txt; do
+            test -s "site/$f" || { echo "::error::missing site/$f"; exit 1; }
+          done
+          cat > wrangler.jsonc <<'JSON'
+          {
+            "name": "dokkit-dev",
+            "compatibility_date": "2026-10-01",
+            "assets": {
+              "directory": "./site",
+              "not_found_handling": "404-page",
+              "html_handling": "none"
+            },
+            "workers_dev": false,
+            "observability": { "enabled": false },
+            "routes": [
+              { "pattern": "dokkit.dev", "custom_domain": true },
+              { "pattern": "www.dokkit.dev", "custom_domain": true }
+            ]
+          }
+          JSON
+      - uses: cloudflare/wrangler-action@v3
         with:
-          path: site
-      - id: deploy
-        uses: actions/deploy-pages@v5
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.151.2"
+          command: deploy
