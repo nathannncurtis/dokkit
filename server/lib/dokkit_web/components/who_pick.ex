@@ -32,6 +32,18 @@ defmodule DokkitWeb.WhoPick do
           disabled={@disabled}
         /> Everyone
       </label>
+      
+      <label style="display: inline-flex; align-items: center; gap: 6px">
+        <input
+          type="checkbox"
+          class="chk"
+          name="who[to][]"
+          value="oncall"
+          checked={"oncall" in @selected}
+          disabled={@disabled}
+        /> Whoever is on call in PagerDuty
+      </label>
+      
       <label :for={p <- @people} style="display: inline-flex; align-items: center; gap: 6px">
         <input
           type="checkbox"
@@ -42,21 +54,22 @@ defmodule DokkitWeb.WhoPick do
           disabled={@disabled}
         /> {p.name}
       </label>
-      <span :if={@selected == []} class="hint" style="flex-basis: auto">{@above}</span>
+       <span :if={@selected == []} class="hint" style="flex-basis: auto">{@above}</span>
     </form>
     """
   end
 
-  @doc "Saves what a pick sent. Ticking Everyone clears the names; ticking a name clears Everyone."
+  @doc "Saves what a pick sent. Ticking Everyone or on call clears the rest; ticking a name clears both."
   def save(%{"scope" => scope, "id" => id, "to" => to}) when is_list(to) do
     to = Enum.reject(to, &(&1 == ""))
     before = People.who(scope, scope_id(scope, id)) || []
+    ticked = Enum.find(People.lone(), &(&1 in to and [&1] != before))
 
     to =
       cond do
-        "everyone" in to and before == ["everyone"] -> List.delete(to, "everyone")
-        "everyone" in to -> ["everyone"]
-        true -> to
+        to == before -> to
+        ticked -> [ticked]
+        true -> to -- People.lone()
       end
 
     People.set_who(scope, id, to)
