@@ -7,7 +7,7 @@ defmodule Dokkit.Alerts do
   use GenServer
   import Ecto.Query
   require Logger
-  alias Dokkit.{Alert, Issue, Machine, People, Repo, Service, Setting, WorkRun}
+  alias Dokkit.{Alert, Issue, Machine, People, Repo, Service, Setting, Values, WorkRun}
 
   @defaults %{
     "down" => "page",
@@ -22,8 +22,6 @@ defmodule Dokkit.Alerts do
   @secrets ~w(pagerduty_key ntfy_token pushover_token pushover_user smtp_password twilio_token)
   @plain ~w(disk_limit memory_limit ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to digest_at heartbeat_url imessage_machine imessage_to twilio_sid twilio_from sms_to self_down self_degraded night_zone)
   @choices ~w(down degraded self_down self_degraded)
-  @max_attempts 5
-  @imessage_wait 300
   @smtp_ports [25, 465, 587, 2525]
   @kept_blank ~w(disk_limit memory_limit)
   @channels [
@@ -484,10 +482,9 @@ defmodule Dokkit.Alerts do
     save_rules(Enum.reject(rules(), &(&1["id"] == id)))
   end
 
-  @often 6
-
   @doc """
-  Changes worth offering: an issue that has opened six times or more in a month and is
+  Changes worth offering: an issue that has opened as often as Settings says (six times in 30
+  days at first) and is
   snoozed, while its service still sends somewhere louder than the digest. Nothing here
   changes a rule; a person accepts or dismisses.
   """
@@ -495,12 +492,14 @@ defmodule Dokkit.Alerts do
     dismissed =
       Setting.get("suggestions")["dismissed"] || []
 
-    since = DateTime.add(DateTime.utc_now(), -30 * 86_400)
+    v = Values.all()
+    since = DateTime.add(DateTime.utc_now(), -v["suggest_days"] * 86_400)
 
     Repo.all(
       from i in Issue,
         join: s in assoc(i, :service),
-        where: i.count >= @often and not is_nil(i.snoozed_until) and i.since > ^since,
+        where:
+          i.count >= ^v["suggest_count"] and not is_nil(i.snoozed_until) and i.since > ^since,
         where: s.id not in ^dismissed,
         order_by: [desc: i.count],
         preload: [service: s]
@@ -704,6 +703,50 @@ defmodule Dokkit.Alerts do
     end
   end
 
+  @doc """
+  When reminders are on: an open issue nobody has seen or snoozed is told again on the channels
+  it was told on, once the newest of those is older than the reminder time. Not at night, not
+  for soon issues, and never by page or digest. Returns how many issues were reminded.
+  """
+  def remind(now \\ DateTime.utc_now()) do
+    v = Values.all()
+
+    if v["remind_on"] and not night?(now) do
+      cutoff = DateTime.add(now, -v["remind_minutes"] * 60)
+
+      Repo.all(
+        from i in Issue,
+          where: is_nil(i.closed_at) and is_nil(i.acknowledged_at) and not i.soon,
+          where: is_nil(i.snoozed_until) or i.snoozed_until <= ^now,
+          preload: [:alerts, :service]
+      )
+      |> Enum.reject(&(&1.kind != "machine" and Dokkit.Issues.machine_down?(&1.machine_id)))
+      |> Enum.count(fn issue ->
+        told =
+          for a <- issue.alerts, a.status == :sent, a.channel not in ["page", "digest"], do: a
+
+        busy = Enum.any?(issue.alerts, &(&1.status in [:pending, :sending, :held, :failed]))
+        newest = told |> Enum.map(& &1.updated_at) |> Enum.max(DateTime, fn -> nil end)
+
+        if (not busy and newest) && DateTime.compare(newest, cutoff) == :lt do
+          ids = Enum.map(told, & &1.id)
+
+          Repo.update_all(from(a in Alert, where: a.id in ^ids),
+            set: [status: :pending, attempts: 0, error: nil]
+          )
+
+          Repo.update_all(from(t in Dokkit.AlertTarget, where: t.alert_id in ^ids),
+            set: [opened: false, closed: false]
+          )
+
+          true
+        end
+      end)
+    else
+      0
+    end
+  end
+
   @doc "Held alerts whose night is over are sent if their issue is still open and not snoozed or seen, else dropped. Returns how many go out."
   def release(now \\ DateTime.utc_now()) do
     if night?(now) do
@@ -867,6 +910,7 @@ defmodule Dokkit.Alerts do
     do: Repo.exists?(from t in Dokkit.AlertTarget, where: t.alert_id == ^id and t.opened)
 
   def deliver_pending do
+    tries = Values.get("send_tries")
     config = config()
     settle()
 
@@ -874,7 +918,7 @@ defmodule Dokkit.Alerts do
       from a in Alert,
         where:
           a.status == :pending or (a.status == :closing and a.attempts == 0) or
-            (a.status in [:failed, :closing] and a.attempts < @max_attempts and
+            (a.status in [:failed, :closing] and a.attempts < ^tries and
                a.updated_at < ago(1, "minute")),
         # A digest alert waits for the day's one mail.
         where: a.channel != "digest",
@@ -895,7 +939,7 @@ defmodule Dokkit.Alerts do
           :ok ->
             [status: if(action == :close, do: :closed, else: :sent), error: nil]
 
-          {:error, text} when action == :close and alert.attempts + 1 >= @max_attempts ->
+          {:error, text} when action == :close and alert.attempts + 1 >= tries ->
             [status: :closed, error: text]
 
           {:error, text} ->
@@ -993,14 +1037,15 @@ defmodule Dokkit.Alerts do
     end
   end
 
-  defp stale?(%WorkRun{inserted_at: at}, now), do: DateTime.diff(now, at) >= @imessage_wait
+  defp stale?(%WorkRun{inserted_at: at}, now),
+    do: DateTime.diff(now, at) >= Values.get("imessage_wait_seconds")
 
   @doc """
-  Fails the iMessage alerts whose Mac has not answered in five minutes. Their run stays, so a
+  Fails the iMessage alerts whose Mac has not answered within the wait set in Settings. Their run stays, so a
   late answer still counts and a retry does not send a second message. Returns how many failed.
   """
   def settle(now \\ DateTime.utc_now()) do
-    cutoff = DateTime.add(now, -@imessage_wait)
+    cutoff = DateTime.add(now, -Values.get("imessage_wait_seconds"))
 
     late =
       Repo.all(
@@ -1091,16 +1136,14 @@ defmodule Dokkit.Alerts do
     end
   end
 
-  @test_stays 120
-
   @doc "Whether a test by this channel stays open for two minutes: a PagerDuty incident is not noticed if it resolves at once."
   def keeps_open?(channel, config \\ config()),
     do: provider(channel, config) in [:pagerduty_high, :pagerduty_low]
 
-  def test_stays, do: @test_stays
+  def test_stays, do: Values.get("test_open_seconds")
 
   defp stay_open(id, channel, person) do
-    due = DateTime.add(DateTime.utc_now(), @test_stays)
+    due = DateTime.add(DateTime.utc_now(), test_stays())
 
     Repo.insert!(%Setting{
       key: "test_open:" <> id,
@@ -1115,11 +1158,12 @@ defmodule Dokkit.Alerts do
   end
 
   @doc """
-  Resolves the PagerDuty tests whose two minutes are up. The open tests are rows, so a restart
+  Resolves the PagerDuty tests whose time is up. The open tests are rows, so a restart
   in between still sends the resolve on the next sweep. Returns how many resolved.
   """
   def resolve_tests(now \\ DateTime.utc_now()) do
     rows = Repo.all(from s in Setting, where: like(s.key, "test_open:%"))
+    most = Values.get("send_tries")
 
     for %Setting{value: v} = row <- rows,
         {:ok, due, _} = DateTime.from_iso8601(v["due"]),
@@ -1135,7 +1179,7 @@ defmodule Dokkit.Alerts do
             Repo.delete!(row)
             n + 1
 
-          {:error, _} when tries >= @max_attempts ->
+          {:error, _} when tries >= most ->
             Repo.delete!(row)
             n
 

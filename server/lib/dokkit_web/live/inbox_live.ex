@@ -3,12 +3,13 @@ defmodule DokkitWeb.InboxLive do
   alias Dokkit.{Found, Issue, Issues}
   alias Phoenix.LiveView.JS
 
-  @spans [{"1 hour", 3600}, {"4 hours", 14_400}, {"1 day", 86_400}, {"1 week", 604_800}]
   @tabs [{:now, "Needs you"}, {:soon, "Soon"}, {:found, "Not watched"}, {:snoozed, "Snoozed"}]
 
   def mount(_params, _session, socket) do
     {:ok,
-     load(assign(socket, page_title: "Inbox", tab: :now, picked: MapSet.new(), span: 86_400))}
+     load(
+       assign(socket, page_title: "Inbox", tab: :now, picked: MapSet.new(), span: first_span())
+     )}
   end
 
   def handle_info(:issues_changed, socket),
@@ -62,6 +63,17 @@ defmodule DokkitWeb.InboxLive do
     {:noreply, load(assign(socket, picked: MapSet.new()))}
   end
 
+  defp spans do
+    {:ok, list} = Dokkit.Values.choices("snooze_choices")
+    for {seconds, words} <- list, do: {words, seconds}
+  end
+
+  # A day, as before, when it is one of the choices.
+  defp first_span do
+    seconds = Enum.map(spans(), &elem(&1, 1))
+    if 86_400 in seconds, do: 86_400, else: hd(seconds)
+  end
+
   defp load(socket) do
     %{needs_you: now, soon: soon, other: other} = Issues.groups()
 
@@ -98,7 +110,7 @@ defmodule DokkitWeb.InboxLive do
 
     assigns =
       assign(assigns,
-        spans: @spans,
+        spans: spans(),
         tabs: @tabs,
         rows: rows(assigns),
         counts: counts,
