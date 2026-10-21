@@ -57,6 +57,7 @@ defmodule DokkitWeb.JobsLive do
 
       <div class="head">
         <h1 tabindex="-1">{@page_title}</h1>
+
         <p class="lede">{lede(@live_action, @jobs)}</p>
 
         <div :if={@live_action == :index} class="end">
