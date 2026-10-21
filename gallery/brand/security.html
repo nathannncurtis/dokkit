@@ -114,7 +114,7 @@ MCowBQYDK2VwAyEAxX87EOVIFN9AkYL7vMj40ivpQ36bRyvJGLOMIbgAmRk=
             </ol>
           </div>
         </details>
-        <p class="note">The project hands out no builds signed with anyone's code-signing certificate. Whoever builds signs their own.</p>
+        <p class="note">The files are signed as well. The Windows programs, the Windows server and the desktop installers are signed with Azure Trusted Signing. The macOS programs and the desktop disk image are signed with a Developer ID and notarized. <code>dokkit-android.apk</code> is signed with the Dokkit key, beside <code>dokkit-android-unsigned.apk</code>. The Docker image is signed with cosign, keyless. The iPhone app comes through TestFlight, and the release also holds an unsigned IPA.</p>
       </section>
 
       <section class="step" id="phone">

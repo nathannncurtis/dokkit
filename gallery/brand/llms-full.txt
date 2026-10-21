@@ -52,6 +52,9 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `releases` | `read` | Lists the program releases the server holds and whether each is complete. |
 | `certificate` | `read` | Shows the certificates the server serves itself. |
 | `alert_settings` | `read` | Shows the alert settings. Addresses, user names and secrets are only `set` or `not set`. |
+| `settings` | `read` | Shows every value Dokkit decides on its own for the whole server: `values` now, `defaults` that Reset gives, `changed` the ones that differ. |
+| `machine_settings` | `read` | Shows one machine's values (`id`). Each starts at the server-wide one. |
+| `job_settings` | `read` | Shows one job's values (`id`). Each starts at the job's own file, or the server-wide one. |
 | `alert_suggestions` | `read` | Lists issues that keep opening, which the daily digest could take instead. |
 | `logs` | `read-logs` | Searches log lines. |
 | `archives` | `read-logs` | Lists the archived months of logs that can be loaded back. |
@@ -75,6 +78,9 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `downtime_schedules` | `read` | A machine's scheduled planned downtime: each with `id`, `repeat`, `at`, `time`, `days`, `for_seconds`, `reason`, `by` and `next`. |
 | `schedule_downtime` | `act` | Schedules planned downtime that the server starts by itself: `repeat` of `once` (with `at`, an RFC 3339 time), `daily` or `weekly` (with `time`, such as `02:00`, in the night time zone, and for `weekly` `days`, 1 for Monday to 7 for Sunday), `for` (such as `30m`, at most `4h`) and an optional `reason`. A window it starts is not ended early when the machine comes back. |
 | `remove_scheduled_downtime` | `act` | Removes a scheduled planned downtime, by the `schedule` id from `downtime_schedules`. |
+| `set_settings` | `admin` | Changes server-wide values. `values` maps a name from `settings` to a whole number, true or false, or text for a list of lengths; null or an empty text puts one back to its default. A name left out stays as it was. |
+| `set_machine_settings` | `admin` | Changes one machine's values (`id`, `values`), as `set_settings` does. |
+| `set_job_settings` | `admin` | Changes one job's values (`id`, `values`), as `set_settings` does. |
 | `add_rule` | `admin` | Adds an alert rule. |
 | `update_rule` | `admin` | Changes an alert rule. A field left out stays as it was; an empty one clears it. |
 | `delete_rule` | `admin` | Deletes an alert rule. |
@@ -103,7 +109,8 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `alert_people` | `read` | Lists the people alerts can be told with their own destinations. The ntfy address, Pushover key and routing key are only set or not set. |
 | `alert_who` | `read` | Lists who is told at each level where someone is named. |
 | `set_alert_person` | `admin` | Changes a person's destinations. A field not given stays; an empty one clears it. |
-| `set_alert_who` | `admin` | Names who is told at one level (`default`, `rule`, `service` or `check`): person ids, or `["everyone"]`. |
+| `set_alert_who` | `admin` | Names who is told at one level (`default`, `rule`, `service` or `check`): person ids, `["everyone"]`, or `["oncall"]` for whoever is on call in the chosen PagerDuty schedule. |
+| `alert_oncall` | `admin` | Lists the PagerDuty schedules and who is on call now in the chosen one, and which person here that is. |
 | `test_alert` | `admin` | Sends a test alert by one channel, or to one person's destination with `person`. Answers sent, or one fixed reason. Four at once for each token, then one every 25 seconds; a page, or a push through PagerDuty, stays open for two minutes and then resolves itself, and costs twice as much (two at once, then one every 50 seconds). |
 | `accept_suggestion` | `admin` | Sends a service's issues to the daily digest from now on. |
 | `dismiss_suggestion` | `admin` | Dismisses an alert suggestion. |
@@ -121,7 +128,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 
 ## Built so far
 
-`POST /mcp` with a user token: every tool in the table, 70 in all (25 `read`, 2 `read-logs`, 14 `act`, 29 `admin`), one for each call of the API a token can make. Making a full-control token, pairing and removing phones (`/phones`), moving log lines between services and the browser's own sign-in have no tool: they are Settings and the browser only. A tool the token may not use is not listed.
+`POST /mcp` with a user token: every tool in the first table, 85 in all (29 `read`, 2 `read-logs`, 19 `act`, 35 `admin`), one for each call of the API a token can make. Making a full-control token, pairing and removing phones (`/phones`), moving log lines between services and the browser's own sign-in have no tool: they are Settings and the browser only. A tool the token may not use is not listed.
 
 ## The public MCP at mcp.dokkit.dev
 
@@ -163,7 +170,7 @@ url = "http://localhost:8080/healthz"
 every = "30s"
 timeout = "5s"
 slow = "2s"                     # an answer slower than this is degraded, not down; http only, above 0, below timeout
-fail_after = 3                  # bad results in a row before an issue opens; 1 to 100, default 3
+fail_after = 3                  # bad results in a row before an issue opens; 1 to 100, the server default is 3
 
 [stats]
 url = "http://localhost:8080/internal/stats"
@@ -175,8 +182,8 @@ path = "logs/*.jsonl"
 [[job]]
 id = "nightly-purge"
 schedule = "0 1 * * *"
-grace = "30m"                  # how late it may start; 30m when left out
-max_runtime = "1h"              # how long a run may take; 1h when left out
+grace = "30m"                  # how late it may start; the server default is 30m
+max_runtime = "1h"              # how long a run may take; declaring it turns the limit on
 
 [alert]
 down = "page"                   # a suggested default only
@@ -189,10 +196,10 @@ degraded = "push"
 |---|---|
 | `schema` | The version of this file format. `1`. |
 | `[service]` | What the app is. `id` is unique on its machine and never changes. |
-| `[[check]]` | One per check. `type` is one of `http`, `tcp`, `process`, `windows-service`, `systemd`, `beat`, `stats`, `threshold`, `expiry` and `custom` (a job is a `[[job]]`, not a check). Each type has its own fields: `url` for `http` (an optional `status` is the answer that counts as healthy: a code such as `200`, a range such as `"200-299"`, or a list of those such as `[200, "400-403"]`, from 100 to 599; any other answer is down; without it anything under 400 is healthy; redirects are followed unless `status` includes a 3xx code), `port` for `tcp` (with an optional `host`, `localhost` when left out), `name` for `process` (the program's file name; an optional `command_has` also needs a piece of its text, ignoring case: the full executable path on Windows (as the system names it, after the drive: \Device\HarddiskVolumeN\..., so match from the folder, not the drive letter), the whole command line on Linux and macOS, so `command_has = '\envs\imageresizer\'` tells one app's `python.exe` from the rest, a backslash and a slash count the same, and a process that cannot be inspected does not match; an optional `at_least = 30` is the fewest matching processes that is healthy: fewer is `degraded`, none is `down`, and the value reported is how many were found, which is how an app that runs as dozens of worker processes is watched; see Which processes can be seen), `windows-service` and `systemd` (the unit), `metric` and `limit` for `threshold` (bad when the metric is over the limit), `date_from` for `expiry` (an `https` address or `host:port` for a certificate, or a file whose first line is a date; the check is `degraded` from 30 days before the date, counted in exact time, and `down` once it has passed, and shows the days left rounded up). All take `every` and `fail_after`, the number of bad results in a row (a whole number from 1 to 100, 3 when left out) after which the server opens an issue. `http` also takes `slow`: an answer that comes back successfully but takes longer is `degraded`, with the time as its value, and the server opens an issue only after its usual run of bad results. |
+| `[[check]]` | One per check. `type` is one of `http`, `tcp`, `process`, `windows-service`, `systemd`, `beat`, `stats`, `threshold`, `expiry` and `custom` (a job is a `[[job]]`, not a check). Each type has its own fields: `url` for `http` (an optional `status` is the answer that counts as healthy: a code such as `200`, a range such as `"200-299"`, or a list of those such as `[200, "400-403"]`, from 100 to 599; any other answer is down; without it anything under 400 is healthy; redirects are followed unless `status` includes a 3xx code), `port` for `tcp` (with an optional `host`, `localhost` when left out), `name` for `process` (the program's file name; an optional `command_has` also needs a piece of its text, ignoring case: the full executable path on Windows (as the system names it, after the drive: \Device\HarddiskVolumeN\..., so match from the folder, not the drive letter), the whole command line on Linux and macOS, so `command_has = '\envs\imageresizer\'` tells one app's `python.exe` from the rest, a backslash and a slash count the same, and a process that cannot be inspected does not match; an optional `at_least = 30` is the fewest matching processes that is healthy: fewer is `degraded`, none is `down`, and the value reported is how many were found, which is how an app that runs as dozens of worker processes is watched; see Which processes can be seen), `windows-service` and `systemd` (the unit), `metric` and `limit` for `threshold` (bad when the metric is over the limit), `date_from` for `expiry` (an `https` address or `host:port` for a certificate, or a file whose first line is a date; the check is `degraded` from 30 days before the date, counted in exact time, and `down` once it has passed, and shows the days left rounded up; the 30 days is a default, changed in Settings). All take `every`, `timeout` and `fail_after`, the number of bad results in a row (a whole number from 1 to 100) after which the server opens an issue. When one is left out, the server's value is used: 30 seconds, 5 seconds and 3 by default, changed in Settings under Checks. `http` also takes `slow`: an answer that comes back successfully but takes longer is `degraded`, with the time as its value, and the server opens an issue only after its usual run of bad results. |
 | `[stats]` | Where the stats document is and which environment variable holds its key. |
 | `[logs]` | Files to read. Paths are relative to the file and must stay inside its folder. Each line is a JSON object (`t`, `level`, `msg`, `service`, `fields`) or a CLEF line; any other line is kept as its message. |
-| `[[job]]` | A scheduled job: when it should run, how late it may be (`grace`, 30 minutes when left out), and how long it may take (`max_runtime`, 1 hour when left out). `schedule` is a five-field cron line read as UTC, and `@reboot` is refused. |
+| `[[job]]` | A scheduled job: when it should run, how late it may be (`grace`, 30 minutes by default) and how long it may take (`max_runtime`). A `max_runtime` in the file turns the limit on for that job; without one, a run is flagged only when "Too long" is on in the job's settings (60 minutes by default). `schedule` is a five-field cron line read as UTC, and `@reboot` is refused. |
 | `[alert]` | A starting suggestion for who is told. |
 
 ## Rules
@@ -2232,6 +2239,105 @@ Who is told at each level. Where someone is named: the default, a rule, a servic
 
 `403` The key may not do this.
 
+### GET /api/v1/settings
+
+The values for the whole server. Every value Dokkit decides on its own, server-wide: how alerts are retried and repeated, the defaults for every machine and job, how services are checked, what is kept and for how long, and sign-in limits. `values` is each value now, `defaults` the built-in value and `changed` the names that differ. `disk_on`, `disk_limit`, `memory_on` and `memory_limit` are the same limits as `disk_limit` and `memory_limit` in `/api/v1/alerts`. Takes a user token (`dku_`) with the `read` scope.
+
+
+`200` The values.
+
+```json
+{
+  "values": {
+    "disk_on": true,
+    "disk_limit": 85,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "defaults": {
+    "disk_on": true,
+    "disk_limit": 90,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "changed": [
+    "disk_limit"
+  ]
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+### GET /api/v1/machines/{id}/settings
+
+The values for one machine. The values that can differ by machine: disk, memory and processor alerts, when it counts as gone quiet, the disk forecast, how often the program reports and scans. `defaults` is the server-wide value each falls back to. The program on the machine is sent its reporting and scanning values with its checks. Takes a user token (`dku_`) with the `read` scope.
+
+- `id` (path): The id of the machine.
+
+`200` The values.
+
+```json
+{
+  "values": {
+    "disk_on": true,
+    "disk_limit": 85,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "defaults": {
+    "disk_on": true,
+    "disk_limit": 90,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "changed": [
+    "disk_limit"
+  ]
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`404` Not found.
+
+### GET /api/v1/jobs/{id}/settings
+
+The values for one job. The values that can differ by job: its grace, when it has run too long, whether a missed run alerts, and how long its runs are kept. `defaults` is what the job's own file or timing says, else the server-wide value. Takes a user token (`dku_`) with the `read` scope.
+
+- `id` (path): The id of the job, which is its service id.
+
+`200` The values.
+
+```json
+{
+  "values": {
+    "disk_on": true,
+    "disk_limit": 85,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "defaults": {
+    "disk_on": true,
+    "disk_limit": 90,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "changed": [
+    "disk_limit"
+  ]
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`404` Not found.
+
 ## Act
 
 Snooze and acknowledge issues, route and hold services, accept found things, keep error text and set when a job is late. User token with `act`.
@@ -3298,6 +3404,31 @@ Send:
 
 `422` The body does not fit.
 
+### POST /api/v1/phones/relay/shared
+
+Use the shared relay. Asks the shared relay for a new mailbox and saves its address, mailbox and upload key as the relay, then makes one upload and says whether the relay took it, as setting the relay does. The shared relay is `https://relay.dokkit.dev` unless `DOKKIT_SHARED_RELAY` names another. A different mailbox removes every phone. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.
+
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`200` The relay, and what the upload did.
+
+```json
+{
+  "address": "https://relay.example.com",
+  "mailbox": "92bea4d52a1d53f0c8111edf39e26a89",
+  "key": "set",
+  "last_good_upload": "2026-10-13T09:01:00Z",
+  "last_error": null,
+  "uploaded": true,
+  "result": "The relay took the snapshot."
+}
+```
+
+`422` The shared relay made no mailbox, or what it gave could not be saved.
+
 ### DELETE /api/v1/phones/{id}
 
 Remove a phone. Removes a phone and uploads at once without its slot, so its token stops working. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.
@@ -3917,6 +4048,59 @@ Get a certificate now. Gets a certificate for `acme_name` now, whatever the one 
 
 `422` It failed. The message says why; the same sentence is kept as `renewal` in `GET /certificate`.
 
+### GET /api/v1/certificate/name
+
+The name on dokkit.dev. The name this server holds through the dokkit.dev claim service, empty when none: the address set for it (empty means this machine's own), the address last sent, and whether that worked. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.
+
+
+`200` The name.
+
+```json
+{
+  "name": "home.dokkit.dev",
+  "address": "",
+  "sent": "192.168.1.20",
+  "ok": true,
+  "note": "home.dokkit.dev points at 192.168.1.20"
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+### POST /api/v1/certificate/name
+
+Claim a name on dokkit.dev. With `code`, the one-time claim code from names.dokkit.dev: the server makes a key, registers it with the claim service, makes the name `acme_name` and points the name at `address`, or at this machine's own address when that is empty. From then on the server sends its address once a day, which keeps the name from lapsing, and certificates for the name are proved through the claim service. Without `code`, only the address changes. Follow with `POST /certificate/renew`. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.
+
+
+Send:
+
+```
+{
+  "code": "k3j5w2x7q4m6p2r8t5v3y7z2",
+  "address": ""
+}
+```
+
+`200` The name after the change.
+
+```json
+{
+  "name": "home.dokkit.dev",
+  "address": "",
+  "sent": "192.168.1.20",
+  "ok": true,
+  "note": "home.dokkit.dev points at 192.168.1.20"
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` It failed. The message says why.
+
 ### POST /api/v1/dependencies
 
 Add something outside that is depended on. Adds a service of kind `dependency`. With `check` (`{type: http, url}` or `{type: tcp, address: host:port}`) it is put on `machine`, an enrolled machine whose dokkit runs the check; without a check it belongs to the group machine Outside. Answers as `GET /services/{id}` does. Takes a user token (`dku_`) with the `admin` scope.
@@ -4031,7 +4215,7 @@ Send:
 
 ### PUT /api/v1/alerts/who
 
-Name who is told at one level. `to` is a list of person ids, or `["everyone"]`, which is the server-wide destinations and behaves as before. An empty list names nobody at that level, so the level above decides. Takes a user token (`dku_`) with the `admin` scope.
+Name who is told at one level. `to` is a list of person ids, `["everyone"]`, which is the server-wide destinations and behaves as before, or `["oncall"]`: everyone on call in the PagerDuty schedule chosen in the alert settings when the alert is sent, each told on their own destinations, matched by email. If nobody here matches or PagerDuty cannot be reached, the server-wide destinations are told. An empty list names nobody at that level, so the level above decides. Takes a user token (`dku_`) with the `admin` scope.
 
 
 Send:
@@ -4104,6 +4288,202 @@ Send:
 `404` Not found.
 
 `422` Refused, with the reason.
+
+### POST /api/v1/alerts/heartbeat/shared
+
+Use dokkit.dev as the outside heartbeat. Asks dokkit.dev for a heartbeat address, with no account, and saves it as heartbeat_url. dokkit.dev tells this server's ntfy topic (one without a token) or webhook when the calls stop for five minutes, and again when they start. Called again, or when those alert settings change, it points the same heartbeat at the new place. The service is `https://beat.dokkit.dev` unless `DOKKIT_SHARED_HEARTBEAT` names another. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.
+
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`200` The heartbeat in use.
+
+`422` dokkit.dev made no heartbeat, or this server has nothing for it to send to.
+
+### DELETE /api/v1/alerts/heartbeat/shared
+
+Stop using dokkit.dev as the outside heartbeat. Removes the heartbeat at dokkit.dev and clears heartbeat_url. Takes a user token (`dku_`) with the `admin` scope. Not offered through the MCP.
+
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`200` Stopped.
+
+### PUT /api/v1/settings
+
+Change the values for the whole server. Changes server-wide values. A pair that must agree (such as enrol_hours and enrol_max_hours, silent_minutes and report_seconds, update_run_minutes and updater_minutes) is checked only when one of the two is sent. A value a machine or job sets for itself stays. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `admin` scope.
+
+
+Send:
+
+```
+{
+  "disk_limit": 85,
+  "cpu_on": true,
+  "snooze_choices": "1h, 4h, 1d",
+  "remind_minutes": null
+}
+```
+
+`200` The values after the change, as in the GET.
+
+```json
+{
+  "values": {
+    "disk_on": true,
+    "disk_limit": 85,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "defaults": {
+    "disk_on": true,
+    "disk_limit": 90,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "changed": [
+    "disk_limit"
+  ]
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` A value is not right. The message says which.
+
+### PUT /api/v1/machines/{id}/settings
+
+Change the values for one machine. Changes one machine's values. A machine's own disk or memory limit replaces a threshold its dokkit.toml declares for the same number. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `admin` scope.
+
+- `id` (path): The id of the machine.
+
+Send:
+
+```
+{
+  "disk_limit": 85,
+  "cpu_on": true,
+  "snooze_choices": "1h, 4h, 1d",
+  "remind_minutes": null
+}
+```
+
+`200` The values after the change, as in the GET.
+
+```json
+{
+  "values": {
+    "disk_on": true,
+    "disk_limit": 85,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "defaults": {
+    "disk_on": true,
+    "disk_limit": 90,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "changed": [
+    "disk_limit"
+  ]
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` A value is not right. The message says which.
+
+`404` Not found.
+
+### PUT /api/v1/jobs/{id}/settings
+
+Change the values for one job. Changes one job's values. They replace the job's own grace and max_runtime while they are set. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `admin` scope.
+
+- `id` (path): The id of the job, which is its service id.
+
+Send:
+
+```
+{
+  "disk_limit": 85,
+  "cpu_on": true,
+  "snooze_choices": "1h, 4h, 1d",
+  "remind_minutes": null
+}
+```
+
+`200` The values after the change, as in the GET.
+
+```json
+{
+  "values": {
+    "disk_on": true,
+    "disk_limit": 85,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "defaults": {
+    "disk_on": true,
+    "disk_limit": 90,
+    "disk_after": 3,
+    "disk_down": 98
+  },
+  "changed": [
+    "disk_limit"
+  ]
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
+
+`422` A value is not right. The message says which.
+
+`404` Not found.
+
+### GET /api/v1/alerts/oncall
+
+PagerDuty schedules and who is on call. Asks PagerDuty, with the REST API key in the alert settings, for the account's schedules and for everyone on call now in the chosen schedule, and says which person on this server each is. An answer is kept for a minute; a failure is not. `error` says why something could not be read. Takes a user token (`dku_`) with the `admin` scope.
+
+
+`200` OK.
+
+```json
+{
+  "schedules": [
+    {
+      "id": "PSCHED1",
+      "name": "Primary"
+    }
+  ],
+  "schedule": "PSCHED1",
+  "oncall": [
+    {
+      "name": "Ada Lovelace",
+      "email": "ada@example.com",
+      "person": {
+        "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f4",
+        "name": "ada"
+      }
+    }
+  ],
+  "error": null
+}
+```
+
+`401` Missing or bad key.
+
+`403` The key may not do this.
 
 ## MCP
 
