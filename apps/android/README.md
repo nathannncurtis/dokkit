@@ -37,6 +37,10 @@ adb install dokkit-android.apk
 
 Several servers can be paired. Remove one from Servers and its key, token and saved snapshot are deleted from the phone.
 
+## Look at it without a server
+
+Debug builds (`gradle :app:assembleDebug`) carry a made-up relay at `demo.dokkit.invalid` that seals a demo snapshot the way a server does, so the real pairing and opening code runs. Two demo servers can be paired by pasting `NORTHWIND_CODE` or `HARBOR_LAB_CODE` from `app/src/debug/kotlin/dev/dokkit/phone/Transports.kt`: "northwind" has things that need you, "harbor-lab" is the same estate with everything fine. Debug builds also allow screenshots so the design can be checked on an emulator; release builds keep them blocked. None of this is in a release build.
+
 ## What is in this folder
 
 | Path | What |
@@ -63,7 +67,9 @@ The tests open the spec's sealed snapshots, refuse what must be refused, decode 
 - Shows the age of the snapshot at the top of each screen; past five minutes it is a warning. With no network, or when the relay answers an error, the last snapshot stays on screen and the message says what happened.
 - Refuses a snapshot whose counter is lower than the newest it has opened.
 - Asks for the phone's fingerprint, face or screen lock on every launch and every return from the background. With no screen lock set, it stays locked and says so.
+- Has a Settings tab for what it used to hard-code: the theme, how often it fetches, when a snapshot counts as late, when a meter turns amber, how many fine services a machine lists, the relay timeout and when to ask to unlock. Each shows the value the app always used as its default, with a Reset; they apply to this phone only.
+- Scans the pairing code through the platform's own camera API; no camera library is included. A camera that will not start leaves the paste box.
 - Keeps the phone key, the fetch token and the last snapshot in the app's private storage, encrypted with a key in the Android Keystore. Nothing is included in a cloud backup or a device transfer.
 - Contacts only the paired relays, over https. No account, analytics, crash reporting or third-party networking code.
 - Asks for the internet and the camera. The unlock prompt adds the two permissions the AndroidX biometric library declares for itself; the build prints the list and stops if any other appears.
-- Uses the system font size, light and dark following the phone.
+- Uses the system font size. Light and dark follow the phone unless the theme in Settings says otherwise.
