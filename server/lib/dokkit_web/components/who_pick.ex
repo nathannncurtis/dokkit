@@ -32,6 +32,7 @@ defmodule DokkitWeb.WhoPick do
           disabled={@disabled}
         /> Everyone
       </label>
+
       <label :for={p <- @people} style="display: inline-flex; align-items: center; gap: 6px">
         <input
           type="checkbox"

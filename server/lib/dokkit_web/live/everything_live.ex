@@ -108,6 +108,7 @@ defmodule DokkitWeb.EverythingLive do
     <Layouts.app active={:all} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Everything</h1>
+
         <p class="lede">{lede(@machines, @down)}</p>
 
         <div class="end">
@@ -141,6 +142,7 @@ defmodule DokkitWeb.EverythingLive do
           <span class="end">
             <button class="btn sm" type="button" phx-click="dismiss_update">Dismiss</button>
           </span>
+
           <ul>
             <li :for={m <- @shell.failed}>
               <.link navigate={~p"/machines/#{m.id}"}>{m.name}</.link>: {m.note}
@@ -264,7 +266,6 @@ defmodule DokkitWeb.EverythingLive do
                 planned={@planned[m.id]}
                 disabled={@current_user.role == :viewer}
               />
-
               <div :if={m.has_updater} class="foot" id={"upd-#{m.id}"}>
                 <span class="mono">
                   Program {m.program_version || "unknown"}{m.hosts_server &&
