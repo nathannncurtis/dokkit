@@ -292,6 +292,38 @@ defmodule Dokkit.AlertsTest do
     assert [%Alert{status: :sent}] = Repo.all(Alert)
   end
 
+  test "a resolved page is not sent again when the service now goes to nobody", %{
+    key: key,
+    service: service
+  } do
+    Alerts.save(%{"pagerduty_key" => "R0UTE"})
+    Intake.ping(key, "backup", "fail", nil, "")
+    assert Alerts.deliver_pending() == 1
+    Intake.ping(key, "backup", "ok", nil, "")
+    assert Alerts.deliver_pending() == 1
+    Repo.update!(Ecto.Changeset.change(service, route_down: "none"))
+    Intake.ping(key, "backup", "fail", nil, "")
+    assert Alerts.deliver_pending() == 0
+  end
+
+  test "a machine whose rule sends to nobody stays quiet for soon issues too", %{service: service} do
+    Alerts.save(%{"pagerduty_key" => "R0UTE", "degraded" => "push"})
+    Alerts.add_rule(%{"machine" => "vault", "channel" => "none", "kind" => "", "state" => ""})
+
+    issue =
+      Repo.insert!(%Dokkit.Issue{
+        machine_id: service.machine_id,
+        service_id: service.id,
+        kind: "forecast",
+        state: :degraded,
+        soon: true,
+        title: "Disk fills in about 8 days",
+        since: DateTime.utc_now()
+      })
+
+    assert Alerts.plan(issue, Repo.get!(Service, service.id)) == []
+  end
+
   test "a snoozed issue that reopens does not send its skipped alert", %{key: key} do
     Alerts.save(%{"pagerduty_key" => "R0UTE"})
     Intake.ping(key, "backup", "fail", nil, "")

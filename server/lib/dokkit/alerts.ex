@@ -584,18 +584,10 @@ defmodule Dokkit.Alerts do
   def plan(issue, service, now \\ DateTime.utc_now())
 
   def plan(%Issue{} = issue, %Service{environment: "production"} = service, now) do
-    # A soon issue never takes a rule, and never pages: a page for it goes as a push.
-    rule = !issue.soon && ruled(issue, machine_name(issue.machine_id))
-
     config = config()
+    {channels, rule} = routed(issue, service, config)
 
-    channels =
-      first_set([
-        Map.get(service, :"route_#{issue.state}"),
-        rule && rule["channel"],
-        config[to_string(issue.state)]
-      ])
-
+    # A soon issue never pages: a page for it goes as a push.
     channels =
       if issue.soon,
         do: channels |> Enum.map(&if(&1 == "page", do: "push", else: &1)) |> Enum.uniq(),
@@ -608,18 +600,40 @@ defmodule Dokkit.Alerts do
 
   def plan(%Issue{kind: "machine"} = issue, nil, now) do
     machine = Repo.get(Machine, issue.machine_id)
-    rule = ruled(issue, machine && machine.name)
     config = config()
-
-    channels =
-      first_set([machine && machine.silent_route, rule && rule["channel"], config["down"]])
-
+    {channels, rule} = routed(issue, nil, config)
     wakes = machine == nil or machine.silent_wake
 
     insert(issue, one_incident(channels, config), &(not wakes and held?(&1, now)), rule)
   end
 
   def plan(_, _, _), do: nil
+
+  # Where an issue's alerts go now, and the rule that chose it.
+  defp routed(%Issue{kind: "machine"} = issue, nil, config) do
+    machine = Repo.get(Machine, issue.machine_id)
+    rule = rule_for(issue, machine && machine.name)
+    {first_set([machine && machine.silent_route, rule && rule["channel"], config["down"]]), rule}
+  end
+
+  defp routed(issue, service, config) do
+    rule = rule_for(issue, machine_name(issue.machine_id))
+
+    channels =
+      first_set([
+        service && Map.get(service, :"route_#{issue.state}"),
+        rule && rule["channel"],
+        config[to_string(issue.state)]
+      ])
+
+    {channels, rule}
+  end
+
+  # A soon issue takes no rule, except one that sends to nobody: a machine set to stay quiet stays quiet.
+  defp rule_for(issue, machine) do
+    rule = ruled(issue, machine)
+    if !issue.soon or (rule && split(rule["channel"]) == ["none"]), do: rule
+  end
 
   # A held alert waits in the database for the sweep after the night ends.
   defp holds?(%Service{night: false}, channel, now), do: held?(channel, now)
@@ -640,7 +654,7 @@ defmodule Dokkit.Alerts do
 
   # An issue that opens again inside the 30 minutes is told to whoever is named now.
   defp retarget(issue) do
-    rule = !issue.soon && ruled(issue, machine_name(issue.machine_id))
+    rule = rule_for(issue, machine_name(issue.machine_id))
 
     who =
       People.audience(check: issue.check_id, service: issue.service_id, rule: rule && rule["id"])
@@ -718,10 +732,13 @@ defmodule Dokkit.Alerts do
   An issue that is open again always has a live alert. One that never went out is sent after all.
   One whose page was resolved is paged again, because the resolve closed the incident. One whose
   resolve was never sent, or that has nothing to resolve, stays as it was: nobody is told twice.
+  An issue that now routes to nobody is not paged again.
   """
   def reopened(%Issue{id: id} = issue, now \\ DateTime.utc_now()) do
-    held = Repo.preload(issue, :service).service |> holds?("page", now)
-    live = is_nil(issue.acknowledged_at) and not snoozed?(issue, now)
+    service = Repo.preload(issue, :service).service
+    held = holds?(service, "page", now)
+    quiet = elem(routed(issue, service, config()), 0) == ["none"]
+    live = is_nil(issue.acknowledged_at) and not snoozed?(issue, now) and not quiet
 
     if live,
       do:
