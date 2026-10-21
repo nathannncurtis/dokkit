@@ -10,8 +10,6 @@ defmodule Dokkit.Acme do
   @directory "https://acme-v02.api.letsencrypt.org/directory"
   @settings "certificate"
   @renewal "certificate_renewal"
-  @renew_days 30
-  @retry_hours 12
   @name ~r/\A[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+\z/
 
   ## Settings
@@ -109,8 +107,12 @@ defmodule Dokkit.Acme do
     last = Setting.get(@renewal)
 
     case last["checked"] || last["at"] do
-      nil -> true
-      at -> hours_since(at, now) >= if(last["ok"] == false, do: @retry_hours, else: 24)
+      nil ->
+        true
+
+      at ->
+        hours_since(at, now) >=
+          if(last["ok"] == false, do: Dokkit.Values.get("acme_retry_hours"), else: 24)
     end
   end
 
@@ -124,7 +126,7 @@ defmodule Dokkit.Acme do
 
     case Certificate.days_left(now) do
       nil -> true
-      days -> not covers or days <= @renew_days
+      days -> not covers or days <= Dokkit.Values.get("acme_renew_days")
     end
   end
 

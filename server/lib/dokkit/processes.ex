@@ -1,6 +1,6 @@
 defmodule Dokkit.Processes do
   @moduledoc """
-  A machine's process list: the newest full list, and 24 hours of the top 10 by memory and by
+  A machine's process list: the newest full list, and a day (or as Settings says) of the top 10 by memory and by
   processor.
   """
   import Ecto.Query
@@ -9,7 +9,6 @@ defmodule Dokkit.Processes do
   @max_items 10_000
   @max_text 260
   @top 10
-  @keep_hours 24
   @fresh_seconds 300
   @default_limit 50
   @snapshot_metrics ~w(memory.used_percent cpu.percent)
@@ -87,10 +86,13 @@ defmodule Dokkit.Processes do
   defp short(items),
     do: items |> Enum.take(@top) |> Enum.map(&Map.take(&1, ~w(pid name memory_bytes cpu_percent)))
 
-  @doc "Drops top lists older than 24 hours."
+  @doc "Drops top lists older than the hours set in Settings."
   def prune(now),
     do:
-      Repo.delete_all(from t in ProcessTop, where: t.at < ^DateTime.add(now, -@keep_hours * 3600))
+      Repo.delete_all(
+        from t in ProcessTop,
+          where: t.at < ^DateTime.add(now, -Dokkit.Values.get("processes_hours") * 3600)
+      )
 
   @doc """
   What to keep with an issue that is opening: the machine's newest top lists, when they are
