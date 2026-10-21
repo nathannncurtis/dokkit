@@ -15,12 +15,12 @@ fun interface Transport {
     fun get(url: String, headers: Map<String, String>): HttpResponse
 }
 
-class HttpsTransport : Transport {
+class HttpsTransport(private val timeoutMs: () -> Int = { 15_000 }) : Transport {
     override fun get(url: String, headers: Map<String, String>): HttpResponse {
         val c = URL(url).openConnection() as HttpURLConnection
         try {
-            c.connectTimeout = 15_000
-            c.readTimeout = 15_000
+            c.connectTimeout = timeoutMs()
+            c.readTimeout = timeoutMs()
             c.instanceFollowRedirects = false
             c.useCaches = false
             headers.forEach { (k, v) -> c.setRequestProperty(k, v) }

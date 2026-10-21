@@ -44,15 +44,15 @@ object Age {
         }
     }
 
-    fun isStale(from: Instant, now: Instant): Boolean = ChronoUnit.MILLIS.between(from, now) > WARN_AFTER_SECONDS * 1000L
+    fun isStale(from: Instant, now: Instant, lateSeconds: Int = WARN_AFTER_SECONDS): Boolean = ChronoUnit.MILLIS.between(from, now) > lateSeconds * 1000L
 }
 
 data class Freshness(val text: String, val isWarning: Boolean, val detail: String?) {
     companion object {
-        fun make(madeAt: Instant?, hasSnapshot: Boolean, problem: String?, now: Instant): Freshness {
+        fun make(madeAt: Instant?, hasSnapshot: Boolean, problem: String?, now: Instant, lateSeconds: Int = Age.WARN_AFTER_SECONDS): Freshness {
             if (!hasSnapshot) return Freshness("No snapshot yet", problem != null, problem)
             if (madeAt == null) return Freshness("Snapshot age unknown", true, problem)
-            val stale = Age.isStale(madeAt, now)
+            val stale = Age.isStale(madeAt, now, lateSeconds)
             val late = if (stale) "The server, its network or the relay is not delivering." else null
             return Freshness(
                 "Snapshot made ${Age.ago(madeAt, now)}",
@@ -120,6 +120,7 @@ data class ServiceScreen(
     val chart: List<Double?>,
     val job: List<Pair<String, String>>,
     val logs: List<LogRow>,
+    val metric: String? = null,
 )
 
 object Screens {
@@ -155,6 +156,7 @@ object Screens {
                     isError = it.level == "error",
                 )
             },
+            metric = full.chart?.metric,
         )
     }
 

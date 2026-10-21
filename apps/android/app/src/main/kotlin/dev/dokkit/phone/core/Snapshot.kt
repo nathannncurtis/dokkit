@@ -155,6 +155,7 @@ data class Machine(
     val schedules: List<Schedule>? = null,
     val services: List<Service>? = null,
     @SerialName("needs_a_look") val needsALook: Int? = null,
+    @SerialName("last_day") val lastDay: List<String>? = null,
 )
 
 @Serializable
