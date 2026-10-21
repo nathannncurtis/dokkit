@@ -88,14 +88,14 @@ defmodule DokkitWeb.UpdateScreenTest do
     refute has_element?(view, "#update-failed")
   end
 
-  test "a machine that never answers is shown as failed after 20 minutes", %{conn: conn, m: m} do
+  test "a machine that never answers is shown as failed after 50 minutes", %{conn: conn, m: m} do
     change(m,
       wanted_version: "v1.1.0",
-      update_started_at: DateTime.add(DateTime.utc_now(), -1300)
+      update_started_at: DateTime.add(DateTime.utc_now(), -3100)
     )
 
     {:ok, view, _} = live(conn, "/all")
     refute has_element?(view, "#updating")
-    assert has_element?(view, "#update-failed", "did not report back within 20 minutes")
+    assert has_element?(view, "#update-failed", "did not report back within 50 minutes")
   end
 end

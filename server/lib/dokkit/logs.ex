@@ -43,7 +43,7 @@ defmodule Dokkit.Logs do
         else: (is_map(line["fields"]) && line["fields"]) || %{}
 
     extra = if clef? and line["@x"], do: Map.put(extra, "exception", line["@x"]), else: extra
-    longest = Dokkit.Values.quick("longest_line_kb") * 1024
+    longest = Dokkit.Values.get("longest_line_kb") * 1024
     cut = byte_size(msg) > longest
     big = byte_size(Jason.encode!(extra)) > longest
 

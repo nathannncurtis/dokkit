@@ -162,12 +162,22 @@ defmodule Dokkit.Numbers do
 
   @doc "A check's limit, from its own config or its machine's settings; nil when there is none."
   def limit(%Check{} = check) do
-    values =
+    machine_id =
       check.config["limit_from"] &&
-        Values.all(
-          {:machine,
-           Repo.one(from s in Service, where: s.id == ^check.service_id, select: s.machine_id)}
-        )
+        case check.service do
+          %Service{machine_id: id} ->
+            id
+
+          _ ->
+            Repo.one(from s in Service, where: s.id == ^check.service_id, select: s.machine_id)
+        end
+
+    values =
+      cond do
+        is_nil(check.config["limit_from"]) -> nil
+        is_nil(machine_id) -> Values.all()
+        true -> Values.all({:machine, machine_id})
+      end
 
     limit_with(check, values)
   end

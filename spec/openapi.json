@@ -14534,7 +14534,7 @@
         "tags": [
           "Admin"
         ],
-        "description": "Changes server-wide values. A value a machine or job sets for itself stays. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `admin` scope.",
+        "description": "Changes server-wide values. A pair that must agree (such as enrol_hours and enrol_max_hours, silent_minutes and report_seconds, update_run_minutes and updater_minutes) is checked only when one of the two is sent. A value a machine or job sets for itself stays. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `admin` scope.",
         "requestBody": {
           "required": true,
           "content": {
@@ -14761,9 +14761,9 @@
         "operationId": "setMachineSettings",
         "summary": "Change the values for one machine",
         "tags": [
-          "Act"
+          "Admin"
         ],
-        "description": "Changes one machine's values. A machine's own disk or memory limit replaces a threshold its dokkit.toml declares for the same number. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `act` scope.",
+        "description": "Changes one machine's values. A machine's own disk or memory limit replaces a threshold its dokkit.toml declares for the same number. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `admin` scope.",
         "requestBody": {
           "required": true,
           "content": {
@@ -14850,7 +14850,7 @@
                 "example": {
                   "error": {
                     "code": "no_scope",
-                    "message": "This token may not act."
+                    "message": "This token may not admin."
                   }
                 }
               }
@@ -14892,7 +14892,7 @@
         "security": [
           {
             "userToken": [
-              "act"
+              "admin"
             ]
           }
         ],
@@ -15017,9 +15017,9 @@
         "operationId": "setJobSettings",
         "summary": "Change the values for one job",
         "tags": [
-          "Act"
+          "Admin"
         ],
-        "description": "Changes one job's values. They replace the job's own grace and max_runtime while they are set. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `act` scope.",
+        "description": "Changes one job's values. They replace the job's own grace and max_runtime while they are set. Each value is a whole number in its range, true or false, or text for a list of lengths such as `1h, 4h, 1d`. `null` or an empty text puts a value back to what `defaults` shows; a value equal to it is stored as no change. Names left out stay as they were; an unknown name is refused. Takes a user token (`dku_`) with the `admin` scope.",
         "requestBody": {
           "required": true,
           "content": {
@@ -15106,7 +15106,7 @@
                 "example": {
                   "error": {
                     "code": "no_scope",
-                    "message": "This token may not act."
+                    "message": "This token may not admin."
                   }
                 }
               }
@@ -15148,7 +15148,7 @@
         "security": [
           {
             "userToken": [
-              "act"
+              "admin"
             ]
           }
         ],

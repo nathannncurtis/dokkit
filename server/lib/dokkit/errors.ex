@@ -53,8 +53,8 @@ defmodule Dokkit.Errors do
       )
 
     # A group keeps its first reports and then one in so many, so a crash loop cannot fill the table.
-    if group.count <= Values.quick("errors_first") or
-         rem(group.count, Values.quick("errors_every")) == 0 do
+    if group.count <= Values.get("errors_first") or
+         rem(group.count, Values.get("errors_every")) == 0 do
       Repo.insert!(%ErrorEvent{
         group_id: group.id,
         at: at,
@@ -84,7 +84,8 @@ defmodule Dokkit.Errors do
       :ets.update_counter(@bursts, key, 1, {key, 0})
       n = recent(service.id, v["error_alert_minutes"])
 
-      if n >= v["error_alert_count"],
+      # Recorded once per burst, so a crash loop does not write for every report.
+      if n >= v["error_alert_count"] and :ets.insert_new(@bursts, {{:open, service.id}, true}),
         do:
           Issues.record(burst_check(service), :degraded,
             at: at,
@@ -105,9 +106,17 @@ defmodule Dokkit.Errors do
     )
   end
 
+  @burst "errors.burst"
+
   defp burst_check(service) do
-    Repo.get_by(Check, service_id: service.id, name: "errors") ||
-      Repo.insert!(%Check{service_id: service.id, name: "errors", type: :custom, fail_after: 1})
+    Repo.get_by(Check, service_id: service.id, name: @burst) ||
+      Repo.insert!(%Check{
+        service_id: service.id,
+        name: @burst,
+        type: :custom,
+        fail_after: 1,
+        config: %{"burst" => true}
+      })
   end
 
   @doc "Each minute: a burst of errors that has calmed down, or whose alert is switched off, closes."
@@ -118,11 +127,16 @@ defmodule Dokkit.Errors do
 
     for c <-
           Repo.all(
-            from c in Check, where: c.name == "errors" and c.type == :custom and c.state != :ok
+            from c in Check,
+              where:
+                c.name == @burst and c.type == :custom and c.state != :ok and
+                  fragment("?->>'burst' = 'true'", c.config)
           ),
         not v["error_alert_on"] or
-          recent(c.service_id, v["error_alert_minutes"]) < v["error_alert_count"],
-        do: Issues.record(c, :ok)
+          recent(c.service_id, v["error_alert_minutes"]) < v["error_alert_count"] do
+      :ets.delete(@bursts, {:open, c.service_id})
+      Issues.record(c, :ok)
+    end
   end
 
   defp frames(list) when is_list(list) do

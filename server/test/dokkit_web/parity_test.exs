@@ -53,8 +53,8 @@ defmodule DokkitWeb.ParityTest do
       "silent" => {:member, ["PUT /api/v1/machines/:id/routing"]},
       "update" => {:owner, ["POST /api/v1/machines/:id/update"]},
       "scan" => {:member, ["POST /api/v1/machines/:id/scan"]},
-      "values_save" => {:member, ["PUT /api/v1/machines/:id/settings"]},
-      "values_reset" => {:member, ["PUT /api/v1/machines/:id/settings"]}
+      "values_save" => {:owner, ["PUT /api/v1/machines/:id/settings"]},
+      "values_reset" => {:owner, ["PUT /api/v1/machines/:id/settings"]}
     },
     "EnrolLive" => %{
       "token" => {:owner, ["POST /api/v1/keys", "POST /api/v1/add-script"]},
@@ -74,8 +74,8 @@ defmodule DokkitWeb.ParityTest do
     },
     "JobsLive" => %{
       "add" => {:owner, ["POST /api/v1/jobs"]},
-      "values_save" => {:member, ["PUT /api/v1/jobs/:id/settings"]},
-      "values_reset" => {:member, ["PUT /api/v1/jobs/:id/settings"]}
+      "values_save" => {:owner, ["PUT /api/v1/jobs/:id/settings"]},
+      "values_reset" => {:owner, ["PUT /api/v1/jobs/:id/settings"]}
     },
     "LogsLive" => %{"filter" => {:viewer, ["GET /api/v1/logs"]}},
     "ServiceLive" => %{

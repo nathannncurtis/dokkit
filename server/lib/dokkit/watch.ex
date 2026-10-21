@@ -135,10 +135,7 @@ defmodule Dokkit.Watch do
 
   # The jobs (by service id) that keep their runs for their own number of days.
   defp own_keep do
-    for %{key: "values:job:" <> id, value: %{"job_keep_days" => days}} <-
-          Repo.all(from s in Dokkit.Setting, where: like(s.key, "values:job:%")),
-        into: %{},
-        do: {id, days}
+    for {id, %{"job_keep_days" => days}} <- Values.job_overrides(), into: %{}, do: {id, days}
   end
 
   defp runs_of(nil, []), do: dynamic(true)
@@ -149,6 +146,7 @@ defmodule Dokkit.Watch do
   def sweep(now \\ DateTime.utc_now(), booted \\ nil) do
     quiet = MapSet.new(Dokkit.Quiet.active(now), & &1.machine_id)
     over = Dokkit.Quiet.overs()
+    jobs = Values.job_overrides()
 
     Repo.all(
       from c in Check, where: c.type in [:job, :beat] and c.state != :down, preload: :service
@@ -160,7 +158,7 @@ defmodule Dokkit.Watch do
         |> Enum.reject(&is_nil/1)
         |> Enum.max(DateTime, fn -> nil end)
 
-      case safe_verdict(check, now, since) do
+      case safe_verdict(check, now, since, jobs) do
         nil -> false
         {title, note} -> Issues.record(check, :down, at: now, title: title, note: note)
       end
@@ -168,8 +166,8 @@ defmodule Dokkit.Watch do
   end
 
   # One check with a schedule that cannot be read must not stop the others.
-  defp safe_verdict(check, now, booted) do
-    verdict(check, now, booted)
+  defp safe_verdict(check, now, booted, jobs) do
+    verdict(check, now, booted, jobs)
   rescue
     e ->
       Logger.error("Watch could not judge #{check.id}: " <> Exception.message(e))
@@ -177,12 +175,13 @@ defmodule Dokkit.Watch do
   end
 
   # Two beats late and a minute more, so one slow loop is not an alarm.
-  defp verdict(%Check{config: %{"waiting" => true}}, _, _), do: nil
+  defp verdict(%Check{config: %{"waiting" => true}}, _, _, _), do: nil
 
   defp verdict(
          %Check{type: :beat, checked_at: %DateTime{} = last, config: config} = check,
          now,
-         booted
+         booted,
+         _
        ) do
     every = config["every_seconds"] || 60
     quiet = DateTime.diff(now, later(last, booted))
@@ -194,10 +193,11 @@ defmodule Dokkit.Watch do
          "No beat for #{div(quiet, 60)} min. One was expected every #{every} s."}
   end
 
-  defp verdict(%Check{type: :beat}, _, _), do: nil
+  defp verdict(%Check{type: :beat}, _, _, _), do: nil
 
-  defp verdict(check, now, booted) do
-    v = Values.all({:job, check.service_id})
+  defp verdict(check, now, booted, jobs) do
+    own = Map.get(jobs, check.service_id, %{})
+    v = check |> Values.for_job(own) |> Map.put(:own, own)
     (v["job_missed"] && missed(check, now, booted, v)) || overran(check, now, v)
   end
 
@@ -237,10 +237,9 @@ defmodule Dokkit.Watch do
 
   # In seconds, so a grace of 90s in a file is not rounded to minutes.
   defp grace(check, v) do
-    if check.config["grace"] &&
-         not Map.has_key?(Values.own({:job, check.service_id}), "job_grace_minutes"),
-       do: seconds(check.config["grace"], v["job_grace_minutes"] * 60),
-       else: v["job_grace_minutes"] * 60
+    if check.config["grace"] && not Map.has_key?(v.own, "job_grace_minutes"),
+      do: seconds(check.config["grace"], v["job_grace_minutes"] * 60),
+      else: v["job_grace_minutes"] * 60
   end
 
   defp last_good(check) do
@@ -267,7 +266,9 @@ defmodule Dokkit.Watch do
 
   @doc "The title and note for a finished run that took longer than the job's max_runtime, else nil."
   def ran_long(%Check{} = check, %JobRun{} = run, label) do
-    case max_runtime(check, Values.all({:job, check.service_id})) do
+    v = Map.put(Values.all({:job, check.service_id}), :own, Values.own({:job, check.service_id}))
+
+    case max_runtime(check, v) do
       nil -> nil
       {max, seconds} -> ran_long(check, run, label, max, seconds * 1000)
     end
@@ -295,10 +296,9 @@ defmodule Dokkit.Watch do
   # The limit as it is written, and in seconds: the job's own setting, else its max_runtime, else the default when switched on.
   defp max_runtime(check, v) do
     if v["job_max_on"] do
-      own = Values.own({:job, check.service_id})
       text = check.config["max_runtime"]
 
-      if text && not Map.has_key?(own, "job_max_minutes"),
+      if text && not Map.has_key?(v.own, "job_max_minutes"),
         do: {text, seconds(text, v["job_max_minutes"] * 60)},
         else: {"#{v["job_max_minutes"]}m", v["job_max_minutes"] * 60}
     end

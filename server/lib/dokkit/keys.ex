@@ -24,8 +24,6 @@ defmodule Dokkit.Keys do
     {text, key}
   end
 
-  @enrol_cap 720 * 3600
-
   def enrol_life, do: Dokkit.Values.get("enrol_hours") * 3600
   def enrol_most_hours, do: Dokkit.Values.get("enrol_max_hours")
 
@@ -33,7 +31,8 @@ defmodule Dokkit.Keys do
   def mint_enrol(label, seconds \\ nil)
   def mint_enrol(label, nil), do: mint_enrol(label, enrol_life())
 
-  def mint_enrol(label, seconds) when seconds in 1..@enrol_cap do
+  def mint_enrol(label, seconds) when is_integer(seconds) and seconds > 0 do
+    seconds = min(seconds, enrol_most_hours() * 3600)
     mint(:enrol, %{expires_at: DateTime.add(DateTime.utc_now(), seconds), label: label})
   end
 
