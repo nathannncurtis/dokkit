@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-var recordEvery = time.Minute
+var recordEvery = newSetting(time.Minute)
 
 // A run of a job that the system keeps its own record of.
 type systemRun struct {
@@ -33,7 +33,7 @@ type recordItem struct {
 // reads the last run time and result and reports a run when they changed since the last tick.
 func (c *client) records() {
 	for {
-		time.Sleep(recordEvery)
+		time.Sleep(recordEvery.get())
 		c.recordTick()
 	}
 }
@@ -167,9 +167,12 @@ func parseTimerRecord(timer, service map[string]string) (systemRun, bool) {
 // autoScan looks the machine over shortly after it starts and then once a day, and sends the
 // proposal. Nothing it finds is watched until a person accepts it.
 func (c *client) autoScan() {
-	time.Sleep(scanFirst)
+	// the first pull can change scanFirst after this has started waiting
+	for start := time.Now(); time.Since(start) < scanFirst.get(); {
+		time.Sleep(min(5*time.Second, scanFirst.get()))
+	}
 	for {
-		wait := scanEvery
+		wait := scanEvery.get()
 		if _, err := c.scanAndSend(); err != nil {
 			fmt.Fprintln(os.Stderr, time.Now().Format("15:04:05"), "scan:", err)
 			wait = time.Hour
