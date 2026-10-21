@@ -568,12 +568,12 @@ defmodule Dokkit.Alerts do
     list
   end
 
-  defp ruled(%Issue{} = issue, machine, wanted \\ fn _ -> true end) do
+  defp ruled(%Issue{} = issue, machine) do
     kind = if issue.kind in ~w(job machine), do: issue.kind, else: "check"
 
     Enum.find(rules(), fn r ->
       r["on"] and r["kind"] in ["", kind] and r["state"] in ["", to_string(issue.state)] and
-        r["machine"] in ["", machine] and wanted.(r)
+        r["machine"] in ["", machine]
     end)
   end
 
@@ -644,8 +644,10 @@ defmodule Dokkit.Alerts do
   end
 
   # A soon issue takes no rule, except one that sends to nobody: a machine set to stay quiet stays quiet.
-  defp rule_for(%Issue{soon: true} = issue, machine),
-    do: ruled(issue, machine, &(split(&1["channel"]) == ["none"]))
+  defp rule_for(%Issue{soon: true} = issue, machine) do
+    rule = ruled(issue, machine)
+    if rule && split(rule["channel"]) == ["none"], do: rule
+  end
 
   defp rule_for(issue, machine), do: ruled(issue, machine)
 
@@ -797,7 +799,7 @@ defmodule Dokkit.Alerts do
     retarget(issue)
 
     # A channel added to the route since the issue first opened is told now.
-    if live do
+    if live and not Dokkit.Issues.machine_down?(issue.machine_id) do
       have = Repo.all(from a in Alert, where: a.issue_id == ^id, select: a.channel)
       {_, rule} = routed(issue, issue.service, config)
       insert(issue, wanted -- have, &holds?(issue.service, &1, now), rule)

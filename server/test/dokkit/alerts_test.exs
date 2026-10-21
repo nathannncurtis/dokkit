@@ -323,6 +323,28 @@ defmodule Dokkit.AlertsTest do
              Repo.all(from a in Alert, order_by: a.channel, select: {a.channel, a.status})
   end
 
+  test "an issue that reopens while its machine is down tells nobody new", %{
+    key: key,
+    service: service
+  } do
+    Alerts.save(%{"pagerduty_key" => "R0UTE"})
+
+    Repo.insert!(%Dokkit.Issue{
+      machine_id: service.machine_id,
+      kind: "machine",
+      state: :down,
+      title: "vault stopped reporting",
+      since: DateTime.utc_now()
+    })
+
+    Intake.ping(key, "backup", "fail", nil, "")
+    Intake.ping(key, "backup", "ok", nil, "")
+    Intake.ping(key, "backup", "fail", nil, "")
+
+    assert Repo.all(from a in Alert, join: i in assoc(a, :issue), where: i.kind != "machine") ==
+             []
+  end
+
   test "a waiting alert is dropped once its service goes to nobody", %{key: key, service: service} do
     Alerts.save(%{"pagerduty_key" => "R0UTE"})
     Intake.ping(key, "backup", "fail", nil, "")
