@@ -331,7 +331,7 @@ jobs:
 
   release:
     if: always() && github.ref_type == 'tag'
-    needs: [image, program, sign-windows, mac, windows-server, ios, android]
+    needs: [image, program, sign-windows, mac, windows-server, ios, android, desktop]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -346,8 +346,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
-          # Six programs and the Windows server, each with its checksum. The phone apps are added when they built.
-          found=$(ls assets 2>/dev/null | grep -v -e '^dokkit-ios' -e '^dokkit-android' | wc -l)
+          # Six programs and the Windows server, each with its checksum. The phone and desktop apps are added when they built.
+          found=$(ls assets 2>/dev/null | grep -v -e '^dokkit-ios' -e '^dokkit-android' -e '^dokkit-desktop' | wc -l)
           if [ "$found" -ne 14 ]; then
             echo "::warning::Not published: $found of 14 files were built."
             ls assets
