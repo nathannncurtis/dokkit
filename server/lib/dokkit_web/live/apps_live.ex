@@ -51,11 +51,28 @@ defmodule DokkitWeb.AppsLive do
     """
   end
 
+  defp lede([], []), do: "Desktop apps that report to Dokkit show here, one row each."
+
+  defp lede(reported, silent) do
+    attention = reported |> Enum.map(& &1.attention) |> Enum.sum()
+
+    "#{plural(length(reported), "app reports", "apps report")} to Dokkit." <>
+      if(attention > 0,
+        do: " #{plural(attention, "thing needs", "things need")} a look.",
+        else: " Nothing needs a look."
+      ) <>
+      if(silent != [], do: " #{plural(length(silent), "has", "have")} not reported yet.", else: "")
+  end
+
+  defp plural(1, one, _), do: "1 #{one}"
+  defp plural(n, _, many), do: "#{n} #{many}"
+
   def render(assigns) do
     ~H"""
     <Layouts.app active={:apps} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Apps</h1>
+        <p class="lede">{lede(@reported, @silent)}</p>
       </div>
       
       <div class="body">

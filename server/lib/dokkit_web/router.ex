@@ -43,6 +43,7 @@ defmodule DokkitWeb.Router do
     post "/password", SessionController, :change_password
     get "/two-step", SessionController, :two_step
     post "/two-step", SessionController, :change_two_step
+    get "/logs.csv", LogsController, :csv
 
     live_session :user, on_mount: {DokkitWeb.Auth, :user} do
       live "/", InboxLive

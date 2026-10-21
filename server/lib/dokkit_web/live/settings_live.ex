@@ -357,6 +357,7 @@ defmodule DokkitWeb.SettingsLive do
     <Layouts.app active={:settings} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Settings</h1>
+        <p class="lede">How Dokkit keeps its data, who can use it, and how it looks.</p>
          <a class="btn ghost sm" href={~p"/two-step"}>Two-step sign-in</a>
         <a class="btn ghost sm" href={~p"/password"}>Change password</a>
       </div>
@@ -1039,7 +1040,7 @@ defmodule DokkitWeb.SettingsLive do
                   sw={"t-dark d-#{v}"}
                 />
               </div>
-               <span class="hint">Applies in dark</span>
+               <span class="hint">Applies in dark. Ember also warms the light theme.</span>
             </dd>
             
             <dt>Accent</dt>

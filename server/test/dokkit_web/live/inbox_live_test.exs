@@ -229,7 +229,7 @@ defmodule DokkitWeb.InboxLiveTest do
     service: service
   } do
     {:ok, _, html} = live(conn, "/")
-    refute html =~ "more is fine"
+    refute html =~ "Everything else is fine: 1 service"
 
     check =
       Repo.insert!(%Check{service_id: service.id, name: "backup", type: :job, fail_after: 1})
@@ -237,7 +237,7 @@ defmodule DokkitWeb.InboxLiveTest do
     Dokkit.Issues.record(check, :ok)
 
     {:ok, _, html} = live(conn, "/")
-    assert html =~ "1 more is fine, on 1 machine."
+    assert html =~ "Everything else is fine: 1 service on 1 machine."
     assert %{fine: %{services: 1, machines: 1}} = Dokkit.Read.inbox()
   end
 

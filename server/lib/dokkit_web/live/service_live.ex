@@ -150,6 +150,15 @@ defmodule DokkitWeb.ServiceLive do
     )
   end
 
+  defp lede(:down, %{since: since}), do: "Something is wrong here, since #{at(since)} UTC."
+
+  defp lede(:degraded, %{since: since}),
+    do: "Working, but not as it should, since #{at(since)} UTC."
+
+  defp lede(:ok, _), do: "Fine. Nothing here needs a look."
+  defp lede(state, _) when state in [:down, :degraded], do: "Something here needs a look."
+  defp lede(_, _), do: "No signal yet. It shows here once it reports."
+
   def render(assigns) do
     assigns = assign(assigns, cols: @cols, routes: Dokkit.Alerts.channels())
 
@@ -163,6 +172,7 @@ defmodule DokkitWeb.ServiceLive do
         <h1 tabindex="-1">
           <.lvl state={@service.state} /> {(@issue && @issue.title) || @service.name}
         </h1>
+        <p class="lede">{lede(@service.state, @issue)}</p>
         
         <div class="end">
           <.link
