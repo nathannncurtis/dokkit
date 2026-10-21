@@ -11,8 +11,8 @@ struct Split: Equatable {
 /// The proxy must span the whole width of the screen, horizontal safe area included.
 @MainActor func split(_ g: GeometryProxy) -> Split? {
     guard twoPanes(g.size) else { return nil }
-    #if compiler(>=6.4)
-    if #available(iOS 27.1, macOS 27.1, *), let d = g.reservedRegions(kind: .division).first(where: \.isActive) {
+    #if compiler(>=6.4) && os(iOS)
+    if #available(iOS 27.1, *), let d = g.reservedRegions(kind: .division).first(where: \.isActive) {
         return Split(left: d.frame.minX, gap: d.frame.width, right: g.size.width - d.frame.maxX)
     }
     #endif
@@ -23,8 +23,8 @@ struct Split: Equatable {
 /// What the camera and status take along the top edge, in the proxy's space. The system reserves a margin down the
 /// whole side for it; pages keep clear of just these corners instead.
 @MainActor func corners(_ g: GeometryProxy) -> [CGRect] {
-    #if compiler(>=6.4)
-    if #available(iOS 27.1, macOS 27.1, *) {
+    #if compiler(>=6.4) && os(iOS)
+    if #available(iOS 27.1, *) {
         return g.reservedRegions(kind: .occlusion).filter { $0.isActive && $0.frame.minY <= 1 }.map(\.frame)
     }
     #endif
