@@ -568,12 +568,12 @@ defmodule Dokkit.Alerts do
     list
   end
 
-  defp ruled(%Issue{} = issue, machine) do
+  defp ruled(%Issue{} = issue, machine, wanted \\ fn _ -> true end) do
     kind = if issue.kind in ~w(job machine), do: issue.kind, else: "check"
 
     Enum.find(rules(), fn r ->
       r["on"] and r["kind"] in ["", kind] and r["state"] in ["", to_string(issue.state)] and
-        r["machine"] in ["", machine]
+        r["machine"] in ["", machine] and wanted.(r)
     end)
   end
 
@@ -584,27 +584,19 @@ defmodule Dokkit.Alerts do
   def plan(issue, service, now \\ DateTime.utc_now())
 
   def plan(%Issue{} = issue, %Service{environment: "production"} = service, now) do
-    config = config()
-    {channels, rule} = routed(issue, service, config)
-
-    # A soon issue never pages: a page for it goes as a push.
-    channels =
-      if issue.soon,
-        do: channels |> Enum.map(&if(&1 == "page", do: "push", else: &1)) |> Enum.uniq(),
-        else: channels
+    {channels, rule} = routed(issue, service, config())
 
     unless Dokkit.Issues.machine_down?(issue.machine_id) do
-      insert(issue, one_incident(channels, config), &holds?(service, &1, now), rule)
+      insert(issue, channels, &holds?(service, &1, now), rule)
     end
   end
 
   def plan(%Issue{kind: "machine"} = issue, nil, now) do
     machine = Repo.get(Machine, issue.machine_id)
-    config = config()
-    {channels, rule} = routed(issue, nil, config)
+    {channels, rule} = routed(issue, nil, config())
     wakes = machine == nil or machine.silent_wake
 
-    insert(issue, one_incident(channels, config), &(not wakes and held?(&1, now)), rule)
+    insert(issue, channels, &(not wakes and held?(&1, now)), rule)
   end
 
   def plan(_, _, _), do: nil
@@ -613,7 +605,11 @@ defmodule Dokkit.Alerts do
   defp routed(%Issue{kind: "machine"} = issue, nil, config) do
     machine = Repo.get(Machine, issue.machine_id)
     rule = rule_for(issue, machine && machine.name)
-    {first_set([machine && machine.silent_route, rule && rule["channel"], config["down"]]), rule}
+
+    channels =
+      first_set([machine && machine.silent_route, rule && rule["channel"], config["down"]])
+
+    {finish(channels, issue, config), rule}
   end
 
   defp routed(issue, service, config) do
@@ -626,16 +622,11 @@ defmodule Dokkit.Alerts do
         config[to_string(issue.state)]
       ])
 
-    {channels, rule}
+    {finish(channels, issue, config), rule}
   end
 
-  # The channels an issue goes to as things are set now; only production services alert.
-  defp current(%Issue{service: %Service{environment: env}}, _) when env != "production", do: []
-
-  defp current(issue, config) do
-    service = if match?(%Service{}, issue.service), do: issue.service
-    {channels, _} = routed(issue, service, config)
-
+  # A soon issue never pages: a page for it goes as a push.
+  defp finish(channels, issue, config) do
     channels =
       if issue.soon,
         do: channels |> Enum.map(&if(&1 == "page", do: "push", else: &1)) |> Enum.uniq(),
@@ -644,11 +635,19 @@ defmodule Dokkit.Alerts do
     one_incident(channels, config)
   end
 
-  # A soon issue takes no rule, except one that sends to nobody: a machine set to stay quiet stays quiet.
-  defp rule_for(issue, machine) do
-    rule = ruled(issue, machine)
-    if !issue.soon or (rule && split(rule["channel"]) == ["none"]), do: rule
+  # The channels an issue goes to as things are set now; only production services alert.
+  defp current(%Issue{service: %Service{environment: env}}, _) when env != "production", do: []
+
+  defp current(issue, config) do
+    service = if match?(%Service{}, issue.service), do: issue.service
+    issue |> routed(service, config) |> elem(0)
   end
+
+  # A soon issue takes no rule, except one that sends to nobody: a machine set to stay quiet stays quiet.
+  defp rule_for(%Issue{soon: true} = issue, machine),
+    do: ruled(issue, machine, &(split(&1["channel"]) == ["none"]))
+
+  defp rule_for(issue, machine), do: ruled(issue, machine)
 
   # A held alert waits in the database for the sweep after the night ends.
   defp holds?(%Service{night: false}, channel, now), do: held?(channel, now)
@@ -797,6 +796,13 @@ defmodule Dokkit.Alerts do
 
     retarget(issue)
 
+    # A channel added to the route since the issue first opened is told now.
+    if live do
+      have = Repo.all(from a in Alert, where: a.issue_id == ^id, select: a.channel)
+      {_, rule} = routed(issue, issue.service, config)
+      insert(issue, wanted -- have, &holds?(issue.service, &1, now), rule)
+    end
+
     if held,
       do:
         Repo.update_all(
@@ -844,9 +850,9 @@ defmodule Dokkit.Alerts do
     {:noreply, state}
   end
 
-  # A waiting alert for an issue that now goes to nobody is dropped, not sent.
-  defp rerouted?(%Alert{status: status} = alert, config) when status in [:pending, :failed] do
-    gone = current(alert.issue, config) in [[], ["none"]]
+  # An alert not yet tried whose channel the issue no longer routes to is dropped, not sent.
+  defp rerouted?(%Alert{status: :pending, attempts: 0} = alert, config) do
+    gone = alert.channel not in current(alert.issue, config)
     if gone, do: Repo.update!(Ecto.Changeset.change(alert, status: :skipped))
     gone
   end

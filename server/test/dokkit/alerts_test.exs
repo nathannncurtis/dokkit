@@ -306,7 +306,7 @@ defmodule Dokkit.AlertsTest do
     assert Alerts.deliver_pending() == 0
   end
 
-  test "a reopened issue comes back only on the channels it is routed to now", %{
+  test "a reopened issue is told on the channels it is routed to now, not the old page", %{
     key: key,
     service: service
   } do
@@ -317,8 +317,10 @@ defmodule Dokkit.AlertsTest do
     assert Alerts.deliver_pending() == 1
     Repo.update!(Ecto.Changeset.change(service, route_down: "email"))
     Intake.ping(key, "backup", "fail", nil, "")
-    assert Alerts.deliver_pending() == 0
-    assert [%Alert{channel: "page", status: :closed}] = Repo.all(Alert)
+    Alerts.deliver_pending()
+
+    assert [{"email", _}, {"page", :closed}] =
+             Repo.all(from a in Alert, order_by: a.channel, select: {a.channel, a.status})
   end
 
   test "a waiting alert is dropped once its service goes to nobody", %{key: key, service: service} do
