@@ -69,13 +69,52 @@ defmodule Dokkit.Logs do
 
   def subscribe, do: Phoenix.PubSub.subscribe(Dokkit.PubSub, "logs")
 
-  @doc "Newest first. Options: q, level (that level and worse), service, machine, from, to, limit."
+  @doc """
+  The newest lines that match (200 unless `limit`), shown in `order`: a column (at, level,
+  machine, service, msg) and :asc or :desc. Options: q, level (that level and worse), service,
+  machine, from, to. Only the newest are fetched, so sorting never reads the whole table.
+  """
   def list(opts \\ []) do
+    opts |> query() |> limit(^(opts[:limit] || 200)) |> Repo.all() |> sort(opts[:order])
+  end
+
+  @doc "Every line that matches, newest first, fetched 1,000 at a time so no connection is held."
+  def stream(opts) do
+    Stream.unfold(nil, fn
+      :done ->
+        nil
+
+      before ->
+        page = opts |> Keyword.put(:before, before) |> query() |> limit(1000) |> Repo.all()
+
+        case page do
+          [] -> nil
+          lines when length(lines) < 1000 -> {lines, :done}
+          lines -> {lines, lines |> List.last() |> then(&{&1.at, &1.id})}
+        end
+    end)
+    |> Stream.concat()
+  end
+
+  @doc "Orders lines that came newest first by `order`, as `list/1` does."
+  def sort(lines, nil), do: lines
+  def sort(lines, {:at, :desc}), do: lines
+  def sort(lines, {:at, :asc}), do: Enum.reverse(lines)
+  def sort(lines, {:level, dir}), do: Enum.sort_by(lines, &level_rank(&1.level), dir)
+
+  def sort(lines, {:machine, dir}),
+    do: Enum.sort_by(lines, &(&1.machine && &1.machine.name), dir)
+
+  def sort(lines, {:service, dir}),
+    do: Enum.sort_by(lines, &(&1.service && &1.service.name), dir)
+
+  def sort(lines, {:msg, dir}), do: Enum.sort_by(lines, & &1.msg, dir)
+
+  defp level_rank(level), do: Enum.find_index(@levels, &(&1 == level)) || length(@levels)
+
+  defp query(opts) do
     query =
-      from l in Log,
-        order_by: [desc: l.at, desc: l.id],
-        limit: ^(opts[:limit] || 200),
-        preload: [:machine, :service]
+      from l in Log, preload: [:machine, :service], order_by: [desc: l.at, desc: l.id]
 
     query = if opts[:service], do: where(query, [l], l.service_id == ^opts[:service]), else: query
     query = if opts[:machine], do: where(query, [l], l.machine_id == ^opts[:machine]), else: query
@@ -84,7 +123,7 @@ defmodule Dokkit.Logs do
 
     query =
       case opts[:before] do
-        {at, id} -> where(query, [l], l.at < ^at or (l.at == ^at and l.id < ^id))
+        {at, id} -> where(query, [l], l.at <= ^at and (l.at < ^at or l.id < ^id))
         _ -> query
       end
 
@@ -94,20 +133,17 @@ defmodule Dokkit.Logs do
         i -> where(query, [l], l.level in ^Enum.drop(@levels, i))
       end
 
-    query =
-      case String.trim(opts[:q] || "") do
-        "" ->
-          query
+    case String.trim(opts[:q] || "") do
+      "" ->
+        query
 
-        q ->
-          where(
-            query,
-            [l],
-            ilike(l.msg, ^"%#{String.replace(q, ["\\", "%", "_"], &("\\" <> &1))}%")
-          )
-      end
-
-    Repo.all(query)
+      q ->
+        where(
+          query,
+          [l],
+          ilike(l.msg, ^"%#{String.replace(q, ["\\", "%", "_"], &("\\" <> &1))}%")
+        )
+    end
   end
 
   @move_batch 20_000

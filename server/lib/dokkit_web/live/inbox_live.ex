@@ -109,6 +109,7 @@ defmodule DokkitWeb.InboxLive do
     <Layouts.app active={:inbox} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Inbox</h1>
+        <p class="lede">{lede(@counts)}</p>
 
         <div class="end">
           <.link class="btn primary" navigate={~p"/jobs/new"}><.ic name="plus" />New job</.link>
@@ -217,8 +218,6 @@ defmodule DokkitWeb.InboxLive do
             </div>
           </div>
 
-          <div :if={@tab == :now} class="foot">{fine(@fine)}</div>
-
           <div :for={{env, list} <- if(@tab == :now, do: @other, else: [])}>
             <div class="grp">
               {env}<span class="end"><span class="tag">{length(list)}</span></span>
@@ -232,6 +231,14 @@ defmodule DokkitWeb.InboxLive do
               spans={@spans}
               night={@night}
             />
+          </div>
+        </div>
+
+        <div :if={@tab == :now and @fine.services > 0} class="allgood" id="fine">
+          <span class="ic" aria-hidden="true"><.ic name="check-circle" /></span>
+          <div>
+            <p>{fine(@fine)}</p>
+            <p class="sub">Nothing to do there. Dokkit keeps watching.</p>
           </div>
         </div>
 
@@ -269,6 +276,12 @@ defmodule DokkitWeb.InboxLive do
               </div>
             </div>
 
+            <p :if={@day.machines != []} class="legend" aria-hidden="true">
+              <span><b></b>Fine</span><span><b class="warn"></b>Needed a look</span>
+              <span><b class="bad"></b>Down</span><span><b class="plan"></b>Planned downtime</span>
+              <span><b class="none"></b>No signal</span>
+            </p>
+
             <div class="evs">
               <p :if={@day.events == []} class="mute">Nothing opened in the last day.</p>
 
@@ -302,7 +315,7 @@ defmodule DokkitWeb.InboxLive do
 
   defp issue_row(assigns) do
     ~H"""
-    <div class="irow" id={"issue-#{@i.id}"}>
+    <div class={["irow", if(@i.state == :down, do: "down", else: "warn")]} id={"issue-#{@i.id}"}>
       <input
         :if={@tab in [:now, :soon]}
         class="chk"
@@ -334,6 +347,7 @@ defmodule DokkitWeb.InboxLive do
                 aria-label={if @i.state == :down, do: "Down", else: "Needs a look"}
               ></span><span>{@i.title}</span>
             </div>
+            <p class="say">{sentence(@i)}</p>
 
             <div class="meta">
               <span class="tag">{issue_kind(@i)}</span>
@@ -352,7 +366,12 @@ defmodule DokkitWeb.InboxLive do
           <.link class="tag" title={@i.machine.name} navigate={~p"/machines/#{@i.machine_id}"}>
             {@i.machine.name}
           </.link>
-          <span :if={@tab == :snoozed}></span> <.ic :if={@tab != :snoozed} name="caret-down" />
+          <span class="nx">
+            <.link class="btn sm soft" navigate={where(@i)}>
+              {next_step(@i)}<.ic name="arrow-right" />
+            </.link>
+            <.ic :if={@tab != :snoozed} name="caret-down" />
+          </span>
         </summary>
 
         <div class="foot">
@@ -437,8 +456,45 @@ defmodule DokkitWeb.InboxLive do
   end
 
   defp fine(%{services: n, machines: m}) do
-    "#{n} more #{if n == 1, do: "is", else: "are"} fine, on #{m} #{if m == 1, do: "machine", else: "machines"}."
+    "Everything else is fine: #{plural(n, "service", "services")} on #{plural(m, "machine", "machines")}."
   end
+
+  defp plural(1, one, _), do: "1 #{one}"
+  defp plural(n, _, many), do: "#{n} #{many}"
+
+  defp lede(%{now: now, soon: soon}) do
+    first =
+      if now == 0,
+        do: "Nothing needs you right now.",
+        else: "#{plural(now, "thing needs", "things need")} you."
+
+    second =
+      case soon do
+        0 -> "Nothing is coming up."
+        1 -> "1 is coming up."
+        n -> "#{n} are coming up."
+      end
+
+    first <> " " <> second
+  end
+
+  defp sentence(%Issue{} = i) do
+    where =
+      case i do
+        %{service: %{slug: "machine"}} -> i.machine.name
+        %{service: %{name: name}} -> "#{name} on #{i.machine.name}"
+        _ -> i.machine.name
+      end
+
+    if i.state == :down,
+      do: "Something is wrong with #{where}.",
+      else: "Working, but not as it should: #{where}."
+  end
+
+  defp next_step(%Issue{kind: "job"}), do: "See the runs"
+  defp next_step(%Issue{service_id: nil}), do: "Open the machine"
+  defp next_step(%Issue{check: %{type: :http}}), do: "Check the address"
+  defp next_step(_), do: "Look into it"
 
   defp how("port"), do: "Listening port"
   defp how(_), do: "Running service"
@@ -483,7 +539,9 @@ defmodule DokkitWeb.InboxLive do
   defp planned_names(list),
     do: Enum.map_join(list, ", ", &"#{&1.name} until #{hm(&1.planned.until)} UTC")
 
-  defp estate(%{planned: %{until: until}, attention: 0}), do: "planned downtime until #{hm(until)} UTC"
+  defp estate(%{planned: %{until: until}, attention: 0}),
+    do: "planned downtime until #{hm(until)} UTC"
+
   defp estate(%{attention: 1}), do: "1 needs a look"
   defp estate(%{attention: n}) when n > 1, do: "#{n} need a look"
   defp estate(%{soon: n}) when n > 0, do: "#{n} soon"

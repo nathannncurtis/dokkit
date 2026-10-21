@@ -140,6 +140,7 @@ defmodule DokkitWeb.EnrolLive do
       </div>
       <div class="head">
         <h1 tabindex="-1">Add a machine</h1>
+        <p class="lede">Put the Dokkit program on a machine and it starts reporting within a minute.</p>
       </div>
       <div class="body set">
         <div :if={@os != "windows"} class="card">

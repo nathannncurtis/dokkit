@@ -47,9 +47,19 @@ defmodule DokkitWeb.Layouts do
     ~H"""
     <div class="shell">
       <nav class="side" aria-label="Main">
-        <.link class="org" navigate={~p"/"}>
-          <.mark /> <span><b>Dokkit</b></span>
-        </.link>
+        <div class="brandrow">
+          <.link class="org" navigate={~p"/"}>
+            <.mark /> <span><b>Dokkit</b></span>
+          </.link>
+          <button
+            class="theme"
+            type="button"
+            aria-label="Switch between light and dark"
+            onclick="dokkitLook('theme', document.documentElement.classList.contains('t-dark') ? 'light' : 'dark')"
+          >
+            <i class="ph ph-sun" aria-hidden="true"></i><i class="ph ph-moon-stars" aria-hidden="true"></i>
+          </button>
+        </div>
 
         <%= for {heading, items} <- nav() do %>
           <h3>{heading}</h3>
