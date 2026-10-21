@@ -94,7 +94,7 @@ State tints, each a soft surface, an ink for text on it and a solid for marks (l
 ## Phone apps only
 
 These rules are for the Android and iOS apps, and only there they replace the matching rules above. The
-approved direction is "Statement", mocked as `gallery/calm-ember-android/j.html` and built in `apps/android/`.
+approved direction is "Statement", built in `apps/android/`.
 
 - **Type.** Figtree for everything, technical strings included: machine and service names, ids, times and
   numbers use Figtree, not IBM Plex Mono. Big figures use the heavy weight.
