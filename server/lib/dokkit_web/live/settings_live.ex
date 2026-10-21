@@ -357,17 +357,18 @@ defmodule DokkitWeb.SettingsLive do
     <Layouts.app active={:settings} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Settings</h1>
+
         <p class="lede">How Dokkit keeps its data, who can use it, and how it looks.</p>
-         <a class="btn ghost sm" href={~p"/two-step"}>Two-step sign-in</a>
+        <a class="btn ghost sm" href={~p"/two-step"}>Two-step sign-in</a>
         <a class="btn ghost sm" href={~p"/password"}>Change password</a>
       </div>
-      
+
       <div class="body set">
         <p :if={@error} class="lead bad" role="alert">{@error}</p>
-        
+
         <div class="card">
           <h2>People<span class="cnt">{length(@people)}</span></h2>
-          
+
           <div :for={p <- @people} class="est" id={"person-#{p.id}"}>
             <b>{p.name}</b>
             <span style="display:flex; gap:8px; align-items:center">
@@ -384,16 +385,16 @@ defmodule DokkitWeb.SettingsLive do
               </button>
             </span>
           </div>
-          
+
           <form :if={@owner} class="foot" phx-submit="add" id="person-form">
             <input class="inp" name="person[name]" placeholder="Name" aria-label="Name" required />
             <span class="dd">
               <select class="inp" name="person[role]" aria-label="Role">
                 <option :for={{text, value} <- @roles} value={value}>{text}</option>
               </select>
-               <.ic name="caret-down" />
+              <.ic name="caret-down" />
             </span>
-            
+
             <input
               class="inp"
               type="password"
@@ -404,39 +405,39 @@ defmodule DokkitWeb.SettingsLive do
               required
             /> <span class="end"><button class="btn primary" type="submit">Add person</button></span>
           </form>
-          
+
           <p class="lead">
             A member can do everything except manage people, keys and alert channels. A viewer can look and change nothing.
           </p>
         </div>
-        
+
         <div class="card">
           <h2>Keys<span class="cnt">{length(@keys)}</span></h2>
-          
+
           <p :if={@keys == []} class="lead">No keys yet. Adding a job or a machine makes one.</p>
-          
+
           <div :if={@keys != []} class="lh cols-key" style={@key_cols}>
             <span>Key</span><span>Kind</span><span>Made</span><span>Last used</span><span></span>
           </div>
-          
+
           <div :for={k <- @keys} class="li slim cols-key" style={@key_cols} id={"key-#{k.id}"}>
             <div>
               <div class="ti"><span>{k.label || holder(k)}</span></div>
-              
+
               <div class="sub mono">
                 {k.hint}{if k.scopes != [], do: "  " <> Enum.join(k.scopes, ", ")}
               </div>
             </div>
-            
+
             <span class={["tag", "admin" in k.scopes && "bad"]}>
               {if "admin" in k.scopes, do: "Full control", else: @kinds[k.kind]}
             </span>
-             <span class="mono">{at(k.inserted_at)}</span>
+            <span class="mono">{at(k.inserted_at)}</span>
             <span :if={k.used_at} class="mono">{at(k.used_at)}</span>
             <span :if={!k.used_at and k.kind == :enrol} class="mono left">
               Unused, {Keys.left(k, DateTime.utc_now())} left
             </span>
-             <span :if={!k.used_at and k.kind != :enrol} class="mute">Never</span>
+            <span :if={!k.used_at and k.kind != :enrol} class="mute">Never</span>
             <button
               :if={@owner}
               class="btn sm"
@@ -447,17 +448,17 @@ defmodule DokkitWeb.SettingsLive do
             >
               Revoke
             </button>
-             <span :if={!@owner}></span>
+            <span :if={!@owner}></span>
           </div>
         </div>
-        
+
         <div :if={@owner} class="card" id="releases">
           <h2>Releases<span class="end">Held for the updaters to fetch</span></h2>
-          
+
           <p :if={@releases == []} class="lead">
             No release is held. The release workflow puts one here with PUT /api/v1/releases.
           </p>
-          
+
           <div
             :for={r <- @releases}
             class="li slim"
@@ -466,19 +467,19 @@ defmodule DokkitWeb.SettingsLive do
           >
             <div>
               <div class="ti"><span class="mono">{r.version}</span></div>
-              
+
               <div class="sub mono">{Enum.join(r.files, ", ")}</div>
             </div>
-            
+
             <span class={["tag", !r.complete && "warn"]}>
               {if r.complete, do: "Complete", else: "Incomplete"}
             </span>
           </div>
         </div>
-        
+
         <div :if={@owner} class="card" id="certificate">
           <h2>Certificate</h2>
-          
+
           <div
             :for={
               {label, c} <- [
@@ -498,11 +499,11 @@ defmodule DokkitWeb.SettingsLive do
               )} <span :if={c.self_signed} class="tag">self-signed</span>
             </span>
           </div>
-          
+
           <p class="lead">
             A certificate for a real name, with its chain after it, is served to clients that ask for that name. Machines pinned to the installed certificate are not affected.
           </p>
-          
+
           <form
             style="display:grid; gap:12px; padding:12px 16px 0"
             phx-submit="certificate_save"
@@ -518,7 +519,7 @@ defmodule DokkitWeb.SettingsLive do
                 required
               ></textarea>
             </label>
-            
+
             <label style="display:grid; gap:6px">
               Private key <textarea
                 class="inp"
@@ -530,7 +531,7 @@ defmodule DokkitWeb.SettingsLive do
                 required
               ></textarea>
             </label>
-            
+
             <span class="foot" style="padding-inline:0; margin-inline:-16px; padding-inline:16px">
               <span
                 :if={@cert_result}
@@ -540,7 +541,7 @@ defmodule DokkitWeb.SettingsLive do
               >
                 {elem(@cert_result, 1)}
               </span>
-              
+
               <span class="end">
                 <button
                   :if={@certificates.uploaded}
@@ -551,11 +552,11 @@ defmodule DokkitWeb.SettingsLive do
                 >
                   Remove
                 </button>
-                 <button class="btn primary" type="submit">Save</button>
+                <button class="btn primary" type="submit">Save</button>
               </span>
             </span>
           </form>
-          
+
           <form
             style="display:grid; gap:12px; padding:12px 16px 0"
             phx-submit="acme_save"
@@ -564,7 +565,7 @@ defmodule DokkitWeb.SettingsLive do
             <p class="lead" style="margin:0">
               Dokkit can get this certificate and renew it by itself from Let's Encrypt, proving the name with a DNS record at Cloudflare.
             </p>
-            
+
             <label style="display:grid; gap:6px">
               DNS name
               <input
@@ -576,7 +577,7 @@ defmodule DokkitWeb.SettingsLive do
                 spellcheck="false"
               />
             </label>
-            
+
             <label style="display:grid; gap:6px">
               Cloudflare API token that may edit DNS in that name's zone
               <input
@@ -587,7 +588,7 @@ defmodule DokkitWeb.SettingsLive do
                 autocomplete="new-password"
               />
             </label>
-            
+
             <label style="display:grid; gap:6px">
               Certificate authority directory
               <input
@@ -598,7 +599,7 @@ defmodule DokkitWeb.SettingsLive do
                 spellcheck="false"
               />
             </label>
-            
+
             <span class="foot" style="padding-inline:16px; margin-inline:-16px">
               <span
                 :if={@certificates.renewal}
@@ -607,7 +608,7 @@ defmodule DokkitWeb.SettingsLive do
               >
                 {@certificates.renewal.note}
               </span>
-               <span :if={@acme_busy} role="status">Working, this takes a few minutes.</span>
+              <span :if={@acme_busy} role="status">Working, this takes a few minutes.</span>
               <span
                 :if={@acme_result}
                 class={elem(@acme_result, 0) == :error && "bad"}
@@ -616,12 +617,12 @@ defmodule DokkitWeb.SettingsLive do
               >
                 {elem(@acme_result, 1)}
               </span>
-              
+
               <span class="end">
                 <button class="btn" type="button" phx-click="acme_now" disabled={@acme_busy}>
                   Get a certificate now
                 </button>
-                 <button class="btn primary" type="submit">Save</button>
+                <button class="btn primary" type="submit">Save</button>
               </span>
             </span>
           </form>
@@ -669,6 +670,7 @@ defmodule DokkitWeb.SettingsLive do
               >
                 {@dokkit_name["note"]}
               </span>
+
               <span
                 :if={@name_result}
                 class={elem(@name_result, 0) == :error && "bad"}
@@ -689,11 +691,11 @@ defmodule DokkitWeb.SettingsLive do
 
         <div :if={@owner} class="card" id="phones">
           <h2>Phones<span class="cnt">{length(@phones)}</span></h2>
-          
+
           <p class="lead">
             A phone shows what needs attention and the state of every machine and service, read only. This server sends a sealed snapshot to a relay, one you run or the shared one, and each phone fetches its own copy from there. The relay cannot read it.
           </p>
-          
+
           <form
             style="display:grid; gap:12px; padding:12px 16px 0"
             phx-submit="relay_save"
@@ -710,7 +712,7 @@ defmodule DokkitWeb.SettingsLive do
                 spellcheck="false"
               />
             </label>
-            
+
             <label style="display:grid; gap:6px">
               Mailbox
               <input
@@ -722,7 +724,7 @@ defmodule DokkitWeb.SettingsLive do
                 spellcheck="false"
               />
             </label>
-            
+
             <label style="display:grid; gap:6px">
               Upload key
               <input
@@ -733,18 +735,18 @@ defmodule DokkitWeb.SettingsLive do
                 autocomplete="new-password"
               />
             </label>
-            
+
             <p class="lead" style="margin:0">
               Saving uploads one snapshot to the relay. Phones stay paired only when the address and the mailbox are the same; with a different one the {length(
                 @phones
               )} phones listed below are removed and each is paired again.
             </p>
-            
+
             <span class="foot" style="padding-inline:16px; margin-inline:-16px">
               <span :if={@relay.last_error} class="bad" id="relay-error">
                 {@relay.last_error}
               </span>
-              
+
               <span
                 :if={@relay_result}
                 class={elem(@relay_result, 0) == :error && "bad"}
@@ -753,29 +755,29 @@ defmodule DokkitWeb.SettingsLive do
               >
                 {elem(@relay_result, 1)}
               </span>
-              
+
               <span class="end">
                 <button class="btn" type="button" phx-click="relay_shared" id="relay-shared">
                   Use the shared relay at {URI.parse(@shared_relay).host}
                 </button>
-                 <button class="btn primary" type="submit">Save</button>
+                <button class="btn primary" type="submit">Save</button>
               </span>
             </span>
           </form>
-          
+
           <div :if={@phone_new} class="once" id="phone-new">
             <b>{@phone_new.name}</b>
             <div class="qr" id="phone-qr">{Phoenix.HTML.raw(@phone_new.qr)}</div>
-            
+
             <span class="mono" id="phone-code" style="overflow-wrap:anywhere">{@phone_new.code}</span>
             <button class="btn sm" type="button" data-copy="#phone-code">Copy</button>
             <button class="btn sm" type="button" phx-click="phone_hide">Done</button>
           </div>
-          
+
           <p :if={@phone_new} class="lead" style="padding-top: 0">
             Scan this in the app, or paste the text. It is shown only now and goes away after two minutes.
           </p>
-          
+
           <div
             :for={p <- @phones}
             class="li slim"
@@ -784,14 +786,14 @@ defmodule DokkitWeb.SettingsLive do
           >
             <div>
               <div class="ti"><span>{p.name}</span></div>
-              
+
               <div class="sub">
                 Added {at(p.inserted_at)}, {if p.last_fetch_at,
                   do: "last fetched " <> at(p.last_fetch_at),
                   else: "not fetched yet"}
               </div>
             </div>
-            
+
             <button
               class="btn sm"
               type="button"
@@ -802,9 +804,9 @@ defmodule DokkitWeb.SettingsLive do
               Remove
             </button>
           </div>
-          
+
           <p :if={@phone_error} class="lead bad" role="alert" id="phone-error">{@phone_error}</p>
-          
+
           <form class="foot" phx-submit="phone_add" id="phone-form">
             <input
               class="inp"
@@ -815,26 +817,26 @@ defmodule DokkitWeb.SettingsLive do
             /> <span class="end"><button class="btn primary" type="submit">Add a phone</button></span>
           </form>
         </div>
-        
+
         <div :if={@owner} class="card">
           <h2>Access for scripts and AI tools</h2>
-          
+
           <p class="lead">
             A user token reads Dokkit through the API. Give it only what it needs: log contents are a separate permission, and so is acting on issues.
           </p>
-          
+
           <div :if={@new_token} class="once">
             <span class="mono" id="new-token">{@new_token}</span>
             <button class="btn sm" type="button" data-copy="#new-token">Copy</button>
           </div>
-          
+
           <p :if={@new_token} class="lead" style="padding-top: 0">
             Shown only now. Send it with each request as
             <code>Authorization: Bearer &lt;token&gt;</code>
             to <code>{Dokkit.Certificate.url()}/api/v1/machines</code>
             for a first try; AI tools use <code>{Dokkit.Certificate.url()}/mcp</code>.
           </p>
-          
+
           <form class="foot" phx-submit="token" id="token-form">
             <input
               class="inp"
@@ -848,12 +850,12 @@ defmodule DokkitWeb.SettingsLive do
             Act: snooze, acknowledge, watch, route</label>
             <span class="end"><button class="btn primary" type="submit">Make a user token</button></span>
           </form>
-          
+
           <div :if={!@full} class="est">
             <span>Let a script or an AI tool do everything you can do here.</span>
             <button class="btn sm" type="button" phx-click="full" id="full-open">Full control</button>
           </div>
-          
+
           <form
             :if={@full}
             class="sure"
@@ -862,30 +864,30 @@ defmodule DokkitWeb.SettingsLive do
             id="full-form"
           >
             <h3>A token that can do everything</h3>
-            
+
             <p>
               Whatever holds this token can do anything you can do in Dokkit, and nobody is asked first:
             </p>
-            
+
             <ul>
               <li>Make and revoke keys, and add and remove people, owners included</li>
-              
+
               <li>Change who is told, and silence an alert for good</li>
-              
+
               <li>Accept what a scan found, change checks, and let services be restarted</li>
-              
+
               <li>Read everything, log contents included</li>
             </ul>
-            
+
             <p>
               An AI tool acts on what it reads, and it reads log lines and error text that your apps wrote. Give this only to a tool you would hand your own password.
             </p>
-            
+
             <label>
               What it is for
               <input class="inp" name="full[label]" value={@full_form["label"]} required />
             </label>
-            
+
             <label>
               <span>Type <b>{@host}</b> to confirm</span>
               <input
@@ -896,7 +898,7 @@ defmodule DokkitWeb.SettingsLive do
                 spellcheck="false"
               />
             </label>
-            
+
             <label class="tick">
               <input
                 type="checkbox"
@@ -905,7 +907,7 @@ defmodule DokkitWeb.SettingsLive do
                 checked={@full_form["sure"] == "true"}
               /> I understand this token can remove people and keys, mine included.
             </label>
-            
+
             <span class="end">
               <button class="btn" type="button" phx-click="full">Cancel</button>
               <button class="btn danger" type="submit" disabled={!@full_ok}>
@@ -914,10 +916,10 @@ defmodule DokkitWeb.SettingsLive do
             </span>
           </form>
         </div>
-        
+
         <div :if={@owner} class="card" id="log-retention">
           <h2>Logs</h2>
-          
+
           <form
             style="display:grid; gap:12px; padding:12px 16px 0"
             phx-change="retention_change"
@@ -927,7 +929,7 @@ defmodule DokkitWeb.SettingsLive do
             <p class="lead" style="margin:0">
               {@ret_stats}
             </p>
-            
+
             <label style="display:grid; gap:6px">
               Months that stay live
               <input
@@ -940,18 +942,18 @@ defmodule DokkitWeb.SettingsLive do
                 step="1"
               />
             </label>
-            
+
             <label style="display:grid; gap:6px">
               A month older than that is
               <select class="inp" name="retention[action]">
                 <option value="archive" selected={@ret["action"] == "archive"}>
                   Archived to a file
                 </option>
-                
+
                 <option value="delete" selected={@ret["action"] == "delete"}>Deleted</option>
               </select>
             </label>
-            
+
             <label :if={@ret["action"] == "delete"}>
               <input
                 type="checkbox"
@@ -960,11 +962,11 @@ defmodule DokkitWeb.SettingsLive do
                 checked={@ret["confirm"] == "true"}
               /> I understand old logs will be deleted, not archived
             </label>
-            
+
             <p class="lead" style="margin:0" id="retention-note">
               {@ret_note} Archived files that already exist stay, and can still be loaded back.
             </p>
-            
+
             <span class="foot" style="padding-inline:16px; margin-inline:-16px">
               <span
                 :if={@ret_result}
@@ -974,21 +976,21 @@ defmodule DokkitWeb.SettingsLive do
               >
                 {elem(@ret_result, 1)}
               </span>
-              
+
               <span class="end">
                 <button class="btn primary" type="submit">Save</button>
               </span>
             </span>
           </form>
         </div>
-        
+
         <div :if={@archives != []} class="card">
           <h2>Archived logs<span class="cnt">{length(@archives)}</span></h2>
-          
+
           <p class="lead">
             Months past the live limit. One loaded back can be searched for a week.
           </p>
-          
+
           <div
             :for={a <- @archives}
             class="li slim"
@@ -1013,13 +1015,13 @@ defmodule DokkitWeb.SettingsLive do
             </button>
           </div>
         </div>
-        
+
         <div class="card">
           <h2>Appearance</h2>
-          
+
           <dl class="kv" id="look" phx-hook="Look" phx-update="ignore">
             <dt>Theme</dt>
-            
+
             <dd>
               <div class="opts">
                 <.look_opt key="theme" value="light" label="Light" sw="t-light" />
@@ -1027,9 +1029,9 @@ defmodule DokkitWeb.SettingsLive do
                 <.look_opt key="theme" value="" label="Follow this device" sw="" />
               </div>
             </dd>
-            
+
             <dt>Dark base</dt>
-            
+
             <dd>
               <div class="opts">
                 <.look_opt
@@ -1040,11 +1042,11 @@ defmodule DokkitWeb.SettingsLive do
                   sw={"t-dark d-#{v}"}
                 />
               </div>
-               <span class="hint">Applies in dark. Ember also warms the light theme.</span>
+              <span class="hint">Applies in dark. Ember also warms the light theme.</span>
             </dd>
-            
+
             <dt>Accent</dt>
-            
+
             <dd>
               <div class="opts">
                 <button
@@ -1059,9 +1061,9 @@ defmodule DokkitWeb.SettingsLive do
                 </button>
               </div>
             </dd>
-            
+
             <dt>Preview</dt>
-            
+
             <dd>
               <div class="look-pv">
                 <button class="btn primary" type="button">Primary</button>
@@ -1072,7 +1074,7 @@ defmodule DokkitWeb.SettingsLive do
                   <b style="color: var(--bad)">Down</b>
                 </span>
               </div>
-              
+
               <span class="hint">
                 Each choice applies as you click it and is kept in this browser. There is nothing to save.
               </span>

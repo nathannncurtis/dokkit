@@ -93,13 +93,13 @@ defmodule DokkitWeb.Show do
     <svg viewBox="0 0 600 150" role="img" aria-label={@label} class="line">
       <line :for={v <- [@lo, @mid, @hi]} x1="54" x2="592" y1={@y.(v)} y2={@y.(v)} />
       <text :for={v <- [@lo, @mid, @hi]} x="48" y={@y.(v) + 4} text-anchor="end">{round(v)}%</text>
-       <line :if={@limit} class="mk" x1="54" x2="592" y1={@y.(@limit)} y2={@y.(@limit)} />
+      <line :if={@limit} class="mk" x1="54" x2="592" y1={@y.(@limit)} y2={@y.(@limit)} />
       <text :if={@limit} class="mk" x="592" y={@y.(@limit) - 4} text-anchor="end">
         limit {round(@limit)}%
       </text>
-       <path d={@path} />
+      <path d={@path} />
       <text x="54" y="144">{at(@first)}</text>
-      
+
       <text x="592" y="144" text-anchor="end">{at(@last)}</text>
     </svg>
     """
