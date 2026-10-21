@@ -6,7 +6,7 @@ The app is not on the App Store yet. Until it is, you build it and sign it with 
 
 ## Build and install
 
-You need a Mac with Xcode 16 or later, an iPhone on iOS 17 or later, and an Apple ID.
+You need a Mac with Xcode 16 or later, an iPhone on iOS 17 or later, and an Apple ID. Build with Xcode 27.1 or later for the foldable layout below; an older Xcode builds the app without it.
 
 1. Install XcodeGen: `brew install xcodegen`.
 2. In this folder run `xcodegen generate`. It writes `Dokkit.xcodeproj`.
@@ -25,12 +25,37 @@ An app signed with a free Apple ID stops opening after seven days. Run it from X
 
 Several servers can be paired. Remove one from Servers and its key, token and saved snapshot are deleted from the phone.
 
+## On a foldable
+
+On the iPhone Duo the app follows how the phone is held.
+
+- Folded, or open and turned 90°, it is the phone app at full width.
+- Open like a book, it spreads across both pages as one app: one bar and one background over the fold, the tab's own page on the left and what it opened on the right. Home leads with the top issue on the right, or the last day and machines when everything is fine. Servers shows the chosen server's details on the right; Settings shows the groups on the left and the open group on the right.
+- Where the fold and the camera sit comes from the system, so nothing is placed on the fold or under the camera.
+- It rotates on a foldable only; every other iPhone stays portrait. It is the same build for every iPhone: pages are laid out by the window's size, not by the model.
+
+Folding or unfolding does not count as leaving the app, so it does not ask to unlock again.
+
+## Look at it without a server
+
+Debug builds carry a made-up relay at `demo.dokkit.invalid` that seals a demo snapshot the way a server does, so the real pairing and opening code runs. Two demo servers can be paired by pasting `NORTHWIND_CODE` or `HARBOR_LAB_CODE` from `Dokkit/Debug/DemoRelay.swift`: "northwind" has things that need you, "harbor-lab" is the same estate with everything fine.
+
+Debug builds also take launch arguments, so a simulator can be walked through every screen without typing:
+
+| Argument | What |
+|---|---|
+| `-dokkitDemo YES` | Pairs both demo servers. |
+| `-dokkitRoute home/machine/db-01` | Opens a screen: `home`, `home/service/<id>`, `home/machine/<id>`, `home/picking`, `home/first`, `servers`, `servers/add`, `servers/paste`, `settings/<group>`. Add `@harbor-lab` to show that server. |
+| `-dokkitShowLock YES` | Shows the lock screen without asking to unlock. |
+
+For example: `xcrun simctl launch booted to.nathancurtis.dokkit -dokkitDemo YES -dokkitRoute home/service/s-purge`. None of this is in a release build.
+
 ## What is in this folder
 
 | Path | What |
 |---|---|
 | `DokkitKit/` | Swift package. `DokkitKit` holds everything that is not a screen: snapshot models, opening a sealed snapshot, pairing codes, the relay client, the Keychain and file stores, and what each screen shows. `DokkitUI` holds the SwiftUI screens. |
-| `Dokkit/` | The app: `@main`, `Info.plist`, the camera scanner, the unlock gate, assets. |
+| `Dokkit/` | The app: `@main`, `Info.plist`, the camera scanner, the unlock gate, assets. `Dokkit/Debug/` is the demo relay and its snapshots, left out of release builds. |
 | `project.yml` | XcodeGen description of the app target. |
 | `sync-fixtures.sh` | Copies the spec's test fixtures into the package. |
 
@@ -50,7 +75,8 @@ It exits non-zero when a check fails. The fixtures it reads are copies of `spec/
 - Fetches when opened, when the screen is pulled down, and every 30 seconds while in front. Nothing runs in the background.
 - Shows the age of the snapshot at the top of each screen; past five minutes it is a warning. With no network, or when the relay answers an error, the last snapshot stays on screen and the message says what happened.
 - Refuses a snapshot whose counter is lower than the newest it has opened.
-- Asks for Face ID or the passcode on every launch and every return from the background.
+- Asks for Face ID, Touch ID or the passcode, whichever the phone has, on every launch and every return from the background.
+- Has a Settings tab for what it used to hard-code: the theme, how often it fetches, when a snapshot counts as late, when a meter turns amber, how many fine services a machine lists, the relay timeout and when to ask to unlock. Each shows the value the app always used as its default, with a Reset; they apply to this phone only.
 - Keeps the phone key and fetch token in the Keychain (after first unlock, this device only, not synchronised) and the last snapshot in a file protected until first unlock and excluded from backup.
 - Contacts only the paired relays, over https. No account, analytics, crash reporting or third-party packages.
-- Uses the system fonts, so Dynamic Type works everywhere.
+- Uses Figtree, bundled under the SIL Open Font License, sized with Dynamic Type, and Phosphor icons, bundled under the MIT licence. Light and dark follow the phone unless the theme in Settings says otherwise; a chosen theme applies from launch, the lock screen included.

@@ -165,9 +165,10 @@ public struct Machine: Codable, Sendable, Equatable {
     public var schedules: [Schedule]?
     public var services: [Service]?
     public var needsALook: Int?
+    public var lastDay: [String]?
     enum CodingKeys: String, CodingKey {
         case id, name, os, kind, down, lastSeenAt = "last_seen_at", vitals, plannedDowntime = "planned_downtime"
-        case schedules, services, needsALook = "needs_a_look"
+        case schedules, services, needsALook = "needs_a_look", lastDay = "last_day"
     }
 }
 

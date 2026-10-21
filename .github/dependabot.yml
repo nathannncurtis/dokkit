@@ -29,6 +29,9 @@ updates:
     directories: [/clients/rust, /clients/conformance/programs/rust, /apps/desktop/src-tauri]
     schedule: { interval: monthly }
     groups: { cargo: { patterns: ["*"] } }
+    # windows-core must match the version webview2-com is built against; it moves with webview2-com.
+    ignore:
+      - dependency-name: windows-core
   - package-ecosystem: pip
     directory: /clients/python
     schedule: { interval: monthly }
