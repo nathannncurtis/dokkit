@@ -111,6 +111,7 @@ defmodule DokkitWeb.InboxLive do
     <Layouts.app active={:inbox} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Inbox</h1>
+
         <p class="lede">{lede(@counts)}</p>
 
         <div class="end">
@@ -240,6 +241,7 @@ defmodule DokkitWeb.InboxLive do
           <span class="ic" aria-hidden="true"><.ic name="check-circle" /></span>
           <div>
             <p>{fine(@fine)}</p>
+
             <p class="sub">Nothing to do there. Dokkit keeps watching.</p>
           </div>
         </div>
@@ -351,6 +353,7 @@ defmodule DokkitWeb.InboxLive do
                 aria-label={if @i.state == :down, do: "Down", else: "Needs a look"}
               ></span><span>{@i.title}</span>
             </div>
+
             <p class="say">{sentence(@i)}</p>
 
             <div class="meta">
@@ -367,9 +370,11 @@ defmodule DokkitWeb.InboxLive do
           <div class="num">
             <span :if={@i.count > 1}>{@i.count}<small>times</small></span>
           </div>
+
           <.link class="tag" title={@i.machine.name} navigate={~p"/machines/#{@i.machine_id}"}>
             {@i.machine.name}
           </.link>
+
           <span class="nx">
             <.link class="btn sm soft" navigate={where(@i)}>
               {next_step(@i)}<.ic name="arrow-right" />
