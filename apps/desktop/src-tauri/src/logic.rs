@@ -86,12 +86,19 @@ pub fn awake(all: &[Issue], now: DateTime<Utc>) -> Vec<Issue> {
     all.iter().filter(|i| !snoozed(i, now)).cloned().collect()
 }
 
-/// Issues in `candidates` not in `seen`. Nothing is new before the first poll has been seen.
-pub fn fresh(seen: Option<&HashSet<String>>, candidates: &[Issue]) -> Vec<Issue> {
-    match seen {
+/// Issues in `candidates` that were not in the notify set at the last poll. Nothing is new before the first poll.
+pub fn fresh(prev: Option<&HashSet<String>>, candidates: &[Issue]) -> Vec<Issue> {
+    match prev {
         None => vec![],
-        Some(seen) => candidates.iter().filter(|i| !seen.contains(&i.id)).cloned().collect(),
+        Some(prev) => candidates.iter().filter(|i| !prev.contains(&i.id)).cloned().collect(),
     }
+}
+
+#[cfg(any(target_os = "macos", test))]
+/// `host:port` of a server address, the key its pinned certificate is stored under.
+pub fn pin_key(url: &str) -> Option<String> {
+    let u = Url::parse(url).ok()?;
+    Some(format!("{}:{}", u.host_str()?.to_lowercase(), u.port_or_known_default()?))
 }
 
 pub fn issue_path(i: &Issue) -> String {
@@ -101,8 +108,8 @@ pub fn issue_path(i: &Issue) -> String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Level {
     Fine,
-    Needs,
     Down,
+    Needs,
 }
 
 pub fn worst(levels: &[Level]) -> Level {
@@ -194,6 +201,23 @@ mod tests {
     }
 
     #[test]
+    fn issues_entering_the_notify_set_are_fresh() {
+        let (a, b) = (issue("a", false, None, None), issue("b", false, None, None));
+        // b was open but outside the notify set last poll (soon or snoozed), so it is new when it enters
+        let last: HashSet<String> = ["a".to_string()].into();
+        assert_eq!(fresh(Some(&last), &[a.clone(), b.clone()]), [b.clone()]);
+        let now_both: HashSet<String> = ["a".to_string(), "b".to_string()].into();
+        assert!(fresh(Some(&now_both), &[a, b]).is_empty());
+    }
+
+    #[test]
+    fn pins_are_keyed_by_host_and_port() {
+        assert_eq!(pin_key("https://Acme.Test").as_deref(), Some("acme.test:443"));
+        assert_eq!(pin_key("https://acme.test:8443").as_deref(), Some("acme.test:8443"));
+        assert_ne!(pin_key("https://acme.test:8443"), pin_key("https://acme.test:9443"));
+    }
+
+    #[test]
     fn issue_pages() {
         assert_eq!(issue_path(&issue("a", false, None, Some("s1"))), "/s/s1");
         assert_eq!(issue_path(&issue("a", false, None, None)), "/");
@@ -203,6 +227,7 @@ mod tests {
     fn worst_level_wins() {
         assert_eq!(worst(&[]), Level::Fine);
         assert_eq!(worst(&[Level::Fine, Level::Needs]), Level::Needs);
-        assert_eq!(worst(&[Level::Needs, Level::Down, Level::Fine]), Level::Down);
+        assert_eq!(worst(&[Level::Needs, Level::Down, Level::Fine]), Level::Needs);
+        assert_eq!(worst(&[Level::Fine, Level::Down]), Level::Down);
     }
 }

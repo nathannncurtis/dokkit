@@ -10,6 +10,7 @@ pub enum Notify {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Server {
     pub id: String,
     pub name: String,
@@ -17,6 +18,12 @@ pub struct Server {
     pub notify: bool,
     pub pin: Option<String>,
     pub allow_http: bool,
+}
+
+impl Default for Server {
+    fn default() -> Self {
+        Server { id: String::new(), name: String::new(), url: String::new(), notify: true, pin: None, allow_http: false }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -39,14 +46,31 @@ impl Default for Settings {
 
 impl Settings {
     pub fn load(path: &Path) -> Settings {
-        std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+        let Ok(bytes) = std::fs::read(path) else { return Settings::default() };
+        match serde_json::from_slice::<Settings>(&bytes) {
+            Ok(mut s) => {
+                s.servers.retain(|v| !v.id.is_empty() && !v.url.is_empty());
+                s
+            }
+            Err(e) => {
+                let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+                let bad = path.with_file_name(format!("settings.json.bad-{stamp}"));
+                match std::fs::rename(path, &bad) {
+                    Ok(()) => eprintln!("settings file is unreadable ({e}); kept as {}", bad.display()),
+                    Err(re) => eprintln!("settings file is unreadable ({e}) and could not be set aside: {re}"),
+                }
+                Settings::default()
+            }
+        }
     }
 
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        std::fs::write(path, serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?)
+        let tmp = path.with_file_name("settings.json.tmp");
+        std::fs::write(&tmp, serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?)?;
+        std::fs::rename(&tmp, path)
     }
 
     pub fn set_poll_secs(&mut self, secs: u64) -> Result<(), String> {
@@ -90,5 +114,30 @@ mod tests {
         let loaded = Settings::load(&path);
         assert_eq!((loaded.poll_secs, loaded.notify, loaded.autostart), (30, Notify::NeedsYou, true));
         assert_eq!(Settings::load(&dir.join("none.json")), Settings::default());
+    }
+
+    #[test]
+    fn corrupt_file_is_kept_aside() {
+        let dir = std::env::temp_dir().join("dokkit-desktop-test-corrupt");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.json");
+        std::fs::write(&path, b"{ not json").unwrap();
+        assert_eq!(Settings::load(&path), Settings::default());
+        assert!(!path.exists());
+        let kept = std::fs::read_dir(&dir).unwrap().flatten().any(|e| {
+            e.file_name().to_string_lossy().starts_with("settings.json.bad-") && std::fs::read(e.path()).unwrap() == b"{ not json"
+        });
+        assert!(kept);
+    }
+
+    #[test]
+    fn server_missing_a_field_still_loads() {
+        let dir = std::env::temp_dir().join("dokkit-desktop-test-fields");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.json");
+        std::fs::write(&path, br#"{"servers":[{"id":"x","name":"A","url":"https://a.test"}]}"#).unwrap();
+        let s = Settings::load(&path);
+        assert_eq!(s.servers.len(), 1);
+        assert!(s.servers[0].notify && s.servers[0].pin.is_none() && !s.servers[0].allow_http);
     }
 }

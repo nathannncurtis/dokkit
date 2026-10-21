@@ -27,7 +27,7 @@ pub struct ServerState {
     pub level: Option<Level>,
     pub needs: usize,
     pub error: Option<String>,
-    seen: Option<HashSet<String>>,
+    notified: Option<(Notify, HashSet<String>)>,
 }
 
 pub struct Shared {
@@ -99,7 +99,11 @@ pub fn show_server(app: &AppHandle, id: &str, path: Option<String>) {
         let Some(server) = shared(&app).settings.lock().unwrap().servers.iter().find(|s| s.id == id).cloned() else {
             return;
         };
-        let Ok(target) = url::Url::parse(&format!("{}{}", server.url, path.as_deref().unwrap_or("/"))) else {
+        let Ok(base) = checked(&server) else {
+            open_settings(&app);
+            return;
+        };
+        let Ok(target) = url::Url::parse(&format!("{base}{}", path.as_deref().unwrap_or("/"))) else {
             return;
         };
         let label = format!("srv-{id}");
@@ -124,8 +128,8 @@ pub fn show_server(app: &AppHandle, id: &str, path: Option<String>) {
         }
         #[cfg(target_os = "macos")]
         {
-            if let (Ok(w), Some(pin), Some(host)) = (&_built, &server.pin, target.host_str()) {
-                macos::pin(w, host, pin);
+            if let (Ok(w), Some(pin), Some(key)) = (&_built, &server.pin, logic::pin_key(&server.url)) {
+                macos::pin(w, &key, pin);
             }
             macos::dock(&app);
         }
@@ -156,12 +160,10 @@ fn toast(app: &AppHandle, server: &Server, issue: &Issue) {
     macos::notify(title, issue.title.clone(), move || show_server(&app2, &id, Some(path)));
     #[cfg(target_os = "linux")]
     linux::notify(&title, &issue.title, move || show_server(&app2, &id, Some(path)));
-    #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
-    {
-        use tauri_plugin_notification::NotificationExt;
-        let _ = (app2, id, path);
-        let _ = app.notification().builder().title(title).body(&issue.title).show();
-    }
+}
+
+fn checked(server: &Server) -> Result<String, String> {
+    logic::validate_url(&server.url, server.allow_http).map_err(|e| format!("The saved address is not allowed: {e}"))
 }
 
 async fn poll_all(app: &AppHandle) {
@@ -170,13 +172,16 @@ async fn poll_all(app: &AppHandle) {
         (s.servers.clone(), s.notify)
     };
     for server in servers {
-        let result = match token(&server.id) {
-            Ok(t) => net::snapshot(&server.url, &t, server.pin.as_deref()).await,
+        let result = match checked(&server).and_then(|url| token(&server.id).map(|t| (url, t))) {
+            Ok((url, t)) => net::snapshot(&url, &t, server.pin.as_deref()).await,
             Err(e) => Err(e),
         };
         let mut fresh = vec![];
         {
             let mut states = shared(app).states.lock().unwrap();
+            if !shared(app).settings.lock().unwrap().servers.iter().any(|s| s.id == server.id) {
+                continue;
+            }
             let st = states.entry(server.id.clone()).or_default();
             match result {
                 Ok(snap) => {
@@ -185,8 +190,9 @@ async fn poll_all(app: &AppHandle) {
                         Notify::Everything => logic::awake(&snap.all, chrono::Utc::now()),
                         Notify::Off => vec![],
                     };
-                    fresh = logic::fresh(st.seen.as_ref(), &candidates);
-                    st.seen = Some(snap.all.iter().map(|i| i.id.clone()).collect());
+                    let prev = st.notified.as_ref().filter(|(m, _)| *m == mode).map(|(_, ids)| ids);
+                    fresh = logic::fresh(prev, &candidates);
+                    st.notified = Some((mode, candidates.iter().map(|i| i.id.clone()).collect()));
                     st.needs = snap.needs.len();
                     st.level = Some(if st.needs > 0 { Level::Needs } else { Level::Fine });
                     st.error = None;
@@ -203,6 +209,8 @@ async fn poll_all(app: &AppHandle) {
             }
         }
     }
+    let ids: HashSet<String> = shared(app).settings.lock().unwrap().servers.iter().map(|s| s.id.clone()).collect();
+    shared(app).states.lock().unwrap().retain(|id, _| ids.contains(id));
     tray::refresh(app);
 }
 
@@ -279,7 +287,7 @@ async fn add_server(
                 return Ok(Added::Untrusted { fingerprint });
             }
         }
-        return Err(e.without_url().to_string());
+        return Err(net::explain(&e.without_url()));
     }
     net::snapshot(&url, &token, pin.as_deref()).await?;
     let id = uuid::Uuid::new_v4().to_string();
@@ -303,7 +311,16 @@ async fn add_server(
 #[tauri::command]
 async fn remove_server(app: AppHandle, id: String) -> Result<(), String> {
     let _ = secret(&id).and_then(|e| e.delete_credential().map_err(|e| e.to_string()));
-    shared(&app).settings.lock().unwrap().servers.retain(|s| s.id != id);
+    let _removed = {
+        let mut s = shared(&app).settings.lock().unwrap();
+        let removed = s.servers.iter().find(|s| s.id == id).cloned();
+        s.servers.retain(|s| s.id != id);
+        removed
+    };
+    #[cfg(target_os = "macos")]
+    if let Some(key) = _removed.and_then(|s| logic::pin_key(&s.url)) {
+        macos::unpin(&key);
+    }
     shared(&app).states.lock().unwrap().remove(&id);
     save(&app)?;
     let label = format!("srv-{id}");
@@ -376,7 +393,6 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_window_state::Builder::default().with_state_flags(StateFlags::all() & !StateFlags::VISIBLE).build())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {

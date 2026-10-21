@@ -83,6 +83,34 @@ pub async fn presented_fingerprint(url: &str) -> Result<String, String> {
     Ok(logic::fingerprint(&der))
 }
 
+/// A short sentence for why a request failed, from the whole cause chain.
+pub fn explain(e: &reqwest::Error) -> String {
+    if e.is_timeout() {
+        return "The server did not answer in time.".into();
+    }
+    let mut msgs = vec![];
+    let mut refused = false;
+    let mut cur: Option<&(dyn std::error::Error + 'static)> = Some(e);
+    while let Some(x) = cur {
+        msgs.push(x.to_string());
+        refused |= x.downcast_ref::<std::io::Error>().is_some_and(|i| i.kind() == std::io::ErrorKind::ConnectionRefused);
+        cur = x.source();
+    }
+    let all = msgs.join(" | ").to_lowercase();
+    let has = |words: &[&str]| words.iter().any(|w| all.contains(w));
+    if has(&["applicationverificationfailure"]) {
+        "The server's certificate does not match the pinned one.".into()
+    } else if has(&["unknownissuer", "unknown issuer", "invalid peer certificate", "certificate"]) {
+        "The server's certificate is not trusted.".into()
+    } else if has(&["dns error", "failed to lookup", "no such host", "name or service not known", "nodename nor servname"]) {
+        "The server's name could not be found.".into()
+    } else if refused || has(&["connection refused", "actively refused"]) {
+        "The server refused the connection.".into()
+    } else {
+        msgs.last().cloned().unwrap_or_else(|| e.to_string())
+    }
+}
+
 #[derive(Debug)]
 pub struct Snapshot {
     pub all: Vec<Issue>,
@@ -100,7 +128,7 @@ async fn list(c: &reqwest::Client, base: &str, token: &str, query: &str) -> Resu
         .bearer_auth(token)
         .send()
         .await
-        .map_err(|e| e.without_url().to_string())?;
+        .map_err(|e| explain(&e.without_url()))?;
     match res.status().as_u16() {
         200 => Ok(res.json::<List>().await.map_err(|e| e.without_url().to_string())?.items),
         401 => Err("The token was not accepted.".into()),
@@ -175,13 +203,22 @@ connection: close
     #[tokio::test]
     async fn self_signed_server_is_pinned_not_trusted_by_default() {
         let (url, der) = serve().await;
-        assert!(client(None).unwrap().get(&url).send().await.is_err());
+        let untrusted = client(None).unwrap().get(&url).send().await.unwrap_err();
+        assert_eq!(explain(&untrusted), "The server's certificate is not trusted.");
         let fp = presented_fingerprint(&url).await.unwrap();
         assert_eq!(fp, logic::fingerprint(&der));
         assert!(client(Some(&fp)).unwrap().get(&url).bearer_auth("dku_good").send().await.is_ok());
         let wrong = logic::fingerprint(b"another certificate");
-        assert!(client(Some(&wrong)).unwrap().get(&url).send().await.is_err());
+        let mismatch = client(Some(&wrong)).unwrap().get(&url).send().await.unwrap_err();
+        assert_eq!(explain(&mismatch), "The server's certificate does not match the pinned one.");
         assert_eq!(snapshot(&url, "dku_bad", Some(&fp)).await.unwrap_err(), "The token was not accepted.");
+    }
+
+    #[tokio::test]
+    async fn refused_connection_is_explained() {
+        let port = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap().port();
+        let e = client(None).unwrap().get(format!("https://127.0.0.1:{port}")).send().await.unwrap_err();
+        assert_eq!(explain(&e), "The server refused the connection.");
     }
 
     #[tokio::test]
