@@ -2,13 +2,18 @@ import DokkitUI
 import LocalAuthentication
 import SwiftUI
 
+private let foldGrace: TimeInterval = 1
+
 struct UnlockGate<Content: View>: View {
+    var lockAfter: () -> TimeInterval = { 0 }
     @ViewBuilder var content: () -> Content
     @Environment(\.scenePhase) private var phase
     @State private var unlocked = false
     @State private var busy = false
     @State private var asked = false
     @State private var message: String?
+    @State private var method: UnlockMethod = .passcode
+    @State private var leftAt: Date?
 
     var body: some View {
         ZStack {
@@ -16,31 +21,44 @@ struct UnlockGate<Content: View>: View {
             if !unlocked { cover } else if phase != .active { Look.background.ignoresSafeArea() }
         }
         .onChange(of: phase) { _, new in
-            if new == .background { unlocked = false; asked = false }
-            if new == .active { Task { await askOnce() } }
+            if new == .background { leftAt = Date() }
+            if new == .active {
+                // Folding or unfolding the phone passes through the background for a moment; that is not leaving the app.
+                if let leftAt, Date().timeIntervalSince(leftAt) >= max(lockAfter(), foldGrace) { unlocked = false; asked = false }
+                leftAt = nil
+                Task { await askOnce() }
+            }
         }
         .task { await askOnce() }
     }
 
     private var cover: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "lock.fill").font(.largeTitle).accessibilityHidden(true)
-            Text("Dokkit is locked").font(.headline)
-            if let message { Text(message).font(.subheadline).multilineTextAlignment(.center) }
-            Button("Unlock") { Task { await unlock() } }
-                .buttonStyle(.borderedProminent).tint(Look.brand).frame(minHeight: 44)
-        }
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .foregroundStyle(Look.ink)
-        .background(Look.background)
+        LockCover(message: message, method: method) { Task { await unlock() } }
     }
 
     // The Face ID sheet makes the app inactive and active again, so asking on every activation would ask again after Cancel.
     private func askOnce() async {
         guard !asked else { return }
         asked = true
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "dokkitShowLock") {
+            let ctx = LAContext()
+            _ = ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
+            method = Self.method(ctx)
+            return
+        }
+        #endif
         await unlock()
+    }
+
+    // biometryType is only filled in after canEvaluatePolicy.
+    private static func method(_ ctx: LAContext) -> UnlockMethod {
+        switch ctx.biometryType {
+        case .touchID: .touchID
+        case .faceID: .faceID
+        case .opticID: .opticID
+        default: .passcode
+        }
     }
 
     private func unlock() async {
@@ -49,12 +67,19 @@ struct UnlockGate<Content: View>: View {
         defer { busy = false }
         let ctx = LAContext()
         var err: NSError?
-        guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else {
+        let can = ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err)
+        method = Self.method(ctx)
+        guard can else {
             message = "Set a passcode on this phone to use Dokkit."
             return
         }
         do {
-            unlocked = try await ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Open Dokkit")
+            // The callback form, so the context never leaves this actor; older SDKs flag the async form as a data race.
+            unlocked = try await withCheckedThrowingContinuation { (done: CheckedContinuation<Bool, Error>) in
+                ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Open Dokkit") { ok, error in
+                    if let error { done.resume(throwing: error) } else { done.resume(returning: ok) }
+                }
+            }
             message = nil
         } catch {
             message = "Dokkit stayed locked."

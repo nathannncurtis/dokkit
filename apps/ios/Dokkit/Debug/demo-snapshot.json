@@ -1,0 +1,3194 @@
+{
+  "generated_at": "2026-10-20T19:00:00.000Z",
+  "schema": 1,
+  "server": {
+    "name": "northwind",
+    "version": "v0.4.2",
+    "made_at": "2026-10-20T18:59:18.000Z",
+    "counter": 1791937925,
+    "left_out": []
+  },
+  "inbox": {
+    "needs_you": [
+      {
+        "count": 1,
+        "acknowledged_at": null,
+        "snoozed_until": null,
+        "closed_at": null,
+        "alert": {
+          "channel": "page",
+          "status": "sent"
+        },
+        "history": [
+          {
+            "at": "2026-10-19T21:30:00.000Z",
+            "event": "opened"
+          },
+          {
+            "at": "2026-10-19T21:31:00.000Z",
+            "event": "paged",
+            "note": "on call"
+          }
+        ],
+        "id": "i3",
+        "short_id": "DOK-3",
+        "title": "Nightly purge did not run",
+        "kind": "job",
+        "machine": "db-01",
+        "service": "s-purge",
+        "state": "down",
+        "since": "2026-10-19T21:30:00.000Z",
+        "note": "Expected at 01:00. Its last good run was yesterday at 01:04 and took 4 minutes."
+      },
+      {
+        "count": 3,
+        "acknowledged_at": "2026-10-20T18:48:00.000Z",
+        "snoozed_until": null,
+        "closed_at": null,
+        "alert": {
+          "channel": "push",
+          "status": "sent"
+        },
+        "history": [
+          {
+            "at": "2026-10-20T18:20:00.000Z",
+            "event": "opened"
+          },
+          {
+            "at": "2026-10-20T18:35:00.000Z",
+            "event": "reopened"
+          },
+          {
+            "at": "2026-10-20T18:48:00.000Z",
+            "event": "acknowledged",
+            "by": "alex"
+          }
+        ],
+        "id": "i7",
+        "short_id": "DOK-7",
+        "title": "Upload portal answers slowly",
+        "kind": "custom",
+        "machine": "web-02",
+        "service": "s-upload",
+        "state": "degraded",
+        "since": "2026-10-20T18:20:00.000Z",
+        "note": "Three checks in a row took over two seconds. It started 20 minutes after deploy 2.4.1."
+      },
+      {
+        "count": 1,
+        "acknowledged_at": null,
+        "snoozed_until": null,
+        "closed_at": null,
+        "alert": {
+          "channel": "push",
+          "status": "held",
+          "until": "2026-10-21T04:00:00.000Z"
+        },
+        "history": [
+          {
+            "at": "2026-10-20T18:50:00.000Z",
+            "event": "opened"
+          },
+          {
+            "at": "2026-10-20T18:51:00.000Z",
+            "event": "held",
+            "note": "night hours"
+          }
+        ],
+        "id": "i4",
+        "short_id": "DOK-4",
+        "title": "Disk /data is nearly full",
+        "kind": "threshold",
+        "machine": "nas",
+        "service": "s-disk",
+        "state": "degraded",
+        "since": "2026-10-20T18:50:00.000Z",
+        "note": "91 percent full. The limit is 90. At this week's rate it is full in about 12 days."
+      }
+    ],
+    "soon": [
+      {
+        "count": 1,
+        "acknowledged_at": null,
+        "snoozed_until": null,
+        "closed_at": null,
+        "alert": {
+          "channel": "push",
+          "status": "sent"
+        },
+        "history": [
+          {
+            "at": "2026-10-20T17:00:00.000Z",
+            "event": "opened"
+          }
+        ],
+        "id": "i8",
+        "short_id": "DOK-8",
+        "title": "Certificate for mail expires in 21 days",
+        "kind": "expiry",
+        "machine": "mail",
+        "service": "s-tls",
+        "state": "degraded",
+        "soon": true,
+        "since": "2026-10-20T17:00:00.000Z",
+        "note": "It expires on Tue Nov 10 2026."
+      },
+      {
+        "count": 1,
+        "acknowledged_at": null,
+        "snoozed_until": null,
+        "closed_at": null,
+        "alert": {
+          "channel": "push",
+          "status": "sent"
+        },
+        "history": [
+          {
+            "at": "2026-10-20T18:30:00.000Z",
+            "event": "opened"
+          }
+        ],
+        "id": "i5",
+        "short_id": "DOK-5",
+        "title": "Disk /data full in about 12 days",
+        "kind": "forecast",
+        "machine": "nas",
+        "service": "s-disk",
+        "state": "degraded",
+        "soon": true,
+        "since": "2026-10-20T18:30:00.000Z",
+        "note": "Forecast from the last week of readings."
+      }
+    ],
+    "snoozed": [
+      {
+        "count": 1,
+        "acknowledged_at": null,
+        "snoozed_until": "2026-10-20T21:30:00.000Z",
+        "closed_at": null,
+        "alert": {
+          "channel": "push",
+          "status": "sent"
+        },
+        "history": [
+          {
+            "at": "2026-10-20T13:00:00.000Z",
+            "event": "opened"
+          },
+          {
+            "at": "2026-10-20T14:00:00.000Z",
+            "event": "snoozed",
+            "until": "2026-10-20T21:30:00.000Z",
+            "by": "alex"
+          }
+        ],
+        "id": "i9",
+        "short_id": "DOK-9",
+        "title": "Report builder is slow",
+        "kind": "http",
+        "machine": "sql",
+        "service": "s-reports",
+        "state": "degraded",
+        "since": "2026-10-20T13:00:00.000Z",
+        "note": "Reports take over a minute."
+      }
+    ],
+    "not_watched": [
+      {
+        "id": "f1",
+        "machine": "build",
+        "name": "22",
+        "kind": "port",
+        "detail": {
+          "label": "Port 22",
+          "saw": "sshd"
+        }
+      },
+      {
+        "id": "f2",
+        "machine": "build",
+        "name": "Spooler",
+        "kind": "service",
+        "detail": {
+          "label": "Print Spooler",
+          "saw": "Running"
+        }
+      },
+      {
+        "id": "f3",
+        "machine": "sql",
+        "name": "defrag",
+        "kind": "job",
+        "detail": {
+          "label": "defrag",
+          "saw": "Sundays 03:00"
+        }
+      }
+    ],
+    "other_environments": [
+      {
+        "environment": "dev",
+        "issues": [
+          {
+            "count": 1,
+            "acknowledged_at": null,
+            "snoozed_until": null,
+            "closed_at": null,
+            "alert": null,
+            "history": [
+              {
+                "at": "2026-10-20T17:30:00.000Z",
+                "event": "opened"
+              }
+            ],
+            "id": "i10",
+            "short_id": "DOK-10",
+            "title": "Web preview is down",
+            "kind": "http",
+            "machine": "build",
+            "service": "s-preview",
+            "state": "down",
+            "since": "2026-10-20T17:30:00.000Z",
+            "note": "Connection refused."
+          }
+        ]
+      }
+    ],
+    "fine": {
+      "services": 37,
+      "machines": 6
+    }
+  },
+  "machines": [
+    {
+      "id": "db-01",
+      "name": "db-01",
+      "os": "linux",
+      "kind": "enrolled",
+      "down": false,
+      "last_seen_at": "2026-10-20T18:59:42.000Z",
+      "vitals": {
+        "cpu.percent": 38,
+        "memory.used_percent": 61,
+        "disk.used_percent./": 72
+      },
+      "services": [
+        {
+          "id": "s-postgres",
+          "machine": "db-01",
+          "name": "postgres",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [
+            {
+              "name": "port 5432",
+              "type": "tcp",
+              "state": "ok",
+              "checked_at": "2026-10-20T18:59:36.000Z"
+            }
+          ],
+          "chart": {
+            "metric": "connections",
+            "values": [
+              42,
+              47,
+              51,
+              54,
+              55,
+              49,
+              47,
+              45,
+              43,
+              42,
+              35,
+              35,
+              38,
+              41,
+              46,
+              44,
+              48,
+              52,
+              54,
+              55,
+              47,
+              46,
+              44,
+              42
+            ]
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-pgbouncer",
+          "machine": "db-01",
+          "name": "pgbouncer",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-wal",
+          "machine": "db-01",
+          "name": "wal-archive",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-pgexp",
+          "machine": "db-01",
+          "name": "pg-exporter",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-replica",
+          "machine": "db-01",
+          "name": "replica-sync",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-purge",
+          "machine": "db-01",
+          "name": "nightly-purge",
+          "kind": "job",
+          "state": "down",
+          "environment": "production",
+          "version": null,
+          "note": "Expected at 01:00. Its last good run was yesterday at 01:04 and took 4 minutes.",
+          "checks": [
+            {
+              "name": "schedule",
+              "type": "job",
+              "state": "down",
+              "note": "Missed its 01:00 start, with 20 minutes' grace.",
+              "checked_at": "2026-10-20T18:59:00.000Z"
+            }
+          ],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": {
+            "count": 1,
+            "acknowledged_at": null,
+            "snoozed_until": null,
+            "closed_at": null,
+            "alert": {
+              "channel": "page",
+              "status": "sent"
+            },
+            "history": [
+              {
+                "at": "2026-10-19T21:30:00.000Z",
+                "event": "opened"
+              },
+              {
+                "at": "2026-10-19T21:31:00.000Z",
+                "event": "paged",
+                "note": "on call"
+              }
+            ],
+            "id": "i3",
+            "short_id": "DOK-3",
+            "title": "Nightly purge did not run",
+            "kind": "job",
+            "machine": "db-01",
+            "service": "s-purge",
+            "state": "down",
+            "since": "2026-10-19T21:30:00.000Z",
+            "note": "Expected at 01:00. Its last good run was yesterday at 01:04 and took 4 minutes."
+          }
+        }
+      ],
+      "last_day": [
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "bad",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok"
+      ]
+    },
+    {
+      "id": "web-02",
+      "name": "web-02",
+      "os": "linux",
+      "kind": "enrolled",
+      "down": false,
+      "last_seen_at": "2026-10-20T18:59:48.000Z",
+      "vitals": {
+        "cpu.percent": 64,
+        "memory.used_percent": 58,
+        "disk.used_percent./": 44
+      },
+      "services": [
+        {
+          "id": "s-nginx",
+          "machine": "web-02",
+          "name": "nginx",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-upload",
+          "machine": "web-02",
+          "name": "upload-portal",
+          "kind": "service",
+          "state": "degraded",
+          "environment": "production",
+          "version": "2.4.1",
+          "note": "Three checks in a row took over two seconds.",
+          "checks": [
+            {
+              "name": "GET /health",
+              "type": "http",
+              "state": "degraded",
+              "note": "Answered in 2.4 s. The limit is 2 s.",
+              "checked_at": "2026-10-20T18:59:30.000Z"
+            },
+            {
+              "name": "process",
+              "type": "process",
+              "state": "ok",
+              "checked_at": "2026-10-20T18:59:30.000Z"
+            },
+            {
+              "name": "port 8080",
+              "type": "tcp",
+              "state": "ok",
+              "checked_at": "2026-10-20T18:59:30.000Z"
+            }
+          ],
+          "chart": {
+            "metric": "response time, ms",
+            "values": [
+              380,
+              433,
+              479,
+              512,
+              529,
+              454,
+              441,
+              419,
+              395,
+              377,
+              296,
+              305,
+              331,
+              372,
+              422,
+              401,
+              451,
+              491,
+              515,
+              523,
+              1650,
+              1980,
+              2310,
+              2440
+            ]
+          },
+          "open_issue": {
+            "count": 3,
+            "acknowledged_at": "2026-10-20T18:48:00.000Z",
+            "snoozed_until": null,
+            "closed_at": null,
+            "alert": {
+              "channel": "push",
+              "status": "sent"
+            },
+            "history": [
+              {
+                "at": "2026-10-20T18:20:00.000Z",
+                "event": "opened"
+              },
+              {
+                "at": "2026-10-20T18:35:00.000Z",
+                "event": "reopened"
+              },
+              {
+                "at": "2026-10-20T18:48:00.000Z",
+                "event": "acknowledged",
+                "by": "alex"
+              }
+            ],
+            "id": "i7",
+            "short_id": "DOK-7",
+            "title": "Upload portal answers slowly",
+            "kind": "custom",
+            "machine": "web-02",
+            "service": "s-upload",
+            "state": "degraded",
+            "since": "2026-10-20T18:20:00.000Z",
+            "note": "Three checks in a row took over two seconds. It started 20 minutes after deploy 2.4.1."
+          }
+        },
+        {
+          "id": "s-api",
+          "machine": "web-02",
+          "name": "api",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": "7.12.0",
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": "requests a minute",
+            "values": [
+              820,
+              914,
+              996,
+              1054,
+              1084,
+              952,
+              928,
+              889,
+              847,
+              815,
+              671,
+              687,
+              733,
+              806,
+              895,
+              858,
+              946,
+              1017,
+              1060,
+              1074,
+              927,
+              893,
+              851,
+              813
+            ]
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-queue",
+          "machine": "web-02",
+          "name": "worker-queue",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-redis",
+          "machine": "web-02",
+          "name": "redis",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-resize",
+          "machine": "web-02",
+          "name": "resize-worker",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-session",
+          "machine": "web-02",
+          "name": "session-store",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-search",
+          "machine": "web-02",
+          "name": "search-index",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-imgcache",
+          "machine": "web-02",
+          "name": "image-cache",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-cdnsync",
+          "machine": "web-02",
+          "name": "cdn-sync",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-pay",
+          "machine": "web-02",
+          "name": "payment-gateway",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-upload-stg",
+          "machine": "web-02",
+          "name": "upload-portal",
+          "kind": "service",
+          "state": "degraded",
+          "environment": "staging",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        }
+      ],
+      "last_day": [
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "warn",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "warn",
+        "warn"
+      ]
+    },
+    {
+      "id": "nas",
+      "name": "nas",
+      "os": "linux",
+      "kind": "enrolled",
+      "down": false,
+      "last_seen_at": "2026-10-20T18:59:36.000Z",
+      "vitals": {
+        "cpu.percent": 12,
+        "memory.used_percent": 33,
+        "disk.used_percent./": 41,
+        "disk.used_percent./data": 91
+      },
+      "services": [
+        {
+          "id": "s-disk",
+          "machine": "nas",
+          "name": "disk /data",
+          "kind": "threshold",
+          "state": "degraded",
+          "environment": "production",
+          "version": null,
+          "note": "91 percent full. The limit is 90.",
+          "checks": [
+            {
+              "name": "disk /data",
+              "type": "threshold",
+              "state": "degraded",
+              "note": "91.0 percent used, limit 90.",
+              "checked_at": "2026-10-20T18:59:24.000Z"
+            }
+          ],
+          "chart": {
+            "metric": "used, %",
+            "values": [
+              84,
+              85,
+              85,
+              85,
+              86,
+              85,
+              85,
+              84,
+              84,
+              84,
+              83,
+              83,
+              83,
+              84,
+              84,
+              84,
+              85,
+              85,
+              85,
+              86,
+              89,
+              90,
+              90,
+              91
+            ]
+          },
+          "open_issue": {
+            "count": 1,
+            "acknowledged_at": null,
+            "snoozed_until": null,
+            "closed_at": null,
+            "alert": {
+              "channel": "push",
+              "status": "held",
+              "until": "2026-10-21T04:00:00.000Z"
+            },
+            "history": [
+              {
+                "at": "2026-10-20T18:50:00.000Z",
+                "event": "opened"
+              },
+              {
+                "at": "2026-10-20T18:51:00.000Z",
+                "event": "held",
+                "note": "night hours"
+              }
+            ],
+            "id": "i4",
+            "short_id": "DOK-4",
+            "title": "Disk /data is nearly full",
+            "kind": "threshold",
+            "machine": "nas",
+            "service": "s-disk",
+            "state": "degraded",
+            "since": "2026-10-20T18:50:00.000Z",
+            "note": "91 percent full. The limit is 90. At this week's rate it is full in about 12 days."
+          }
+        },
+        {
+          "id": "s-smb",
+          "machine": "nas",
+          "name": "smb-share",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-nfs",
+          "machine": "nas",
+          "name": "nfs-export",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-backup",
+          "machine": "nas",
+          "name": "backup",
+          "kind": "job",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-snapkeep",
+          "machine": "nas",
+          "name": "snapshot-keeper",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-smart",
+          "machine": "nas",
+          "name": "smart-monitor",
+          "kind": "service",
+          "state": "unknown",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-photo",
+          "machine": "nas",
+          "name": "photo-sync",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        }
+      ],
+      "last_day": [
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "warn"
+      ]
+    },
+    {
+      "id": "mail",
+      "name": "mail",
+      "os": "linux",
+      "kind": "enrolled",
+      "down": false,
+      "last_seen_at": "2026-10-20T18:59:30.000Z",
+      "vitals": {
+        "cpu.percent": 9,
+        "memory.used_percent": 41,
+        "disk.used_percent./": 37
+      },
+      "services": [
+        {
+          "id": "s-postfix",
+          "machine": "mail",
+          "name": "postfix",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-dovecot",
+          "machine": "mail",
+          "name": "dovecot",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-spam",
+          "machine": "mail",
+          "name": "spam-filter",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-tls",
+          "machine": "mail",
+          "name": "mail-tls",
+          "kind": "expiry",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": "The certificate expires in 21 days.",
+          "checks": [
+            {
+              "name": "certificate",
+              "type": "expiry",
+              "state": "ok",
+              "note": "21 days left.",
+              "checked_at": "2026-10-20T18:30:00.000Z"
+            }
+          ],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-webmail",
+          "machine": "mail",
+          "name": "webmail",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-av",
+          "machine": "mail",
+          "name": "antivirus",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        }
+      ],
+      "last_day": [
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok"
+      ]
+    },
+    {
+      "id": "build",
+      "name": "build",
+      "os": "windows",
+      "kind": "enrolled",
+      "down": false,
+      "last_seen_at": "2026-10-20T18:59:24.000Z",
+      "vitals": {
+        "cpu.percent": 22,
+        "memory.used_percent": 47,
+        "disk.used_percent.C:": 63
+      },
+      "schedules": [
+        {
+          "id": "q1",
+          "reason": "Windows updates",
+          "next": "2026-10-21T21:00:00.000Z"
+        }
+      ],
+      "services": [
+        {
+          "id": "s-ci",
+          "machine": "build",
+          "name": "ci-runner",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-artifact",
+          "machine": "build",
+          "name": "artifact-store",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-docker",
+          "machine": "build",
+          "name": "docker-daemon",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-mirror",
+          "machine": "build",
+          "name": "package-mirror",
+          "kind": "service",
+          "state": "unknown",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-nbuild",
+          "machine": "build",
+          "name": "nightly-build",
+          "kind": "job",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-preview",
+          "machine": "build",
+          "name": "web-preview",
+          "kind": "service",
+          "state": "down",
+          "environment": "dev",
+          "version": null,
+          "note": "Connection refused",
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": {
+            "count": 1,
+            "acknowledged_at": null,
+            "snoozed_until": null,
+            "closed_at": null,
+            "alert": null,
+            "history": [
+              {
+                "at": "2026-10-20T17:30:00.000Z",
+                "event": "opened"
+              }
+            ],
+            "id": "i10",
+            "short_id": "DOK-10",
+            "title": "Web preview is down",
+            "kind": "http",
+            "machine": "build",
+            "service": "s-preview",
+            "state": "down",
+            "since": "2026-10-20T17:30:00.000Z",
+            "note": "Connection refused."
+          }
+        }
+      ],
+      "last_day": [
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok"
+      ]
+    },
+    {
+      "id": "sql",
+      "name": "sql",
+      "os": "windows",
+      "kind": "enrolled",
+      "down": false,
+      "last_seen_at": "2026-10-20T18:59:36.000Z",
+      "vitals": {
+        "cpu.percent": 31,
+        "memory.used_percent": 88,
+        "disk.used_percent.D:": 58
+      },
+      "services": [
+        {
+          "id": "s-sqlsrv",
+          "machine": "sql",
+          "name": "sql-server",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-sqlagent",
+          "machine": "sql",
+          "name": "sql-agent",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-reports",
+          "machine": "sql",
+          "name": "report-builder",
+          "kind": "service",
+          "state": "degraded",
+          "environment": "production",
+          "version": null,
+          "note": "Reports take over a minute.",
+          "checks": [
+            {
+              "name": "GET /reports/health",
+              "type": "http",
+              "state": "degraded",
+              "note": "Answered in 64 s.",
+              "checked_at": "2026-10-20T18:59:18.000Z"
+            }
+          ],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": {
+            "count": 1,
+            "acknowledged_at": null,
+            "snoozed_until": "2026-10-20T21:30:00.000Z",
+            "closed_at": null,
+            "alert": {
+              "channel": "push",
+              "status": "sent"
+            },
+            "history": [
+              {
+                "at": "2026-10-20T13:00:00.000Z",
+                "event": "opened"
+              },
+              {
+                "at": "2026-10-20T14:00:00.000Z",
+                "event": "snoozed",
+                "until": "2026-10-20T21:30:00.000Z",
+                "by": "alex"
+              }
+            ],
+            "id": "i9",
+            "short_id": "DOK-9",
+            "title": "Report builder is slow",
+            "kind": "http",
+            "machine": "sql",
+            "service": "s-reports",
+            "state": "degraded",
+            "since": "2026-10-20T13:00:00.000Z",
+            "note": "Reports take over a minute."
+          }
+        },
+        {
+          "id": "s-etl",
+          "machine": "sql",
+          "name": "etl-loader",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        }
+      ],
+      "last_day": [
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "warn",
+        "warn",
+        "warn",
+        "warn",
+        "warn",
+        "warn",
+        "warn",
+        "warn",
+        "warn",
+        "warn",
+        "warn",
+        "warn"
+      ]
+    },
+    {
+      "id": "front-desk-pc",
+      "name": "front-desk-pc",
+      "os": "windows",
+      "kind": "enrolled",
+      "down": true,
+      "last_seen_at": "2026-10-20T16:10:00.000Z",
+      "vitals": {},
+      "planned_downtime": {
+        "until": "2026-10-21T06:00:00.000Z",
+        "reason": "Off outside office hours"
+      },
+      "services": [
+        {
+          "id": "s-fdagent",
+          "machine": "front-desk-pc",
+          "name": "check-in kiosk",
+          "kind": "service",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        }
+      ],
+      "last_day": [
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "off",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok"
+      ]
+    },
+    {
+      "id": "g-web",
+      "name": "Websites",
+      "kind": "group",
+      "down": false,
+      "vitals": {},
+      "services": [
+        {
+          "id": "s-site",
+          "machine": "g-web",
+          "name": "public website",
+          "kind": "http",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": "response time, ms",
+            "values": [
+              210,
+              234,
+              254,
+              269,
+              276,
+              243,
+              237,
+              227,
+              217,
+              209,
+              173,
+              177,
+              188,
+              206,
+              229,
+              219,
+              242,
+              259,
+              270,
+              273,
+              237,
+              228,
+              218,
+              208
+            ]
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-status",
+          "machine": "g-web",
+          "name": "status page",
+          "kind": "http",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        }
+      ]
+    },
+    {
+      "id": "g-cloud",
+      "name": "Cloud",
+      "kind": "group",
+      "down": false,
+      "vitals": {},
+      "services": [
+        {
+          "id": "s-dns",
+          "machine": "g-cloud",
+          "name": "dns",
+          "kind": "dns",
+          "state": "ok",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        },
+        {
+          "id": "s-payapi",
+          "machine": "g-cloud",
+          "name": "payments api",
+          "kind": "http",
+          "state": "unknown",
+          "environment": "production",
+          "version": null,
+          "note": null,
+          "checks": [],
+          "chart": {
+            "metric": null,
+            "values": []
+          },
+          "open_issue": null
+        }
+      ]
+    }
+  ],
+  "services": [
+    {
+      "id": "s-postgres",
+      "machine": "db-01",
+      "name": "postgres",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [
+        {
+          "name": "port 5432",
+          "type": "tcp",
+          "state": "ok",
+          "checked_at": "2026-10-20T18:59:36.000Z"
+        }
+      ],
+      "chart": {
+        "metric": "connections",
+        "values": [
+          42,
+          47,
+          51,
+          54,
+          55,
+          49,
+          47,
+          45,
+          43,
+          42,
+          35,
+          35,
+          38,
+          41,
+          46,
+          44,
+          48,
+          52,
+          54,
+          55,
+          47,
+          46,
+          44,
+          42
+        ]
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-pgbouncer",
+      "machine": "db-01",
+      "name": "pgbouncer",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-wal",
+      "machine": "db-01",
+      "name": "wal-archive",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-pgexp",
+      "machine": "db-01",
+      "name": "pg-exporter",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-replica",
+      "machine": "db-01",
+      "name": "replica-sync",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-purge",
+      "machine": "db-01",
+      "name": "nightly-purge",
+      "kind": "job",
+      "state": "down",
+      "environment": "production",
+      "version": null,
+      "note": "Expected at 01:00. Its last good run was yesterday at 01:04 and took 4 minutes.",
+      "checks": [
+        {
+          "name": "schedule",
+          "type": "job",
+          "state": "down",
+          "note": "Missed its 01:00 start, with 20 minutes' grace.",
+          "checked_at": "2026-10-20T18:59:00.000Z"
+        }
+      ],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": {
+        "count": 1,
+        "acknowledged_at": null,
+        "snoozed_until": null,
+        "closed_at": null,
+        "alert": {
+          "channel": "page",
+          "status": "sent"
+        },
+        "history": [
+          {
+            "at": "2026-10-19T21:30:00.000Z",
+            "event": "opened"
+          },
+          {
+            "at": "2026-10-19T21:31:00.000Z",
+            "event": "paged",
+            "note": "on call"
+          }
+        ],
+        "id": "i3",
+        "short_id": "DOK-3",
+        "title": "Nightly purge did not run",
+        "kind": "job",
+        "machine": "db-01",
+        "service": "s-purge",
+        "state": "down",
+        "since": "2026-10-19T21:30:00.000Z",
+        "note": "Expected at 01:00. Its last good run was yesterday at 01:04 and took 4 minutes."
+      }
+    },
+    {
+      "id": "s-nginx",
+      "machine": "web-02",
+      "name": "nginx",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-upload",
+      "machine": "web-02",
+      "name": "upload-portal",
+      "kind": "service",
+      "state": "degraded",
+      "environment": "production",
+      "version": "2.4.1",
+      "note": "Three checks in a row took over two seconds.",
+      "checks": [
+        {
+          "name": "GET /health",
+          "type": "http",
+          "state": "degraded",
+          "note": "Answered in 2.4 s. The limit is 2 s.",
+          "checked_at": "2026-10-20T18:59:30.000Z"
+        },
+        {
+          "name": "process",
+          "type": "process",
+          "state": "ok",
+          "checked_at": "2026-10-20T18:59:30.000Z"
+        },
+        {
+          "name": "port 8080",
+          "type": "tcp",
+          "state": "ok",
+          "checked_at": "2026-10-20T18:59:30.000Z"
+        }
+      ],
+      "chart": {
+        "metric": "response time, ms",
+        "values": [
+          380,
+          433,
+          479,
+          512,
+          529,
+          454,
+          441,
+          419,
+          395,
+          377,
+          296,
+          305,
+          331,
+          372,
+          422,
+          401,
+          451,
+          491,
+          515,
+          523,
+          1650,
+          1980,
+          2310,
+          2440
+        ]
+      },
+      "open_issue": {
+        "count": 3,
+        "acknowledged_at": "2026-10-20T18:48:00.000Z",
+        "snoozed_until": null,
+        "closed_at": null,
+        "alert": {
+          "channel": "push",
+          "status": "sent"
+        },
+        "history": [
+          {
+            "at": "2026-10-20T18:20:00.000Z",
+            "event": "opened"
+          },
+          {
+            "at": "2026-10-20T18:35:00.000Z",
+            "event": "reopened"
+          },
+          {
+            "at": "2026-10-20T18:48:00.000Z",
+            "event": "acknowledged",
+            "by": "alex"
+          }
+        ],
+        "id": "i7",
+        "short_id": "DOK-7",
+        "title": "Upload portal answers slowly",
+        "kind": "custom",
+        "machine": "web-02",
+        "service": "s-upload",
+        "state": "degraded",
+        "since": "2026-10-20T18:20:00.000Z",
+        "note": "Three checks in a row took over two seconds. It started 20 minutes after deploy 2.4.1."
+      }
+    },
+    {
+      "id": "s-api",
+      "machine": "web-02",
+      "name": "api",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": "7.12.0",
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": "requests a minute",
+        "values": [
+          820,
+          914,
+          996,
+          1054,
+          1084,
+          952,
+          928,
+          889,
+          847,
+          815,
+          671,
+          687,
+          733,
+          806,
+          895,
+          858,
+          946,
+          1017,
+          1060,
+          1074,
+          927,
+          893,
+          851,
+          813
+        ]
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-queue",
+      "machine": "web-02",
+      "name": "worker-queue",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-redis",
+      "machine": "web-02",
+      "name": "redis",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-resize",
+      "machine": "web-02",
+      "name": "resize-worker",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-session",
+      "machine": "web-02",
+      "name": "session-store",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-search",
+      "machine": "web-02",
+      "name": "search-index",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-imgcache",
+      "machine": "web-02",
+      "name": "image-cache",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-cdnsync",
+      "machine": "web-02",
+      "name": "cdn-sync",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-pay",
+      "machine": "web-02",
+      "name": "payment-gateway",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-upload-stg",
+      "machine": "web-02",
+      "name": "upload-portal",
+      "kind": "service",
+      "state": "degraded",
+      "environment": "staging",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-disk",
+      "machine": "nas",
+      "name": "disk /data",
+      "kind": "threshold",
+      "state": "degraded",
+      "environment": "production",
+      "version": null,
+      "note": "91 percent full. The limit is 90.",
+      "checks": [
+        {
+          "name": "disk /data",
+          "type": "threshold",
+          "state": "degraded",
+          "note": "91.0 percent used, limit 90.",
+          "checked_at": "2026-10-20T18:59:24.000Z"
+        }
+      ],
+      "chart": {
+        "metric": "used, %",
+        "values": [
+          84,
+          85,
+          85,
+          85,
+          86,
+          85,
+          85,
+          84,
+          84,
+          84,
+          83,
+          83,
+          83,
+          84,
+          84,
+          84,
+          85,
+          85,
+          85,
+          86,
+          89,
+          90,
+          90,
+          91
+        ]
+      },
+      "open_issue": {
+        "count": 1,
+        "acknowledged_at": null,
+        "snoozed_until": null,
+        "closed_at": null,
+        "alert": {
+          "channel": "push",
+          "status": "held",
+          "until": "2026-10-21T04:00:00.000Z"
+        },
+        "history": [
+          {
+            "at": "2026-10-20T18:50:00.000Z",
+            "event": "opened"
+          },
+          {
+            "at": "2026-10-20T18:51:00.000Z",
+            "event": "held",
+            "note": "night hours"
+          }
+        ],
+        "id": "i4",
+        "short_id": "DOK-4",
+        "title": "Disk /data is nearly full",
+        "kind": "threshold",
+        "machine": "nas",
+        "service": "s-disk",
+        "state": "degraded",
+        "since": "2026-10-20T18:50:00.000Z",
+        "note": "91 percent full. The limit is 90. At this week's rate it is full in about 12 days."
+      }
+    },
+    {
+      "id": "s-smb",
+      "machine": "nas",
+      "name": "smb-share",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-nfs",
+      "machine": "nas",
+      "name": "nfs-export",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-backup",
+      "machine": "nas",
+      "name": "backup",
+      "kind": "job",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-snapkeep",
+      "machine": "nas",
+      "name": "snapshot-keeper",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-smart",
+      "machine": "nas",
+      "name": "smart-monitor",
+      "kind": "service",
+      "state": "unknown",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-photo",
+      "machine": "nas",
+      "name": "photo-sync",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-postfix",
+      "machine": "mail",
+      "name": "postfix",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-dovecot",
+      "machine": "mail",
+      "name": "dovecot",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-spam",
+      "machine": "mail",
+      "name": "spam-filter",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-tls",
+      "machine": "mail",
+      "name": "mail-tls",
+      "kind": "expiry",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": "The certificate expires in 21 days.",
+      "checks": [
+        {
+          "name": "certificate",
+          "type": "expiry",
+          "state": "ok",
+          "note": "21 days left.",
+          "checked_at": "2026-10-20T18:30:00.000Z"
+        }
+      ],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-webmail",
+      "machine": "mail",
+      "name": "webmail",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-av",
+      "machine": "mail",
+      "name": "antivirus",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-ci",
+      "machine": "build",
+      "name": "ci-runner",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-artifact",
+      "machine": "build",
+      "name": "artifact-store",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-docker",
+      "machine": "build",
+      "name": "docker-daemon",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-mirror",
+      "machine": "build",
+      "name": "package-mirror",
+      "kind": "service",
+      "state": "unknown",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-nbuild",
+      "machine": "build",
+      "name": "nightly-build",
+      "kind": "job",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-preview",
+      "machine": "build",
+      "name": "web-preview",
+      "kind": "service",
+      "state": "down",
+      "environment": "dev",
+      "version": null,
+      "note": "Connection refused",
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": {
+        "count": 1,
+        "acknowledged_at": null,
+        "snoozed_until": null,
+        "closed_at": null,
+        "alert": null,
+        "history": [
+          {
+            "at": "2026-10-20T17:30:00.000Z",
+            "event": "opened"
+          }
+        ],
+        "id": "i10",
+        "short_id": "DOK-10",
+        "title": "Web preview is down",
+        "kind": "http",
+        "machine": "build",
+        "service": "s-preview",
+        "state": "down",
+        "since": "2026-10-20T17:30:00.000Z",
+        "note": "Connection refused."
+      }
+    },
+    {
+      "id": "s-sqlsrv",
+      "machine": "sql",
+      "name": "sql-server",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-sqlagent",
+      "machine": "sql",
+      "name": "sql-agent",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-reports",
+      "machine": "sql",
+      "name": "report-builder",
+      "kind": "service",
+      "state": "degraded",
+      "environment": "production",
+      "version": null,
+      "note": "Reports take over a minute.",
+      "checks": [
+        {
+          "name": "GET /reports/health",
+          "type": "http",
+          "state": "degraded",
+          "note": "Answered in 64 s.",
+          "checked_at": "2026-10-20T18:59:18.000Z"
+        }
+      ],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": {
+        "count": 1,
+        "acknowledged_at": null,
+        "snoozed_until": "2026-10-20T21:30:00.000Z",
+        "closed_at": null,
+        "alert": {
+          "channel": "push",
+          "status": "sent"
+        },
+        "history": [
+          {
+            "at": "2026-10-20T13:00:00.000Z",
+            "event": "opened"
+          },
+          {
+            "at": "2026-10-20T14:00:00.000Z",
+            "event": "snoozed",
+            "until": "2026-10-20T21:30:00.000Z",
+            "by": "alex"
+          }
+        ],
+        "id": "i9",
+        "short_id": "DOK-9",
+        "title": "Report builder is slow",
+        "kind": "http",
+        "machine": "sql",
+        "service": "s-reports",
+        "state": "degraded",
+        "since": "2026-10-20T13:00:00.000Z",
+        "note": "Reports take over a minute."
+      }
+    },
+    {
+      "id": "s-etl",
+      "machine": "sql",
+      "name": "etl-loader",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-fdagent",
+      "machine": "front-desk-pc",
+      "name": "check-in kiosk",
+      "kind": "service",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-site",
+      "machine": "g-web",
+      "name": "public website",
+      "kind": "http",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": "response time, ms",
+        "values": [
+          210,
+          234,
+          254,
+          269,
+          276,
+          243,
+          237,
+          227,
+          217,
+          209,
+          173,
+          177,
+          188,
+          206,
+          229,
+          219,
+          242,
+          259,
+          270,
+          273,
+          237,
+          228,
+          218,
+          208
+        ]
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-status",
+      "machine": "g-web",
+      "name": "status page",
+      "kind": "http",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-dns",
+      "machine": "g-cloud",
+      "name": "dns",
+      "kind": "dns",
+      "state": "ok",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    },
+    {
+      "id": "s-payapi",
+      "machine": "g-cloud",
+      "name": "payments api",
+      "kind": "http",
+      "state": "unknown",
+      "environment": "production",
+      "version": null,
+      "note": null,
+      "checks": [],
+      "chart": {
+        "metric": null,
+        "values": []
+      },
+      "open_issue": null
+    }
+  ],
+  "issues": [
+    {
+      "count": 1,
+      "acknowledged_at": null,
+      "snoozed_until": null,
+      "closed_at": null,
+      "alert": {
+        "channel": "page",
+        "status": "sent"
+      },
+      "history": [
+        {
+          "at": "2026-10-19T21:30:00.000Z",
+          "event": "opened"
+        },
+        {
+          "at": "2026-10-19T21:31:00.000Z",
+          "event": "paged",
+          "note": "on call"
+        }
+      ],
+      "id": "i3",
+      "short_id": "DOK-3",
+      "title": "Nightly purge did not run",
+      "kind": "job",
+      "machine": "db-01",
+      "service": "s-purge",
+      "state": "down",
+      "since": "2026-10-19T21:30:00.000Z",
+      "note": "Expected at 01:00. Its last good run was yesterday at 01:04 and took 4 minutes."
+    },
+    {
+      "count": 3,
+      "acknowledged_at": "2026-10-20T18:48:00.000Z",
+      "snoozed_until": null,
+      "closed_at": null,
+      "alert": {
+        "channel": "push",
+        "status": "sent"
+      },
+      "history": [
+        {
+          "at": "2026-10-20T18:20:00.000Z",
+          "event": "opened"
+        },
+        {
+          "at": "2026-10-20T18:35:00.000Z",
+          "event": "reopened"
+        },
+        {
+          "at": "2026-10-20T18:48:00.000Z",
+          "event": "acknowledged",
+          "by": "alex"
+        }
+      ],
+      "id": "i7",
+      "short_id": "DOK-7",
+      "title": "Upload portal answers slowly",
+      "kind": "custom",
+      "machine": "web-02",
+      "service": "s-upload",
+      "state": "degraded",
+      "since": "2026-10-20T18:20:00.000Z",
+      "note": "Three checks in a row took over two seconds. It started 20 minutes after deploy 2.4.1."
+    },
+    {
+      "count": 1,
+      "acknowledged_at": null,
+      "snoozed_until": null,
+      "closed_at": null,
+      "alert": {
+        "channel": "push",
+        "status": "held",
+        "until": "2026-10-21T04:00:00.000Z"
+      },
+      "history": [
+        {
+          "at": "2026-10-20T18:50:00.000Z",
+          "event": "opened"
+        },
+        {
+          "at": "2026-10-20T18:51:00.000Z",
+          "event": "held",
+          "note": "night hours"
+        }
+      ],
+      "id": "i4",
+      "short_id": "DOK-4",
+      "title": "Disk /data is nearly full",
+      "kind": "threshold",
+      "machine": "nas",
+      "service": "s-disk",
+      "state": "degraded",
+      "since": "2026-10-20T18:50:00.000Z",
+      "note": "91 percent full. The limit is 90. At this week's rate it is full in about 12 days."
+    },
+    {
+      "count": 1,
+      "acknowledged_at": null,
+      "snoozed_until": null,
+      "closed_at": null,
+      "alert": {
+        "channel": "push",
+        "status": "sent"
+      },
+      "history": [
+        {
+          "at": "2026-10-20T17:00:00.000Z",
+          "event": "opened"
+        }
+      ],
+      "id": "i8",
+      "short_id": "DOK-8",
+      "title": "Certificate for mail expires in 21 days",
+      "kind": "expiry",
+      "machine": "mail",
+      "service": "s-tls",
+      "state": "degraded",
+      "soon": true,
+      "since": "2026-10-20T17:00:00.000Z",
+      "note": "It expires on Tue Nov 10 2026."
+    },
+    {
+      "count": 1,
+      "acknowledged_at": null,
+      "snoozed_until": null,
+      "closed_at": null,
+      "alert": {
+        "channel": "push",
+        "status": "sent"
+      },
+      "history": [
+        {
+          "at": "2026-10-20T18:30:00.000Z",
+          "event": "opened"
+        }
+      ],
+      "id": "i5",
+      "short_id": "DOK-5",
+      "title": "Disk /data full in about 12 days",
+      "kind": "forecast",
+      "machine": "nas",
+      "service": "s-disk",
+      "state": "degraded",
+      "soon": true,
+      "since": "2026-10-20T18:30:00.000Z",
+      "note": "Forecast from the last week of readings."
+    },
+    {
+      "count": 1,
+      "acknowledged_at": null,
+      "snoozed_until": "2026-10-20T21:30:00.000Z",
+      "closed_at": null,
+      "alert": {
+        "channel": "push",
+        "status": "sent"
+      },
+      "history": [
+        {
+          "at": "2026-10-20T13:00:00.000Z",
+          "event": "opened"
+        },
+        {
+          "at": "2026-10-20T14:00:00.000Z",
+          "event": "snoozed",
+          "until": "2026-10-20T21:30:00.000Z",
+          "by": "alex"
+        }
+      ],
+      "id": "i9",
+      "short_id": "DOK-9",
+      "title": "Report builder is slow",
+      "kind": "http",
+      "machine": "sql",
+      "service": "s-reports",
+      "state": "degraded",
+      "since": "2026-10-20T13:00:00.000Z",
+      "note": "Reports take over a minute."
+    },
+    {
+      "count": 1,
+      "acknowledged_at": null,
+      "snoozed_until": null,
+      "closed_at": null,
+      "alert": null,
+      "history": [
+        {
+          "at": "2026-10-20T17:30:00.000Z",
+          "event": "opened"
+        }
+      ],
+      "id": "i10",
+      "short_id": "DOK-10",
+      "title": "Web preview is down",
+      "kind": "http",
+      "machine": "build",
+      "service": "s-preview",
+      "state": "down",
+      "since": "2026-10-20T17:30:00.000Z",
+      "note": "Connection refused."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "s-purge",
+      "machine": "db-01",
+      "name": "nightly-purge",
+      "state": "down",
+      "schedule": "0 1 * * *",
+      "next_expected": "2026-10-20T21:30:00.000Z",
+      "last_good_run": "2026-10-18T22:00:00.000Z",
+      "last_run": {
+        "result": "ok",
+        "exit_code": 0,
+        "duration_ms": 240000,
+        "started_at": "2026-10-18T22:00:00.000Z"
+      }
+    },
+    {
+      "id": "s-backup",
+      "machine": "nas",
+      "name": "backup",
+      "state": "ok",
+      "schedule": "after midnight",
+      "next_expected": "2026-10-21T03:00:00.000Z",
+      "last_good_run": "2026-10-20T15:40:00.000Z",
+      "last_run": {
+        "result": "ok",
+        "exit_code": 0,
+        "duration_ms": 3120000,
+        "started_at": "2026-10-20T14:48:00.000Z"
+      }
+    },
+    {
+      "id": "s-nbuild",
+      "machine": "build",
+      "name": "nightly-build",
+      "state": "ok",
+      "schedule": "on push",
+      "last_good_run": "2026-10-20T10:00:00.000Z",
+      "last_run": {
+        "result": "running",
+        "started_at": "2026-10-20T18:54:00.000Z",
+        "done": 4000,
+        "total": 9000
+      }
+    }
+  ],
+  "logs": {
+    "s-upload": [
+      {
+        "t": "2026-10-20T18:59:36.000Z",
+        "level": "error",
+        "msg": "resize timed out after 30 s"
+      },
+      {
+        "t": "2026-10-20T18:59:06.000Z",
+        "level": "info",
+        "msg": "upload received"
+      },
+      {
+        "t": "2026-10-20T18:58:36.000Z",
+        "level": "info",
+        "msg": "thumbnail made"
+      },
+      {
+        "t": "2026-10-20T18:58:00.000Z",
+        "level": "warn",
+        "msg": "slow answer: 2.4 s"
+      },
+      {
+        "t": "2026-10-20T18:57:24.000Z",
+        "level": "info",
+        "msg": "virus scan passed"
+      },
+      {
+        "t": "2026-10-20T18:56:54.000Z",
+        "level": "error",
+        "msg": "resize timed out after 30 s"
+      },
+      {
+        "t": "2026-10-20T18:56:18.000Z",
+        "level": "info",
+        "msg": "stored in the share"
+      },
+      {
+        "t": "2026-10-20T18:55:36.000Z",
+        "level": "info",
+        "msg": "upload received"
+      }
+    ],
+    "s-purge": [
+      {
+        "t": "2026-10-18T22:04:00.000Z",
+        "level": "info",
+        "msg": "Purged 17,422 rows"
+      },
+      {
+        "t": "2026-10-18T22:01:00.000Z",
+        "level": "info",
+        "msg": "vacuum started"
+      },
+      {
+        "t": "2026-10-18T22:00:00.000Z",
+        "level": "info",
+        "msg": "purge started"
+      }
+    ],
+    "s-reports": [
+      {
+        "t": "2026-10-20T18:59:00.000Z",
+        "level": "warn",
+        "msg": "query took 64 s: monthly-sales"
+      },
+      {
+        "t": "2026-10-20T18:54:00.000Z",
+        "level": "info",
+        "msg": "report queued"
+      }
+    ]
+  }
+}

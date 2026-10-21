@@ -10,7 +10,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "DokkitKit"),
-        .target(name: "DokkitUI", dependencies: ["DokkitKit"]),
+        .target(name: "DokkitUI", dependencies: ["DokkitKit"], resources: [.process("Resources")]),
         .executableTarget(name: "DokkitChecks", dependencies: ["DokkitKit"], path: "Tests/DokkitChecks", resources: [.copy("Fixtures")]),
     ]
 )
