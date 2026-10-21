@@ -145,6 +145,8 @@ defmodule DokkitWeb.ParityTest do
     "POST /two-step" => "A person turns their own two-step sign-in on and off; a token has none.",
     "GET /password" => "A person changes their own password; a token has none.",
     "POST /password" => "A person changes their own password; a token has none.",
+    "GET /logs.csv" =>
+      "The Logs page saves the lines it shows as a file; a token reads the same lines from GET /api/v1/logs.",
     "GET /add/:token" =>
       "The new machine fetches its add script with the enrolment token in the address; POST /api/v1/add-script makes it.",
     "GET /demo" =>

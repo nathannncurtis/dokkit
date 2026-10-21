@@ -69,13 +69,27 @@ defmodule Dokkit.Logs do
 
   def subscribe, do: Phoenix.PubSub.subscribe(Dokkit.PubSub, "logs")
 
-  @doc "Newest first. Options: q, level (that level and worse), service, machine, from, to, limit."
+  @doc """
+  Newest first. Options: q, level (that level and worse), service, machine, from, to, limit, and
+  order, a column (at, level, machine, service, msg) and :asc or :desc.
+  """
   def list(opts \\ []) do
-    query =
-      from l in Log,
-        order_by: [desc: l.at, desc: l.id],
-        limit: ^(opts[:limit] || 200),
-        preload: [:machine, :service]
+    opts |> query() |> limit(^(opts[:limit] || 200)) |> Repo.all()
+  end
+
+  @doc "Every line that matches, in order, for `list/1`'s options without a limit. Inside a transaction."
+  def stream(opts) do
+    opts
+    |> query()
+    |> exclude(:preload)
+    |> Repo.stream(max_rows: 1000)
+    |> Stream.chunk_every(1000)
+    |> Stream.flat_map(&Repo.preload(&1, [:machine, :service]))
+  end
+
+  defp query(opts) do
+    query = from l in Log, preload: [:machine, :service]
+    query = ordered(query, opts[:order] || {:at, :desc})
 
     query = if opts[:service], do: where(query, [l], l.service_id == ^opts[:service]), else: query
     query = if opts[:machine], do: where(query, [l], l.machine_id == ^opts[:machine]), else: query
@@ -94,21 +108,43 @@ defmodule Dokkit.Logs do
         i -> where(query, [l], l.level in ^Enum.drop(@levels, i))
       end
 
-    query =
-      case String.trim(opts[:q] || "") do
-        "" ->
-          query
+    case String.trim(opts[:q] || "") do
+      "" ->
+        query
 
-        q ->
-          where(
-            query,
-            [l],
-            ilike(l.msg, ^"%#{String.replace(q, ["\\", "%", "_"], &("\\" <> &1))}%")
-          )
-      end
-
-    Repo.all(query)
+      q ->
+        where(
+          query,
+          [l],
+          ilike(l.msg, ^"%#{String.replace(q, ["\\", "%", "_"], &("\\" <> &1))}%")
+        )
+    end
   end
+
+  defp ordered(query, {:at, dir}), do: order_by(query, [l], [{^dir, l.at}, {^dir, l.id}])
+
+  defp ordered(query, {:level, dir}),
+    do:
+      order_by(query, [l], [
+        {^dir, fragment("array_position(?::text[], ?)", ^@levels, l.level)},
+        desc: l.at,
+        desc: l.id
+      ])
+
+  defp ordered(query, {:machine, dir}),
+    do:
+      query
+      |> join(:inner, [l], m in assoc(l, :machine), as: :m)
+      |> order_by([l, m: m], [{^dir, m.name}, desc: l.at, desc: l.id])
+
+  defp ordered(query, {:service, dir}),
+    do:
+      query
+      |> join(:left, [l], s in assoc(l, :service), as: :s)
+      |> order_by([l, s: s], [{^dir, s.name}, desc: l.at, desc: l.id])
+
+  defp ordered(query, {:msg, dir}),
+    do: order_by(query, [l], [{^dir, l.msg}, desc: l.at, desc: l.id])
 
   @move_batch 20_000
 

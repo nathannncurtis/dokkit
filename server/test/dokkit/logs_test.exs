@@ -94,4 +94,69 @@ defmodule Dokkit.LogsTest do
     {:ok, _, html} = live(signed_in(conn), "/logs?s=#{service.id}")
     assert html =~ "Clear the service filter"
   end
+
+  test "the Logs page sorts by any column, filters by machine, service and time, and exports what it shows",
+       %{conn: conn, service: service} do
+    other = Repo.insert!(%Machine{name: "attic"})
+    now = DateTime.utc_now()
+
+    line = fn machine, service_id, level, msg, minutes ->
+      %{
+        at: DateTime.add(now, -minutes * 60),
+        received_at: now,
+        machine_id: machine,
+        service_id: service_id,
+        level: level,
+        msg: msg,
+        fields: %{},
+        cut: false
+      }
+    end
+
+    Logs.insert([
+      line.(service.machine_id, service.id, "info", "alpha upload", 5),
+      line.(service.machine_id, service.id, "error", "=bravo, \"quoted\"", 30),
+      line.(other.id, nil, "warn", "charlie disk", 200)
+    ])
+
+    {:ok, view, html} = live(signed_in(conn), "/logs")
+    assert html =~ ~r/aria-sort="descending"[^>]*>\s*<a[^>]*sort=at/
+    assert order(html) == ["alpha upload", "=bravo, &quot;quoted&quot;", "charlie disk"]
+
+    html = view |> element("th a", "Level") |> render_click()
+    assert order(html) == ["alpha upload", "charlie disk", "=bravo, &quot;quoted&quot;"]
+    assert html =~ ~s(aria-sort="ascending")
+
+    html = view |> element("th a", "Level") |> render_click()
+    assert order(html) == ["=bravo, &quot;quoted&quot;", "charlie disk", "alpha upload"]
+
+    html = view |> form("#log-filter", %{m: other.id}) |> render_change()
+    assert order(html) == ["charlie disk"]
+
+    html = view |> form("#log-filter", %{m: "", since: "60"}) |> render_change()
+    assert order(html) == ["=bravo, &quot;quoted&quot;", "alpha upload"]
+
+    html =
+      view |> form("#log-filter", %{since: "", s: service.id, level: "error"}) |> render_change()
+
+    assert order(html) == ["=bravo, &quot;quoted&quot;"]
+    assert html =~ ~s(href="/logs.csv?)
+
+    csv = signed_in(conn) |> get("/logs.csv?sort=level&dir=asc") |> response(200)
+
+    assert csv ==
+             "time,level,machine,service,message\r\n" <>
+               "#{DateTime.to_iso8601(DateTime.add(now, -300))},info,vault,Upload portal,alpha upload\r\n" <>
+               "#{DateTime.to_iso8601(DateTime.add(now, -12_000))},warn,attic,,charlie disk\r\n" <>
+               "#{DateTime.to_iso8601(DateTime.add(now, -1800))},error,vault,Upload portal,\"'=bravo, \"\"quoted\"\"\"\r\n"
+
+    csv = signed_in(conn) |> get("/logs.csv?m=#{other.id}") |> response(200)
+    assert csv =~ "charlie disk" and not (csv =~ "alpha")
+
+    assert build_conn() |> get("/logs.csv") |> redirected_to() =~ "/login"
+  end
+
+  defp order(html) do
+    Regex.scan(~r/<td class="msg">([^<]*)/, html, capture: :all_but_first) |> List.flatten()
+  end
 end
