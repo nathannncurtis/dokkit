@@ -163,7 +163,7 @@ mod tests {
             .with_no_client_auth()
             .with_single_cert(
                 vec![key.cert.der().clone()],
-                rustls::pki_types::PrivateKeyDer::Pkcs8(key.key_pair.serialize_der().into()),
+                rustls::pki_types::PrivateKeyDer::Pkcs8(key.signing_key.serialize_der().into()),
             )
             .unwrap();
         let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(config));
