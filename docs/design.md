@@ -92,7 +92,7 @@ State tints, each a soft surface, an ink for text on it and a solid for marks (l
 ## Phone apps only
 
 These rules are for the Android and iOS apps, and only there they replace the matching rules above. The
-approved direction is "Statement", built in `apps/android/`.
+approved direction is "Statement", built in `apps/android/` and `apps/ios/`.
 
 - **Type.** Figtree for everything, technical strings included: machine and service names, ids, times and
   numbers use Figtree, not IBM Plex Mono. Big figures use the heavy weight.
@@ -115,6 +115,13 @@ approved direction is "Statement", built in `apps/android/`.
     soft halo around it.
   - Numbers count up once, heat maps and charts fill once.
   - All of it stops under reduced motion.
+- **Foldables.** Layout follows the window, never the model, so one build serves every phone.
+  - Open like a book, the app spreads across both pages as one: one bar and one background over the fold, the
+    tab's own page on the left and what it opened on the right. Home leads with the top issue on the right.
+  - Nothing sits on the fold or under the camera. Both come from the system, and only what would land there
+    moves aside; pages keep the full width.
+  - The lock screen and first run lay out as one spread: what it is on the left, what to do on the right.
+  - Folded, or open and turned, it is the phone layout at full width. Only a foldable rotates.
 
 ## How the design was reached, and how to do it again
 
