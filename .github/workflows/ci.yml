@@ -373,28 +373,39 @@ jobs:
       NVD_KEY: ${{ secrets.NVD_API_KEY }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: OSV-Scanner
+        run: |
+          v=2.7.0
+          curl -sSL -o osv-scanner "https://github.com/google/osv-scanner/releases/download/v$v/osv-scanner_linux_amd64"
+          echo "160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b  osv-scanner" | sha256sum -c -
+          chmod +x osv-scanner
+          mkdir -p reports
+          ./osv-scanner scan source -r --config .osv-scanner.toml --format json --output-file reports/osv.json clients apps/android || true
+          # CVSS 7.0 and above is High or Critical; the scanner has no fixed-version filter, so a fix may not exist yet.
+          n=$(jq '[.results[]?.packages[]?.groups[]? | select((.max_severity | tonumber? // 0) >= 7)] | length' reports/osv.json)
+          jq -r '.results[]?.packages[]? | .package.name as $p | .groups[]? | select((.max_severity | tonumber? // 0) >= 7) | "\($p) \(.ids | join(",")) \(.max_severity)"' reports/osv.json
+          [ "$n" -eq 0 ]
+      # OWASP Dependency-Check needs an NVD API key; it runs when the NVD_API_KEY secret is set.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: env.NVD_KEY != ''
         with:
           path: ~/dc-data
           key: dc-data-${{ github.run_id }}
           restore-keys: dc-data-
       - name: Dependency-Check
+        if: env.NVD_KEY != ''
         run: |
           v=13.0.0
           curl -sSL -o dc.zip "https://github.com/dependency-check/DependencyCheck/releases/download/v$v/dependency-check-$v-release.zip"
           echo "44d920d1ec03e948df862a253f0912782a31b9beee8a7c8895b9cb95760176ed  dc.zip" | sha256sum -c -
           unzip -q dc.zip
-          mkdir -p dc-report ~/dc-data
-          key=()
-          [ -n "$NVD_KEY" ] && key=(--nvdApiKey "$NVD_KEY")
-          ./dependency-check/bin/dependency-check.sh --project dokkit --scan clients --scan apps/android \
-            --format HTML --format JSON --out dc-report --data ~/dc-data \
-            --suppression .dependency-check/suppressions.xml --failOnCVSS 7 "${key[@]}"
+          mkdir -p reports ~/dc-data
+          ./dependency-check/bin/dependency-check.sh --project dokkit --scan clients --scan apps/android             --format HTML --format JSON --out reports --data ~/dc-data             --suppression .dependency-check/suppressions.xml --failOnCVSS 7 --nvdApiKey "$NVD_KEY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: dependency-check
-          path: dc-report
+          name: dependency-reports
+          path: reports
           if-no-files-found: ignore
 
   ci-ok:
