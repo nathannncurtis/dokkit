@@ -27,7 +27,8 @@ defmodule DokkitWeb.AlertsLive do
        tests: %{},
        beat: Dokkit.SharedBeat.current(),
        beat_service: Dokkit.SharedBeat.service(),
-       beat_result: nil
+       beat_result: nil,
+       oncall: nil
      )}
   end
 
@@ -44,7 +45,7 @@ defmodule DokkitWeb.AlertsLive do
 
   def handle_event("save", %{"alerts" => params} = sent, socket) do
     test = sent["test"]
-    socket = assign(socket, where: sent["at"] || @blocks[test] || "limits")
+    socket = assign(socket, where: sent["at"] || sent["oncall"] || @blocks[test] || "limits")
 
     with true <- owner?(socket) do
       # A secret field left empty keeps the stored secret; its Clear box empties it.
@@ -69,6 +70,11 @@ defmodule DokkitWeb.AlertsLive do
               note: note
             )
 
+          socket =
+            if sent["oncall"],
+              do: assign(socket, oncall: Dokkit.OnCall.view(config)),
+              else: socket
+
           if test,
             do: handle_event("test", %{"channel" => test}, socket),
             else: {:noreply, socket}
@@ -83,36 +89,6 @@ defmodule DokkitWeb.AlertsLive do
 
   def handle_event("beat_shared", _, socket), do: beat(socket, &Dokkit.SharedBeat.use/0)
   def handle_event("beat_stop", _, socket), do: beat(socket, &Dokkit.SharedBeat.stop/0)
-
-  defp beat(socket, change) do
-    socket =
-      if owner?(socket) do
-        result = change.()
-
-        config = Alerts.config()
-
-        assign(socket,
-          config: config,
-          beat: Dokkit.SharedBeat.current(),
-          beat_result:
-            case result do
-              {:ok, _} ->
-                {:ok,
-                 "This server now calls #{URI.parse(config["heartbeat_url"]).host} every minute."}
-
-              :ok ->
-                {:ok, "Stopped. Nothing is told when this server goes quiet."}
-
-              {:error, why} ->
-                {:error, why}
-            end
-        )
-      else
-        socket
-      end
-
-    {:noreply, socket}
-  end
 
   def handle_event("changed", %{"alerts" => params}, socket),
     do: {:noreply, typed(socket, params, nil)}
@@ -208,6 +184,36 @@ defmodule DokkitWeb.AlertsLive do
     end
   end
 
+  defp beat(socket, change) do
+    socket =
+      if owner?(socket) do
+        result = change.()
+
+        config = Alerts.config()
+
+        assign(socket,
+          config: config,
+          beat: Dokkit.SharedBeat.current(),
+          beat_result:
+            case result do
+              {:ok, _} ->
+                {:ok,
+                 "This server now calls #{URI.parse(config["heartbeat_url"]).host} every minute."}
+
+              :ok ->
+                {:ok, "Stopped. Nothing is told when this server goes quiet."}
+
+              {:error, why} ->
+                {:error, why}
+            end
+        )
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
   def handle_async(:imessage, {:ok, {key, answer}}, socket),
     do:
       {:noreply,
@@ -233,7 +239,7 @@ defmodule DokkitWeb.AlertsLive do
   defp add_rule(rule) do
     list = Alerts.add_rule(rule)
     to = Enum.reject(rule["to"] || [], &(&1 == ""))
-    to = if "everyone" in to, do: ["everyone"], else: to
+    to = Enum.find_value(People.lone(), to, &(&1 in to && [&1]))
     if to != [], do: People.set_who("rule", List.last(list)["id"], to)
   end
 
@@ -327,6 +333,16 @@ defmodule DokkitWeb.AlertsLive do
 
   defp owner?(socket), do: socket.assigns.current_user.role == :owner
 
+  # Until the schedules are looked up, the one chosen is shown by its id.
+  defp schedules(oncall, config) do
+    listed = for s <- (oncall && oncall.schedules) || [], do: {s.name, s.id}
+    chosen = config["pagerduty_schedule"]
+
+    if chosen in [nil, ""] or List.keymember?(listed, chosen, 1),
+      do: listed,
+      else: [{chosen, chosen} | listed]
+  end
+
   def render(assigns) do
     assigns =
       assign(assigns,
@@ -347,7 +363,10 @@ defmodule DokkitWeb.AlertsLive do
     <Layouts.app active={:alerts} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Alerts</h1>
-        <p class="lede">Who hears about what, how, and when. Night hours hold all but what is down.</p>
+
+        <p class="lede">
+          Who hears about what, how, and when. Night hours hold all but what is down.
+        </p>
       </div>
 
       <div :if={@suggestions != []} class="body set" style="padding-bottom: 0">
@@ -404,6 +423,41 @@ defmodule DokkitWeb.AlertsLive do
                 /> <.send_test channel="page" stays tests={@tests} />
                 <span class="hint">
                   Through PagerDuty, for what cannot wait until morning. The key is the integration key of an Events API v2 integration. The page is resolved when the issue closes.
+                </span>
+              </dd>
+
+              <dt>On call</dt>
+
+              <dd>
+                <.secret
+                  typed={@typed}
+                  name="pagerduty_api_key"
+                  config={@config}
+                  label="PagerDuty REST API key"
+                />
+                <.pick
+                  name="pagerduty_schedule"
+                  value={@config["pagerduty_schedule"]}
+                  options={schedules(@oncall, @config)}
+                  label="PagerDuty schedule"
+                  blank="No schedule"
+                />
+                <button class="btn" type="submit" name="oncall" value="pagerduty">
+                  Save and look up
+                </button>
+
+                <span :if={@oncall && @oncall.error} class="hint bad" role="status">
+                  {@oncall.error}
+                </span>
+
+                <span :for={u <- (@oncall && @oncall.oncall) || []} class="hint" role="status">
+                  On call now: {u.name} ({u.email}), {if u.person,
+                    do: "told as #{u.person.name}.",
+                    else: "who is nobody on this server."}
+                </span>
+
+                <span class="hint">
+                  For "Whoever is on call in PagerDuty" under People, a rule, a service or a check. The key is a read-only REST API key. When an alert goes out, everyone on call in the schedule is told on their own destinations, matched by their email. When nobody here matches, or PagerDuty cannot be reached, the destinations on this page are told.
                 </span>
               </dd>
             </dl>
@@ -798,9 +852,11 @@ defmodule DokkitWeb.AlertsLive do
                 >
                   Use {URI.parse(@beat_service).host}
                 </button>
+
                 <button :if={@beat} class="btn" type="button" phx-click="beat_stop" id="beat-stop">
                   Stop using {URI.parse(@beat_service).host}
                 </button>
+
                 <span
                   :if={@beat_result}
                   class={["hint", elem(@beat_result, 0) == :error && "bad"]}
@@ -809,11 +865,13 @@ defmodule DokkitWeb.AlertsLive do
                 >
                   {elem(@beat_result, 1)}
                 </span>
+
                 <span :if={@beat} class="hint">
                   {URI.parse(@beat_service).host} tells your {if @beat["kind"] == "ntfy",
                     do: "ntfy topic",
                     else: "webhook"} when this server has not called for five minutes, and again when it calls.
                 </span>
+
                 <span :if={!@beat} class="hint">
                   An https address. Dokkit calls it every minute. Point it at a service that alerts when the calls stop, because Dokkit cannot tell anyone that it is down. Or use {URI.parse(
                     @beat_service
@@ -1092,11 +1150,15 @@ defmodule DokkitWeb.AlertsLive do
                     label="Rule channels"
                     blank="Nobody"
                   />
-
                   <span style="display: inline-flex; flex-wrap: wrap; gap: 4px 14px">
                     <label style="display: inline-flex; align-items: center; gap: 6px">
                       <input type="checkbox" class="chk" name="rule[to][]" value="everyone" />
                       Everyone
+                    </label>
+
+                    <label style="display: inline-flex; align-items: center; gap: 6px">
+                      <input type="checkbox" class="chk" name="rule[to][]" value="oncall" />
+                      Whoever is on call in PagerDuty
                     </label>
 
                     <label
@@ -1215,7 +1277,6 @@ defmodule DokkitWeb.AlertsLive do
     </button>
 
     <span :if={@stays} class="hint">This test stays open for two minutes, then resolves itself.</span>
-
     <span :if={@result} class={["hint", elem(@result, 0) == :error && "bad"]} role="status">{elem(
       @result,
       1

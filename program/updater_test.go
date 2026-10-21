@@ -134,27 +134,27 @@ func writeZip(t *testing.T, path string, files map[string]string) []byte {
 
 // rig is a machine with a fake Windows and a fake Dokkit server.
 type rig struct {
-	t        *testing.T
-	priv     ed25519.PrivateKey
-	dir      string
-	srv      *httptest.Server
-	mu       sync.Mutex
-	wanted   string // the version the server asks for; "" for 204
-	query    string
-	files    map[string]map[string][]byte // version -> file -> bytes
-	sums     map[string][]byte            // overrides the list served for a version
-	results  []outcome
-	failPost bool
-	failPosts int
-	refusePosts int
-	posts     int
-	cutFiles  int
+	t            *testing.T
+	priv         ed25519.PrivateKey
+	dir          string
+	srv          *httptest.Server
+	mu           sync.Mutex
+	wanted       string // the version the server asks for; "" for 204
+	query        string
+	files        map[string]map[string][]byte // version -> file -> bytes
+	sums         map[string][]byte            // overrides the list served for a version
+	results      []outcome
+	failPost     bool
+	failPosts    int
+	refusePosts  int
+	posts        int
+	cutFiles     int
 	serverStarts int
-	failPS   bool
-	noStart  string // a program file content that will not start
-	calls    []string
-	port     bool
-	server   bool
+	failPS       bool
+	noStart      string // a program file content that will not start
+	calls        []string
+	port         bool
+	server       bool
 }
 
 func newRig(t *testing.T, hostsServer bool) *rig {

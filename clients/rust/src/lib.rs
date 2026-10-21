@@ -558,16 +558,18 @@ fn post(url: &str, key: &str, path: &str, kind: &str, id: &str, body: &str) -> S
     #[cfg(feature = "log")]
     SENDING.with(|s| s.set(true));
     let sent = ureq::post(&format!("{url}{path}"))
-        .timeout(Duration::from_secs(10))
-        .set("Authorization", &format!("Bearer {key}"))
-        .set("Content-Type", kind)
-        .set("Dokkit-Batch", id)
-        .send_string(body);
+        .config()
+        .timeout_global(Some(Duration::from_secs(10)))
+        .build()
+        .header("Authorization", &format!("Bearer {key}"))
+        .header("Content-Type", kind)
+        .header("Dokkit-Batch", id)
+        .send(body);
     #[cfg(feature = "log")]
     SENDING.with(|s| s.set(false));
     match sent {
         Ok(_) => Sent::Taken,
-        Err(ureq::Error::Status(code, _)) if code < 500 && code != 429 => Sent::Refused,
+        Err(ureq::Error::StatusCode(code)) if code < 500 && code != 429 => Sent::Refused,
         Err(_) => Sent::Failed,
     }
 }

@@ -44,7 +44,7 @@ Checks (http, tcp, process, Windows service, systemd unit, beats, jobs on a sche
 ## Brand Commitments
 
 - Name: Dokkit, "docket" respelled. A docket is the list of matters waiting for attention.
-- Mark: a D with a dot at its top-left, used exactly as drawn (`gallery/app/app.js`, `LOGO`).
+- Mark: a D with a dot at its top-left, used exactly as drawn (`server/priv/static/favicon.svg`).
 - Colour: Ember, a warm charcoal with one tangerine accent, in the interface's dark theme and on the website. The light theme keeps a teal accent. Accent and dark base are settings a person can change.
 - The website is meant to be a scrolling site with a working sample of the interface in it; its mock is `gallery/brand/`.
 - The website must not look like Sentry's, or like any other monitoring product's.
@@ -53,7 +53,6 @@ Checks (http, tcp, process, Windows service, systemd unit, beats, jobs on a sche
 
 ## Evidence on Hand
 
-- The working interface mock at `gallery/app/` on an invented company (Brightwater). Real screens can be shown; the data is synthetic and says so.
 - The docs in `docs/`.
 - No customers, testimonials, benchmarks or prices exist. None may be invented.
 

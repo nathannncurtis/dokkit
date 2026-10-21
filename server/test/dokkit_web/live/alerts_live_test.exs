@@ -166,4 +166,32 @@ defmodule DokkitWeb.AlertsLiveTest do
     assert %{"imessage_machine" => id, "imessage_to" => "+15555550100"} = Alerts.config()
     assert id == mac.id
   end
+
+  test "Save and look up lists the PagerDuty schedules and who is on call", %{conn: conn} do
+    Req.Test.stub(Alerts, fn conn ->
+      body =
+        if conn.request_path == "/schedules",
+          do: %{"schedules" => [%{"id" => "PSCHED9", "name" => "Weekend"}]},
+          else: %{"users" => [%{"name" => "Una", "email" => "una@example.test"}]}
+
+      Req.Test.json(conn, body)
+    end)
+
+    {:ok, view, _} = live(signed_in(conn), "/alerts")
+
+    html =
+      view
+      |> form("#alerts-form",
+        alerts: %{pagerduty_api_key: "REST-LIVE-#{System.unique_integer([:positive])}"}
+      )
+      |> render_submit(%{
+        "oncall" => "pagerduty",
+        "alerts" => %{"pagerduty_schedule" => "PSCHED9"}
+      })
+
+    assert html =~ "Weekend"
+    assert html =~ "On call now: Una (una@example.test)"
+    assert html =~ "nobody on this server"
+    assert Alerts.config()["pagerduty_schedule"] == "PSCHED9"
+  end
 end

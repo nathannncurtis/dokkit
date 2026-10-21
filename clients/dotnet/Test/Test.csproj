@@ -8,6 +8,6 @@
   <ItemGroup>
     <ProjectReference Include="../Dokkit/Dokkit.csproj" />
     <ProjectReference Include="../Dokkit.Logging/Dokkit.Logging.csproj" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.13" />
   </ItemGroup>
 </Project>
