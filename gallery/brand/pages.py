@@ -9,7 +9,7 @@ read = lambda n: json.load(open(os.path.join(here, n), encoding="utf-8"))
 V = "20"
 ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E"
 MARK = '<circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/>'
-NAV = [("install.html", "Install"), (None, "Demo"), ("agents.html", "Agents"), ("api.html", "Docs"), ("phone.html", "Phone"), ("security.html", "Security"), (None, "Status"), ("https://github.com/nathannncurtis/dokkit", "Source")]
+NAV = [("install.html", "Install"), ("https://demo.dokkit.dev/", "Demo"), ("agents.html", "Agents"), ("api.html", "Docs"), ("phone.html", "Phone"), ("security.html", "Security"), (None, "Status"), ("https://github.com/nathannncurtis/dokkit", "Source")]
 MK = '<span class="mk"><svg><use href="#mark"/></svg></span>'
 
 
