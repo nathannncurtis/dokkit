@@ -23,6 +23,8 @@ def call(method, path, **kw):
 
 
 def main(build_number):
+    # App Store Connect drops leading zeros from each part of the build number
+    build_number = ".".join(str(int(x)) for x in build_number.split("."))
     deadline = time.time() + 1800
     build = None
     while time.time() < deadline:
