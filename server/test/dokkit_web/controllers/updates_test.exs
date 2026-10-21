@@ -181,6 +181,17 @@ defmodule DokkitWeb.UpdatesTest do
       assert reload(m).wanted_version == "v1.1.0"
     end
 
+    test "the updater is told how long it may take, as set in Settings", %{
+      mkey: mkey,
+      admin: admin
+    } do
+      Repo.update_all(Machine, set: [wanted_version: "v1.1.0"])
+      hold(admin, "v1.1.0")
+      assert %{"limit_seconds" => 2700} = json_response(ask(mkey), 200)
+      {:ok, _} = Dokkit.Values.save(:server, %{"updater_minutes" => 10})
+      assert %{"limit_seconds" => 600} = json_response(ask(mkey), 200)
+    end
+
     test "already on the wanted version, or only one part behind", %{mkey: mkey, admin: admin} do
       hold(admin, "v1.1.0")
       Repo.update_all(Machine, set: [wanted_version: "v1.1.0"])
