@@ -9,8 +9,9 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="site.css?v=19">
+<link rel="stylesheet" href="phone-sequence.css?v=20">
 <script>(() => { let m = null; try { m = localStorage.getItem("motion"); } catch {} const on = m !== "off"; if (!on) document.documentElement.classList.add("still"); })();</script>
 <link rel="stylesheet" href="nav.css?v=1">
 <meta property="og:type" content="website">
@@ -61,6 +62,7 @@
     <div class="steps">
       <section class="step" id="how">
         <h2 data-type>How it reaches you</h2>
+        <div class="seq-stage" id="seqStage">
         <div class="cap" id="pcap" aria-hidden="true"><span>Your server seals a snapshot, every minute.</span><span>A relay holds it, and cannot open it.</span><span>Your phone opens it. Nothing goes back.</span></div>
         <div class="flow" id="flow">
           <div class="node" id="nServer"><span class="mk sm"><svg><use href="#mark"/></svg></span><b>Your server</b><small>on your network</small></div>
@@ -68,10 +70,14 @@
           <div class="node" id="nRelay"><b>A relay</b><small>on any public host</small><em class="blind">cannot read it</em></div>
           <div class="wire"><i></i></div>
           <div class="node phone-node" id="nPhone">
-            <div class="handset"><img src="img/phone.webp?v=2" width="760" height="1344" alt="The Dokkit app for Android, showing what needs you on a sample company"><i class="screen-off" id="screenOff" aria-hidden="true"></i></div>
+            <div class="handset seq-slot" id="seqSlot" role="img" aria-label="The Dokkit app on an Android phone, an iPhone and an iPhone Duo, showing what needs you on a sample company"><noscript><img src="img/phone-demo-home.webp" width="600" height="1299" alt="" style="width:100%;height:auto"></noscript></div>
           </div>
           <div class="env" id="env" aria-hidden="true"><svg><use href="#lock"/></svg></div>
+          <div class="seq-layer" id="seqLayer" aria-hidden="true"></div>
         </div>
+        </div>
+        <div class="seq-row" id="seqRow"></div>
+        <div class="seq-after"><a class="seq-try" href="phone-try.html#how">Try the app <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a><small>Tap through it, on Android, iPhone or the Duo.</small></div>
         <ul class="did">
           <li>The server only ever dials out, to the relay. It opens no port for the phone.</li>
           <li>Each phone has its own key and its own copy. The relay sees sealed bytes and the time they arrived.</li>
@@ -120,7 +126,7 @@
             <li>Open <code>Dokkit.xcodeproj</code>. Under Signing &amp; Capabilities choose your Team and a bundle identifier of your own.</li>
             <li>Turn on Developer Mode on the iPhone, connect it, and press Run.</li>
           </ol>
-          <p>Signed with a free Apple ID it stops opening after seven days; run it from Xcode again to renew. A paid account lasts a year.</p>
+          <p>Signed with a free Apple ID it stops opening after seven days; run it from Xcode again to renew. A paid account lasts a year. The layout for a foldable iPhone needs Xcode 27.1; an older Xcode builds the app without it.</p>
           <p><b>Android</b>:</p>
           <ol class="do">
             <li>Take <code>dokkit-android-unsigned.apk</code> from a release, or build it with <code>./build-unsigned.sh</code> in <code>apps/android</code>.</li>
@@ -154,7 +160,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
 <script src="site.js?v=18"></script>
-<script src="phone.js?v=18"></script>
+<script src="phone-sequence.js?v=20"></script>
 <script src="motion.js?v=18"></script>
 <script src="nav.js?v=1"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "9c697efa266343149d988907066e0008"}'></script>

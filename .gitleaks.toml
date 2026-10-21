@@ -1,9 +1,30 @@
 [extend]
 useDefault = true
 
+# Only things that are public or made up. A real token anywhere else is still caught.
 [allowlist]
-description = "Made-up keys for the debug-only demo relay at demo.dokkit.invalid"
+description = "Made-up keys in tests, fixtures, the API docs and the debug demo relays; the release public key; the public analytics beacon"
 paths = [
+  # The debug-only demo relays at demo.dokkit.invalid.
   '''^apps/android/app/src/debug/kotlin/dev/dokkit/phone/Transports\.kt$''',
   '''^apps/ios/Dokkit/Debug/DemoRelay\.swift$''',
+  # Test vectors and fixtures.
+  '''^spec/phone-cases/''',
+  '''(^|/)fixtures?/''',
+  '''(^|/)Fixtures/''',
+  '''^server/test/''',
+  # Example tokens in the API reference and the files generated from it.
+  '''^spec/openapi\.json$''',
+  '''^gallery/brand/openapi\.json$''',
+  '''^gallery/brand/api\.md$''',
+  '''^gallery/brand/llms-full\.txt$''',
+  # Phoenix's dev-only secret, which is never used outside a developer's machine.
+  '''^server/config/dev\.exs$''',
+]
+regexTarget = "line"
+regexes = [
+  # The public half of the release-signing key, quoted in the program and the install scripts.
+  '''xX87EOVIFN9AkYL7vMj40ivpQ36bRyvJGLOMIbgAmRk=''',
+  # Cloudflare's analytics beacon token, which every site page carries in public.
+  '''data-cf-beacon=[^>]*["']token["']\s*:\s*["'][0-9a-f]{32}["']''',
 ]
