@@ -26,6 +26,10 @@ Dokkit connects with its time zone set to UTC, and a migration re-bounds any log
 
 Log months older than the live limit (12 months unless changed in Settings under Logs, or by `PUT /api/v1/logs/retention`) are archived as compressed files to a folder that is a setting, or deleted if that is chosen. Those files are the archive, not a backup of the live database.
 
+## Settings
+
+The numbers named below (retention, warning days, retry times, quiet minutes) are defaults. Each is a setting in Settings with a Reset, and in `GET` and `PUT /api/v1/settings`; per-machine and per-job values are on their own pages.
+
 ## First start
 
 The first visit to the interface creates the owner account. It asks for a setup code that the server printed when it started, so nobody else on the network can claim it first.
@@ -51,7 +55,7 @@ On a fresh Debian or Ubuntu machine whose domain already points at it:
 curl -fsSL https://dokkit.dev/install.sh | sudo sh -s -- dokkit.example.com
 ```
 
-That form applies once the site serves the script. It does not yet. The release workflow pushes the image (`ghcr.io/nathannncurtis/dokkit-server:latest`) on every tag. What works today is the same script from a checkout of this repository, which builds the image from the checkout:
+The site serves the script. The release workflow pushes the image (`ghcr.io/nathannncurtis/dokkit-server:latest`) on every tag. The same script also runs from a checkout of this repository, which builds the image from the checkout:
 
 ```
 sudo sh server/install.sh dokkit.example.com
@@ -69,13 +73,15 @@ It refuses to run without root, without a domain, or on a system that is not Deb
 
 ## Releases
 
-Pushing a tag that starts with `v` runs `.github/workflows/release.yml`. Releases `v0.1.0` to `v0.1.10` exist. It builds and publishes:
+Pushing a tag that starts with `v` runs `.github/workflows/release.yml`. It builds and publishes:
 
-- The server image, as `ghcr.io/nathannncurtis/dokkit-server:<version>` and `:latest`.
+- The server image, as `ghcr.io/nathannncurtis/dokkit-server:<version>` and `:latest`, signed with cosign (keyless).
 - The `dokkit` program for Windows, Linux and macOS, each on amd64 and arm64, as release assets named `dokkit-<os>-<arch>` (`.exe` on Windows), each with a `.sha256` file beside it, and `SHA256SUMS` with its Ed25519 signature `SHA256SUMS.sig` listing them all. The signature is made with the repository secret `RELEASE_SIGNING_KEY` and checked once before it is published; without that secret the release has no signature and the updater cannot install it.
 - The Windows server as `dokkit-windows-x64.zip` with its `.sha256`, holding `bin\dokkit.bat` and `install.ps1` at the top.
+- The desktop app: `dokkit-desktop-windows-x64-setup.exe` and `.msi`, `dokkit-desktop-macos-universal.dmg`, and `dokkit-desktop-linux-amd64.deb`, `dokkit-desktop-linux-x86_64.rpm` and `dokkit-desktop-linux-amd64.AppImage`, each with a `.sha256`.
+- The phone apps: `dokkit-android.apk` (signed with the Dokkit key), `dokkit-android-unsigned.apk` and `dokkit-ios-unsigned.ipa`, each with a `.sha256`. The iPhone app also goes to a public TestFlight beta (https://testflight.apple.com/join/24zrk6Cd).
 
-The release is created with a one-line note, and only when all 14 files were built: a build that fails does not fail the run, and the release is then not published. The macOS files are code-signed in the workflow when the repository holds the signing certificate secrets, and are published unsigned with a warning otherwise; the Windows and Linux files are not signed. `.github/workflows/test.yml` runs by hand only (`workflow_dispatch`), not on a push: it runs the server's `mix test` against a Postgres 17 service, and the program's `go vet ./...` and `go test ./...` on Ubuntu and Windows.
+The release is created with a one-line note, and only when all 14 program and server files were built: a build that fails does not fail the run, and the release is then not published. The desktop and phone files are added when they built. Signing uses secrets the repository holds, and a missing secret is a warning, not a failure: the Windows programs, the desktop installers and the Windows server zip are signed with Azure Trusted Signing, and are published unsigned when the Azure secrets are missing. The macOS programs and the desktop disk image are signed with a Developer ID and notarized, and are signed but not notarized without the App Store Connect key. Linux files are not signed; they are covered by `SHA256SUMS`. `.github/workflows/test.yml` runs by hand only (`workflow_dispatch`), not on a push: it runs the server's `mix test` against a Postgres 17 service, and the program's `go vet ./...` and `go test ./...` on Ubuntu and Windows.
 
 ## Getting the program
 
@@ -95,11 +101,9 @@ Each downloads `SHA256SUMS` and `SHA256SUMS.sig` from the latest release, checks
 
 For Windows the Add a machine page gives one line instead, `irm https://<server>/add/<token> | iex`, to paste in a PowerShell opened as administrator, and the same script as a file, `dokkit-add-<name>.ps1`, for a machine where the line cannot be used (a server whose certificate Windows does not trust, or one whose security software blocks downloaded scripts). Neither needs anything from dokkit.dev. The address hands out the script only while its token is unused. It holds the server's address, the certificate fingerprint when one is needed, the newest release the server holds and a one-use enrolment token that runs out in 24 hours. Run from a PowerShell opened as administrator (`powershell -ExecutionPolicy Bypass -File .\dokkit-add-<name>.ps1`), it fetches the program from the server with that token, checks the release signature and the file's SHA-256 as `get.ps1` does, enrols, runs `dokkit service install` and `dokkit updater install`, runs `dokkit doctor` against the installed service, and then offers to delete itself. On a machine that already has the service it only installs the updater and checks. With `-Check` it only downloads and checks, needs no administrator and spends nothing. `POST /api/v1/add-script` makes the same script.
 
-dokkit.dev does not serve them yet, so neither has been run from there.
-
 ## Serving the scripts
 
-`install.sh`, `install.ps1`, `compose.yml`, `get.sh` and `get.ps1` must be served from the root of dokkit.dev. dokkit.dev does not serve them yet, so none of the commands above work until it does.
+`install.sh`, `install.ps1`, `compose.yml`, `get.sh` and `get.ps1` are served from the root of dokkit.dev. `.github/workflows/pages.yml` copies them from `server/install.sh`, `server/rel/overlays/install.ps1`, `server/compose.yml`, `program/get.sh` and `program/get.ps1` into the site whenever one changes.
 
 ## Reaching it
 
@@ -111,9 +115,9 @@ Its own usernames and passwords. It is meant for a local network or a private ov
 
 **Docker.** `server/Dockerfile` and `server/compose.yml`, with Postgres 17 beside it. The release workflow builds the image on a tag; no container has been run from it, and the compose file has not been run. The base images are pinned by digest, the image has a health check that speaks plain HTTP, so it reports unhealthy when `DOKKIT_CERT` makes the server serve https, and the server listens on plain HTTP on port 4000 for a proxy that holds the certificate. Compose publishes no port unless a `compose.override.yml` adds one; its `caddy` profile adds a Caddy container that holds the certificate. `PHX_HOST` and a Postgres password of letters and digits (`openssl rand -hex 24`) are required.
 
-**VPS installer.** `server/install.sh` is described under "On a cloud VPS". It has had `bash -n` run on it and nothing else: it has not been run, in either form, and the compose file has not been validated. dokkit.dev does not serve it.
+**VPS installer.** `server/install.sh` is described under "On a cloud VPS". It has had `bash -n` run on it and nothing else: it has not been run, in either form, and the compose file has not been validated.
 
-**Windows, in one line.** From an administrator PowerShell, `irm https://dokkit.dev/install.ps1 | iex` fetches the newest release and, on a first install, Postgres's own Windows binaries from EnterpriseDB, then runs the installer described next with a Postgres of its own. It applies once the site serves the script, and it has not been run from there. Each download is checked against a SHA-256 before anything is unpacked: Postgres against the one written in the script, the release against the SHA-256 in `SHA256SUMS`, which must carry a valid signature from the release key, fetched from the same folder as the zip. `DOKKIT_RELEASE_URL` names another release's zip (with `SHA256SUMS` and `SHA256SUMS.sig` in its folder, and `DOKKIT_RELEASE_KEY` for a server that needs a key); `DOKKIT_POSTGRES_URL` names another Postgres and needs `DOKKIT_POSTGRES_SHA256` with it. For any other choice (an existing database, a certificate, another folder), unpack a release and run its `install.ps1` with the settings below.
+**Windows, in one line.** From an administrator PowerShell, `irm https://dokkit.dev/install.ps1 | iex` fetches the newest release and, on a first install, Postgres's own Windows binaries from EnterpriseDB, then runs the installer described next with a Postgres of its own. Each download is checked against a SHA-256 before anything is unpacked: Postgres against the one written in the script, the release against the SHA-256 in `SHA256SUMS`, which must carry a valid signature from the release key, fetched from the same folder as the zip. `DOKKIT_RELEASE_URL` names another release's zip (with `SHA256SUMS` and `SHA256SUMS.sig` in its folder, and `DOKKIT_RELEASE_KEY` for a server that needs a key); `DOKKIT_POSTGRES_URL` names another Postgres and needs `DOKKIT_POSTGRES_SHA256` with it. For any other choice (an existing database, a certificate, another folder), unpack a release and run its `install.ps1` with the settings below.
 
 **Windows.** `install.ps1` ships in the release folder and is run from an administrator PowerShell. It copies the server to `Program Files\Dokkit`, writes its settings to `ProgramData\Dokkit\settings.env` where only administrators and the system account can read them, brings the database up to date, and registers and starts a Windows service. The server reads that settings file itself, because a Windows service is not started through a script that could set variables.
  The program's own Windows service keeps to `Program Files\DokkitProgram` and `ProgramData\DokkitProgram`, so both can be installed on one machine in either order. `install.ps1` refuses, and changes nothing, when `ProgramData\Dokkit` holds a program installed by an older release and no server: run `service update` from a current copy of the program, which moves it, then delete the old `config.json`, `spool`, `dokkit.log` and `dokkit.exe` and run the installer again.
@@ -137,11 +141,11 @@ The service runs as Local Service, starts with Windows after `dokkit-postgres`, 
 
 **Its own TLS.** With `DOKKIT_CERT` and `DOKKIT_CERT_KEY` set to a certificate and its key, the server serves HTTPS itself and the enrol page shows the fingerprint for machines to pin.
 
-A second certificate, for a real name with a publicly trusted certificate, can be put in place with `PUT /api/v1/certificate` or in Settings under Certificate, with no restart and nothing to run on the server. The server serves it to clients that ask for one of its names (a name it covers, or a `*.` wildcard for one label) and serves the installed certificate to every other client, including one that connects by address, so machines pinned to the first certificate are not affected. The files are kept in the `tls` folder beside the settings (`DOKKIT_TLS` names another place). Once there is one, its first name is the address Dokkit shows and links to, the enrol command carries no fingerprint when that name is covered by a certificate that is not self-signed, and Dokkit's own row warns 21 days before it runs out.
+A second certificate, for a real name with a publicly trusted certificate, can be put in place with `PUT /api/v1/certificate` or in Settings under Certificate, with no restart and nothing to run on the server. The server serves it to clients that ask for one of its names (a name it covers, or a `*.` wildcard for one label) and serves the installed certificate to every other client, including one that connects by address, so machines pinned to the first certificate are not affected. The files are kept in the `tls` folder beside the settings (`DOKKIT_TLS` names another place). Once there is one, its first name is the address Dokkit shows and links to, the enrol command carries no fingerprint when that name is covered by a certificate that is not self-signed, and Dokkit's own row warns 21 days before it runs out (a default).
 
 **Renewing it by itself.** With a name (`acme_name`) and a Cloudflare API token that may edit DNS in the name's zone (`acme_cloudflare_token`) set in Settings under Certificate, or through `PUT /api/v1/certificate/settings`, the server gets the certificate itself from Let's Encrypt and renews it when 30 days or fewer are left. It proves the name with a TXT record at `_acme-challenge.<name>`, which it adds at Cloudflare, waits to see through Cloudflare's own DNS, and removes again whatever happens. The account key is kept in the `tls` folder. Once a day it checks; after a failure it tries again no sooner than twelve hours later, and the failure shows beside the settings, in `GET /api/v1/certificate` and on Dokkit's own row. **Get a certificate now** does it at once. `acme_directory` points it at Let's Encrypt's staging directory (`https://acme-staging-v02.api.letsencrypt.org/directory`) to try it out. The server needs to reach `api.cloudflare.com`, `cloudflare-dns.com` and the directory over https.
 
-**Who watches Dokkit.** The outside heartbeat is an https address set on the Alerts page. Dokkit's own row is a service called Dokkit with a check that the database answers, a chart of the database's size, a check that goes bad when every enrolled machine has been quiet for ten minutes at once, and, when an archive folder is set, a check that the folder can be written to (it writes an empty file called `.dokkit-write-check` there each minute). It routes to a quiet push.
+**Who watches Dokkit.** The outside heartbeat is an https address set on the Alerts page. Dokkit's own row is a service called Dokkit with a check that the database answers, a chart of the database's size, a check that goes bad when every enrolled machine has been quiet for ten minutes at once (a default), and, when an archive folder is set, a check that the folder can be written to (it writes an empty file called `.dokkit-write-check` there each minute). It routes to a quiet push.
 
 **The program for machines to fetch.** With `DOKKIT_PROGRAMS` set to a folder holding `version.txt` and files named like `dokkit-windows-amd64.exe`, the Versions page lists the machines behind that version and can ask each to fetch the newer copy. The file is only fetched; finishing the update on the machine is what the updater does (see below).
 

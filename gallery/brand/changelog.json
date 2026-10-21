@@ -1,5 +1,125 @@
 [
  {
+  "version": "v0.1.54",
+  "at": "2026-10-21T02:22:48-07:00",
+  "changes": [
+   "Desktop: rcgen 0.14's signing_key, and keep windows-core with webview2-com",
+   "Bump the cargo group across 1 directory with 5 updates",
+   "Release: match the build number the way App Store Connect stores it",
+   "Release: upload the iOS app to TestFlight",
+   "iOS: an empty debug route opens Home instead of stopping the app",
+   "iOS: unlock through the callback form, which CI's older SDK accepts",
+   "Fix desktop review findings: notify on entry, safe settings file, clearer errors, tray order, pins by host:port, saved URL checks",
+   "iOS: build with CI's older Xcode, and the package on macOS again",
+   "iOS: ship Phosphor's licence with its icons, as Figtree's ships with the font",
+   "Scans: gitleaks also skips the iOS debug demo relay's made-up keys",
+   "Test the MCP tool list in the order the server offers it",
+   "dokkit.page answers with a 301 to names.dokkit.dev, from an Azure Static Web App",
+   "iOS: the iPhone Duo, open and folded, in every orientation",
+   "On-call alerts read the send tries from the settings, like every other alert",
+   "Make the desktop app work on Linux",
+   "Make the desktop app work on macOS: keychain, clickable notifications, pinned certificates, menu-bar behaviour, dmg bundle, CI",
+   "Add the Dokkit desktop app for Windows: server windows, tray, notifications, pinned certificates",
+   "Android: compile against API 37, which the new Compose libraries need",
+   "Android: keep the release unit tests, which the 9.x Android plugin skips by default",
+   "Android: drop the Kotlin Android plugin; the 9.x Android plugin builds Kotlin itself",
+   "Rust client: ureq 3's request config, header and send calls, and its status-code error",
+   "iOS: the Calm in Ember redesign, Statement direction",
+   "Bump the gradle group in /apps/android with 9 updates",
+   "Scans: gitleaks skips the debug demo relay's made-up keys, CodeQL skips the static design mocks",
+   "Bump the nuget group with 2 updates",
+   "Bump crontab in /server in the mix group across 1 directory",
+   "Bump golang.org/x/sys in /program in the go group across 1 directory",
+   "Bump ureq",
+   "Sobelow: give the GET heartbeat its own action name, and leave CSP to the security-headers change",
+   "Docs: the phone apps' own rules, flagged as phone-only, and the Android README for Settings, the camera and the debug demo",
+   "Android: the Calm in Ember redesign, Statement direction",
+   "Android: scan pairing codes through the platform camera instead of CameraX, which crashed on Android 17",
+   "Android: what the app always hard-coded is now a setting with that value as its default, and the core says each issue in one sentence with one next step",
+   "Fix a data race in the job output tail, a second-resolution error check in the conformance runner, and bound the audit step",
+   "Review fixes: values read through a short cache emptied on save; error bursts write once and close only their own check; stored limits keep their fractions; pairs checked only when saved, with quiet time against reporting and the update wait against the updater (now 50 minutes); unreadable max_runtime flagged after an hour; machine and job settings need an owner and are off in the demo; enrolment codes capped at the most. The processor, error-burst and reminder alerts are on by default.",
+   "Fix known vulnerabilities: Go 1.26.10, bandit 1.13.1; scan dependencies with OSV-Scanner, Dependency-Check when an NVD key is set",
+   "Tests that change each setting and watch the behaviour change",
+   "Pages and API: grouped settings that fold open on Settings, a machine's page and Jobs, each with its default and Reset; GET and PUT for the server, a machine and a job, MCP tools, and off in the public demo",
+   "Program: reporting, scanning, check defaults, the certificate warning, the restart gap and the updater's limit follow what the server sends",
+   "Jobs and the sweep: grace, too long, missed runs and run history per job; heartbeats, the wait after a restart and forgetting unknown hosts read their settings",
+   "Server: sign-in, enrolment codes, certificates, renewing, keep times and update limits read their settings; machines are sent their reporting and scanning values with their checks",
+   "Logs and errors: the longest line, restored archives and how many error reports are kept read their settings; error-burst alerts are new and off",
+   "Alerts: tries, the iMessage wait, test alerts, the digest suggestion and snooze lengths read their settings; reminders are new and off",
+   "Machines and checks: disk, memory and a new processor alert (off), going quiet, the disk forecast, planned downtime, failures in a row and reopening read their settings; a machine's own limit wins over its dokkit.toml",
+   "Settings: one list of every value Dokkit decides on its own, each with today's value as its default, for the server, a machine or a job",
+   "CI fixes: format the server from LF files, platform-independent program tests, absolute deps path, NVD key variable",
+   "CI fixes: mix format the server, gofmt a test file, gofmt on Linux only, Dependency-Check output folder, ZAP rules",
+   "CI: one workflow that tests every area on pull requests, with rules, ZAP scans and dependency audits",
+   "On call: read the schedule's own users, tell everyone on call, ask again on each try",
+   "Alerts page: the REST key, the schedule and the on-call choice",
+   "API and MCP: the PagerDuty on-call lookup and the oncall choice",
+   "Alerts can go to whoever is on call in a PagerDuty schedule",
+   "The last day: five quick clicks on a down cell open Keep it green in the panel",
+   "Demo is full: the status console with the Keep it green game while you wait",
+   "Phone apps: orange in the light theme and on the app icons, no more teal",
+   "Favicon: the orange mark, as on the site",
+   "The theme follows the device until someone picks light or dark, as before",
+   "Round 4: Logs and Errors say there is more only when there is",
+   "Round 6: only a service's issue gains new channels on reopen",
+   "Round 3: page summaries say only what is true",
+   "Round 5: a failed alert that has reached nobody is also dropped when its channel leaves the route",
+   "Round 3: a test that the export pages through 2,501 lines with shared timestamps, with nothing lost or repeated",
+   "Round 2: the CSV pages through the time index, survives a browser that leaves, and marks any failure; a machine's own service filter sticks; honest Jobs and Everything summaries",
+   "Round 4: a reopen adds no alerts while the machine is down, and a soon issue takes the first matching rule only when it sends to nobody",
+   "Round 3: a reopened issue is told on its current channels, untried alerts follow the route, and soon issues find a quiet rule anywhere",
+   "Round 1: Logs sorts only the newest 200 lines it shows, the CSV no longer holds a connection, and small fixes",
+   "Round 2: a reopened issue comes back only on the channels it is routed to now, and waiting alerts for an issue sent to nobody are dropped",
+   "Alerts: a machine or service sent to nobody stays quiet when an issue reopens, and for soon issues too",
+   "A sentence under each page's title, and an inbox that reads as sentences",
+   "Calm in Ember as the default look: dark first, warm light mode, Figtree, rounder panels and tinted states",
+   "Figtree, self-hosted beside IBM Plex, with its SIL Open Font License",
+   "Logs: sort by any column, filter by machine, service and time as well as level and text, and export exactly the filtered lines as CSV"
+  ]
+ },
+ {
+  "version": "v0.1.53",
+  "at": "2026-10-20T15:06:50-07:00",
+  "changes": [
+   "Demo: the band stays at the top while the page scrolls, so a turned-off control's note is seen where it was clicked"
+  ]
+ },
+ {
+  "version": "v0.1.52",
+  "at": "2026-10-20T14:35:27-07:00",
+  "changes": [
+   "Live demo: one click takes a seat on a made-up company, 80 seats with a line, and seats of people who walked away go to the next in line"
+  ]
+ },
+ {
+  "version": "v0.1.51",
+  "at": "2026-10-19T18:07:35-07:00",
+  "changes": [
+   "Certificates: find the zone's own name servers through public resolvers where Erlang reads none from the system, as on Windows"
+  ]
+ },
+ {
+  "version": "v0.1.50",
+  "at": "2026-10-19T23:27:12Z",
+  "changes": [
+   "Names for servers move to dokkit.page; the site says dokkit.dev takes the outside heartbeat now",
+   "dokkit.dev as the outside heartbeat: one click on the Alerts page, no account; dokkit.dev tells the server's ntfy topic or webhook when it stops calling"
+  ]
+ },
+ {
+  "version": "v0.1.49",
+  "at": "2026-10-19T03:41:20-07:00",
+  "changes": [
+   "names: the site's own top menu",
+   "names: no demo sign-in",
+   "names: sign-in swaps in place, live checks while typing, offensive names refused, claim code hidden with copy",
+   "names: sign in with GitHub, Google, Microsoft, Apple, GitLab, Discord or Codeberg, all in the site's style",
+   "names: comment says DNS, not Cloudflare",
+   "The names service writes dokkit.dev's records through Azure DNS",
+   "Shared relay sign-up, dokkit.dev's public MCP, and the names service for <name>.dokkit.dev with its server side"
+  ]
+ },
+ {
   "version": "v0.1.48",
   "at": "2026-10-18T23:55:30-07:00",
   "changes": [

@@ -1,6 +1,6 @@
 # Dokkit for Rust
 
-One file and one package, `ureq`. `beat`, `job`, `check`, `capture`, `log`.
+One file and one package, `ureq`. `beat`, `job`, `check`, `metric`, `capture`, `log`, `stats`.
 
 ## Install
 

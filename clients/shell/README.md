@@ -1,6 +1,6 @@
 # Dokkit for shell
 
-One file to source, needing only curl. `dokkit_beat`, `dokkit_job`, `dokkit_check`, `dokkit_capture`, `dokkit_log`.
+One file to source, needing only curl. `dokkit_beat`, `dokkit_job`, `dokkit_check`, `dokkit_metric`, `dokkit_capture`, `dokkit_log`.
 
 ## Install
 

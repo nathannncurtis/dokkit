@@ -1,6 +1,6 @@
 # Dokkit for Python
 
-One file, standard library only. `beat`, `job`, `check`, `capture`, `log`. See `dokkit.py`.
+One file, standard library only. `beat`, `job`, `check`, `metric`, `capture`, `log`, `stats`. See `dokkit.py`.
 
 ## Install
 

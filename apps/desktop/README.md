@@ -26,9 +26,13 @@ cargo test
 cargo tauri build
 ```
 
-The installers land in `src-tauri/target/release/bundle/` (`.dmg` and `.app` on macOS, set in `tauri.macos.conf.json`). `icons/make.py` redraws the app and tray icons from `server/priv/static/favicon.svg`; `cargo tauri icon icons/app.png -o src-tauri/icons` rebuilds the bundle icons.
+The installers land in `src-tauri/target/release/bundle/`: an NSIS setup and an `.msi` on Windows (`tauri.conf.json`), a `.dmg` and `.app` on macOS (`tauri.macos.conf.json`), a `.deb`, an `.rpm` and an AppImage on Linux (`tauri.linux.conf.json`). A release attaches them as `dokkit-desktop-windows-x64-setup.exe`, `dokkit-desktop-windows-x64.msi`, `dokkit-desktop-macos-universal.dmg`, `dokkit-desktop-linux-amd64.deb`, `dokkit-desktop-linux-x86_64.rpm` and `dokkit-desktop-linux-amd64.AppImage`, each with a `.sha256` file. `icons/make.py` redraws the app and tray icons from `server/priv/static/favicon.svg`; `cargo tauri icon icons/app.png -o src-tauri/icons` rebuilds the bundle icons.
 
 The server windows are plain web content: only the bundled settings page can call the app's commands (see `src-tauri/capabilities/`).
+
+## Windows
+
+- Release installers are signed with Azure Trusted Signing. A build you make yourself is not signed, so SmartScreen warns the first time.
 
 ## macOS
 
@@ -36,7 +40,7 @@ The server windows are plain web content: only the bundled settings page can cal
 - The token is kept in the Keychain. Start at login adds a LaunchAgent.
 - Clicking a notification opens the issue. Notifications come from the app's bundle, so they appear from the installed `.app`, not from `cargo run`.
 - A pinned certificate is honoured in the server window through the web view's authentication challenge, for that server's host only.
-- Release builds are signed with Developer ID and notarized. A build you make yourself is not, so Gatekeeper asks for a right-click, Open the first time.
+- Release disk images are universal (Apple silicon and Intel), signed with Developer ID and notarized. A build you make yourself is not, so Gatekeeper asks for a right-click, Open the first time.
 
 ## Linux
 

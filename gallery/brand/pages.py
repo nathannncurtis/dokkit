@@ -122,7 +122,8 @@ CHANNELS = [
                ("Who is told", "Choose <code>Page</code> for <code>When something stops</code>. It is the default.")],
      "more": ["A paged issue is a <code>critical</code> incident. Push can go through PagerDuty too, as a <code>warning</code>: under Push, set <code>Push goes through</code> to PagerDuty.",
               "Page and Push through PagerDuty together make one incident, at the page's severity.",
-              "Each person can have their own routing key, under People, so a rule can page one person."],
+              "Each person can have their own routing key, under People, so a rule can page one person.",
+              "To tell whoever is on call, paste a read-only REST API key under On call, pick a schedule and press Save and look up. Then choose Whoever is on call in PagerDuty for People, a rule, a service or a check. Everyone on the schedule is told on their own destinations, matched by email. If nobody matches, or PagerDuty cannot be reached, the destinations on the Alerts page are told."],
      "arrives": notif("[critical] " + SAMPLE[0], "Source db-01 · Open Dokkit", big=True)},
     {"id": "ntfy", "name": "ntfy", "say": "A quiet push to your phone, through ntfy.sh or your own ntfy",
      "lede": "A quiet notification on your phone, for what should be seen today. Works with ntfy.sh or <mark class=\"n\">an ntfy server of your own</mark>.",
@@ -246,10 +247,10 @@ def alerts_page():
         <div class="next-links" data-fly="up">{chan}</div>'''
     people = f'''        <p class="sub-p">Until you name people, an alert goes to the addresses set for each channel. Name them at four levels: the default, a rule, a service and a check. The most specific level that names someone decides.</p>
         <div class="cards cards-2">
-          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>People</h3><p>Each person can have their own email, phone, iMessage address, ntfy topic, Pushover key and PagerDuty key. Send a test to one person from their row.</p></article>
+          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>People</h3><p>Each person can have their own email, phone, iMessage address, ntfy topic, Pushover key and PagerDuty key. Send a test to one person from their row. Or choose whoever is on call in a PagerDuty schedule.</p></article>
           <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Rules</h3><p>A rule picks the channel and the people for a kind of issue, a state and a machine. The first rule that fits decides. A service's own routing comes first.</p></article>
           <article class="wcard" data-fly="up"><h3><i class="s warn"></i>Night</h3><p>Choose when night starts and ends, and a time zone. A service set not to wake you holds its alerts until the night ends.</p></article>
-          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Limits</h3><p>The percent of a disk, or of memory for three minutes running, that needs a look. Leave either blank to switch it off.</p></article>
+          <article class="wcard" data-fly="up"><h3><i class="s ok"></i>Limits</h3><p>The percent of a disk, of memory and of the processor that needs a look, and for how long. Each can be switched off. The processor, a burst of errors and a reminder while an issue stays unseen alert by default. Every value shows its default and has a Reset.</p></article>
         </div>'''
     itself = '''        <p class="big-fact" data-fly="up">Dokkit cannot tell anyone that it is down. Give it <mark class="n">an outside heartbeat</mark>: an https address it calls every minute, at a service that alerts when the calls stop.</p>
         <details class="card"><summary>dokkit.dev as your outside heartbeat</summary><div class="card-body"><p>On the Alerts page, under Outside heartbeat, press Use beat.dokkit.dev. There is no account to make. When your server stops calling for five minutes, dokkit.dev tells the ntfy topic or webhook already set on that page, and tells it again when the calls start. Change that topic or webhook later and the heartbeat follows. If dokkit.dev itself is down, nobody is told, as with any outside service.</p></div></details>
