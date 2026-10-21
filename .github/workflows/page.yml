@@ -3,7 +3,7 @@ name: page
 on:
   push:
     branches: [main]
-    paths: ['names/page/**', '.github/workflows/page.yml']
+    paths: ['names/page/**']
   workflow_dispatch:
 
 concurrency:
