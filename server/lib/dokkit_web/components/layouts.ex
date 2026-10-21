@@ -14,6 +14,7 @@ defmodule DokkitWeb.Layouts do
       <div class="up">
         <.mark />
         <h1 id="updating-h" tabindex="-1">Updating to {@shell.updating.version}</h1>
+
         <div
           class="prog"
           role="progressbar"
@@ -26,10 +27,13 @@ defmodule DokkitWeb.Layouts do
         >
           <i></i>
         </div>
+
         <p class="up-count">{@shell.updating.done} of {@shell.updating.total} finished</p>
+
         <p class="up-restart" role="status">
           <.ic name="arrows-clockwise" />Dokkit is restarting. This screen carries on when it answers.
         </p>
+
         <ul class="up-list">
           <li :for={m <- @shell.updating.machines} id={"updating-#{m.id}"}>
             <span>{m.name}</span>
@@ -51,6 +55,7 @@ defmodule DokkitWeb.Layouts do
           <.link class="org" navigate={~p"/"}>
             <.mark /> <span><b>Dokkit</b></span>
           </.link>
+
           <button
             class="theme"
             type="button"
@@ -83,7 +88,10 @@ defmodule DokkitWeb.Layouts do
           <span class={["dot", attention(m) > 0 && "warn"]}></span>{m.name}<span
             :if={attention(m) > 0}
             class="q"
-          >{attention(m)}</span><span :if={attention(m) == 0 and soon(m) > 0} class="q">{soon(m)} soon</span><span :if={attention(m) == 0 and soon(m) == 0 and Map.get(m, :planned)} class="q">planned</span>
+          >{attention(m)}</span><span :if={attention(m) == 0 and soon(m) > 0} class="q">{soon(m)} soon</span><span
+            :if={attention(m) == 0 and soon(m) == 0 and Map.get(m, :planned)}
+            class="q"
+          >planned</span>
         </.link>
         <span class="grow"></span>
         <div class="me">
@@ -99,8 +107,7 @@ defmodule DokkitWeb.Layouts do
       </nav>
 
       <main class="page" id="page" tabindex="-1">
-        <.demo :if={@shell[:demo]} demo={@shell.demo} />
-        {render_slot(@inner_block)}
+        <.demo :if={@shell[:demo]} demo={@shell.demo} /> {render_slot(@inner_block)}
       </main>
     </div>
     """
@@ -113,6 +120,7 @@ defmodule DokkitWeb.Layouts do
       <span>This is the Dokkit demo. Everything in it is made up, and it starts fresh on the hour.</span>
       <b :if={@demo.note} role="status">{@demo.note}</b>
     </p>
+
     <div
       :if={@demo.warn}
       class="still"

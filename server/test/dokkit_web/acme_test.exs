@@ -24,7 +24,10 @@ defmodule DokkitWeb.AcmeTest do
 
     on_exit(fn ->
       Req.Test.set_req_test_to_private(%{})
-      for k <- [:tls, :cert, :acme_wait, :acme_authoritative, :acme_poll], do: Application.put_env(:dokkit, k, old[k])
+
+      for k <- [:tls, :cert, :acme_wait, :acme_authoritative, :acme_poll],
+          do: Application.put_env(:dokkit, k, old[k])
+
       :persistent_term.erase({Certificate, :uploaded})
     end)
 

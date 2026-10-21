@@ -6,12 +6,12 @@ defmodule DokkitWeb.DemoHTML do
     <main class="door">
       <div class="card">
         <h1><Layouts.mark />The demo is full</h1>
-        
+
         <div id="waiting" class="stack" hidden={@turn}>
           <p class="mute">
             All {@stats.seats} seats are taken. You're in line, and this page takes you in as soon as a seat frees up.
           </p>
-          
+
           <div class="line" role="status" aria-live="polite">
             <span class="place" id="place">{@place}</span>
             <span>
@@ -19,37 +19,37 @@ defmodule DokkitWeb.DemoHTML do
               <small><span class="pulse" aria-hidden="true"></span>Keep this tab open. Checked <span id="ago">just now</span>.</small>
             </span>
           </div>
-          
+
           <div>
             <div class="seats" id="seats" aria-hidden="true">
               <i :for={n <- 1..@stats.seats} class={n > @stats.taken && "free"}></i>
             </div>
-            
+
             <div class="meta">
               <span id="taken">{@stats.taken} of {@stats.seats} seats taken</span>
               <span id="freed">{@stats.freed} freed in the last 5 min</span>
             </div>
           </div>
-          
+
           <div class="why">
             <p>
               <i class="ph ph-hourglass-medium" aria-hidden="true"></i>Seats open up when someone leaves, or after 6 minutes of not doing anything.
             </p>
-            
+
             <p>
               <i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>The demo starts fresh on the hour. Everything in it is made up.
             </p>
           </div>
-          
+
           <p class="alt">
             Or look around <a href="https://dokkit.dev/">the sample on dokkit.dev</a> while you wait.
           </p>
         </div>
-        
+
         <form id="turn" hidden={!@turn} method="post" action={~p"/demo/seat"} class="stack">
           <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
           <p class="mute">A seat is free and it's held for you for 2 minutes.</p>
-           <button class="btn primary" type="submit">Take your seat</button>
+          <button class="btn primary" type="submit">Take your seat</button>
         </form>
       </div>
     </main>
@@ -86,9 +86,9 @@ defmodule DokkitWeb.DemoHTML do
             do: "You left the demo",
             else: "Your seat went to someone else"}
         </h1>
-        
+
         <p class="mute">{reason(@why)}</p>
-         <a class="btn primary" href={~p"/demo"}>Take a seat again</a>
+        <a class="btn primary" href={~p"/demo"}>Take a seat again</a>
       </div>
     </main>
     """
@@ -99,11 +99,11 @@ defmodule DokkitWeb.DemoHTML do
     <main class="door">
       <div class="card">
         <h1><Layouts.mark />That's enough seats for now</h1>
-        
+
         <p class="mute">
           Your address already holds three seats or places in line. Close a demo tab, then try again in a couple of minutes.
         </p>
-         <a class="btn primary" href={~p"/demo"}>Try again</a>
+        <a class="btn primary" href={~p"/demo"}>Try again</a>
       </div>
     </main>
     """
