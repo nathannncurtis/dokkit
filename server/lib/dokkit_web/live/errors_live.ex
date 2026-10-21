@@ -12,8 +12,16 @@ defmodule DokkitWeb.ErrorsLive do
   def handle_info({:settled, :page}, socket),
     do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
 
-  defp load(%{assigns: %{id: nil}} = socket),
-    do: assign(socket, page_title: "Errors", errors: Errors.list(), error: nil)
+  defp load(%{assigns: %{id: nil}} = socket) do
+    errors = Errors.list(limit: 201)
+
+    assign(socket,
+      page_title: "Errors",
+      errors: Enum.take(errors, 200),
+      more: length(errors) > 200,
+      error: nil
+    )
+  end
 
   defp load(%{assigns: %{id: id}} = socket) do
     case Errors.get(id) do
@@ -22,9 +30,12 @@ defmodule DokkitWeb.ErrorsLive do
     end
   end
 
-  defp lede([]), do: "No errors have been reported. Apps send theirs here as they happen."
+  defp lede([], _), do: "No errors have been reported. Apps send theirs here as they happen."
 
-  defp lede(errors),
+  defp lede(_, true),
+    do: "The 200 kinds of error seen most recently, newest first. Older ones are not shown."
+
+  defp lede(errors, _),
     do: "#{plural(length(errors), "kind of error", "kinds of error")}, the most recent first."
 
   defp plural(1, one, _), do: "1 #{one}"
@@ -35,7 +46,7 @@ defmodule DokkitWeb.ErrorsLive do
     <Layouts.app active={:errors} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Errors</h1>
-        <p class="lede">{lede(@errors)}</p>
+        <p class="lede">{lede(@errors, assigns[:more])}</p>
       </div>
 
       <div class="body">

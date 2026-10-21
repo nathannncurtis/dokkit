@@ -113,7 +113,13 @@ defmodule DokkitWeb.LogsLive do
     {col, dir}
   end
 
-  defp load(socket), do: assign(socket, lines: Logs.list(options(socket.assigns.params)))
+  # One line past the 200 shown says whether older ones exist.
+  defp load(socket) do
+    opts = options(socket.assigns.params)
+    newest = opts |> Keyword.merge(limit: 201, order: nil) |> Logs.list()
+    lines = newest |> Enum.take(200) |> Logs.sort(opts[:order])
+    assign(socket, lines: lines, more: length(newest) > 200)
+  end
 
   defp sort_link(params, {col, dir}, key) do
     next = if col == key and dir == :asc, do: "desc", else: if(col == key, do: "asc", else: nil)
@@ -137,14 +143,14 @@ defmodule DokkitWeb.LogsLive do
     end
   end
 
-  defp lede([]), do: "No log lines match. Try another word, level, machine or time."
+  defp lede([], _), do: "No log lines match. Try another word, level, machine or time."
 
-  defp lede(lines) do
+  defp lede(lines, more) do
     errors = Enum.count(lines, &(&1.level in ~w(error fatal)))
     warns = Enum.count(lines, &(&1.level == "warn"))
 
     {shown, them} =
-      if length(lines) == 200,
+      if more,
         do: {"The newest 200 lines that match are shown.", "Of these"},
         else: {"#{plural(length(lines), "line matches", "lines match")}.", "Of them"}
 
@@ -192,7 +198,7 @@ defmodule DokkitWeb.LogsLive do
     <Layouts.app active={:logs} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Logs</h1>
-        <p class="lede">{lede(@lines)}</p>
+        <p class="lede">{lede(@lines, @more)}</p>
       </div>
 
       <form class="filters" phx-change="filter" phx-submit="filter" id="log-filter">
@@ -313,7 +319,7 @@ defmodule DokkitWeb.LogsLive do
             </table>
           </div>
 
-          <div :if={length(@lines) == 200} class="foot">
+          <div :if={@more} class="foot">
             Older lines are not shown. Narrow the filter to reach them; Export CSV has every one.
           </div>
         </div>

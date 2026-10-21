@@ -75,7 +75,7 @@ defmodule Dokkit.Logs do
   machine, from, to. Only the newest are fetched, so sorting never reads the whole table.
   """
   def list(opts \\ []) do
-    opts |> query() |> limit(^(opts[:limit] || 200)) |> Repo.all() |> sorted(opts[:order])
+    opts |> query() |> limit(^(opts[:limit] || 200)) |> Repo.all() |> sort(opts[:order])
   end
 
   @doc "Every line that matches, newest first, fetched 1,000 at a time so no connection is held."
@@ -96,18 +96,19 @@ defmodule Dokkit.Logs do
     |> Stream.concat()
   end
 
-  defp sorted(lines, nil), do: lines
-  defp sorted(lines, {:at, :desc}), do: lines
-  defp sorted(lines, {:at, :asc}), do: Enum.reverse(lines)
-  defp sorted(lines, {:level, dir}), do: Enum.sort_by(lines, &level_rank(&1.level), dir)
+  @doc "Orders lines that came newest first by `order`, as `list/1` does."
+  def sort(lines, nil), do: lines
+  def sort(lines, {:at, :desc}), do: lines
+  def sort(lines, {:at, :asc}), do: Enum.reverse(lines)
+  def sort(lines, {:level, dir}), do: Enum.sort_by(lines, &level_rank(&1.level), dir)
 
-  defp sorted(lines, {:machine, dir}),
+  def sort(lines, {:machine, dir}),
     do: Enum.sort_by(lines, &(&1.machine && &1.machine.name), dir)
 
-  defp sorted(lines, {:service, dir}),
+  def sort(lines, {:service, dir}),
     do: Enum.sort_by(lines, &(&1.service && &1.service.name), dir)
 
-  defp sorted(lines, {:msg, dir}), do: Enum.sort_by(lines, & &1.msg, dir)
+  def sort(lines, {:msg, dir}), do: Enum.sort_by(lines, & &1.msg, dir)
 
   defp level_rank(level), do: Enum.find_index(@levels, &(&1 == level)) || length(@levels)
 
