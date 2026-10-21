@@ -72,7 +72,7 @@ jobs:
         run: |
           if [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then BASE="$HEAD~1"; fi
           echo "range=$BASE..$HEAD" >> "$GITHUB_OUTPUT"
-      - name: Names, attribution and workflow rules
+      - name: Names and workflow rules
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
