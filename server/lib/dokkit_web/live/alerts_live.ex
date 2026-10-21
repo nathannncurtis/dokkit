@@ -84,36 +84,6 @@ defmodule DokkitWeb.AlertsLive do
   def handle_event("beat_shared", _, socket), do: beat(socket, &Dokkit.SharedBeat.use/0)
   def handle_event("beat_stop", _, socket), do: beat(socket, &Dokkit.SharedBeat.stop/0)
 
-  defp beat(socket, change) do
-    socket =
-      if owner?(socket) do
-        result = change.()
-
-        config = Alerts.config()
-
-        assign(socket,
-          config: config,
-          beat: Dokkit.SharedBeat.current(),
-          beat_result:
-            case result do
-              {:ok, _} ->
-                {:ok,
-                 "This server now calls #{URI.parse(config["heartbeat_url"]).host} every minute."}
-
-              :ok ->
-                {:ok, "Stopped. Nothing is told when this server goes quiet."}
-
-              {:error, why} ->
-                {:error, why}
-            end
-        )
-      else
-        socket
-      end
-
-    {:noreply, socket}
-  end
-
   def handle_event("changed", %{"alerts" => params}, socket),
     do: {:noreply, typed(socket, params, nil)}
 
@@ -206,6 +176,36 @@ defmodule DokkitWeb.AlertsLive do
     else
       {:noreply, socket}
     end
+  end
+
+  defp beat(socket, change) do
+    socket =
+      if owner?(socket) do
+        result = change.()
+
+        config = Alerts.config()
+
+        assign(socket,
+          config: config,
+          beat: Dokkit.SharedBeat.current(),
+          beat_result:
+            case result do
+              {:ok, _} ->
+                {:ok,
+                 "This server now calls #{URI.parse(config["heartbeat_url"]).host} every minute."}
+
+              :ok ->
+                {:ok, "Stopped. Nothing is told when this server goes quiet."}
+
+              {:error, why} ->
+                {:error, why}
+            end
+        )
+      else
+        socket
+      end
+
+    {:noreply, socket}
   end
 
   def handle_async(:imessage, {:ok, {key, answer}}, socket),
@@ -347,7 +347,10 @@ defmodule DokkitWeb.AlertsLive do
     <Layouts.app active={:alerts} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Alerts</h1>
-        <p class="lede">Who hears about what, how, and when. Night hours hold all but what is down.</p>
+
+        <p class="lede">
+          Who hears about what, how, and when. Night hours hold all but what is down.
+        </p>
       </div>
 
       <div :if={@suggestions != []} class="body set" style="padding-bottom: 0">
@@ -798,9 +801,11 @@ defmodule DokkitWeb.AlertsLive do
                 >
                   Use {URI.parse(@beat_service).host}
                 </button>
+
                 <button :if={@beat} class="btn" type="button" phx-click="beat_stop" id="beat-stop">
                   Stop using {URI.parse(@beat_service).host}
                 </button>
+
                 <span
                   :if={@beat_result}
                   class={["hint", elem(@beat_result, 0) == :error && "bad"]}
@@ -809,11 +814,13 @@ defmodule DokkitWeb.AlertsLive do
                 >
                   {elem(@beat_result, 1)}
                 </span>
+
                 <span :if={@beat} class="hint">
                   {URI.parse(@beat_service).host} tells your {if @beat["kind"] == "ntfy",
                     do: "ntfy topic",
                     else: "webhook"} when this server has not called for five minutes, and again when it calls.
                 </span>
+
                 <span :if={!@beat} class="hint">
                   An https address. Dokkit calls it every minute. Point it at a service that alerts when the calls stop, because Dokkit cannot tell anyone that it is down. Or use {URI.parse(
                     @beat_service
@@ -1092,7 +1099,6 @@ defmodule DokkitWeb.AlertsLive do
                     label="Rule channels"
                     blank="Nobody"
                   />
-
                   <span style="display: inline-flex; flex-wrap: wrap; gap: 4px 14px">
                     <label style="display: inline-flex; align-items: center; gap: 6px">
                       <input type="checkbox" class="chk" name="rule[to][]" value="everyone" />
@@ -1215,7 +1221,6 @@ defmodule DokkitWeb.AlertsLive do
     </button>
 
     <span :if={@stays} class="hint">This test stays open for two minutes, then resolves itself.</span>
-
     <span :if={@result} class={["hint", elem(@result, 0) == :error && "bad"]} role="status">{elem(
       @result,
       1

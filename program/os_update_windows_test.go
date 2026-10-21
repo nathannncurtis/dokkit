@@ -34,6 +34,10 @@ func TestAnUnreadableOldLogIsLeftBehindAndNothingElseIs(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer windows.CloseHandle(h)
+	if f, err := os.Open(log); err == nil {
+		f.Close()
+		t.Skip("this file system does not enforce an exclusive open")
+	}
 	was := lockFolder
 	lockFolder = func(string) error { return nil }
 	defer func() { lockFolder = was }()

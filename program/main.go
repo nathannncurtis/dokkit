@@ -801,11 +801,14 @@ func (c *client) doctor() int {
 
 // ring keeps the last max bytes written to it.
 type ring struct {
+	mu  sync.Mutex
 	max int
 	b   []byte
 }
 
 func (r *ring) Write(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.b = append(r.b, p...)
 	if len(r.b) > r.max {
 		r.b = r.b[len(r.b)-r.max:]
@@ -813,4 +816,8 @@ func (r *ring) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (r *ring) String() string { return strings.ToValidUTF8(string(r.b), "") }
+func (r *ring) String() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return strings.ToValidUTF8(string(r.b), "")
+}
