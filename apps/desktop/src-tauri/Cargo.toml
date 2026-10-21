@@ -36,6 +36,12 @@ webview2-com = "0.39"
 windows-core = "0.62"
 base64 = "0.22"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+mac-notification-sys = "0.6"
+objc2 = "0.6"
+block2 = "0.6"
+
 [dev-dependencies]
 rcgen = "0.13"
 tokio = { version = "1", features = ["time", "sync", "net", "rt", "macros", "io-util"] }
