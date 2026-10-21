@@ -57,7 +57,8 @@ defmodule DokkitWeb.Endpoint do
   defp parse(%{path_info: ["api", "v1", "in" | _]} = conn, _),
     do: Plug.Conn.fetch_query_params(conn)
 
-  defp parse(%{path_info: ["api", "events", "raw"]} = conn, _), do: Plug.Conn.fetch_query_params(conn)
+  defp parse(%{path_info: ["api", "events", "raw"]} = conn, _),
+    do: Plug.Conn.fetch_query_params(conn)
 
   defp parse(%{path_info: ["ingest", "clef"]} = conn, _), do: Plug.Conn.fetch_query_params(conn)
 

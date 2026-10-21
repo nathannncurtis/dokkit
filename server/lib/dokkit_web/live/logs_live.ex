@@ -198,6 +198,7 @@ defmodule DokkitWeb.LogsLive do
     <Layouts.app active={:logs} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Logs</h1>
+
         <p class="lede">{lede(@lines, @more)}</p>
       </div>
 
@@ -212,6 +213,7 @@ defmodule DokkitWeb.LogsLive do
         <span class="dd">
           <select class="inp" name="m" aria-label="Machine">
             <option value="">Every machine</option>
+
             <option :for={m <- @machines} value={m.id} selected={m.id == @filter.machine}>
               {m.name}
             </option>
@@ -222,6 +224,7 @@ defmodule DokkitWeb.LogsLive do
         <span class="dd">
           <select class="inp" name="s" aria-label="Service">
             <option value="">Every service</option>
+
             <option
               :for={{text, id} <- @service_opts}
               value={id}
@@ -296,9 +299,11 @@ defmodule DokkitWeb.LogsLive do
                   </th>
                 </tr>
               </thead>
+
               <tbody>
                 <tr :for={l <- @lines} class={level_class(l.level)}>
                   <td class="at">{at(l.at)}</td>
+
                   <td>
                     <span class={[
                       "tag",
@@ -306,13 +311,16 @@ defmodule DokkitWeb.LogsLive do
                       l.level == "warn" && "warn"
                     ]}>{String.capitalize(l.level)}</span>
                   </td>
+
                   <td class="m">
                     <.link navigate={~p"/machines/#{l.machine_id}"} title={l.machine.name}>{l.machine.name}</.link>
                   </td>
+
                   <td class="s">
                     <.link :if={l.service} navigate={~p"/s/#{l.service_id}"}>{l.service.name}</.link>
                     <span :if={!l.service} class="mute">The machine</span>
                   </td>
+
                   <td class="msg">{l.msg}<span :if={l.cut} class="mute"> (cut)</span></td>
                 </tr>
               </tbody>

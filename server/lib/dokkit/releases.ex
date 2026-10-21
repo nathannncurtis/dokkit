@@ -147,7 +147,11 @@ defmodule Dokkit.Releases do
     reported = for {field, key} <- @parts, is_binary(params[key]), do: {field, params[key]}
 
     change =
-      [has_updater: true, hosts_server: is_binary(params["server"]), updater_checked_at: DateTime.utc_now()] ++
+      [
+        has_updater: true,
+        hosts_server: is_binary(params["server"]),
+        updater_checked_at: DateTime.utc_now()
+      ] ++
         reported ++ if(is_binary(params["server"]), do: [], else: [server_version: nil])
 
     Repo.update_all(from(m in Machine, where: m.id == ^machine_id), set: change)
