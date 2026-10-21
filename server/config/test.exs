@@ -26,6 +26,7 @@ config :dokkit, DokkitWeb.Endpoint,
 config :dokkit,
   mail: :test,
   watch: false,
+  values_cache_ms: 0,
   req_options: [plug: {Req.Test, Dokkit.Alerts}, retry: false],
   shared_relay: "https://relay.example.test",
   shared_heartbeat: "https://beat.example.test"

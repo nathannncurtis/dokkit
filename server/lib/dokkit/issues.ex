@@ -3,7 +3,6 @@ defmodule Dokkit.Issues do
   import Ecto.Query
   alias Dokkit.{Check, Issue, Repo, Service}
 
-  @same_issue_seconds 30 * 60
   @rank %{ok: 0, unknown: 1, degraded: 2, down: 3}
 
   @doc """
@@ -36,10 +35,12 @@ defmodule Dokkit.Issues do
     {fails, passes} =
       if state == :ok, do: {0, check.passes + 1}, else: {check.fails + 1, 0}
 
+    need = fail_after(check)
+
     confirmed =
       cond do
-        state != :ok and fails >= check.fail_after -> state
-        state == :ok and (check.state == :unknown or passes >= check.fail_after) -> :ok
+        state != :ok and fails >= need -> state
+        state == :ok and (check.state == :unknown or passes >= need) -> :ok
         true -> check.state
       end
 
@@ -182,12 +183,10 @@ defmodule Dokkit.Issues do
     Phoenix.PubSub.broadcast(Dokkit.PubSub, "issues", :issues_changed)
   end
 
-  @silent_seconds 180
-
   @doc "Opens an issue for each enrolled machine that has gone quiet, and closes it when the machine is back."
   def machines_sweep(now) do
-    quiet = DateTime.add(now, -@silent_seconds)
     Dokkit.Quiet.tick(now)
+    silent = silent_after(now)
 
     down =
       from i in Issue, where: i.kind == "machine" and is_nil(i.closed_at), select: i.machine_id
@@ -201,9 +200,10 @@ defmodule Dokkit.Issues do
       Repo.all(
         from m in Dokkit.Machine,
           where:
-            m.kind == :enrolled and m.last_seen_at < ^quiet and m.id not in subquery(down) and
-              m.id not in subquery(planned)
+            m.kind == :enrolled and m.last_seen_at < ^DateTime.add(now, -60) and
+              m.id not in subquery(down) and m.id not in subquery(planned)
       )
+      |> Enum.filter(&(DateTime.compare(&1.last_seen_at, silent.(&1.id)) == :lt))
 
     for m <- gone do
       issue =
@@ -223,8 +223,11 @@ defmodule Dokkit.Issues do
       Repo.all(
         from i in Issue,
           join: m in assoc(i, :machine),
-          where: i.kind == "machine" and is_nil(i.closed_at) and m.last_seen_at >= ^quiet
+          where: i.kind == "machine" and is_nil(i.closed_at),
+          select: {i, m}
       )
+      |> Enum.filter(fn {_, m} -> DateTime.compare(m.last_seen_at, silent.(m.id)) != :lt end)
+      |> Enum.map(&elem(&1, 0))
 
     for issue <- back do
       Repo.update!(Ecto.Changeset.change(issue, closed_at: now))
@@ -250,6 +253,18 @@ defmodule Dokkit.Issues do
         do: Dokkit.Alerts.plan(i, i.service)
 
     length(gone) + length(back)
+  end
+
+  defp silent_after(now) do
+    server = Dokkit.Values.get("silent_minutes")
+
+    own =
+      for %{key: "values:machine:" <> id, value: %{"silent_minutes" => n}} <-
+            Repo.all(from s in Dokkit.Setting, where: like(s.key, "values:machine:%")),
+          into: %{},
+          do: {id, n}
+
+    fn id -> DateTime.add(now, -Map.get(own, id, server) * 60) end
   end
 
   defp planned_note(m, now) do
@@ -339,6 +354,13 @@ defmodule Dokkit.Issues do
     Dokkit.Alerts.closing(issue)
   end
 
+  @doc "How many results in a row a check needs: its own number, or the server's for a check that does not say."
+  def fail_after(%Check{fail_after: 3, config: config})
+      when not is_map_key(config, "own_fail_after"),
+      do: Dokkit.Values.get("check_fail_after")
+
+  def fail_after(%Check{fail_after: n}), do: n
+
   defp open_for(check),
     do: Repo.one(from i in Issue, where: i.check_id == ^check.id and is_nil(i.closed_at))
 
@@ -351,7 +373,7 @@ defmodule Dokkit.Issues do
         from i in Issue,
           where:
             i.check_id == ^check.id and i.soon == ^soon and i.state == ^state and
-              i.closed_at > ^DateTime.add(at, -@same_issue_seconds),
+              i.closed_at > ^DateTime.add(at, -Dokkit.Values.get("reopen_minutes") * 60),
           order_by: [desc: i.closed_at],
           limit: 1
       )

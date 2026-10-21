@@ -6,8 +6,10 @@ defmodule DokkitWeb.DemoSeat do
   # Each of these sends something out, locks other visitors out, or changes the server itself.
   @off %{
     DokkitWeb.SettingsLive =>
-      ~w(relay_save relay_shared phone_add phone_remove add remove restore revoke token full full_token certificate_save acme_save acme_now name_claim retention_save certificate_remove),
-    DokkitWeb.AlertsLive => ~w(save test beat_shared beat_stop person)
+      ~w(relay_save relay_shared phone_add phone_remove add remove restore revoke token full full_token certificate_save acme_save acme_now name_claim retention_save certificate_remove values_save values_reset),
+    DokkitWeb.AlertsLive => ~w(save test beat_shared beat_stop person),
+    DokkitWeb.MachineLive => ~w(values_save values_reset),
+    DokkitWeb.JobsLive => ~w(values_save values_reset)
   }
 
   def off?(view, event), do: event in Map.get(@off, view, [])

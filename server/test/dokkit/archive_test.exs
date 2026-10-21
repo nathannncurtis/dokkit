@@ -36,6 +36,31 @@ defmodule Dokkit.ArchiveTest do
   end
 
   @tag :tmp_dir
+  test "a month loaded back stays as many days as Settings says", %{tmp_dir: dir} do
+    machine = Repo.insert!(%Machine{name: "vault-days"})
+    at = ~U[2018-05-15 10:00:00.000000Z]
+    Logs.ensure_partition(at)
+
+    Repo.insert_all(Log, [
+      %{
+        at: at,
+        received_at: at,
+        level: "info",
+        msg: "x",
+        fields: %{},
+        cut: false,
+        machine_id: machine.id
+      }
+    ])
+
+    [path] = Logs.archive(dir, ~D[2026-10-06])
+    {:ok, _} = Dokkit.Values.save(:server, %{"restored_days" => 2})
+    assert Logs.restore(path) == 1
+    [%{back_until: until}] = Logs.archives(dir)
+    assert DateTime.diff(until, DateTime.utc_now()) in (2 * 86_400 - 60)..(2 * 86_400)
+  end
+
+  @tag :tmp_dir
   test "an archive file already there is never written over", %{tmp_dir: dir} do
     machine = Repo.insert!(%Machine{name: "vault-keep"})
     at = ~U[2020-02-15 10:00:00.000000Z]

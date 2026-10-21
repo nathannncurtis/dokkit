@@ -113,14 +113,14 @@ defmodule Dokkit.Self do
     relay(service, now)
   end
 
-  @warn_days 21
-
   defp certificate(service, now) do
     failed =
       case Dokkit.Acme.renewal() do
         %{ok: false, note: note} -> " " <> note
         _ -> ""
       end
+
+    warn = Dokkit.Values.get("cert_warn_days")
 
     case Dokkit.Certificate.days_left(now) do
       nil ->
@@ -133,7 +133,7 @@ defmodule Dokkit.Self do
           note: "The uploaded certificate has run out." <> failed
         )
 
-      days when days <= @warn_days ->
+      days when days <= warn ->
         Issues.record(check(service, "certificate"), :degraded,
           at: now,
           value: days,
@@ -150,15 +150,13 @@ defmodule Dokkit.Self do
     end
   end
 
-  @quiet_minutes 10
-
   # One quiet machine is that machine's news. Every machine quiet at once is more likely Dokkit's.
   defp reports(service, now, booted) do
     newest = Repo.one(from m in Machine, where: m.kind == :enrolled, select: max(m.last_seen_at))
     newest = if newest && booted, do: Enum.max([newest, booted], DateTime), else: newest
     quiet = newest && DateTime.diff(now, newest, :minute) * 1.0
 
-    if quiet && quiet >= @quiet_minutes,
+    if quiet && quiet >= Dokkit.Values.get("self_quiet_minutes"),
       do:
         Issues.record(check(service, "reports"), :down,
           at: now,

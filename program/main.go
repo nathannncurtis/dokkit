@@ -68,7 +68,7 @@ dokkit startup on starts it that way each time you sign in.`
 )
 
 // How often watch tells the server this machine is alive.
-var beatEvery = time.Minute
+var beatEvery = newSetting(time.Minute)
 
 func cli(args []string) int {
 	if len(args) == 0 {

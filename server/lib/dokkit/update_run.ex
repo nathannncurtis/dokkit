@@ -3,9 +3,6 @@ defmodule Dokkit.UpdateRun do
   import Ecto.Query
   alias Dokkit.{Machine, Repo}
 
-  @timeout 1200
-  @late "did not report back within 20 minutes"
-
   @doc "The running update, or nil: its version, a line for each machine, and how many have finished."
   def current(now \\ DateTime.utc_now()) do
     rows = rows(now)
@@ -34,13 +31,26 @@ defmodule Dokkit.UpdateRun do
   end
 
   def status(%Machine{} = m, now) do
+    late = Dokkit.Values.get("update_run_minutes")
+
     cond do
-      m.update_ok == false -> {:failed, m.update_note || "The updater gave no reason."}
-      is_nil(m.wanted_version) and m.update_ok == true -> {:done, nil}
-      current?(m) -> {:done, nil}
-      DateTime.diff(now, m.update_started_at) >= @timeout -> {:failed, @late}
-      m.update_asked_at -> {:installing, nil}
-      true -> {:waiting, nil}
+      m.update_ok == false ->
+        {:failed, m.update_note || "The updater gave no reason."}
+
+      is_nil(m.wanted_version) and m.update_ok == true ->
+        {:done, nil}
+
+      current?(m) ->
+        {:done, nil}
+
+      DateTime.diff(now, m.update_started_at) >= late * 60 ->
+        {:failed, "did not report back within #{late} minutes"}
+
+      m.update_asked_at ->
+        {:installing, nil}
+
+      true ->
+        {:waiting, nil}
     end
   end
 

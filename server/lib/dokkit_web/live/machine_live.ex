@@ -20,6 +20,7 @@ defmodule DokkitWeb.MachineLive do
              schedule: %{},
              schedule_error: nil,
              silent_saved: false,
+             values_result: nil,
              range: "7",
              procs_q: "",
              procs_sort: "memory",
@@ -92,6 +93,21 @@ defmodule DokkitWeb.MachineLive do
     end
 
     {:noreply, assign(load(socket), silent_saved: saved)}
+  end
+
+  def handle_event(event, params, socket) when event in ~w(values_save values_reset) do
+    if socket.assigns.current_user.role != :owner do
+      {:noreply, socket}
+    else
+      scope = {:machine, socket.assigns.machine.id}
+
+      result =
+        if event == "values_save",
+          do: DokkitWeb.ValuesForm.save(scope, params),
+          else: DokkitWeb.ValuesForm.reset(scope, params)
+
+      {:noreply, assign(load(socket), values_result: result)}
+    end
   end
 
   def handle_event("update", _, socket) do
@@ -525,6 +541,17 @@ defmodule DokkitWeb.MachineLive do
               </span>
             </div>
           </form>
+
+          <DokkitWeb.ValuesForm.fold
+            :if={@machine.kind == :enrolled}
+            id="machine-values"
+            group="machines"
+            scope={{:machine, @machine.id}}
+            title={"Settings for #{@machine.name}"}
+            sub="When and how this machine alerts you. Each starts at the default for every machine, set in Settings."
+            disabled={@current_user.role != :owner}
+            result={@values_result}
+          />
         </div>
       </div>
     </Layouts.app>
