@@ -281,8 +281,7 @@ jobs:
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/.appstoreconnect/private_keys"
           printf '%s' "$IOS_PROFILE" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/6f5092c3-5b2e-4a67-88c3-b7fa87728baa.mobileprovision"
-          printf '%s
-' "$ASC_KEY_P8" > "$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          printf '%s\n' "$ASC_KEY_P8" > "$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
       - name: Archive and export
         if: steps.gate.outputs.go != 'no'
         working-directory: apps/ios
