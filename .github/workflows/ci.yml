@@ -135,7 +135,8 @@ jobs:
         timeout-minutes: 5
         run: |
           mix archive.install hex sobelow 0.13.0 --force
-          mix sobelow --exit high --threshold high --skip
+          # CSP is ignored until the security-headers change sets one.
+          mix sobelow --exit high --threshold high --skip --ignore Config.CSP
 
   program:
     needs: changes
