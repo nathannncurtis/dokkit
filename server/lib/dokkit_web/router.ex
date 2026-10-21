@@ -90,7 +90,7 @@ defmodule DokkitWeb.Router do
 
     post "/report", IntakeController, :report
     post "/errors", IntakeController, :error
-    get "/in/:key/job/:name/:event", IntakeController, :ping, log: false
+    get "/in/:key/job/:name/:event", IntakeController, :ping_get, log: false
     post "/in/:key/job/:name/:event", IntakeController, :ping, log: false
     options "/report", IntakeController, :report
     options "/errors", IntakeController, :error
