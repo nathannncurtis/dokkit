@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Made-up keys for the debug-only demo relay at demo.dokkit.invalid"
+paths = ['''^apps/android/app/src/debug/kotlin/dev/dokkit/phone/Transports\.kt$''']
