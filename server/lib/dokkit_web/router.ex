@@ -190,6 +190,12 @@ defmodule DokkitWeb.Router do
     post "/apps", ApiController, :add_app
     post "/dependencies", ApiController, :add_dependency
     put "/jobs/:id/timing", ApiController, :set_job_timing
+    get "/settings", ApiController, :settings
+    put "/settings", ApiController, :put_settings
+    get "/machines/:id/settings", ApiController, :machine_settings
+    put "/machines/:id/settings", ApiController, :put_machine_settings
+    get "/jobs/:id/settings", ApiController, :job_settings
+    put "/jobs/:id/settings", ApiController, :put_job_settings
     post "/machines/:id/update", ApiController, :update_program
     post "/machines/:id/scan", ApiController, :scan_machine
     post "/machines/:id/quiet", ApiController, :quiet_machine
