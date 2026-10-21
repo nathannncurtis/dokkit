@@ -51,7 +51,7 @@ public enum Age {
         }
     }
 
-    public static func isStale(_ from: Date, now: Date) -> Bool { now.timeIntervalSince(from) > warnAfter }
+    public static func isStale(_ from: Date, now: Date, late: TimeInterval = warnAfter) -> Bool { now.timeIntervalSince(from) > late }
 }
 
 public struct Freshness: Equatable, Sendable {
@@ -59,10 +59,10 @@ public struct Freshness: Equatable, Sendable {
     public var isWarning: Bool
     public var detail: String?
 
-    public static func make(madeAt: Date?, hasSnapshot: Bool, problem: String?, now: Date) -> Freshness {
+    public static func make(madeAt: Date?, hasSnapshot: Bool, problem: String?, now: Date, late: TimeInterval = Age.warnAfter) -> Freshness {
         guard hasSnapshot else { return Freshness(text: "No snapshot yet", isWarning: problem != nil, detail: problem) }
         guard let madeAt else { return Freshness(text: "Snapshot age unknown", isWarning: true, detail: problem) }
-        let stale = Age.isStale(madeAt, now: now)
+        let stale = Age.isStale(madeAt, now: now, late: late)
         let late = stale ? "The server, its network or the relay is not delivering." : nil
         return Freshness(
             text: "Snapshot made \(Age.ago(madeAt, now: now))", isWarning: stale,
@@ -140,6 +140,7 @@ public struct ServiceScreen: Equatable, Sendable {
     public var chart: [Double?]
     public var job: [[String]]
     public var logs: [LogRow]
+    public var metric: String?
 }
 
 public enum Screens {
@@ -163,7 +164,8 @@ public enum Screens {
             job: job.map(jobLines) ?? [],
             logs: ((s.logs ?? [:])[id] ?? []).map {
                 LogRow(time: $0.t.map { $0.formatted(date: .omitted, time: .standard) } ?? "--:--:--", level: $0.level ?? "info", message: $0.msg ?? "", isError: $0.level == "error")
-            })
+            },
+            metric: full.chart?.metric)
     }
 
     static func serviceNames(_ s: Snapshot) -> [String: String] {

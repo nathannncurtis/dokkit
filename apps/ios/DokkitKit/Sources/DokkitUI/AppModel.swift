@@ -17,9 +17,32 @@ public final class AppModel {
     var addError: String?
     var pasted = ""
     var addWorking = false
+    var tab = 0
+    var picking = false
+    var homePath: [Page] = []
+    var serversPath: [Page] = []
+    var firstPath: [Page] = []
+    public var settings: AppSettings = AppSettings.decode(UserDefaults.standard.data(forKey: AppModel.settingsKey)) {
+        didSet { UserDefaults.standard.set(settings.encoded(), forKey: AppModel.settingsKey) }
+    }
     private let refresher: Refresher
 
+    public nonisolated static let settingsKey = "settings"
+
+    /// The relay timeout as saved, readable from any thread for the relay client.
+    public nonisolated static let relayTimeout: @Sendable () -> TimeInterval = {
+        TimeInterval(AppSettings.decode(UserDefaults.standard.data(forKey: AppModel.settingsKey)).relayWaitSeconds)
+    }
+
     public init(refresher: Refresher) { self.refresher = refresher }
+
+    func freshness(_ st: ServerState, now: Date) -> Freshness {
+        Freshness.make(madeAt: st.madeAt, hasSnapshot: st.snapshot != nil, problem: st.problem, now: now, late: TimeInterval(settings.lateMinutes * 60))
+    }
+
+    func open(_ page: Page) {
+        if tab == 1 { serversPath.append(page) } else { homePath.append(page) }
+    }
 
     public var selected: PairedServer? { servers.first { $0.id == selectedID } ?? servers.first }
     public var selectedState: ServerState { selected.flatMap { states[$0.id] } ?? ServerState() }
@@ -64,4 +87,10 @@ public final class AppModel {
         if selectedID == id { selectedID = nil }
         await load()
     }
+}
+
+enum Page: Hashable {
+    case service(String, from: String?)
+    case machine(String)
+    case add(paste: Bool)
 }

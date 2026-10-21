@@ -8,9 +8,10 @@ struct DokkitApp: App {
 
     var body: some Scene {
         WindowGroup {
-            UnlockGate {
+            UnlockGate(lockAfter: { model.settings.lockAfter.seconds }) {
                 RootView(model: model) { onCode in AnyView(QRScannerView(onCode: onCode)) }
             }
+            .preferredColorScheme(model.colorScheme)
         }
     }
 }
@@ -19,6 +20,14 @@ extension AppModel {
     @MainActor static func live() -> AppModel {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Dokkit")
         let store = ServerStore(secrets: KeychainSecrets(), files: DiskFiles(directory: dir))
-        return AppModel(refresher: Refresher(store: store))
+        #if DEBUG
+        let c = URLSessionConfiguration.ephemeral
+        c.protocolClasses = [DemoRelay.self] + (c.protocolClasses ?? [])
+        c.urlCache = nil
+        let client = RelayClient(session: URLSession(configuration: c), timeout: AppModel.relayTimeout)
+        #else
+        let client = RelayClient(timeout: AppModel.relayTimeout)
+        #endif
+        return AppModel(refresher: Refresher(store: store, client: client))
     }
 }

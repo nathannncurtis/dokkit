@@ -3,12 +3,14 @@ import LocalAuthentication
 import SwiftUI
 
 struct UnlockGate<Content: View>: View {
+    var lockAfter: () -> TimeInterval = { 0 }
     @ViewBuilder var content: () -> Content
     @Environment(\.scenePhase) private var phase
     @State private var unlocked = false
     @State private var busy = false
     @State private var asked = false
     @State private var message: String?
+    @State private var leftAt: Date?
 
     var body: some View {
         ZStack {
@@ -16,24 +18,20 @@ struct UnlockGate<Content: View>: View {
             if !unlocked { cover } else if phase != .active { Look.background.ignoresSafeArea() }
         }
         .onChange(of: phase) { _, new in
-            if new == .background { unlocked = false; asked = false }
-            if new == .active { Task { await askOnce() } }
+            if new == .background {
+                leftAt = Date()
+                if lockAfter() == 0 { unlocked = false; asked = false }
+            }
+            if new == .active {
+                if let leftAt, Date().timeIntervalSince(leftAt) >= lockAfter() { unlocked = false; asked = false }
+                Task { await askOnce() }
+            }
         }
         .task { await askOnce() }
     }
 
     private var cover: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "lock.fill").font(.largeTitle).accessibilityHidden(true)
-            Text("Dokkit is locked").font(.headline)
-            if let message { Text(message).font(.subheadline).multilineTextAlignment(.center) }
-            Button("Unlock") { Task { await unlock() } }
-                .buttonStyle(.borderedProminent).tint(Look.brand).frame(minHeight: 44)
-        }
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .foregroundStyle(Look.ink)
-        .background(Look.background)
+        LockCover(message: message) { Task { await unlock() } }
     }
 
     // The Face ID sheet makes the app inactive and active again, so asking on every activation would ask again after Cancel.
