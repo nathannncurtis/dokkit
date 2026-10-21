@@ -172,7 +172,7 @@ defmodule DokkitWeb.AlertsLiveTest do
       body =
         if conn.request_path == "/schedules",
           do: %{"schedules" => [%{"id" => "PSCHED9", "name" => "Weekend"}]},
-          else: %{"oncalls" => [%{"user" => %{"name" => "Una", "email" => "una@example.test"}}]}
+          else: %{"users" => [%{"name" => "Una", "email" => "una@example.test"}]}
 
       Req.Test.json(conn, body)
     end)

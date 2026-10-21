@@ -13786,7 +13786,7 @@
         "tags": [
           "Admin"
         ],
-        "description": "`to` is a list of person ids, `[\"everyone\"]`, which is the server-wide destinations and behaves as before, or `[\"oncall\"]`: whoever is on call in the PagerDuty schedule chosen in the alert settings when the alert is sent, told on their own destinations, matched by email. If nobody here matches or PagerDuty cannot be reached, the server-wide destinations are told. An empty list names nobody at that level, so the level above decides. Takes a user token (`dku_`) with the `admin` scope.",
+        "description": "`to` is a list of person ids, `[\"everyone\"]`, which is the server-wide destinations and behaves as before, or `[\"oncall\"]`: everyone on call in the PagerDuty schedule chosen in the alert settings when the alert is sent, each told on their own destinations, matched by email. If nobody here matches or PagerDuty cannot be reached, the server-wide destinations are told. An empty list names nobody at that level, so the level above decides. Takes a user token (`dku_`) with the `admin` scope.",
         "requestBody": {
           "required": true,
           "content": {
@@ -14458,7 +14458,7 @@
         "tags": [
           "Admin"
         ],
-        "description": "Asks PagerDuty, with the REST API key in the alert settings, for the account's schedules and for who is on call now in the chosen schedule, and says which person on this server that is. The answer is kept for a minute. `error` says why something could not be read. Takes a user token (`dku_`) with the `admin` scope.",
+        "description": "Asks PagerDuty, with the REST API key in the alert settings, for the account's schedules and for everyone on call now in the chosen schedule, and says which person on this server each is. An answer is kept for a minute; a failure is not. `error` says why something could not be read. Takes a user token (`dku_`) with the `admin` scope.",
         "responses": {
           "200": {
             "description": "OK.",
@@ -14488,29 +14488,29 @@
                       ]
                     },
                     "oncall": {
-                      "type": [
-                        "object",
-                        "null"
-                      ],
-                      "properties": {
-                        "name": {
-                          "type": "string"
-                        },
-                        "email": {
-                          "type": "string"
-                        },
-                        "person": {
-                          "type": [
-                            "object",
-                            "null"
-                          ],
-                          "description": "The person on this server with that email, or null when there is none and the server-wide destinations are told.",
-                          "properties": {
-                            "id": {
-                              "type": "string"
-                            },
-                            "name": {
-                              "type": "string"
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "person": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "description": "The person on this server with that email, or null when there is none and the server-wide destinations are told.",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
                             }
                           }
                         }
@@ -14532,14 +14532,16 @@
                     }
                   ],
                   "schedule": "PSCHED1",
-                  "oncall": {
-                    "name": "Ada Lovelace",
-                    "email": "ada@example.com",
-                    "person": {
-                      "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f4",
-                      "name": "ada"
+                  "oncall": [
+                    {
+                      "name": "Ada Lovelace",
+                      "email": "ada@example.com",
+                      "person": {
+                        "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f4",
+                        "name": "ada"
+                      }
                     }
-                  },
+                  ],
                   "error": null
                 }
               }
