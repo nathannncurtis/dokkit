@@ -242,7 +242,7 @@ jobs:
           path: apps/ios/out/*
 
   testflight:
-    runs-on: macos-15
+    runs-on: macos-26
     continue-on-error: true
     timeout-minutes: 45
     permissions:
