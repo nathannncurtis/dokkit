@@ -1024,7 +1024,7 @@ defmodule DokkitWeb.SettingsLive do
               <div class="opts">
                 <.look_opt key="theme" value="light" label="Light" sw="t-light" />
                 <.look_opt key="theme" value="dark" label="Dark" sw="t-dark" />
-                <.look_opt key="theme" value="device" label="Follow this device" sw="" />
+                <.look_opt key="theme" value="" label="Follow this device" sw="" />
               </div>
             </dd>
             
