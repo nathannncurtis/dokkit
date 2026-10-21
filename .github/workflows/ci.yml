@@ -24,6 +24,7 @@ jobs:
       clients: ${{ steps.f.outputs.clients }}
       apps-ios: ${{ steps.f.outputs.apps-ios }}
       apps-android: ${{ steps.f.outputs.apps-android }}
+      apps-desktop: ${{ steps.f.outputs.apps-desktop }}
       site: ${{ steps.f.outputs.site }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -50,6 +51,10 @@ jobs:
             apps-android:
               - 'apps/android/**'
               - '.dependency-check/**'
+              - '.github/workflows/ci.yml'
+            apps-desktop:
+              - 'apps/desktop/**'
+              - 'server/priv/static/favicon.svg'
               - '.github/workflows/ci.yml'
             site:
               - 'gallery/brand/**'
@@ -256,6 +261,40 @@ jobs:
         working-directory: apps/android
         run: ./build-unsigned.sh
 
+  apps-desktop:
+    needs: changes
+    if: needs.changes.outputs.apps-desktop == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/desktop/src-tauri
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin/cargo-tauri*
+            apps/desktop/src-tauri/target
+          key: desktop-${{ matrix.os }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+      - name: Tauri CLI
+        shell: bash
+        run: command -v cargo-tauri >/dev/null || cargo install tauri-cli --version "^2" --locked
+      - name: Tests
+        run: cargo test
+      - name: Build the installers
+        run: cargo tauri build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-${{ matrix.os }}
+          path: apps/desktop/src-tauri/target/release/bundle/*/*
+          if-no-files-found: error
+
   site:
     needs: changes
     if: needs.changes.outputs.site == 'true'
@@ -417,7 +456,7 @@ jobs:
           if-no-files-found: ignore
 
   ci-ok:
-    needs: [changes, rules, server, program, clients, clients-swift, apps-ios, apps-android, site, zap-site, zap-server, deps-owasp]
+    needs: [changes, rules, server, program, clients, clients-swift, apps-ios, apps-android, apps-desktop, site, zap-site, zap-server, deps-owasp]
     if: always()
     runs-on: ubuntu-latest
     steps:
