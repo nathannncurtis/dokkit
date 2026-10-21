@@ -270,3 +270,36 @@ function holdWatches() {
     .to(cards, { opacity: 1, y: 0, stagger: 0.08, duration: 0.45, ease: "power3.out" }, 0.95);
   holdFor(sec, tl, "top 12%");
 }
+
+let downHits = [];
+document.addEventListener("click", (e) => {
+  const row = e.target.closest(".item > button");
+  if (!row || !row.querySelector(".s.bad")) return;
+  const now = Date.now(), pane = $(".pane");
+  downHits = downHits.filter((t) => now - t < 4000).concat(now);
+  if (downHits.length < 5 || pane.classList.contains("playing")) return;
+  downHits = [];
+  const open = () => {
+    const found = document.createElement("p"), root = document.createElement("div");
+    found.className = "kg-found";
+    found.innerHTML = '<span>You found it.</span><button type="button">Back to the sample</button>';
+    pane.classList.add("playing");
+    pane.prepend(found, root);
+    const game = KeepGreen.mount(root);
+    $("[data-k=start]", root).focus();
+    $("button", found).onclick = () => {
+      game.stop();
+      found.remove();
+      root.remove();
+      pane.classList.remove("playing");
+      $(".item .s.bad")?.closest("button").focus();
+    };
+  };
+  if (window.KeepGreen) return open();
+  const css = document.createElement("link"), js = document.createElement("script");
+  css.rel = "stylesheet";
+  css.href = "keep-green.css?v=20";
+  js.src = "keep-green.js?v=20";
+  js.onload = open;
+  document.head.append(css, js);
+});
