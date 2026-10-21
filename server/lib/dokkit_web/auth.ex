@@ -21,7 +21,19 @@ defmodule DokkitWeb.Auth do
         socket
         |> Phoenix.Component.assign(:current_user, user)
         |> shell()
+        |> reload_if_updated()
         |> DokkitWeb.DemoSeat.keep(session)
+    end
+  end
+
+  # A tab open across a server update reconnects with the old stylesheet in its head; load the page afresh.
+  defp reload_if_updated(socket) do
+    if Phoenix.LiveView.static_changed?(socket) do
+      Phoenix.LiveView.attach_hook(socket, :reload, :handle_params, fn _, uri, socket ->
+        {:halt, Phoenix.LiveView.redirect(socket, external: uri)}
+      end)
+    else
+      socket
     end
   end
 
