@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   changes:
+    if: github.repository == 'nathannncurtis/dokkit'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -58,6 +59,7 @@ jobs:
               - '.github/workflows/ci.yml'
 
   rules:
+    if: github.repository == 'nathannncurtis/dokkit'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -418,7 +420,7 @@ jobs:
 
   ci-ok:
     needs: [changes, rules, server, program, clients, clients-swift, apps-ios, apps-android, site, zap-site, zap-server, deps-owasp]
-    if: always()
+    if: always() && github.repository == 'nathannncurtis/dokkit'
     runs-on: ubuntu-latest
     steps:
       - name: Every job passed or was skipped

@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   analyze:
+    if: github.repository == 'nathannncurtis/dokkit'
     name: analyze (${{ matrix.language }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
