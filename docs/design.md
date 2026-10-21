@@ -1,9 +1,7 @@
 # Design: Calm in Ember
 
-The look of Dokkit's web app, and the one the phone apps and every new page follow. The approved
-clickable mock is in `gallery/calm-ember/` (open `index.html`; routes `#inbox`, `#issue/DOK-3`,
-`#everything`, `#machine/db-01`, `#jobs`, `#logs`, `#settings`). The "demo is full" page with its game
-is `gallery/calm-ember/demo-full/`. When the mock and this page disagree, the mock wins.
+The look of Dokkit's web app, and the one the phone apps and every new page follow. The built web app is
+the reference: when it and this page disagree, the app wins.
 
 The phone apps differ from these rules in a few places. Those differences are in **Phone apps only** near the
 end, and they apply to the Android and iOS apps alone; the web app, the site and everything else keep the rules
@@ -122,11 +120,11 @@ approved direction is "Statement", built in `apps/android/`.
 
 This process produced the approved look; repeat it for the phone apps or any new screen.
 
-1. Write one shared file of made-up data (`gallery/calm-ember/shared/data.js` is the model) so every
-   option shows the same estate.
+1. Write one shared file of made-up data so every option shows the same estate.
 2. Build several clearly different, clickable directions on that data, each covering the real
    screens (inbox, an issue, everything, a machine, jobs, logs, settings), working at phone width.
    Serve them on the LAN behind one page with a tab per direction, and open it for the owner.
 3. Let the owner mix: the winner here was one direction's layout in another's colours.
 4. Then change one thing at a time as the owner names it, refreshing the same page.
 5. Only then build it into the product, keeping every existing behaviour (rule 1).
+6. Delete the mocks once it is built. The product is the reference from then on; git history keeps them.
