@@ -1,0 +1,48 @@
+name: codeql
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    if: github.repository == 'nathannncurtis/dokkit'
+    name: analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { language: actions, build-mode: none, os: ubuntu-latest }
+          - { language: csharp, build-mode: none, os: ubuntu-latest }
+          - { language: go, build-mode: autobuild, os: ubuntu-latest }
+          # The Android app and the Java library live in subfolders, so nothing is built; source is read as is.
+          - { language: java-kotlin, build-mode: none, os: ubuntu-latest }
+          - { language: javascript-typescript, build-mode: none, os: ubuntu-latest }
+          - { language: python, build-mode: none, os: ubuntu-latest }
+          - { language: rust, build-mode: none, os: ubuntu-latest }
+          - { language: swift, build-mode: manual, os: macos-latest }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - if: matrix.language == 'swift'
+        run: |
+          swift build --package-path clients/swift
+          swift build --package-path apps/ios/DokkitKit
+      - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          category: /language:${{ matrix.language }}
