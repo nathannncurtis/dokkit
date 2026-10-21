@@ -160,7 +160,7 @@ def verify(a, lang, tag, since, slug, dev_run):
     res["log"] = exists("select 1 from logs where service_id = %s and msg = 'conformance %s'" % (svc, tag))
     if lang in FIELDS:
         res["fields"] = exists("select 1 from logs where service_id = %s and msg = 'conformance %s' and fields->>'tag' = '%s' and fields->>'n' = '1'" % (svc, tag, tag))
-    res["error"] = exists("select 1 from error_events e join error_groups g on g.id = e.group_id where g.service_id = %s and g.type like '%%ConformanceError' and e.at >= '%s'" % (svc, since))
+    res["error"] = exists("select 1 from error_events e join error_groups g on g.id = e.group_id where g.service_id = %s and g.type like '%%ConformanceError' and e.at >= date_trunc('second', timestamp '%s')" % (svc, since))
     if dev_run:
         res["isolation"] = not any([
             exists("select 1 from logs where service_id = %s and msg = 'conformance %s'" % (other, tag)),

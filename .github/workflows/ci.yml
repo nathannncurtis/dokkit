@@ -125,11 +125,12 @@ jobs:
       - run: mix format --check-formatted
       - run: mix test
       - name: Retired and vulnerable packages
+        timeout-minutes: 5
         run: |
           mix hex.audit
           # mix_audit reports every known advisory; it has no severity filter.
           mix escript.install hex mix_audit 2.1.5 --force
-          ~/.mix/escripts/mix_audit
+          ~/.mix/escripts/mix_audit < /dev/null
 
   program:
     needs: changes
