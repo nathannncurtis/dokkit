@@ -4,6 +4,7 @@ import DokkitUI
 
 @main
 struct DokkitApp: App {
+    @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var model = AppModel.live()
 
     var body: some Scene {
@@ -11,8 +12,27 @@ struct DokkitApp: App {
             UnlockGate(lockAfter: { model.settings.lockAfter.seconds }) {
                 RootView(model: model) { onCode in AnyView(QRScannerView(onCode: onCode)) }
             }
+            .background(HingeProbe())
             .preferredColorScheme(model.colorScheme)
+            #if DEBUG
+            .task {
+                // Launched with -dokkitDemo YES, the simulator pairs both demo servers without anyone typing a code.
+                guard UserDefaults.standard.bool(forKey: "dokkitDemo") else { return }
+                await model.load()
+                for code in [DemoRelay.NORTHWIND_CODE, DemoRelay.HARBOR_LAB_CODE] {
+                    guard let p = try? Pairing.parse(code), !model.servers.contains(where: { $0.mailbox == p.mailbox }) else { continue }
+                    _ = await model.add(code: code)
+                }
+                if let route = UserDefaults.standard.string(forKey: "dokkitRoute") { model.debugOpen(route) }
+            }
+            #endif
         }
+    }
+}
+
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        Foldable.isFoldable ? .all : .portrait
     }
 }
 

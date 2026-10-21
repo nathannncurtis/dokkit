@@ -8,17 +8,22 @@ struct ServerTop: View {
     let model: AppModel
     let title: String
     var back: (() -> Void)?
+    var showsServer = true
     @Environment(\.morph) private var ns
     @Environment(\.onTop) private var onTop
+    @Environment(\.pane) private var pane
 
     var body: some View {
-        TopBar(title: title, server: model.selected?.name, back: back) {
+        TopBar(title: title, server: showsServer ? model.selected?.name : nil, back: back) {
             if model.servers.count > 1 {
                 if let ns, !model.picking, onTop {
-                    RoundIcon(icon: "swap", label: "Switch server") { withAnimation(Theme.travel) { model.picking = true } }
-                        .matchedGeometryEffect(id: "picker", in: ns)
+                    RoundIcon(icon: "swap", label: "Switch server") {
+                        model.pickFrom = pane
+                        withAnimation(Theme.travel) { model.picking = true }
+                    }
+                    .matchedGeometryEffect(id: "picker-\(pane)", in: ns)
                 } else if !model.picking {
-                    RoundIcon(icon: "swap", label: "Switch server") { model.picking = true }
+                    RoundIcon(icon: "swap", label: "Switch server") { model.pickFrom = pane; model.picking = true }
                 } else {
                     Color.clear.frame(width: 50, height: 44)
                 }
@@ -50,8 +55,12 @@ struct NoSnapshot: View {
     }
 }
 
+/// Which part of Home a pane shows: all of it, or, unfolded, the top half on the left and the rest on the right.
+enum HomePart { case full, top, rest }
+
 struct HomeView: View {
     let model: AppModel
+    var part = HomePart.full
     @State private var issueTab = "needs"
     @Environment(\.morph) private var ns
 
@@ -84,7 +93,15 @@ struct HomeView: View {
             }
             return m
         }()
-        StatementPage(tone: tone, top: { ServerTop(model: model, title: "Home") }, hero: hero, onRefresh: { await model.refresh() }) {
+        StatementPage(tone: tone, top: {
+            if part == .rest { TopBar(title: "Machines") { EmptyView() } } else { ServerTop(model: model, title: "Home") }
+        }, hero: part == .rest ? nil : hero, onRefresh: { await model.refresh() }) {
+            if part != .rest { top(snap, f: f, h: h, fine: fine, tone: tone) }
+            if part != .top { rest(h) }
+        }
+    }
+
+    @ViewBuilder private func top(_ snap: Snapshot, f: Freshness, h: HomeScreen, fine: Bool, tone: Tone) -> some View {
             if f.isWarning || f.detail != nil { Banner(f: f) }
             if let lo = leftOutText(snap) { QuietLine(text: lo, icon: "info") }
             Figures(items: [
@@ -116,6 +133,9 @@ struct HomeView: View {
             } else if let s = h.snoozedLine {
                 QuietLine(text: s, icon: "moon")
             }
+    }
+
+    @ViewBuilder private func rest(_ h: HomeScreen) -> some View {
             let days = h.machines.filter { $0.lastDay != nil }
             if !days.isEmpty {
                 BigCard {
@@ -147,7 +167,6 @@ struct HomeView: View {
                 Label2(text: "Not on a machine")
                 MachineList(model: model, cards: h.groups)
             }
-        }
     }
 
     @ViewBuilder private func issueCard(_ c: IssueCard) -> some View {

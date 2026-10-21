@@ -19,9 +19,11 @@ public final class AppModel {
     var addWorking = false
     var tab = 0
     var picking = false
+    var pickFrom = Pane.main
     var homePath: [Page] = []
     var serversPath: [Page] = []
     var firstPath: [Page] = []
+    var settingsGroup = 0
     public var settings: AppSettings = AppSettings.decode(UserDefaults.standard.data(forKey: AppModel.settingsKey)) {
         didSet { UserDefaults.standard.set(settings.encoded(), forKey: AppModel.settingsKey) }
     }
@@ -39,6 +41,32 @@ public final class AppModel {
     func freshness(_ st: ServerState, now: Date) -> Freshness {
         Freshness.make(madeAt: st.madeAt, hasSnapshot: st.snapshot != nil, problem: st.problem, now: now, late: TimeInterval(settings.lateMinutes * 60))
     }
+
+    #if DEBUG
+    /// Shows first run as if nothing were paired, without unpairing anything.
+    var debugFirstRun = false
+
+    /// Opens a screen by name so the simulator can be walked through every screen: "home/service/s-purge", "servers/add",
+    /// "servers/paste", "settings/2", "home/picking", "home/first", with "@harbor-lab" to show that server.
+    public func debugOpen(_ route: String) {
+        let at = route.split(separator: "@", maxSplits: 1).map(String.init)
+        if at.count > 1, let s = servers.first(where: { $0.name == at[1] }) { selectedID = s.id }
+        let parts = at[0].split(separator: "/").map(String.init)
+        tab = ["home": 0, "servers": 1, "settings": 2][parts.first ?? ""] ?? 0
+        homePath = []
+        serversPath = []
+        switch (parts.dropFirst().first, parts.dropFirst(2).first) {
+        case ("service", let id?): homePath = [.service(id, from: nil)]
+        case ("machine", let id?): homePath = [.machine(id)]
+        case ("add", _): serversPath = [.add(paste: false)]
+        case ("paste", _): serversPath = [.add(paste: true)]
+        case ("picking", _): picking = true
+        case ("first", _): debugFirstRun = true
+        case (let n?, _) where Int(n) != nil: settingsGroup = Int(n)!
+        default: break
+        }
+    }
+    #endif
 
     func open(_ page: Page) {
         if tab == 1 { serversPath.append(page) } else { homePath.append(page) }

@@ -24,8 +24,10 @@ extension EnvironmentValues {
 struct BigLine: View {
     let text: String
     var size: CGFloat = 38
+    @Environment(\.cardScale) private var scale
 
     var body: some View {
+        let size = size * scale
         Text(text)
             .font(figtree(size, .heavy, relativeTo: .largeTitle))
             .tracking(-0.032 * size)
@@ -50,16 +52,22 @@ struct Tick: View {
         Text(format(shown ?? value))
             .font(font).foregroundStyle(color)
             .contentTransition(.numericText(value: Double(shown ?? value)))
-            .onAppear {
+            // Keyed on the value, so a new number cancels a count still running toward the old one.
+            .task(id: value) {
                 let from = seen.values[key]
                 seen.values[key] = value
+                let ease = Animation.timingCurve(0.33, 1, 0.68, 1, duration: 0.7)
+                guard shown == nil else {
+                    withAnimation(reduced ? nil : ease) { shown = value }
+                    return
+                }
                 guard !reduced, value > 0, from != value else { shown = value; return }
                 shown = from ?? 0
-                withAnimation(.timingCurve(0.33, 1, 0.68, 1, duration: 0.7)) { shown = value }
-            }
-            .onChange(of: value) { _, new in
-                seen.values[key] = new
-                withAnimation(reduced ? nil : .timingCurve(0.33, 1, 0.68, 1, duration: 0.7)) { shown = new }
+                // After the page has settled; started while a page is still being pushed, the count can be lost and stay at its start.
+                do { try await Task.sleep(for: .milliseconds(120)) } catch { return }
+                withAnimation(ease) { shown = value }
+                do { try await Task.sleep(for: .milliseconds(900)) } catch { return }
+                if shown != value { shown = value }
             }
     }
 }
@@ -302,14 +310,17 @@ struct StatementPage<Top: View, Content: View>: View {
     var onRefresh: (() async -> Void)?
     @ViewBuilder var content: Content
     @Environment(\.accessibilityReduceMotion) private var reduced
+    @Environment(\.sharedChrome) private var shared
+    @Environment(\.verticalSizeClass) private var vertical
     @State private var offset: CGFloat = 0
     @State private var heroH: CGFloat = 0
 
     var body: some View {
-        let pinned = hero != nil && !reduced
+        // On a short screen a pinned card would take too much of it, so it scrolls away with the page.
+        let pinned = hero != nil && !reduced && vertical != .compact
         let p = pinned ? min(1, max(0, -offset / 240)) : 0
         VStack(spacing: 0) {
-            top
+            if !shared { top }
             ZStack(alignment: .top) {
                 scroll(pinned: pinned)
                 if pinned, let hero {
@@ -326,7 +337,7 @@ struct StatementPage<Top: View, Content: View>: View {
                 }
             }
         }
-        .background(Wash(tone: tone).ignoresSafeArea())
+        .background { if !shared { Wash(tone: tone).ignoresSafeArea() } }
     }
 
     @ViewBuilder private func scroll(pinned: Bool) -> some View {
@@ -398,8 +409,13 @@ struct TopBar<Tools: View>: View {
     var backIcon = "arrow-left"
     var backLabel = "Back"
     @ViewBuilder var tools: Tools
+    @Environment(\.corners) private var corners
+    @State private var frame = CGRect.zero
 
     var body: some View {
+        // Where the camera and status take a top corner, the bar is as tall as that corner and its buttons stop short of it.
+        let clear = corners.clearance(for: frame)
+        let band = max(0, corners.band - frame.minY)
         HStack(spacing: 0) {
             if let back {
                 RoundIcon(icon: backIcon, label: backLabel, action: back)
@@ -407,14 +423,19 @@ struct TopBar<Tools: View>: View {
             } else {
                 Spacer().frame(width: 12)
             }
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title).font(figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink2).accessibilityAddTraits(.isHeader)
-                if let server { Text(server).font(figtree(12, .medium, relativeTo: .caption)).foregroundStyle(Theme.mute).lineLimit(1) }
+            if !title.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title).font(figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink2).accessibilityAddTraits(.isHeader)
+                    if let server { Text(server).font(figtree(12, .medium, relativeTo: .caption)).foregroundStyle(Theme.mute).lineLimit(1) }
+                }
             }
             Spacer(minLength: 8)
             tools
         }
         .frame(minHeight: 56).padding(.horizontal, 8)
+        .padding(.leading, clear.leading).padding(.trailing, clear.trailing)
+        .frame(minHeight: band)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("screen")) } action: { frame = $0 }
     }
 }
 
@@ -672,6 +693,9 @@ struct FlowLayout: Layout {
 struct IssueCardView: View {
     let c: IssueCard
     var onOpen: (() -> Void)?
+    @Environment(\.onRight) private var onRight
+
+    private var shown: Bool { onRight != nil && onRight == c.serviceID }
 
     var body: some View {
         let t = Theme.tint(c.tone)
@@ -690,11 +714,13 @@ struct IssueCardView: View {
         }
         .padding(20)
         .background(LinearGradient(stops: [.init(color: t.surface, location: 0), .init(color: Theme.panel, location: 0.62)], startPoint: .leading, endPoint: .trailing), in: shape)
-        .overlay(shape.strokeBorder(Theme.line.opacity(0.75)))
+        .overlay(shape.strokeBorder(shown ? Theme.brand : Theme.line.opacity(0.75), lineWidth: shown ? 2 : 1))
+        .animation(Theme.ease, value: shown)
         .shadow(color: Theme.ink.opacity(0.07), radius: 14, y: 10)
         .rise()
         if let onOpen, c.serviceID != nil {
             Button(action: onOpen) { card }.buttonStyle(PressStyle()).accessibilityHint(c.nextStep)
+                .accessibilityAddTraits(shown ? .isSelected : [])
         } else {
             card
         }
@@ -866,6 +892,10 @@ struct MeterBar: View {
             guard seen.values["m" + key] == nil, !reduced else { return }
             seen.values["m" + key] = 1
             k = 0
+        }
+        .task {
+            guard k == 0 else { return }
+            try? await Task.sleep(for: .milliseconds(120))
             withAnimation(Theme.ease.speed(0.55)) { k = 1 }
         }
     }

@@ -93,3 +93,6 @@ enum Theme {
     static let settle = Animation.spring(response: 0.34, dampingFraction: 0.42)
     static let ease = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.45)
 }
+
+/// Two panes, split where the iPhone Duo folds, once the window is wide enough for two phone-width pages side by side.
+func twoPanes(_ size: CGSize) -> Bool { size.width >= 900 && size.width > size.height }

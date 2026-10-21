@@ -4,7 +4,7 @@ import DokkitKit
 struct ServiceView: View {
     let model: AppModel
     let id: String
-    var back: () -> Void
+    var back: (() -> Void)?
 
     var body: some View {
         if model.selectedState.snapshot == nil {
