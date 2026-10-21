@@ -287,6 +287,77 @@ jobs:
           name: phone-ios
           path: apps/ios/out/*
 
+  testflight:
+    runs-on: macos-26
+    continue-on-error: true
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      IOS_DIST_P12: ${{ secrets.IOS_DIST_P12 }}
+      IOS_DIST_P12_PASSWORD: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+      IOS_PROFILE: ${{ secrets.IOS_PROFILE }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check the secrets
+        id: gate
+        run: |
+          if [ -z "$ASC_KEY_P8" ] || [ -z "$IOS_DIST_P12" ]; then
+            echo "::warning::The App Store Connect secrets are not set, so nothing is uploaded to TestFlight."
+            echo "go=no" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install the signing files
+        if: steps.gate.outputs.go != 'no'
+        run: |
+          keychain=$RUNNER_TEMP/ios.keychain-db
+          pass=$(openssl rand -hex 16)
+          security create-keychain -p "$pass" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$pass" "$keychain"
+          printf '%s' "$IOS_DIST_P12" | base64 --decode > "$RUNNER_TEMP/dist.p12"
+          security import "$RUNNER_TEMP/dist.p12" -k "$keychain" -P "$IOS_DIST_P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/dist.p12"
+          curl -fsSL https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer -o "$RUNNER_TEMP/wwdr.cer" && security import "$RUNNER_TEMP/wwdr.cer" -k "$keychain" || true
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pass" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/.appstoreconnect/private_keys"
+          printf '%s' "$IOS_PROFILE" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/6f5092c3-5b2e-4a67-88c3-b7fa87728baa.mobileprovision"
+          printf '%s\n' "$ASC_KEY_P8" > "$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+      - name: Archive and export
+        if: steps.gate.outputs.go != 'no'
+        working-directory: apps/ios
+        run: |
+          command -v xcodegen >/dev/null || brew install xcodegen
+          version=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          version=${version#v}
+          [ -n "$version" ] || version=0.1.0
+          build=$(date -u +%y%m%d).$(date -u +%H%M%S)
+          echo "BUILD_NUMBER=$build" >> "$GITHUB_ENV"
+          echo "Uploading $version ($build)"
+          xcodegen generate
+          xcodebuild archive -project Dokkit.xcodeproj -scheme Dokkit -configuration Release -destination generic/platform=iOS             -archivePath build/Dokkit.xcarchive DEVELOPMENT_TEAM=Z46423B3U9 CODE_SIGN_STYLE=Manual             CODE_SIGN_IDENTITY="Apple Distribution" PROVISIONING_PROFILE_SPECIFIER="Dokkit App Store"             MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build"
+          xcodebuild -exportArchive -archivePath build/Dokkit.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath build/export
+      - name: Upload to TestFlight
+        if: steps.gate.outputs.go != 'no'
+        run: xcrun altool --upload-app -t ios -f apps/ios/build/export/Dokkit.ipa --apiKey "$ASC_KEY_ID" --apiIssuer "${{ secrets.ASC_ISSUER_ID }}"
+      - name: Add to the Public group and submit for beta review
+        if: steps.gate.outputs.go != 'no' && github.ref_type == 'tag'
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          python3 -m pip install --quiet pyjwt cryptography
+          python3 apps/ios/testflight.py "$BUILD_NUMBER"
+      - name: Remove the keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/ios.keychain-db" || true
+          rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+
   android:
     runs-on: ubuntu-latest
     continue-on-error: true
