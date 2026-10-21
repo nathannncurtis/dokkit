@@ -35,16 +35,14 @@ defmodule DokkitWeb.JobsLive do
 
   defp lede(_, jobs) do
     running = Enum.count(jobs, &(&1.last && &1.last.result == :running))
-    failed = Enum.count(jobs, &(&1.last && &1.last.result == :fail))
-    done = Enum.count(jobs, &(&1.last && &1.last.result not in [:running, :fail]))
+    trouble = Enum.count(jobs, &(&1.check && &1.check.state in [:down, :degraded]))
 
-    "#{plural(length(jobs), "job", "jobs")} on a schedule." <>
+    "#{plural(length(jobs), "job", "jobs")}." <>
       if(running > 0, do: " #{running} running now.", else: "") <>
-      cond do
-        failed > 0 -> " #{plural(failed, "last run", "last runs")} failed."
-        done > 0 -> " No last run failed."
-        true -> ""
-      end
+      if(trouble > 0,
+        do: " #{plural(trouble, "needs", "need")} a look.",
+        else: " None needs a look."
+      )
   end
 
   defp plural(1, one, _), do: "1 #{one}"

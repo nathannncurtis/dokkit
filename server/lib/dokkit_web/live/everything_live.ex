@@ -89,7 +89,7 @@ defmodule DokkitWeb.EverythingLive do
 
   defp lede(machines, down) do
     machines = Enum.filter(machines, &(&1.kind != :group))
-    watched = for m <- machines, s <- m.services, s.slug != "machine", do: s
+    watched = for m <- machines, s <- m.services, s.slug != "machine", s.watched, do: s
 
     head =
       "#{plural(length(watched), "thing", "things")} watched on #{plural(length(machines), "machine", "machines")}, in one place."

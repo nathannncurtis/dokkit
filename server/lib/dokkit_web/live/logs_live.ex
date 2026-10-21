@@ -26,6 +26,7 @@ defmodule DokkitWeb.LogsLive do
 
   def handle_params(params, _uri, socket) do
     params = Map.take(params, @keys)
+    socket = assign(socket, machines: Estate.machines())
     service = params["s"] && Estate.service(params["s"])
 
     filter = %{
@@ -142,24 +143,24 @@ defmodule DokkitWeb.LogsLive do
     errors = Enum.count(lines, &(&1.level in ~w(error fatal)))
     warns = Enum.count(lines, &(&1.level == "warn"))
 
-    shown =
+    {shown, them} =
       if length(lines) == 200,
-        do: "The newest 200 lines that match.",
-        else: "#{plural(length(lines), "line matches", "lines match")}."
+        do: {"The newest 200 lines that match are shown.", "Of these"},
+        else: {"#{plural(length(lines), "line matches", "lines match")}.", "Of them"}
 
     tail =
       case {errors, warns} do
         {0, 0} ->
-          " None of them is a warning or an error."
+          " #{them}, none is a warning or an error."
 
         {0, w} ->
-          " #{plural(w, "is a warning", "are warnings")}, and none is an error."
+          " #{them}, #{plural(w, "is a warning", "are warnings")}, and none is an error."
 
         {e, 0} ->
-          " #{plural(e, "is an error", "are errors")}."
+          " #{them}, #{plural(e, "is an error", "are errors")}."
 
         {e, w} ->
-          " #{plural(e, "is an error", "are errors")} and #{plural(w, "is a warning", "are warnings")}."
+          " #{them}, #{plural(e, "is an error", "are errors")} and #{plural(w, "is a warning", "are warnings")}."
       end
 
     shown <> tail
@@ -313,7 +314,7 @@ defmodule DokkitWeb.LogsLive do
           </div>
 
           <div :if={length(@lines) == 200} class="foot">
-            The newest 200 lines that match. Narrow the filter to see older ones; Export CSV has every one.
+            Older lines are not shown. Narrow the filter to reach them; Export CSV has every one.
           </div>
         </div>
       </div>
