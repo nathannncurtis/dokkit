@@ -31,6 +31,12 @@ fun appTransport(context: Context, timeoutMs: () -> Int): Transport {
 
 object DemoRelay {
     const val RELAY = "https://demo.dokkit.invalid"
+    // Paste one of these into Add a server to pair a demo server.
+    @Suppress("unused")
+    const val NORTHWIND_CODE = "dokkit-phone:1:eyJyZWxheSI6Imh0dHBzOi8vZGVtby5kb2traXQuaW52YWxpZCIsIm1haWxib3giOiJjOWZkOWJkMGFlN2UyZjBlMWQzOTZmMWUxMzNkNGVkOCIsInNsb3QiOiIwMWVjNmFiNDAxZGU4OWFjOWQ5ZWUzZWQzNmQ3YzdlNiIsInRva2VuIjoiZGtmX3NKZ2pmVFVER3ZsNUREZGpLRjBXM09xMGV1b3I1STF1YlNPNiIsImtleSI6IjVpREZ3U1VGUDNrQTBHS2pXQ3JBZnRvOVZ3Z3draU43NkJQS08vejMyZVE9IiwibmFtZSI6Im5vcnRod2luZCJ9"
+    @Suppress("unused")
+    const val HARBOR_LAB_CODE = "dokkit-phone:1:eyJyZWxheSI6Imh0dHBzOi8vZGVtby5kb2traXQuaW52YWxpZCIsIm1haWxib3giOiIzOWU2ZjUwY2M3MjE4Yjc0ZmM3ZTY1ODkxZDM2OGM3MSIsInNsb3QiOiI3NDIzODE2YzZjNzA1ZWRhYmIwMWY2NDMzMGVhODIzZCIsInRva2VuIjoiZGtmX0VTWUx5cVlYYXNFU1F4Mk54aWJOZG9tMUlGVm9odDNSNDNrQSIsImtleSI6Inc5ZnQ2Q3RZaG01Tnp1Z0xlNXFEeDNwNDdPNk5ZcW0rVXRHM2FJL1l6MTQ9IiwibmFtZSI6ImhhcmJvci1sYWIifQ=="
+
     private class Demo(val mailbox: String, val slot: String, val key: String, val asset: String)
 
     private val demos = listOf(
