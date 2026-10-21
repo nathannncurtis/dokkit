@@ -384,7 +384,25 @@ defmodule DokkitWeb.McpController do
      ["id"]},
     {"restore_archive", "admin",
      "Load an archived month of logs back for a week. Takes the name from archives.",
-     %{"name" => @text}, ["name"]}
+     %{"name" => @text}, ["name"]},
+    {"settings", "read",
+     "Every value Dokkit decides on its own for the whole server: values is each one now, defaults what Reset gives, changed the ones that differ.",
+     %{}, []},
+    {"set_settings", "admin",
+     "Change server-wide values. values maps a name from settings to a whole number, true or false, or text for a list of lengths; null or an empty text puts one back to its default. Names left out stay as they were.",
+     %{"values" => %{"type" => "object"}}, ["values"]},
+    {"machine_settings", "read",
+     "One machine's values: each starts at the server-wide one. Takes the id from machines.",
+     %{"id" => @text}, ["id"]},
+    {"set_machine_settings", "act",
+     "Change one machine's values, as set_settings does. Takes the id from machines.",
+     %{"id" => @text, "values" => %{"type" => "object"}}, ["id", "values"]},
+    {"job_settings", "read",
+     "One job's values: each starts at the job's own file, or the server-wide one. Takes the id from jobs.",
+     %{"id" => @text}, ["id"]},
+    {"set_job_settings", "act",
+     "Change one job's values, as set_settings does. Takes the id from jobs.",
+     %{"id" => @text, "values" => %{"type" => "object"}}, ["id", "values"]}
   ]
 
   def rpc(conn, %{"method" => method} = request) do
@@ -598,6 +616,20 @@ defmodule DokkitWeb.McpController do
   defp tool("plan_downtime", %{"id" => id} = args), do: Api.plan_downtime(id, args, "mcp") |> r()
   defp tool("end_downtime", %{"id" => id}), do: Api.end_downtime(id, "mcp") |> r()
   defp tool("downtime_schedules", %{"id" => id}), do: Api.downtime_schedules(id) |> r()
+  defp tool("settings", _), do: Api.values_view(%{}, :server) |> r()
+
+  defp tool("set_settings", %{"values" => %{} = v}),
+    do: v |> Map.delete("id") |> Api.save_values(:server) |> r()
+
+  defp tool("machine_settings", %{"id" => _} = args), do: Api.values_view(args, :machine) |> r()
+
+  defp tool("set_machine_settings", %{"id" => id, "values" => %{} = v}),
+    do: v |> Map.put("id", id) |> Api.save_values(:machine) |> r()
+
+  defp tool("job_settings", %{"id" => _} = args), do: Api.values_view(args, :job) |> r()
+
+  defp tool("set_job_settings", %{"id" => id, "values" => %{} = v}),
+    do: v |> Map.put("id", id) |> Api.save_values(:job) |> r()
 
   defp tool("schedule_downtime", %{"id" => id} = args),
     do: Api.schedule_downtime(id, args, "mcp") |> r()

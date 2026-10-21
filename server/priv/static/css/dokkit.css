@@ -976,6 +976,33 @@ body::before {
 details.run { interpolate-size: allow-keywords; }
 details.run::details-content { block-size: 0; overflow: clip; transition: block-size .3s cubic-bezier(.2, .8, .2, 1), content-visibility .3s allow-discrete; }
 details.run[open]::details-content { block-size: auto; }
+/* settings that fold open: each row its control, its default and a Reset */
+.vals { display: grid; gap: 14px; grid-column: 1 / -1; min-width: 0; }
+.vals-h { font-size: 20px; font-weight: 700; margin-top: 8px; }
+details.fold { interpolate-size: allow-keywords; overflow: clip; }
+details.fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 16px 18px; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary > i { margin-left: auto; color: var(--mute); transition: transform .3s var(--ease); }
+details.fold[open] > summary > i { transform: rotate(180deg); }
+details.fold::details-content { block-size: 0; overflow: clip; transition: block-size .35s var(--ease), content-visibility .35s allow-discrete; }
+details.fold[open]::details-content { block-size: auto; }
+.fold-ic { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--sky); color: var(--sky-ink); font-size: 18px; }
+.fold-t { display: grid; gap: 2px; min-width: 0; } .fold-t b { font-size: 15.5px; } .fold-t .mute { font-size: 13.5px; }
+details.fold form { padding: 0 18px; border-top: 1px solid var(--line); }
+details.fold .foot { margin: 0 -18px; padding-inline: 18px; }
+.cfg-row { display: grid; grid-template-columns: minmax(180px, 1.2fr) minmax(0, 2fr) auto; gap: 16px; align-items: center; padding: 14px 0; }
+.cfg-row + .cfg-row { border-top: 1px solid var(--line); }
+.cfg-row h3 { font-size: 14.5px; font-weight: 600; }
+.cfg-row p.mute { font-size: 13px; margin-top: 2px; max-width: 60ch; }
+.cfg-row .ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cfg-row .ctl .inp.sm { width: 84px; }
+.cfg-row .ctl .inp[type=text] { width: 220px; max-width: 100%; }
+.cfg-row .def { font-size: 12.5px; color: var(--mute); }
+.cfg-row .def button { all: unset; cursor: pointer; color: var(--link); text-decoration: underline; text-underline-offset: 3px; margin-left: 6px; }
+.cfg-row .def button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.cfg-row.changed h3::after { content: "changed"; margin-left: 8px; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 99px; background: var(--brand-bg); color: var(--link); vertical-align: 2px; }
+.cfg-row.off .ctl > :not(.switch) { opacity: .5; }
+@media (max-width: 860px) { .cfg-row { grid-template-columns: minmax(0, 1fr); gap: 8px; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

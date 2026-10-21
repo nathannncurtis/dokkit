@@ -3,7 +3,7 @@ defmodule DokkitWeb.JobsLive do
   alias Dokkit.Estate
 
   def mount(_params, _session, socket),
-    do: {:ok, assign(socket, added: nil, error: nil, form: %{})}
+    do: {:ok, assign(socket, added: nil, error: nil, form: %{}, values_result: nil)}
 
   def handle_params(_params, _uri, socket) do
     title = if socket.assigns.live_action == :new, do: "New job", else: "Jobs"
@@ -23,6 +23,22 @@ defmodule DokkitWeb.JobsLive do
     else
       {:error, text} -> {:noreply, assign(socket, error: text, form: params)}
       false -> {:noreply, assign(socket, error: "An owner adds jobs.", form: params)}
+    end
+  end
+
+  def handle_event(event, %{"target" => id} = params, socket)
+      when event in ~w(values_save values_reset) do
+    job = Enum.find(socket.assigns.jobs, &(&1.service.id == id))
+
+    if socket.assigns.current_user.role == :viewer or is_nil(job) do
+      {:noreply, socket}
+    else
+      result =
+        if event == "values_save",
+          do: DokkitWeb.ValuesForm.save({:job, id}, params),
+          else: DokkitWeb.ValuesForm.reset({:job, id}, params)
+
+      {:noreply, assign(load(socket), values_result: result)}
     end
   end
 
@@ -54,32 +70,33 @@ defmodule DokkitWeb.JobsLive do
       <div :if={@live_action == :new} class="crumb">
         <.link navigate={~p"/jobs"}>Jobs</.link><.ic name="caret-right" /><span>New job</span>
       </div>
-
+      
       <div class="head">
         <h1 tabindex="-1">{@page_title}</h1>
+        
         <p class="lede">{lede(@live_action, @jobs)}</p>
-
+        
         <div :if={@live_action == :index} class="end">
           <.link class="btn primary" patch={~p"/jobs/new"}><.ic name="plus" />New job</.link>
         </div>
       </div>
-
+      
       <div :if={@live_action == :new and @added} class="body set">
         <div class="card">
           <h2>{@added.service.name} is being watched</h2>
-
+          
           <p class="lead">
             Call these addresses from the job. They hold a key that is shown only now, so copy them before leaving this page. A request body sent to the last two is kept as the run's output.
           </p>
-
+          
           <dl class="kv">
             <dt :for={event <- ~w(start ok fail)}>{label(event)}</dt>
-
+            
             <dd :for={event <- ~w(start ok fail)}>
               <span class="mono" id={"ping-#{event}"}>{ping(@added, event)}</span>
             </dd>
           </dl>
-          <pre class="logbox">{example(@added)}</pre>
+           <pre class="logbox">{example(@added)}</pre>
           <div class="foot">
             <span class="end">
               <.link class="btn primary" navigate={~p"/s/#{@added.service.id}"}>Open {@added.service.name}</.link>
@@ -87,14 +104,14 @@ defmodule DokkitWeb.JobsLive do
           </div>
         </div>
       </div>
-
+      
       <form :if={@live_action == :new and !@added} class="body set" phx-submit="add" id="job-form">
         <div class="card">
           <h2>What to watch</h2>
-
+          
           <dl class="kv">
             <dt>Name</dt>
-
+            
             <dd>
               <input
                 class="inp"
@@ -106,9 +123,9 @@ defmodule DokkitWeb.JobsLive do
                 aria-label="Name"
               />
             </dd>
-
+            
             <dt>Machine</dt>
-
+            
             <dd>
               <input
                 class="inp"
@@ -123,9 +140,9 @@ defmodule DokkitWeb.JobsLive do
               <datalist id="machines"><option :for={m <- @shell.machines} value={m.name}></option></datalist>
               <span class="hint">The machine it runs on. A new name adds the machine.</span>
             </dd>
-
+            
             <dt>Schedule</dt>
-
+            
             <dd>
               <input
                 class="inp mono"
@@ -137,9 +154,9 @@ defmodule DokkitWeb.JobsLive do
               />
               <span class="hint">A cron line, read as UTC. Leave it empty and Dokkit only hears about runs that report a failure.</span>
             </dd>
-
+            
             <dt>Late after</dt>
-
+            
             <dd>
               <input
                 class="inp mono"
@@ -151,9 +168,9 @@ defmodule DokkitWeb.JobsLive do
               />
               <span class="hint">How long past its time a run may start before it counts as missed.</span>
             </dd>
-
+            
             <dt>Too long after</dt>
-
+            
             <dd>
               <input
                 class="inp mono"
@@ -165,7 +182,7 @@ defmodule DokkitWeb.JobsLive do
               /> <span class="hint">Only checked for runs that report their start.</span>
             </dd>
           </dl>
-
+          
           <div class="foot">
             <span :if={@error} class="bad" role="alert">{@error}</span>
             <span :if={@current_user.role != :owner} class="hint">An owner adds jobs.</span>
@@ -177,20 +194,20 @@ defmodule DokkitWeb.JobsLive do
           </div>
         </div>
       </form>
-
+      
       <div :if={@live_action == :index} class="body">
         <div class="card">
           <div :if={@jobs == []} class="empty"><.ic name="clock-countdown" />No jobs yet.</div>
-
+          
           <div :if={@jobs != []} class="lh cols-jobs">
             <span>Job</span><span>Machine</span><span>Schedule</span><span>Last good run</span><span></span><span>Last run</span><span></span>
           </div>
-
+          
           <.link :for={j <- @jobs} class="li slim cols-jobs" navigate={~p"/s/#{j.service.id}"}>
             <div class="ti">
               <.lvl state={j.check.state} /><span>{Dokkit.Intake.label(j.service, j.check.name)}</span>
             </div>
-            <span class="tag" title={j.machine.name}>{j.machine.name}</span>
+             <span class="tag" title={j.machine.name}>{j.machine.name}</span>
             <span class="mono mute">{j.check.config["schedule"]}</span>
             <span class="mono">{if j.last && j.last.result != :ok, do: at(j.good)}</span>
             <span><.progress :if={j.last} run={j.last} /></span>
@@ -199,9 +216,21 @@ defmodule DokkitWeb.JobsLive do
               <.result :if={j.last} run={j.last} />
               <span :if={!j.last} class="mute">No run seen yet</span>
             </div>
-            <.ic name="caret-right" />
+             <.ic name="caret-right" />
           </.link>
         </div>
+        
+        <DokkitWeb.ValuesForm.fold
+          :for={j <- @jobs}
+          id={"job-#{j.service.id}"}
+          group="jobs"
+          scope={{:job, j.service.id}}
+          target={j.service.id}
+          title={"Settings for #{Dokkit.Intake.label(j.service, j.check.name)}"}
+          sub="When it counts as late, too long or missed. Each starts at the job's own file, or the default for every job."
+          disabled={@current_user.role == :viewer}
+          result={@values_result}
+        />
       </div>
     </Layouts.app>
     """

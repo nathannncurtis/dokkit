@@ -52,7 +52,9 @@ defmodule DokkitWeb.ParityTest do
       "schedule_remove" => {:member, ["DELETE /api/v1/machines/:id/quiet/schedules/:schedule"]},
       "silent" => {:member, ["PUT /api/v1/machines/:id/routing"]},
       "update" => {:owner, ["POST /api/v1/machines/:id/update"]},
-      "scan" => {:member, ["POST /api/v1/machines/:id/scan"]}
+      "scan" => {:member, ["POST /api/v1/machines/:id/scan"]},
+      "values_save" => {:member, ["PUT /api/v1/machines/:id/settings"]},
+      "values_reset" => {:member, ["PUT /api/v1/machines/:id/settings"]}
     },
     "EnrolLive" => %{
       "token" => {:owner, ["POST /api/v1/keys", "POST /api/v1/add-script"]},
@@ -70,7 +72,11 @@ defmodule DokkitWeb.ParityTest do
       "watch" => {:member, ["POST /api/v1/proposals/:id/accept"]},
       "leave" => {:member, ["POST /api/v1/proposals/:id/dismiss"]}
     },
-    "JobsLive" => %{"add" => {:owner, ["POST /api/v1/jobs"]}},
+    "JobsLive" => %{
+      "add" => {:owner, ["POST /api/v1/jobs"]},
+      "values_save" => {:member, ["PUT /api/v1/jobs/:id/settings"]},
+      "values_reset" => {:member, ["PUT /api/v1/jobs/:id/settings"]}
+    },
     "LogsLive" => %{"filter" => {:viewer, ["GET /api/v1/logs"]}},
     "ServiceLive" => %{
       "quiet_end" => {:member, ["DELETE /api/v1/machines/:id/quiet"]},
@@ -109,7 +115,9 @@ defmodule DokkitWeb.ParityTest do
       "relay_shared" => {:owner, ["POST /api/v1/phones/relay/shared"]},
       "phone_add" => {:owner, ["POST /api/v1/phones"]},
       "phone_remove" => {:owner, ["DELETE /api/v1/phones/:id"]},
-      "phone_hide" => @view
+      "phone_hide" => @view,
+      "values_save" => {:owner, ["PUT /api/v1/settings"]},
+      "values_reset" => {:owner, ["PUT /api/v1/settings"]}
     },
     "FoundLive" => %{
       "sweep" =>

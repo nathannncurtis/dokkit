@@ -1,7 +1,7 @@
 defmodule DokkitWeb.SettingsLive do
   use DokkitWeb, :live_view
   alias Dokkit.{Accounts, Keys, Phones}
-  alias DokkitWeb.ApiController
+  alias DokkitWeb.{ApiController, ValuesForm}
 
   @key_cols "--cols:minmax(0,1.4fr) 110px 150px 150px 96px;--ncols:minmax(140px,1fr) 96px 124px 124px 88px;--minw:640px"
   @roles [{"Member", "member"}, {"Viewer", "viewer"}, {"Owner", "owner"}]
@@ -27,7 +27,8 @@ defmodule DokkitWeb.SettingsLive do
          ret_result: nil,
          ret_n: 0,
          phone_error: nil,
-         phone_new: nil
+         phone_new: nil,
+         values_result: nil
        )
      )}
   end
@@ -240,6 +241,12 @@ defmodule DokkitWeb.SettingsLive do
     end)
   end
 
+  def handle_event("values_save", params, socket),
+    do: owner(socket, fn -> assign(socket, values_result: ValuesForm.save(:server, params)) end)
+
+  def handle_event("values_reset", params, socket),
+    do: owner(socket, fn -> assign(socket, values_result: ValuesForm.reset(:server, params)) end)
+
   def handle_event("retention_change", %{"retention" => r}, socket),
     do: {:noreply, retention(socket, r)}
 
@@ -357,6 +364,7 @@ defmodule DokkitWeb.SettingsLive do
     <Layouts.app active={:settings} shell={@shell} user={@current_user}>
       <div class="head">
         <h1 tabindex="-1">Settings</h1>
+        
         <p class="lede">How Dokkit keeps its data, who can use it, and how it looks.</p>
          <a class="btn ghost sm" href={~p"/two-step"}>Two-step sign-in</a>
         <a class="btn ghost sm" href={~p"/password"}>Change password</a>
@@ -625,7 +633,7 @@ defmodule DokkitWeb.SettingsLive do
               </span>
             </span>
           </form>
-
+          
           <form
             style="display:grid; gap:12px; padding:12px 16px 0"
             phx-submit="name_claim"
@@ -634,11 +642,11 @@ defmodule DokkitWeb.SettingsLive do
             <p class="lead" style="margin:0">
               Or use a name on dokkit.page, with no Cloudflare token: claim one at {@names_service}, paste its claim code here, and Dokkit keeps the name pointed at this server and gets its certificate through that service.
             </p>
-
+            
             <p :if={@dokkit_name["name"] != ""} style="margin:0" id="dokkit-name">
               This server holds <b>{@dokkit_name["name"]}</b>.
             </p>
-
+            
             <label style="display:grid; gap:6px">
               Claim code
               <input
@@ -649,7 +657,7 @@ defmodule DokkitWeb.SettingsLive do
                 spellcheck="false"
               />
             </label>
-
+            
             <label style="display:grid; gap:6px">
               Address the name points at, blank for this machine's own
               <input
@@ -661,7 +669,7 @@ defmodule DokkitWeb.SettingsLive do
                 spellcheck="false"
               />
             </label>
-
+            
             <span class="foot" style="padding-inline:16px; margin-inline:-16px">
               <span
                 :if={@dokkit_name["note"] && !@name_result}
@@ -669,6 +677,7 @@ defmodule DokkitWeb.SettingsLive do
               >
                 {@dokkit_name["note"]}
               </span>
+              
               <span
                 :if={@name_result}
                 class={elem(@name_result, 0) == :error && "bad"}
@@ -677,7 +686,7 @@ defmodule DokkitWeb.SettingsLive do
               >
                 {elem(@name_result, 1)}
               </span>
-
+              
               <span class="end">
                 <button class="btn primary" type="submit">
                   {if @dokkit_name["name"] != "", do: "Save", else: "Claim"}
@@ -686,7 +695,7 @@ defmodule DokkitWeb.SettingsLive do
             </span>
           </form>
         </div>
-
+        
         <div :if={@owner} class="card" id="phones">
           <h2>Phones<span class="cnt">{length(@phones)}</span></h2>
           
@@ -1078,6 +1087,26 @@ defmodule DokkitWeb.SettingsLive do
               </span>
             </dd>
           </dl>
+        </div>
+        
+        <div class="vals" id="values">
+          <h2 class="vals-h">Everything Dokkit decides on its own</h2>
+          
+          <p class="mute">
+            Each starts at today's value. Night hours, the digest and who is told stay on the Alerts page; how long logs stay live is in Logs above.
+          </p>
+          
+          <ValuesForm.fold
+            :for={{group, icon, title, sub} <- Dokkit.Values.groups()}
+            id={"set-#{group}"}
+            group={group}
+            scope={:server}
+            icon={icon}
+            title={title}
+            sub={sub}
+            disabled={!@owner}
+            result={@values_result}
+          />
         </div>
       </div>
     </Layouts.app>
