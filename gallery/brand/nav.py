@@ -12,7 +12,7 @@ MENU = [
         ("install.html", "Install", "The server, then the program on each machine", False),
         ("move.html", "Move over", "From Healthchecks, Uptime Kuma or ping URLs", False),
         ("check.html", "Check a file", "Write a dokkit.toml and see what it watches", False),
-        (None, "Live demo", "The real server on a sample company", True),
+        ("https://demo.dokkit.dev/", "Live demo", "The real server on a sample company", False),
     ]),
     ("Build", [
         ("agents.html", "Agents", "Let a coding agent wire your app in", False),
