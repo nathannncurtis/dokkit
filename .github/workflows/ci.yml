@@ -150,6 +150,38 @@ jobs:
           # CSP is ignored until the security-headers change sets one.
           mix sobelow --exit high --threshold high --skip --ignore Config.CSP
 
+  server-windows-upgrade:
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      MIX_ENV: prod
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          otp-version: '29.1.1'
+          elixir-version: '1.20.4'
+      - name: Build the Windows server
+        shell: pwsh
+        working-directory: server
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get --only prod
+          mix assets.setup
+          mix compile
+          mix assets.deploy
+          mix release
+          Compress-Archive -Path '_build/prod/rel/dokkit/*' -DestinationPath "$env:RUNNER_TEMP/new.zip"
+      - name: Upgrade the last release to this one
+        shell: pwsh
+        run: |
+          gh release download --repo $env:GITHUB_REPOSITORY --pattern dokkit-windows-x64.zip --dir $env:RUNNER_TEMP
+          ./.github/scripts/windows-upgrade.ps1 -Old "$env:RUNNER_TEMP/dokkit-windows-x64.zip" -New "$env:RUNNER_TEMP/new.zip"
+
   program:
     needs: changes
     if: needs.changes.outputs.program == 'true'
@@ -489,7 +521,7 @@ jobs:
           if-no-files-found: ignore
 
   ci-ok:
-    needs: [changes, rules, server, program, clients, clients-swift, apps-ios, apps-android, apps-desktop, plugin, site, zap-site, zap-server, deps-owasp]
+    needs: [changes, rules, server, server-windows-upgrade, program, clients, clients-swift, apps-ios, apps-android, apps-desktop, plugin, site, zap-site, zap-server, deps-owasp]
     if: always() && github.repository == 'nathannncurtis/dokkit'
     runs-on: ubuntu-latest
     steps:
