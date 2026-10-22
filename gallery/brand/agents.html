@@ -68,7 +68,7 @@
           <li><b>Codex</b><span>run <code>codex</code> in the app's repository and paste it</span></li>
           <li><b>Copilot</b><span>in VS Code, switch Copilot Chat to agent mode and paste it</span></li>
         </ul>
-        <details class="card"><summary>A Claude Code plugin that does this for you <small>soon</small></summary><div class="card-body"><p><code>/dokkit</code> as a plugin: it wires the repo in, connects the MCP with a token you paste, and answers "what broke since my last deploy" from inside the editor.</p></div></details>
+        <details class="card" id="plugin"><summary>The Claude Code plugin does this for you <small>/dokkit:dokkit</small></summary><div class="card-body"><p>Run it with nothing after it to wire the repository in, the same three steps as the prompt. Ask it something, such as "what broke since my last deploy", and it answers from your server. Install asks for your server's address and a token made in Settings; both may stay empty until you have a server.</p><div class="cmd bare"><code id="cmdPlugin">/plugin install dokkit --marketplace nathannncurtis/dokkit</code><button type="button" class="copy" data-copy="cmdPlugin">Copy</button></div></div></details>
       </section>
 
       <section class="step" id="connect">

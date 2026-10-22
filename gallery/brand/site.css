@@ -64,6 +64,7 @@ h1 span { color: var(--acc); }
 .cmd { display: flex; gap: 10px; align-items: stretch; }
 .cmd code { flex: 1; min-width: 0; display: flex; align-items: center; min-height: 52px; padding: 12px 18px; border-radius: 12px; background: var(--well); border: 1px solid var(--line); font-size: 14.5px; line-height: 1.5; overflow-wrap: anywhere; }
 .cmd code::before { content: "$ "; color: var(--mute); white-space: pre; }
+.cmd.bare code::before { content: none; }
 .copy { flex: none; padding: 0 20px; border-radius: 12px; font-weight: 600; font-size: 15px; color: var(--acc-ink); background: linear-gradient(var(--acc-2), var(--acc)); transition: transform 140ms var(--ease); }
 .copy:active { transform: translateY(1px); }
 .copy.small { padding: 4px 10px; border-radius: 7px; font-size: 13px; color: var(--ink); background: var(--chip); }
