@@ -35,7 +35,7 @@ if (-not (& $erl) -or (Compare-Object @(& $erl) @($before) -IncludeEqual -Exclud
 $root = (Resolve-Path $new).Path
 $stale = Get-ChildItem $root -Recurse -File | Where-Object {
     $rel = $_.FullName.Substring($root.Length)
-    $rel -ne 'eleases\COOKIE' -and (Get-FileHash $_.FullName).Hash -ne (Get-FileHash (Join-Path "$env:ProgramFiles\Dokkit" $rel)).Hash
+    $rel -ne '\releases\COOKIE' -and (Get-FileHash $_.FullName).Hash -ne (Get-FileHash (Join-Path "$env:ProgramFiles\Dokkit" $rel)).Hash
 }
 if ($stale) { throw "Not upgraded: $(($stale | Select-Object -First 5).FullName -join ', ')" }
 Write-Host "Upgraded: every file matches the new build, the server restarted and serves $css."
