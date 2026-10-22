@@ -325,9 +325,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: npm install -g @anthropic-ai/claude-code@2.1.307
-      - run: claude plugin validate plugins/claude-code --strict
-      - run: claude plugin validate . --strict
+      - run: npx --yes --package=@anthropic-ai/claude-code@2.1.307 claude plugin validate plugins/claude-code --strict
+      - run: npx --yes --package=@anthropic-ai/claude-code@2.1.307 claude plugin validate . --strict
 
   site:
     needs: changes
