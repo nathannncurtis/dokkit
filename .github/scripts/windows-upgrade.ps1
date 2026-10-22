@@ -25,6 +25,12 @@ $old = Expand $Old 'server-old'
 & (Join-Path $old 'install.ps1') -Postgres $env:PGROOT
 if ((Get-Login) -notmatch [regex]::Escape((Get-Css $old))) { throw 'The first install does not serve its own stylesheet.' }
 
+# Hold the wrapper open the way Windows' event log does, as the message file of the service's events.
+$wrapper = (Get-ChildItem "$env:ProgramFiles\Dokkit\erts-*\bin\erlsrv.exe").FullName
+$holder = Start-Process powershell -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile', '-Command', "`$f = [IO.File]::Open('$wrapper', 'Open', 'Read', 'Read, Delete'); Start-Sleep 1800"
+Start-Sleep -Seconds 3
+try { [IO.File]::Open($wrapper, 'Open', 'ReadWrite', 'None').Dispose(); throw 'The wrapper is not held, so this would not test anything.' } catch [IO.IOException] { }
+
 $erl = { @(Get-Process erl -ErrorAction SilentlyContinue | Where-Object Path -like "$env:ProgramFiles\Dokkit\*").Id }
 $before = & $erl
 $new = Expand $New 'server-new'
@@ -38,4 +44,5 @@ $stale = Get-ChildItem $root -Recurse -File | Where-Object {
     $rel -ne '\releases\COOKIE' -and (Get-FileHash $_.FullName).Hash -ne (Get-FileHash (Join-Path "$env:ProgramFiles\Dokkit" $rel)).Hash
 }
 if ($stale) { throw "Not upgraded: $(($stale | Select-Object -First 5).FullName -join ', ')" }
-Write-Host "Upgraded: every file matches the new build, the server restarted and serves $css."
+Stop-Process -Id $holder.Id -Force
+Write-Host "Upgraded, with the wrapper held open: every file matches the new build, the server restarted and serves $css."
