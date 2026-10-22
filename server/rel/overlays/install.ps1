@@ -273,6 +273,12 @@ try {
         # The port mapper outlives the server and keeps its own file open.
         $epmd = Join-Path (Split-Path (Get-Erlsrv)) 'epmd.exe'
         if (Test-Path $epmd) { & $epmd -kill | Out-Null }
+        # erlsrv stop returns before the wrapper exits, and each release's signed wrapper differs, so it must be gone.
+        $root = (Resolve-Path $To).Path.TrimEnd('\') + '\'
+        $ours = { @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($root, 'OrdinalIgnoreCase') }) }
+        $deadline = (Get-Date).AddSeconds(120)
+        while ((& $ours).Count -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+        & $ours | ForEach-Object { Write-Host "Stopping $($_.Name) ($($_.Id)), still running from $root"; Stop-Process -Id $_.Id -Force }
     }
 
     Write-Host "Copying the server to $To."
