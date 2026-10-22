@@ -1,0 +1,32 @@
+{
+  "name": "dokkit",
+  "version": "0.1.0",
+  "description": "Wire the repository you are in into Dokkit, and ask your Dokkit server what broke from inside Claude Code.",
+  "author": {
+    "name": "Nathan Curtis"
+  },
+  "homepage": "https://dokkit.dev/agents.html",
+  "privacyPolicyUrl": "https://dokkit.dev/privacy.html",
+  "repository": "https://github.com/nathannncurtis/dokkit",
+  "license": "Apache-2.0",
+  "keywords": [
+    "monitoring",
+    "mcp",
+    "dokkit"
+  ],
+  "userConfig": {
+    "server": {
+      "type": "string",
+      "title": "Dokkit server address",
+      "description": "Your server's address, such as https://dokkit.example.com. Leave it empty until you have a server.",
+      "required": false
+    },
+    "token": {
+      "type": "string",
+      "title": "Dokkit token",
+      "description": "A token made in your server's Settings (dku_...). It decides which tools the agent is offered.",
+      "required": false,
+      "sensitive": true
+    }
+  }
+}
