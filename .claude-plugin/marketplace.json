@@ -1,0 +1,14 @@
+{
+  "name": "dokkit",
+  "owner": {
+    "name": "Nathan Curtis"
+  },
+  "description": "Dokkit for Claude Code.",
+  "plugins": [
+    {
+      "name": "dokkit",
+      "source": "./plugins/claude-code",
+      "description": "Wire the repository you are in into Dokkit, and ask your Dokkit server what broke from inside Claude Code."
+    }
+  ]
+}
