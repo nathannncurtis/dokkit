@@ -268,6 +268,14 @@ jobs:
           pwsh -Command "Compress-Archive -Path '_build/prod/rel/dokkit/*' -DestinationPath '../out/dokkit-windows-x64.zip'"
           cd ../out
           sha256sum dokkit-windows-x64.zip > dokkit-windows-x64.zip.sha256
+      - name: Upgrade the last release to this one
+        shell: pwsh
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo $env:GITHUB_REPOSITORY --pattern dokkit-windows-x64.zip --dir "$env:RUNNER_TEMP/last"
+          ./.github/scripts/windows-upgrade.ps1 -Old "$env:RUNNER_TEMP/last/dokkit-windows-x64.zip" -New out/dokkit-windows-x64.zip
       - uses: actions/upload-artifact@v7
         with:
           name: windows-server
