@@ -496,6 +496,7 @@ html:not(.pinned) .env { display: none; }
 .watch-table .tr > span:nth-child(3) { font-size: 15px; }
 .watch-table .tr > span:first-child { gap: 12px; }
 .paste-in { display: grid; gap: 0; border-top: 1px solid var(--line); max-width: 760px; }
+.paste-in + .card { max-width: 760px; }
 .paste-in li { display: grid; grid-template-columns: 140px 1fr; gap: 4px 20px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
 .paste-in span { color: var(--mute); }
 @media (max-width: 640px) { .paste-in li { grid-template-columns: 1fr; } }
