@@ -62,6 +62,7 @@ go build -o dokkit.exe .
 | **MCP** | Lets an AI tool ask Dokkit questions and take a few everyday actions. | Part of the server |
 | **Phone apps** | Show what needs attention and whether the hardware is up. | Swift (iOS), Kotlin (Android) |
 | **Desktop app** | The server's web app in a window, with a tray icon and notifications. | Tauri (Rust) |
+| **Claude Code plugin** | `/dokkit:dokkit` wires a repository in and answers from your server through its MCP. Install with `/plugin install dokkit --marketplace nathannncurtis/dokkit`. | Markdown and JSON |
 
 ## Decisions
 
@@ -148,6 +149,7 @@ Four kinds of key: one to enrol a machine, one per machine, one per app that can
 | `server/` | The server: Phoenix on Postgres. Its stylesheet and fonts are in `server/priv/static/`. |
 | `program/` | The `dokkit` program, in Go. It also holds `get.sh` and `get.ps1`. |
 | `clients/` | The libraries, one folder per language, and the conformance programs they are tested with. |
+| `plugins/claude-code/` | The Claude Code plugin. `.claude-plugin/marketplace.json` at the top lists it. |
 | `apps/` | The iOS and Android phone apps and the desktop app. |
 | `names/` | The service behind the `<name>.dokkit.page` addresses. |
 | `gallery/brand/` | The website, dokkit.dev. |
