@@ -25,8 +25,17 @@ $old = Expand $Old 'server-old'
 & (Join-Path $old 'install.ps1') -Postgres $env:PGROOT
 if ((Get-Login) -notmatch [regex]::Escape((Get-Css $old))) { throw 'The first install does not serve its own stylesheet.' }
 
+$erl = { @(Get-Process erl -ErrorAction SilentlyContinue | Where-Object Path -like "$env:ProgramFiles\Dokkit\*").Id }
+$before = & $erl
 $new = Expand $New 'server-new'
 & (Join-Path $new 'install.ps1')
 $css = Get-Css $new
-if ((Get-Login) -notmatch [regex]::Escape($css)) { throw "After the upgrade the server does not serve $css, so the old server is still running." }
-Write-Host "Upgraded: the server serves $css."
+if ((Get-Login) -notmatch [regex]::Escape($css)) { throw "After the upgrade the server does not serve $css." }
+if (-not (& $erl) -or (Compare-Object @(& $erl) @($before) -IncludeEqual -ExcludeDifferent)) { throw 'The server was not restarted by the upgrade.' }
+$root = (Resolve-Path $new).Path
+$stale = Get-ChildItem $root -Recurse -File | Where-Object {
+    $rel = $_.FullName.Substring($root.Length)
+    $rel -ne 'eleases\COOKIE' -and (Get-FileHash $_.FullName).Hash -ne (Get-FileHash (Join-Path "$env:ProgramFiles\Dokkit" $rel)).Hash
+}
+if ($stale) { throw "Not upgraded: $(($stale | Select-Object -First 5).FullName -join ', ')" }
+Write-Host "Upgraded: every file matches the new build, the server restarted and serves $css."
