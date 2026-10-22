@@ -274,11 +274,12 @@ try {
         $epmd = Join-Path (Split-Path (Get-Erlsrv)) 'epmd.exe'
         if (Test-Path $epmd) { & $epmd -kill | Out-Null }
         # erlsrv stop returns before the wrapper exits, and each release's signed wrapper differs, so it must be gone.
-        $root = (Resolve-Path $To).Path.TrimEnd('\') + '\'
-        $ours = { @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($root, 'OrdinalIgnoreCase') }) }
+        # Only Erlang's own programs: the database under $To\postgres keeps running until its own step.
+        $erts = '^' + [regex]::Escape((Resolve-Path $To).Path.TrimEnd('\')) + '\\erts-[^\\]+\\bin\\'
+        $ours = { @(Get-Process | Where-Object { $_.Path -match $erts }) }
         $deadline = (Get-Date).AddSeconds(120)
         while ((& $ours).Count -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
-        & $ours | ForEach-Object { Write-Host "Stopping $($_.Name) ($($_.Id)), still running from $root"; Stop-Process -Id $_.Id -Force }
+        & $ours | ForEach-Object { Write-Host "Stopping $($_.Name) ($($_.Id)), still running"; Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
     }
 
     Write-Host "Copying the server to $To."
