@@ -27,6 +27,7 @@ jobs:
       apps-android: ${{ steps.f.outputs.apps-android }}
       apps-desktop: ${{ steps.f.outputs.apps-desktop }}
       site: ${{ steps.f.outputs.site }}
+      plugin: ${{ steps.f.outputs.plugin }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -56,6 +57,10 @@ jobs:
             apps-desktop:
               - 'apps/desktop/**'
               - 'server/priv/static/favicon.svg'
+              - '.github/workflows/ci.yml'
+            plugin:
+              - '.claude-plugin/**'
+              - 'plugins/**'
               - '.github/workflows/ci.yml'
             site:
               - 'gallery/brand/**'
@@ -313,6 +318,16 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
 
+  plugin:
+    needs: changes
+    if: needs.changes.outputs.plugin == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: npx --yes --package=@anthropic-ai/claude-code@2.1.307 claude plugin validate plugins/claude-code --strict
+      - run: npx --yes --package=@anthropic-ai/claude-code@2.1.307 claude plugin validate . --strict
+
   site:
     needs: changes
     if: needs.changes.outputs.site == 'true'
@@ -474,7 +489,7 @@ jobs:
           if-no-files-found: ignore
 
   ci-ok:
-    needs: [changes, rules, server, program, clients, clients-swift, apps-ios, apps-android, apps-desktop, site, zap-site, zap-server, deps-owasp]
+    needs: [changes, rules, server, program, clients, clients-swift, apps-ios, apps-android, apps-desktop, plugin, site, zap-site, zap-server, deps-owasp]
     if: always() && github.repository == 'nathannncurtis/dokkit'
     runs-on: ubuntu-latest
     steps:
