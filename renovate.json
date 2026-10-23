@@ -1,0 +1,313 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Every pinned version in this repo stays current: one grouped PR a week per ecosystem, majors on their own. Nothing merges itself and nobody is tagged.",
+  "extends": [
+    "config:best-practices",
+    ":disableDependencyDashboard",
+    ":semanticCommitsDisabled"
+  ],
+  "ignorePresets": [
+    ":pinDevDependencies"
+  ],
+  "rangeStrategy": "auto",
+  "schedule": [
+    "* 0-6 * * 1"
+  ],
+  "timezone": "America/Los_Angeles",
+  "prConcurrentLimit": 6,
+  "automerge": false,
+  "assignees": [],
+  "reviewers": [],
+  "labels": [
+    "dependencies"
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "schedule": [
+      "at any time"
+    ],
+    "labels": [
+      "security"
+    ]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "* 0-6 1 * *"
+    ]
+  },
+  "packageRules": [
+    {
+      "description": "Majors come one per PR, since they may need code changes.",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": null
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "actions"
+    },
+    {
+      "matchManagers": [
+        "mix"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "mix"
+    },
+    {
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "go"
+    },
+    {
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "npm"
+    },
+    {
+      "matchManagers": [
+        "gradle",
+        "gradle-wrapper"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "gradle"
+    },
+    {
+      "matchManagers": [
+        "swift"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "swift"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "cargo"
+    },
+    {
+      "matchManagers": [
+        "pip_requirements",
+        "pip_setup",
+        "pep621",
+        "setup-cfg",
+        "pipenv",
+        "poetry"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "pip"
+    },
+    {
+      "matchManagers": [
+        "nuget"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "nuget"
+    },
+    {
+      "matchManagers": [
+        "composer"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "composer"
+    },
+    {
+      "matchManagers": [
+        "maven"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "maven"
+    },
+    {
+      "matchManagers": [
+        "dockerfile",
+        "docker-compose"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "docker"
+    },
+    {
+      "description": "Scripts the dokkit.dev pages load from a CDN; merging this PR redeploys the site.",
+      "matchManagers": [
+        "html"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "site scripts"
+    },
+    {
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "ci tools"
+    },
+    {
+      "description": "Erlang/OTP and Elixir move together everywhere they're named.",
+      "matchPackageNames": [
+        "erlang/otp",
+        "elixir-lang/elixir"
+      ],
+      "groupName": "beam toolchain"
+    },
+    {
+      "description": "windows-core must match the version webview2-com is built against; it moves with webview2-com.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "windows-core"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "hexpm/elixir's tag list is too large for Docker Hub to answer (504), which aborts the whole run; the server image is bumped by hand with the beam toolchain PR.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "hexpm/elixir"
+      ],
+      "enabled": false
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Tools CI downloads from GitHub releases: a `tag=` line, then the URL, then its sha256.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "tag=(?<currentValue>v[0-9][^;\\s]*);[^\\n]*\\s+curl [^\\n]*https://github\\.com/(?<depName>[^/]+/[^/]+)/releases/download/[^\\n]*\\n\\s*echo \"(?<currentDigest>[a-f0-9]{64}) "
+      ],
+      "datasourceTemplate": "github-release-attachments"
+    },
+    {
+      "description": "Hex packages CI installs as escripts or archives (mix_audit, sobelow).",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "mix (?:escript|archive)\\.install hex (?<depName>[a-z_]+) (?<currentValue>[0-9][^\\s]*)"
+      ],
+      "datasourceTemplate": "hex",
+      "versioningTemplate": "semver"
+    },
+    {
+      "description": "Go tools run at a version (govulncheck).",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "go run (?<depName>golang\\.org/x/[a-z]+)/[^@\\s]*@(?<currentValue>v[0-9][^\\s]*)"
+      ],
+      "datasourceTemplate": "go"
+    },
+    {
+      "description": "npm packages CI runs through npx.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "--package=(?<depName>@?[a-z0-9][a-z0-9._/-]*)@(?<currentValue>[0-9][^\\s]*)"
+      ],
+      "datasourceTemplate": "npm"
+    }
+  ]
+}
