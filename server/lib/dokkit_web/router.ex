@@ -179,6 +179,7 @@ defmodule DokkitWeb.Router do
     put "/services/:id/checks", ApiController, :checks
     put "/services/:id/hold", ApiController, :hold
     put "/services/:id/restart", ApiController, :restart
+    put "/services/:id/deployer", ApiController, :deployer
     post "/issues/bulk", ApiController, :bulk
     get "/issues/:id", ApiController, :issue
     post "/issues/:id/notes", ApiController, :note

@@ -49,6 +49,34 @@ defmodule Dokkit.Deploys do
     :ok
   end
 
+  @doc "An app installed on a host by another app, a deployer. A new version there is a deploy on that host."
+  def deployed(%Service{} = service, machine_id, version, by, at) do
+    version = String.slice(version, 0, 100)
+    from = Repo.get_by(Install, service_id: service.id, machine_id: machine_id)
+
+    cond do
+      version == "" ->
+        :ok
+
+      from && from.version == version ->
+        installed(service, machine_id, version, at)
+
+      true ->
+        Repo.insert!(%Deploy{
+          service_id: service.id,
+          machine_id: machine_id,
+          from: from && from.version,
+          version: version,
+          by: by,
+          how: "deployed",
+          at: at
+        })
+
+        installed(service, machine_id, version, at)
+        Dokkit.Issues.changed(false)
+    end
+  end
+
   @doc "Apps that run on many hosts: each with its versions, newest first, and the hosts on each."
   def apps do
     Repo.all(from i in Install, order_by: [desc: i.seen_at], preload: [:service, :machine])
@@ -68,7 +96,7 @@ defmodule Dokkit.Deploys do
   def number(version), do: for([n] <- Regex.scan(~r/\d+/, version), do: String.to_integer(n))
 
   def list(opts \\ []) do
-    query = from d in Deploy, order_by: [desc: d.at], preload: [service: :machine]
+    query = from d in Deploy, order_by: [desc: d.at], preload: [:machine, service: :machine]
     query = if id = opts[:service], do: where(query, [d], d.service_id == ^id), else: query
     Repo.all(limit(query, ^(opts[:limit] || 100)))
   end
