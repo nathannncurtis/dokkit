@@ -109,9 +109,14 @@ defmodule Dokkit.DeploysTest do
     {key, _} = Keys.mint(:app, %{service_id: installer.id})
     deploy = &report(key, [Map.merge(%{type: "deploy", host: "DESK-101"}, &1)])
 
-    deploy.(%{service: "Label Printer", version: "1.0.0"})
+    assert %{"refused" => [%{"code" => "not_allowed"}]} =
+             json_response(deploy.(%{service: "Label Printer", version: "1.0.0"}), 200)
+
     assert Dokkit.Deploys.list(service: printer.id) == []
-    assert Repo.get_by(Dokkit.Install, service_id: installer.id).version == "1.0.0"
+    assert Repo.get_by(Dokkit.Install, service_id: installer.id) == nil
+
+    deploy.(%{service: "Installer", version: "0.9.0"})
+    assert Repo.get_by(Dokkit.Install, service_id: installer.id).version == "0.9.0"
 
     {:ok, view, _} = live(signed_in(conn), "/s/#{installer.id}")
     view |> element("button", "Let it") |> render_click()

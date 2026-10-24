@@ -265,9 +265,16 @@ defmodule Dokkit.Intake do
     deployer = Repo.get!(Service, id)
     slug = Dokkit.Found.slug(name)
 
-    if deployer.deployer and slug != deployer.slug,
-      do: deployed(deployer, slug, line, at),
-      else: line(key, "deploy", Map.delete(line, "service"), at)
+    cond do
+      slug == deployer.slug ->
+        line(key, "deploy", Map.delete(line, "service"), at)
+
+      deployer.deployer ->
+        deployed(deployer, slug, line, at)
+
+      true ->
+        {:error, "not_allowed", "This app may not deploy others. Let it on its page in Dokkit."}
+    end
   end
 
   defp line(key, "deploy", line, at) do
