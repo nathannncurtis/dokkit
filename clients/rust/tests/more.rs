@@ -37,6 +37,7 @@ fn stats_stay_on_one_line_and_a_panicking_job_fails() {
 
     dokkit::start_with("", &address, "dka_test");
     dokkit::stats("{\r\n  \"cpu\": 1\r\n}");
+    dokkit::deploy("Label Printer", "1.1.0");
     let caught = std::panic::catch_unwind(|| {
         let _: Result<(), ()> = dokkit::job("crash", |_| panic!("boom"));
     });
@@ -46,6 +47,8 @@ fn stats_stay_on_one_line_and_a_panicking_job_fails() {
     assert!(all.contains(r#"{"type":"stats","host":"#), "{all}");
     assert!(all.contains(r#""document":{    "cpu": 1  }"#), "{all}");
     assert!(all.contains(r#""event":"fail","exit_code":1"#), "{all}");
+    assert!(all.contains(r#"{"type":"deploy","host":"#), "{all}");
+    assert!(all.contains(r#""service":"Label Printer","version":"1.1.0"}"#), "{all}");
     assert!(all.contains(r#""type":"panic","handled":false"#), "{all}");
     assert!(
         all.contains("more::stats_stay_on_one_line_and_a_panicking_job_fails"),

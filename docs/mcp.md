@@ -72,6 +72,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `delete_rule` | `admin` | Deletes an alert rule. |
 | `set_checks` | `admin` | Replaces the checks added in the interface. |
 | `allow_restart` | `admin` | Allows or forbids restarting a service. |
+| `allow_deploys` | `admin` | Allows or forbids an app's key to record deploys of the other apps it installs. |
 | `keys` | `admin` | Lists keys and tokens, never their text. |
 | `make_key` | `admin` | Makes a key. Its text is returned once. |
 | `revoke_key` | `admin` | Revokes a key. |

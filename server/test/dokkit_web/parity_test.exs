@@ -88,6 +88,7 @@ defmodule DokkitWeb.ParityTest do
         {:member, ["POST /api/v1/services/:id/watch", "POST /api/v1/services/:id/unwatch"]},
       "hold" => {:member, ["PUT /api/v1/services/:id/hold"]},
       "restart" => {:owner, ["PUT /api/v1/services/:id/restart"]},
+      "deployer" => {:owner, ["PUT /api/v1/services/:id/deployer"]},
       "messages" => {:member, ["PUT /api/v1/services/:id/messages"]},
       "note" => {:member, ["POST /api/v1/issues/:id/notes"]},
       "seen" => {:member, ["POST /api/v1/issues/:id/acknowledge"]},

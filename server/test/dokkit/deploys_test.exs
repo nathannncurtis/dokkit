@@ -95,4 +95,50 @@ defmodule Dokkit.DeploysTest do
     assert html =~ "3 machines"
     assert html =~ "PC-014"
   end
+
+  test "an app let deploy others records a deploy of each app it installs, on the machine it went to",
+       %{conn: conn} do
+    group = Repo.insert!(%Machine{name: "shelf", kind: :group})
+
+    app = fn slug, name ->
+      Repo.insert!(%Service{machine_id: group.id, slug: slug, name: name, kind: :app})
+    end
+
+    installer = app.("installer", "Installer")
+    printer = app.("label-printer", "Label Printer")
+    {key, _} = Keys.mint(:app, %{service_id: installer.id})
+    deploy = &report(key, [Map.merge(%{type: "deploy", host: "DESK-101"}, &1)])
+
+    deploy.(%{service: "Label Printer", version: "1.0.0"})
+    assert Dokkit.Deploys.list(service: printer.id) == []
+    assert Repo.get_by(Dokkit.Install, service_id: installer.id).version == "1.0.0"
+
+    {:ok, view, _} = live(signed_in(conn), "/s/#{installer.id}")
+    view |> element("button", "Let it") |> render_click()
+    assert Repo.reload!(installer).deployer
+
+    deploy.(%{service: "Label Printer", version: "1.0.0"})
+    deploy.(%{service: "Label Printer", version: "1.0.0"})
+    deploy.(%{service: "Label Printer", version: "1.1.0"})
+
+    assert [%{from: "1.0.0", version: "1.1.0"}, %{from: nil, version: "1.0.0"}] =
+             Dokkit.Deploys.list(service: printer.id)
+
+    assert [%{machine: "DESK-101", how: "deployed", by: "Installer"} | _] =
+             Read.deploys(service: printer.id)
+
+    assert %{"refused" => [%{"code" => "unknown_service"}]} =
+             json_response(deploy.(%{service: "Nothing Here", version: "1"}), 200)
+
+    as = put_req_header(build_conn(), "authorization", "Bearer " <> key)
+    no_host = %{service: "label-printer", version: "1.2.0"}
+    assert json_response(post(as, "/api/v1/deploys", no_host), 422)
+
+    assert json_response(post(as, "/api/v1/deploys", Map.put(no_host, :host, "DESK-102")), 200)
+    assert [%{version: "1.2.0", machine: "DESK-102"} | _] = Read.deploys(service: printer.id)
+
+    {:ok, _, html} = live(signed_in(conn), "/deploys")
+    assert html =~ "Deployed by Installer"
+    assert html =~ "DESK-101"
+  end
 end

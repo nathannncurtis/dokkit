@@ -273,6 +273,11 @@ pub fn metric(name: &str, value: f64, unit: Option<&str>) {
     add("metric", &[("name", J::S(name)), ("value", J::N(value)), ("unit", opt(unit))]);
 }
 
+/// For an app that installs others: `service` went onto this host at `version`. Dokkit has to let the app deploy others.
+pub fn deploy(service: &str, version: &str) {
+    add("deploy", &[("service", J::S(service)), ("version", J::S(version))]);
+}
+
 /// `level` is trace, debug, info, warn, error or fatal.
 pub fn log(level: &str, msg: &str) {
     add("log", &[("level", J::S(level)), ("msg", J::S(msg))]);

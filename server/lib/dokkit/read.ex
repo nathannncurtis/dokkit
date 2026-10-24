@@ -332,6 +332,7 @@ defmodule Dokkit.Read do
         routing: routing(s),
         restart: s.restart,
         keep_messages: s.keep_messages,
+        deployer: s.deployer,
         stats: s.stats,
         stats_at: s.stats_at,
         facts: (s.declared && s.declared["service"]) || %{},
@@ -416,7 +417,7 @@ defmodule Dokkit.Read do
     |> Map.merge(%{
       service: d.service_id,
       name: d.service.name,
-      machine: d.service.machine.name
+      machine: (d.machine || d.service.machine).name
     })
   end
 
@@ -640,8 +641,10 @@ defmodule Dokkit.Read do
     with {:ok, from, to} <- times(params) do
       Dokkit.Deploys.list(limit: @reach)
       |> Enum.filter(fn d ->
+        machine = d.machine || d.service.machine
+
         params["service"] in [nil, d.service_id, d.service.slug] and
-          params["machine"] in [nil, d.service.machine.id, d.service.machine.name] and
+          params["machine"] in [nil, machine.id, machine.name] and
           params["environment"] in [nil, d.service.environment] and
           like?(params, [d.service.name, d.version, d.commit, d.by]) and within?(d.at, from, to)
       end)

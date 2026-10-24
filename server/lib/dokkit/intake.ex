@@ -259,6 +259,17 @@ defmodule Dokkit.Intake do
     end
   end
 
+  # An app allowed to deploy others, an installer, names the app it put on a host.
+  defp line(%Key{kind: :app, service_id: id} = key, "deploy", %{"service" => name} = line, at)
+       when is_binary(name) do
+    deployer = Repo.get!(Service, id)
+    slug = Dokkit.Found.slug(name)
+
+    if deployer.deployer and slug != deployer.slug,
+      do: deployed(deployer, slug, line, at),
+      else: line(key, "deploy", Map.delete(line, "service"), at)
+  end
+
   defp line(key, "deploy", line, at) do
     with {:ok, service} <- service(key, line),
          version when is_binary(version) <- line["version"] do
@@ -310,6 +321,21 @@ defmodule Dokkit.Intake do
   defp log_line(key, line, now) do
     with {:ok, service} <- log_service(key, line) do
       {:log, Dokkit.Logs.row(line, machine(key, service), service && service.id, now)}
+    end
+  end
+
+  defp deployed(deployer, slug, line, at) do
+    target =
+      Repo.one(from s in Service, where: s.kind == :app and s.slug == ^slug, limit: 1)
+
+    host =
+      is_binary(line["host"]) && Repo.get_by(Machine, name: String.slice(line["host"], 0, 100))
+
+    cond do
+      target == nil -> {:error, "unknown_service", "No app #{inspect(line["service"])}."}
+      !host -> {:error, "bad_line", "A deploy of another app needs the host it went to."}
+      not is_binary(line["version"]) -> {:error, "bad_line", "A deploy needs a version."}
+      true -> Dokkit.Deploys.deployed(target, host.id, line["version"], deployer.name, at)
     end
   end
 
@@ -400,7 +426,9 @@ defmodule Dokkit.Intake do
   def deploy(%Key{} = key, params) do
     params = clean(params)
     seen(key)
-    line(key, "deploy", params, DateTime.utc_now())
+    now = DateTime.utc_now()
+    hosts(key, [params["host"]], now)
+    line(key, "deploy", params, now)
   end
 
   defp label_text(value), do: if(is_binary(value), do: String.slice(value, 0, 100))
