@@ -98,6 +98,21 @@ defmodule Dokkit.MachineHistoryTest do
     assert html =~ "history-memory.used_percent"
   end
 
+  test "the machine page opens on Overview and each tab shows only its own panel", %{conn: conn} do
+    m = machine("porch")
+    {:ok, view, _} = live(signed_in(conn), "/machines/#{m.id}")
+    assert has_element?(view, "#panel-overview:not([hidden])")
+    assert has_element?(view, "#panel-alerts[hidden]")
+
+    view |> element("#tab-alerts") |> render_click()
+    assert_patch(view, "/machines/#{m.id}?tab=alerts")
+    assert has_element?(view, "#panel-alerts:not([hidden]) #silent-form")
+    assert has_element?(view, "#panel-overview[hidden]")
+
+    {:ok, view, _} = live(signed_in(build_conn()), "/machines/#{m.id}?tab=downtime")
+    assert has_element?(view, "#tab-downtime[aria-selected=true]")
+  end
+
   test "a machine with no readings says so", %{conn: conn} do
     m = Repo.insert!(%Machine{name: "pantry", kind: :enrolled})
 

@@ -117,6 +117,7 @@ kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; 
 .tabs button.on .cnt { background: var(--brand-bg); color: var(--brand); }
 .body { padding: 18px 28px 40px; display: grid; gap: 18px; }
 .body.rail { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
+.body[hidden] { display: none; }
 .body.rail > .wide { grid-column: 1 / -1; }
 .body.rail:not(.even) > .col:last-child { position: sticky; top: 18px; align-self: start; }
 .col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }

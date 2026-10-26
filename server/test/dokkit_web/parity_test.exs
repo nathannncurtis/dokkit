@@ -40,6 +40,7 @@ defmodule DokkitWeb.ParityTest do
       "dismiss_update" => @view
     },
     "MachineLive" => %{
+      "tab" => @view,
       "range" => {:viewer, ["GET /api/v1/machines/:id/series"]},
       "quiet_start" => {:member, ["POST /api/v1/machines/:id/quiet"]},
       "quiet_end" => {:member, ["DELETE /api/v1/machines/:id/quiet"]},

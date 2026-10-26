@@ -37,11 +37,27 @@ defmodule DokkitWeb.MachineLive do
     end
   end
 
+  @tabs ~w(overview runs issues downtime alerts)
+
   def handle_info(:issues_changed, socket),
     do: {:noreply, DokkitWeb.Auth.debounce(socket, :page, &load/1)}
 
   def handle_info({:settled, :page}, socket),
     do: {:noreply, DokkitWeb.Auth.settle(socket, :page, &load/1)}
+
+  def handle_params(params, _uri, socket) do
+    tab = if params["tab"] in @tabs, do: String.to_existing_atom(params["tab"]), else: :overview
+    {:noreply, assign(socket, tab: tab)}
+  end
+
+  def handle_event("tab", %{"tab" => tab}, socket) when tab in @tabs do
+    to =
+      if tab == "overview",
+        do: ~p"/machines/#{socket.assigns.id}",
+        else: ~p"/machines/#{socket.assigns.id}?tab=#{tab}"
+
+    {:noreply, push_patch(socket, to: to)}
+  end
 
   def handle_event("range", %{"range" => range}, socket) when range in ~w(1 7 30),
     do: {:noreply, load(assign(socket, range: range))}
@@ -259,6 +275,16 @@ defmodule DokkitWeb.MachineLive do
   defp lede(_, _, 0), do: "All good. Nothing here needs a look."
   defp lede(_, _, n), do: "#{plural(n, "thing needs", "things need")} a look here."
 
+  defp tabs(assigns) do
+    [
+      {:overview, "Overview", 0},
+      {:runs, "What runs", length(Enum.flat_map(assigns.services, &elem(&1, 1)))},
+      {:issues, "Issues", length(assigns.issues)},
+      {:downtime, "Downtime", 0},
+      {:alerts, "Alerts & settings", 0}
+    ]
+  end
+
   defp plural(1, one, _), do: "1 #{one}"
   defp plural(n, _, many), do: "#{n} #{many}"
 
@@ -323,8 +349,30 @@ defmodule DokkitWeb.MachineLive do
           else: DokkitWeb.FoundLive.scan_says(@scan)}</span>
       </div>
 
-      <div class="body rail">
-        <div class="col">
+      <div class="tabs" role="tablist" aria-label="Machine sections">
+        <button
+          :for={{tab, label, count} <- tabs(assigns)}
+          type="button"
+          role="tab"
+          id={"tab-#{tab}"}
+          aria-controls={"panel-#{tab}"}
+          aria-selected={to_string(@tab == tab)}
+          class={@tab == tab && "on"}
+          phx-click="tab"
+          phx-value-tab={tab}
+        >
+          {label}<span :if={count > 0} class="cnt">{count}</span>
+        </button>
+      </div>
+
+      <div
+        class="body"
+        id="panel-overview"
+        role="tabpanel"
+        aria-labelledby="tab-overview"
+        hidden={@tab != :overview}
+      >
+        <div class="two">
           <div class="card" id="meters">
             <h2>
               Now<span class="end">{if @vitals == %{},
@@ -346,95 +394,6 @@ defmodule DokkitWeb.MachineLive do
               <span class="mono r">{round(v)}%<span :if={v >= 90}> high</span></span>
             </div>
           </div>
-          <MachineCards.history history={@history} range={@range} ranges={@ranges} />
-          <MachineCards.processes
-            procs={@procs}
-            procs_q={@procs_q}
-            procs_sort={@procs_sort}
-            procs_all={@procs_all}
-            procs_history={@procs_history}
-          />
-          <div class="card" id="services">
-            <h2>
-              What runs on it<span class="end">{length(Enum.flat_map(@services, &elem(&1, 1)))} watched</span>
-            </h2>
-
-            <p :if={@services == []} class="lead">Nothing is being watched on this machine yet.</p>
-
-            <%= for {heading, list} <- @services do %>
-              <div class="grp bare">{heading}</div>
-
-              <.link :for={s <- list} class="li slim cols-all pc" navigate={~p"/s/#{s.id}"}>
-                <div class="ti"><.lvl state={s.state} /><span>{s.name}</span></div>
-                <span class="mono mute">{s.version}</span> <span class="mute">{kind(s.kind)}</span>
-                <span class={["tag", s.state in [:degraded, :down] && "warn"]}>{s.note || say(s.state)}</span>
-                <.ic name="caret-right" />
-              </.link>
-            <% end %>
-
-            <div :if={@machine.kind == :enrolled} class="foot">
-              <span>Things on it that are not watched are listed on Found.</span>
-              <span class="end">
-                <.link class="btn sm" navigate={~p"/found?#{[machine: @machine.name]}"}>
-                  <.ic name="binoculars" />Open Found
-                </.link>
-              </span>
-            </div>
-          </div>
-
-          <div class="card" id="downtime">
-            <h2>Planned downtime</h2>
-
-            <DokkitWeb.QuietBand.band
-              machine={@machine.id}
-              planned={@planned}
-              control={true}
-              disabled={@current_user.role == :viewer}
-            />
-            <DokkitWeb.QuietBand.schedules
-              machine={@machine.id}
-              schedules={@schedules}
-              form={@schedule}
-              error={@schedule_error}
-              zone={@zone}
-              disabled={@current_user.role == :viewer}
-            />
-          </div>
-
-          <div class="card" id="issues">
-            <h2>Open issues<span :if={@issues != []} class="cnt">{length(@issues)}</span></h2>
-
-            <p :if={@issues == []} class="lead">Nothing is open on this machine.</p>
-
-            <%= for i <- @issues do %>
-              <.link
-                :if={i.service_id}
-                class="li slim"
-                style="--cols: minmax(0,1fr) 16px"
-                navigate={~p"/s/#{i.service_id}"}
-              >
-                <div>
-                  <div class="ti">
-                    <span class={["lvl", if(i.state == :down, do: "bad", else: "warn")]}></span><span>{i.title}</span>
-                  </div>
-                  <span class="st">{since(i)}{if snoozed?(i), do: ", snoozed"}</span>
-                </div>
-                <.ic name="caret-right" />
-              </.link>
-
-              <div :if={!i.service_id} class="li slim" style="--cols: minmax(0,1fr)">
-                <div>
-                  <div class="ti">
-                    <span class={["lvl", if(i.state == :down, do: "bad", else: "warn")]}></span><span>{i.title}</span>
-                  </div>
-                  <span class="st">{since(i)}{if snoozed?(i), do: ", snoozed"}</span>
-                </div>
-              </div>
-            <% end %>
-          </div>
-        </div>
-
-        <div class="col">
           <div class="card" id="versions">
             <h2>Program versions</h2>
 
@@ -496,63 +455,181 @@ defmodule DokkitWeb.MachineLive do
               </span>
             </div>
           </div>
+        </div>
+        <MachineCards.history history={@history} range={@range} ranges={@ranges} />
+        <MachineCards.processes
+          procs={@procs}
+          procs_q={@procs_q}
+          procs_sort={@procs_sort}
+          procs_all={@procs_all}
+          procs_history={@procs_history}
+        />
+      </div>
 
-          <form class="card" id="silent-form" phx-submit="silent">
-            <h2>If this machine stops reporting</h2>
+      <div
+        class="body"
+        id="panel-runs"
+        role="tabpanel"
+        aria-labelledby="tab-runs"
+        hidden={@tab != :runs}
+      >
+        <div class="card" id="services">
+          <h2>
+            What runs on it<span class="end">{length(Enum.flat_map(@services, &elem(&1, 1)))} watched</span>
+          </h2>
 
-            <dl class="kv">
-              <dt>Tell</dt>
+          <p :if={@services == []} class="lead">Nothing is being watched on this machine yet.</p>
 
-              <dd>
-                <ChannelPick.pick
-                  name="silent[down]"
-                  value={@machine.silent_route}
-                  options={@routes}
-                  label="Channels for this machine going quiet"
-                  blank={"As set on Alerts (#{names(@routes, @defaults["down"])})"}
-                  disabled={@current_user.role == :viewer}
-                />
-              </dd>
+          <%= for {heading, list} <- @services do %>
+            <div class="grp bare">{heading}</div>
 
-              <dt>At night</dt>
+            <.link :for={s <- list} class="li slim cols-all pc" navigate={~p"/s/#{s.id}"}>
+              <div class="ti"><.lvl state={s.state} /><span>{s.name}</span></div>
+              <span class="mono mute">{s.version}</span> <span class="mute">{kind(s.kind)}</span>
+              <span class={["tag", s.state in [:degraded, :down] && "warn"]}>{s.note || say(s.state)}</span>
+              <.ic name="caret-right" />
+            </.link>
+          <% end %>
 
-              <dd>
-                <input type="hidden" name="silent[night]" value="false" />
-                <label>
-                  <input
-                    type="checkbox"
-                    name="silent[night]"
-                    value="true"
-                    checked={@machine.silent_wake}
-                    disabled={@current_user.role == :viewer}
-                  /> Wake me at night for this
-                </label>
+          <div :if={@machine.kind == :enrolled} class="foot">
+            <span>Things on it that are not watched are listed on Found.</span>
+            <span class="end">
+              <.link class="btn sm" navigate={~p"/found?#{[machine: @machine.name]}"}>
+                <.ic name="binoculars" />Open Found
+              </.link>
+            </span>
+          </div>
+        </div>
+      </div>
 
-                <span class="hint">Off holds the alert until the night ends, if the machine is still quiet.</span>
-              </dd>
-            </dl>
+      <div
+        class="body"
+        id="panel-issues"
+        role="tabpanel"
+        aria-labelledby="tab-issues"
+        hidden={@tab != :issues}
+      >
+        <div class="card" id="issues">
+          <h2>Open issues<span :if={@issues != []} class="cnt">{length(@issues)}</span></h2>
 
-            <div class="foot">
-              <span :if={@silent_saved} role="status">Saved.</span>
-              <span class="end">
-                <button class="btn primary" type="submit" disabled={@current_user.role == :viewer}>
-                  Save
-                </button>
-              </span>
+          <p :if={@issues == []} class="lead">Nothing is open on this machine.</p>
+
+          <%= for i <- @issues do %>
+            <.link
+              :if={i.service_id}
+              class="li slim"
+              style="--cols: minmax(0,1fr) 16px"
+              navigate={~p"/s/#{i.service_id}"}
+            >
+              <div>
+                <div class="ti">
+                  <span class={["lvl", if(i.state == :down, do: "bad", else: "warn")]}></span><span>{i.title}</span>
+                </div>
+                <span class="st">{since(i)}{if snoozed?(i), do: ", snoozed"}</span>
+              </div>
+              <.ic name="caret-right" />
+            </.link>
+
+            <div :if={!i.service_id} class="li slim" style="--cols: minmax(0,1fr)">
+              <div>
+                <div class="ti">
+                  <span class={["lvl", if(i.state == :down, do: "bad", else: "warn")]}></span><span>{i.title}</span>
+                </div>
+                <span class="st">{since(i)}{if snoozed?(i), do: ", snoozed"}</span>
+              </div>
             </div>
-          </form>
+          <% end %>
+        </div>
+      </div>
 
-          <DokkitWeb.ValuesForm.fold
-            :if={@machine.kind == :enrolled}
-            id="machine-values"
-            group="machines"
-            scope={{:machine, @machine.id}}
-            title={"Settings for #{@machine.name}"}
-            sub="When and how this machine alerts you. Each starts at the default for every machine, set in Settings."
-            disabled={@current_user.role != :owner}
-            result={@values_result}
+      <div
+        class="body"
+        id="panel-downtime"
+        role="tabpanel"
+        aria-labelledby="tab-downtime"
+        hidden={@tab != :downtime}
+      >
+        <div class="card" id="downtime">
+          <h2>Planned downtime</h2>
+
+          <DokkitWeb.QuietBand.band
+            machine={@machine.id}
+            planned={@planned}
+            control={true}
+            disabled={@current_user.role == :viewer}
+          />
+          <DokkitWeb.QuietBand.schedules
+            machine={@machine.id}
+            schedules={@schedules}
+            form={@schedule}
+            error={@schedule_error}
+            zone={@zone}
+            disabled={@current_user.role == :viewer}
           />
         </div>
+      </div>
+
+      <div
+        class="body"
+        id="panel-alerts"
+        role="tabpanel"
+        aria-labelledby="tab-alerts"
+        hidden={@tab != :alerts}
+      >
+        <form class="card" id="silent-form" phx-submit="silent">
+          <h2>If this machine stops reporting</h2>
+
+          <dl class="kv">
+            <dt>Tell</dt>
+
+            <dd>
+              <ChannelPick.pick
+                name="silent[down]"
+                value={@machine.silent_route}
+                options={@routes}
+                label="Channels for this machine going quiet"
+                blank={"As set on Alerts (#{names(@routes, @defaults["down"])})"}
+                disabled={@current_user.role == :viewer}
+              />
+            </dd>
+
+            <dt>At night</dt>
+
+            <dd>
+              <input type="hidden" name="silent[night]" value="false" />
+              <label>
+                <input
+                  type="checkbox"
+                  name="silent[night]"
+                  value="true"
+                  checked={@machine.silent_wake}
+                  disabled={@current_user.role == :viewer}
+                /> Wake me at night for this
+              </label>
+
+              <span class="hint">Off holds the alert until the night ends, if the machine is still quiet.</span>
+            </dd>
+          </dl>
+
+          <div class="foot">
+            <span :if={@silent_saved} role="status">Saved.</span>
+            <span class="end">
+              <button class="btn primary" type="submit" disabled={@current_user.role == :viewer}>
+                Save
+              </button>
+            </span>
+          </div>
+        </form>
+        <DokkitWeb.ValuesForm.fold
+          :if={@machine.kind == :enrolled}
+          id="machine-values"
+          group="machines"
+          scope={{:machine, @machine.id}}
+          title={"Settings for #{@machine.name}"}
+          sub="When and how this machine alerts you. Each starts at the default for every machine, set in Settings."
+          disabled={@current_user.role != :owner}
+          result={@values_result}
+        />
       </div>
     </Layouts.app>
     """
