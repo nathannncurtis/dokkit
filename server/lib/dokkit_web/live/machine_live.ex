@@ -21,6 +21,8 @@ defmodule DokkitWeb.MachineLive do
              schedule_error: nil,
              silent_saved: false,
              values_result: nil,
+             values_draft: %{},
+             silent_draft: nil,
              range: "7",
              procs_q: "",
              procs_sort: "memory",
@@ -99,6 +101,16 @@ defmodule DokkitWeb.MachineLive do
     {:noreply, load(socket)}
   end
 
+  def handle_event("silent_change", %{"silent" => params}, socket) do
+    old = (socket.assigns.silent_draft || %{})["down"] || socket.assigns.machine.silent_route
+
+    {:noreply,
+     assign(socket, silent_draft: Map.update(params, "down", [], &Alerts.exclusive(&1, old)))}
+  end
+
+  def handle_event("values_change", %{"values" => values}, socket),
+    do: {:noreply, assign(socket, values_draft: values)}
+
   def handle_event("silent", %{"silent" => params}, socket) do
     machine = socket.assigns.machine
     saved = socket.assigns.current_user.role != :viewer
@@ -108,7 +120,7 @@ defmodule DokkitWeb.MachineLive do
       Estate.set_silent(machine, params)
     end
 
-    {:noreply, assign(load(socket), silent_saved: saved)}
+    {:noreply, assign(load(socket), silent_saved: saved, silent_draft: nil)}
   end
 
   def handle_event(event, params, socket) when event in ~w(values_save values_reset) do
@@ -122,7 +134,8 @@ defmodule DokkitWeb.MachineLive do
           do: DokkitWeb.ValuesForm.save(scope, params),
           else: DokkitWeb.ValuesForm.reset(scope, params)
 
-      {:noreply, assign(load(socket), values_result: result)}
+      draft = if elem(result, 1) == :ok, do: %{}, else: socket.assigns.values_draft
+      {:noreply, assign(load(socket), values_result: result, values_draft: draft)}
     end
   end
 
@@ -576,7 +589,7 @@ defmodule DokkitWeb.MachineLive do
         aria-labelledby="tab-alerts"
         hidden={@tab != :alerts}
       >
-        <form class="card" id="silent-form" phx-submit="silent">
+        <form class="card" id="silent-form" phx-submit="silent" phx-change="silent_change">
           <h2>If this machine stops reporting</h2>
 
           <dl class="kv">
@@ -585,7 +598,7 @@ defmodule DokkitWeb.MachineLive do
             <dd>
               <ChannelPick.pick
                 name="silent[down]"
-                value={@machine.silent_route}
+                value={if @silent_draft, do: @silent_draft["down"], else: @machine.silent_route}
                 options={@routes}
                 label="Channels for this machine going quiet"
                 blank={"As set on Alerts (#{names(@routes, @defaults["down"])})"}
@@ -602,7 +615,9 @@ defmodule DokkitWeb.MachineLive do
                   type="checkbox"
                   name="silent[night]"
                   value="true"
-                  checked={@machine.silent_wake}
+                  checked={
+                    if @silent_draft, do: @silent_draft["night"] == "true", else: @machine.silent_wake
+                  }
                   disabled={@current_user.role == :viewer}
                 /> Wake me at night for this
               </label>
@@ -629,6 +644,8 @@ defmodule DokkitWeb.MachineLive do
           sub="When and how this machine alerts you. Each starts at the default for every machine, set in Settings."
           disabled={@current_user.role != :owner}
           result={@values_result}
+          draft={@values_draft}
+          change="values_change"
         />
       </div>
     </Layouts.app>

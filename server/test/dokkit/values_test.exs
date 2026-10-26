@@ -697,6 +697,31 @@ defmodule Dokkit.ValuesTest do
       assert Values.get("job_keep_days", {:job, s.id}) == 5
     end
 
+    test "a machine's unsaved settings survive the page reloading when the machine reports",
+         %{conn: conn} do
+      m = machine("v-sql")
+      {:ok, view, _} = live(signed_in(conn), "/machines/#{m.id}?tab=alerts")
+
+      view
+      |> form("#machine-values-form", %{"values" => %{"memory_on" => "false"}})
+      |> render_change()
+
+      view
+      |> form("#silent-form", %{"silent" => %{"down" => ["email"], "night" => "false"}})
+      |> render_change()
+
+      Repo.update!(Ecto.Changeset.change(m, last_seen_at: DateTime.utc_now()))
+      send(view.pid, :issues_changed)
+
+      refute has_element?(view, ~s(#machine-values input[name="values[memory_on]"][checked]))
+      assert has_element?(view, ~s(#silent-form input[value="email"][checked]))
+      refute has_element?(view, ~s(#silent-form input[name="silent[night]"][checked]))
+
+      view |> form("#machine-values-form") |> render_submit()
+      assert Values.get("memory_on", {:machine, m.id}) == false
+      refute has_element?(view, ~s(#machine-values input[name="values[memory_on]"][checked]))
+    end
+
     test "the public demo turns every settings save and reset off" do
       for view <- [DokkitWeb.SettingsLive, DokkitWeb.MachineLive, DokkitWeb.JobsLive],
           event <- ~w(values_save values_reset),
