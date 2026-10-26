@@ -1184,7 +1184,7 @@
                 "properties": {
                   "service": {
                     "type": "string",
-                    "description": "The service slug. Machine keys only; an app key is tied to one service."
+                    "description": "The service slug. With a machine key, a service on that machine. An app key is tied to one service, unless that service may deploy other apps: then this names the app it installed and `host` the machine it went onto."
                   },
                   "version": {
                     "type": "string"
@@ -7028,6 +7028,133 @@
           "Admin"
         ],
         "description": "Allows or stops automatic restart of a service. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The id of the service.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "allow": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "example": {
+                "allow": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The service after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Service"
+                },
+                "example": {
+                  "id": "6f1c2a8e-3b7d-4c52-9e0a-5d41b7c8e9f3",
+                  "slug": "upload-portal",
+                  "name": "Upload portal",
+                  "kind": "service",
+                  "environment": "production",
+                  "state": "ok",
+                  "note": null,
+                  "version": "2.3.0",
+                  "held": null,
+                  "machine": "web-02",
+                  "checks": [],
+                  "routing": {
+                    "down": "page",
+                    "degraded": null
+                  },
+                  "restart": false,
+                  "stats": null,
+                  "stats_at": null,
+                  "open_issue": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/services/{id}/deployer": {
+      "put": {
+        "operationId": "setDeployer",
+        "summary": "Let an app deploy others",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Lets an app's key record a deploy of each other app it installs, or stops it. For an app that installs the others. Takes a user token (`dku_`) with the `admin` scope. Without `read-logs`, job output, error messages and notes are left out of the answer.",
         "parameters": [
           {
             "name": "id",
@@ -15587,6 +15714,10 @@
               "keep_messages": {
                 "type": "boolean",
                 "description": "Whether the text of its errors is kept."
+              },
+              "deployer": {
+                "type": "boolean",
+                "description": "Whether its key may record deploys of the other apps it installs."
               }
             }
           }

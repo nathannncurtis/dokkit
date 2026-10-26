@@ -67,17 +67,19 @@ defmodule DokkitWeb.ServiceLive do
     {:noreply, load(socket)}
   end
 
-  def handle_event(event, params, socket) when event in ~w(watching hold restart messages) do
+  def handle_event(event, params, socket)
+      when event in ~w(watching hold restart messages deployer) do
     service = socket.assigns.service
 
     role = socket.assigns.current_user.role
 
-    if role != :viewer and (event != "restart" or role == :owner) do
+    if role != :viewer and (event not in ~w(restart deployer) or role == :owner) do
       case event do
         "watching" -> Estate.set_watched(service, !service.watched)
         "hold" -> Estate.set(service, :held, String.trim(params["version"] || ""))
         "restart" -> Estate.set(service, :restart, !service.restart)
         "messages" -> Estate.set(service, :keep_messages, !service.keep_messages)
+        "deployer" -> Estate.set(service, :deployer, !service.deployer)
       end
     end
 
@@ -481,6 +483,26 @@ defmodule DokkitWeb.ServiceLive do
                     do: "The text of each error is stored with it.",
                     else:
                       "Only the type and the stack are stored. Messages are where personal data ends up."}
+                </span>
+              </dd>
+
+              <dt :if={@service.kind == :app}>Deploys other apps</dt>
+
+              <dd :if={@service.kind == :app}>
+                <button
+                  class="btn sm"
+                  type="button"
+                  phx-click="deployer"
+                  disabled={@current_user.role != :owner}
+                >
+                  {if @service.deployer, do: "Stop letting it", else: "Let it"}
+                </button>
+
+                <span class="hint">
+                  {if @service.deployer,
+                    do: "Its key records a deploy for each app it installs on a machine.",
+                    else:
+                      "For an app that installs the others. Its key can then record their deploys."}
                 </span>
               </dd>
 

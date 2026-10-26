@@ -45,6 +45,10 @@ defmodule DokkitWeb.DeploysLive do
     on |> Map.values() |> Enum.max_by(&Dokkit.Deploys.number/1)
   end
 
+  defp how(%{how: "reported", by: by}), do: "Reported" <> if(by, do: " by #{by}", else: "")
+  defp how(%{how: "deployed", by: by}), do: "Deployed by #{by}"
+  defp how(_), do: "Noticed by Dokkit"
+
   defp lede(:versions), do: "Which version of each service runs on which machine."
   defp lede(_), do: "What went out, where and when, newest first."
 
@@ -152,13 +156,11 @@ defmodule DokkitWeb.DeploysLive do
             <span class="mono" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px">
               {d.from}<.ic name="arrow-right" />{d.version}
             </span>
-            <span class="tag" title={d.service.machine.name}>{d.service.machine.name}</span>
-            <span class="mono">{at(d.at)}</span>
-            <span class="tag">
-              {if d.how == "reported",
-                do: "Reported" <> if(d.by, do: " by #{d.by}", else: ""),
-                else: "Noticed by Dokkit"}
+            <span class="tag" title={(d.machine || d.service.machine).name}>
+              {(d.machine || d.service.machine).name}
             </span>
+            <span class="mono">{at(d.at)}</span>
+            <span class="tag">{how(d)}</span>
             <.ic name="caret-right" />
           </.link>
         </div>

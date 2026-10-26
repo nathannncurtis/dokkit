@@ -58,6 +58,7 @@ defmodule Dokkit.Service do
     field :held, :string
     field :restart, :boolean, default: false
     field :keep_messages, :boolean, default: false
+    field :deployer, :boolean, default: false
     field :declared, :map
     field :stats, :map
     field :stats_at, :utc_datetime_usec
@@ -221,6 +222,7 @@ defmodule Dokkit.Deploy do
     field :how, :string
     field :at, :utc_datetime_usec
     belongs_to :service, Dokkit.Service
+    belongs_to :machine, Dokkit.Machine
   end
 end
 

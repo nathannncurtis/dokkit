@@ -221,6 +221,13 @@ defmodule DokkitWeb.ApiController do
   def hold(conn, %{"id" => id} = p), do: reply(conn, set_held(id, p["version"]))
   def restart(conn, %{"id" => id} = p), do: reply(conn, set_restart(id, p["allow"]))
 
+  def set_deployer(id, allow) when is_boolean(allow),
+    do: change(id, &Dokkit.Estate.set(&1, :deployer, allow))
+
+  def set_deployer(_, _), do: {:error, "bad_allow", "allow is true or false."}
+
+  def deployer(conn, %{"id" => id} = p), do: reply(conn, set_deployer(id, p["allow"]))
+
   def set_service_checks(%{"id" => id} = params) do
     with %{} = service <- Dokkit.Estate.service(id),
          {:ok, _} <- Dokkit.Estate.set_checks(service, params["checks"]) do
@@ -888,7 +895,7 @@ defmodule DokkitWeb.ApiController do
 
   # What a call needs follows from the call: reading needs read, log contents need
   # read-logs, keys, people, rules, alert settings, the PagerDuty on-call lookup, checks,
-  # restart, updating the program,
+  # restart, letting an app deploy others, updating the program,
   # restoring logs, and making a job need admin, and anything else
   # changes something.
   def needs(method, path) do
@@ -920,7 +927,9 @@ defmodule DokkitWeb.ApiController do
         "admin"
 
       {_, _, last} ->
-        if last in ~w(checks restart update restore move delete), do: "admin", else: "act"
+        if last in ~w(checks restart deployer update restore move delete),
+          do: "admin",
+          else: "act"
     end
   end
 

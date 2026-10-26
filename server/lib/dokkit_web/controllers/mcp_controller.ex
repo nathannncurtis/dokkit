@@ -225,6 +225,9 @@ defmodule DokkitWeb.McpController do
      }, ["id", "checks"]},
     {"allow_restart", "admin", "Allow or forbid restarting a service from Dokkit.",
      %{"id" => @text, "allow" => %{"type" => "boolean"}}, ["id", "allow"]},
+    {"allow_deploys", "admin",
+     "Allow or forbid an app's key to record deploys of the other apps it installs.",
+     %{"id" => @text, "allow" => %{"type" => "boolean"}}, ["id", "allow"]},
     {"keys", "admin", "Every key and token, with its kind, label and scopes. Never the key text.",
      Map.merge(
        %{"q" => @text, "kind" => @text, "machine" => @text, "from" => @text, "to" => @text},
@@ -586,6 +589,10 @@ defmodule DokkitWeb.McpController do
   defp tool("delete_rule", %{"id" => id}), do: Api.drop_rule(id)
   defp tool("set_checks", %{"id" => _} = args), do: Api.set_service_checks(args) |> r()
   defp tool("allow_restart", %{"id" => id} = args), do: Api.set_restart(id, args["allow"]) |> r()
+
+  defp tool("allow_deploys", %{"id" => id} = args),
+    do: Api.set_deployer(id, args["allow"]) |> r()
+
   defp tool("keys", args), do: listed(:keys, args)
   defp tool("revoke_key", %{"id" => id}), do: Api.drop_key(id)
   defp tool("people", args), do: listed(:users, args)
