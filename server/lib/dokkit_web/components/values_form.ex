@@ -14,6 +14,8 @@ defmodule DokkitWeb.ValuesForm do
   attr :disabled, :boolean, default: false
   attr :result, :any, default: nil
   attr :target, :string, default: nil
+  attr :draft, :map, default: %{}
+  attr :change, :string, default: nil
 
   def fold(assigns) do
     view = Values.view(assigns.scope)
@@ -22,7 +24,7 @@ defmodule DokkitWeb.ValuesForm do
     assigns =
       assign(assigns,
         rows: rows,
-        values: view["values"],
+        values: Map.merge(view["values"], Map.take(assigns.draft, Map.keys(view["values"]))),
         base: view["defaults"],
         changed: view["changed"]
       )
@@ -40,7 +42,7 @@ defmodule DokkitWeb.ValuesForm do
         <span class="fold-t"><b>{@title}</b><span class="mute">{@sub}</span></span>
         <.ic name="caret-down" />
       </summary>
-      <form phx-submit="values_save" id={"#{@id}-form"}>
+      <form phx-submit="values_save" phx-change={@change} id={"#{@id}-form"}>
         <input type="hidden" name="group" value={@group} />
         <input :if={@target} type="hidden" name="target" value={@target} />
         <div
@@ -60,7 +62,7 @@ defmodule DokkitWeb.ValuesForm do
                 class="switch"
                 name={"values[#{elem(r.toggle, 0)}]"}
                 value="true"
-                checked={@values[elem(r.toggle, 0)]}
+                checked={on?(@values[elem(r.toggle, 0)])}
                 disabled={@disabled}
                 aria-label={r.title}
               />
@@ -133,8 +135,9 @@ defmodule DokkitWeb.ValuesForm do
     do: Enum.map(if(r[:toggle], do: [r.toggle | r.fields], else: r.fields), &elem(&1, 0))
 
   defp differs?(r, changed), do: Enum.any?(keys(r), &(&1 in changed))
-  defp off?(%{toggle: {on, _}}, values), do: not values[on]
+  defp off?(%{toggle: {on, _}}, values), do: not on?(values[on])
   defp off?(_, _), do: false
+  defp on?(v), do: v in [true, "true"]
 
   @doc "Saves a submitted fold, or resets one row, for the scope. Returns the result line for the fold."
   def save(scope, %{"group" => group} = params) do
