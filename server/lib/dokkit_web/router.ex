@@ -73,6 +73,7 @@ defmodule DokkitWeb.Router do
   end
 
   scope "/", DokkitWeb do
+    post "/hooks/github", GithubController, :hook
     post "/api/events/raw", SeqController, :raw
     post "/ingest/clef", SeqController, :raw
   end
