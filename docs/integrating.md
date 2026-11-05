@@ -30,3 +30,15 @@ curl -fsS https://<dokkit address>/api/v1/in/<app key>/job/nightly-backup/ok
 
 - No secrets in it. Name the environment variable that holds one.
 - The service `id` never changes once it is in use.
+
+## GitHub security alerts by email
+
+`POST /hooks/github` takes GitHub webhook deliveries (content type `application/json`) for `dependabot_alert` and `code_scanning_alert`, and answers `ping`. The `X-Hub-Signature-256` header is checked against `github_secret` before the body is read; a missing or wrong signature is a 401. A new or reopened alert that is critical, or high with a CVE on CISA's known exploited list (fetched at most twice a day), is mailed once. Every other delivery is a 202 with no mail. Each alert (repository, number, kind) is mailed only once, however often it is delivered, so a separate job can forward missed alerts to the same address with the same signature.
+
+These are alert settings (`PUT /api/v1/alerts`, or `set_alert_settings`), next to the mail server settings the alerts already use (`smtp_host`, `smtp_port`, `smtp_user`, `smtp_password`, `mail_from`):
+
+| Setting | Meaning |
+|---|---|
+| `github_secret` | The webhook secret. Required; without it every delivery is refused. |
+| `github_org` | Organisations to accept, with commas between. Empty accepts any repository. |
+| `github_mail_to` | Who is mailed, with commas between. Empty uses `email_to`. |
