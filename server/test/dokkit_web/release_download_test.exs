@@ -21,7 +21,7 @@ defmodule DokkitWeb.ReleaseDownloadTest do
   test "the program's own client downloads a large release file over HTTP/2" do
     dir = Path.join(System.tmp_dir!(), "dokkit-h2-#{Base.encode16(:crypto.strong_rand_bytes(6))}")
     on_exit(fn -> File.rm_rf(dir) end)
-    cert = TestCerts.self_signed(["localhost"], dir)
+    cert = TestCerts.self_signed_ec(["localhost"], dir)
     file = Path.join(dir, "big.bin")
     File.write!(file, :binary.copy(<<0>>, @size))
 
@@ -33,7 +33,7 @@ defmodule DokkitWeb.ReleaseDownloadTest do
          ip: :loopback,
          port: 0,
          certfile: cert.path,
-         keyfile: Path.join(dir, "installed-key.pem"),
+         keyfile: cert.key_path,
          http_2_options: Application.fetch_env!(:dokkit, :http_2_options)}
       )
 
