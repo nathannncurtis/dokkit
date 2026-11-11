@@ -6,8 +6,8 @@ fn a_panic_is_an_error_report_with_a_stack_and_no_message() {
     dokkit::start_with("1.0", &address, "dka_test");
     dokkit::catch_unhandled();
     let result = std::panic::catch_unwind(|| {
-        let secret = "private text";
-        panic!("{secret}");
+        let private_text = "private text";
+        panic!("{private_text}");
     });
     assert!(result.is_err());
     let errors = common::bodies(&seen, "/api/v1/errors");
