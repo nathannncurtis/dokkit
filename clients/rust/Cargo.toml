@@ -11,3 +11,7 @@ log = { version = "0.4", optional = true }
 
 [features]
 log = ["dep:log"]
+
+[dev-dependencies]
+rcgen = { version = "0.14", default-features = false, features = ["ring"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
