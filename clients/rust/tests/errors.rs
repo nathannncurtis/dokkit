@@ -8,7 +8,7 @@ fn a_failed_error_report_is_kept_and_a_refused_one_is_dropped() {
         ("/api/v1/errors", 4) => 401,
         _ => 200,
     });
-    dokkit::start_with("", &address, "dka_test");
+    dokkit::start_manual_with("", &address, "dka_test");
     let attempts = || seen.lock().unwrap().iter().filter(|(p, _)| p == "/api/v1/errors").count();
     dokkit::capture(&std::fmt::Error);
     dokkit::beat("w", 30);
