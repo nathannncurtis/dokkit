@@ -15,6 +15,11 @@ config :dokkit,
   ecto_repos: [Dokkit.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true]
 
+# Bandit 1.14 resets a response stream with ENHANCE_YOUR_CALM once 100 of the client's WINDOW_UPDATEs are
+# unread, and a stream reads one per chunk it sends. Go sends one per 4 KiB read, so a big file in 1 MiB
+# chunks (the default) is reset after a few MB. At 8 KiB a chunk the stream keeps up.
+config :dokkit, :http_2_options, sendfile_chunk_size: 8192
+
 # Configure the endpoint
 config :dokkit, DokkitWeb.Endpoint,
   url: [host: "localhost"],
