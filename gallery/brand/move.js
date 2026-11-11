@@ -163,7 +163,7 @@ function fromUrls(text) {
     const named = segs.filter((s) => !EVENT.test(s) && !token(s) && !["api", "push", "ping"].includes(s.toLowerCase())).pop();
     const host = u.hostname.replace(/^www\./, "").split(".").slice(0, -1).join("-") || "job";
     const jid = named ? id(named) : id(`${host}-${(counts[host] = (counts[host] || 0) + 1)}`);
-    const what = u.hostname.endsWith("hc-ping.com") ? "a Healthchecks ping" : /\/api\/push\//.test(u.pathname) ? "an Uptime Kuma push" : "a ping URL";
+    const h = u.hostname, what = h === "hc-ping.com" || h.endsWith(".hc-ping.com") ? "a Healthchecks ping" : /\/api\/push\//.test(u.pathname) ? "an Uptime Kuma push" : "a ping URL";
     jobs.push({ jid, line, what, named: !!named });
   });
   if (!jobs.length) return { kind: "A list of ping URLs", files: [], skipped };
