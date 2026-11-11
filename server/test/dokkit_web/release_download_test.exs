@@ -6,7 +6,14 @@ defmodule DokkitWeb.ReleaseDownloadTest do
 
   defmodule File48 do
     def init(path), do: path
-    def call(conn, path), do: Plug.Conn.send_file(Plug.Conn.put_resp_content_type(conn, "application/octet-stream"), 200, path)
+
+    def call(conn, path),
+      do:
+        Plug.Conn.send_file(
+          Plug.Conn.put_resp_content_type(conn, "application/octet-stream"),
+          200,
+          path
+        )
   end
 
   @tag skip: if(System.find_executable("go"), do: false, else: "go is not installed")
@@ -21,14 +28,14 @@ defmodule DokkitWeb.ReleaseDownloadTest do
     server =
       start_supervised!(
         {Bandit,
-       plug: {File48, file},
-       scheme: :https,
-       ip: :loopback,
-       port: 0,
-       certfile: cert.path,
-       keyfile: Path.join(dir, "installed-key.pem"),
-       http_2_options: Application.fetch_env!(:dokkit, :http_2_options)}
-    )
+         plug: {File48, file},
+         scheme: :https,
+         ip: :loopback,
+         port: 0,
+         certfile: cert.path,
+         keyfile: Path.join(dir, "installed-key.pem"),
+         http_2_options: Application.fetch_env!(:dokkit, :http_2_options)}
+      )
 
     {:ok, {_, port}} = ThousandIsland.listener_info(server)
     pin = "sha256:" <> Base.encode16(:crypto.hash(:sha256, cert.der), case: :lower)
