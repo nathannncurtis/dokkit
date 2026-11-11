@@ -28,7 +28,7 @@ Lines go first, then error reports. A report the server did not answer for (no a
 
 `dokkit::flush()` waits at most 5 seconds, or `dokkit::flush_timeout(duration)`. A panic seen by `dokkit::catch_unhandled()` is an error report of type `panic` with the file, line and backtrace frames of where it happened, never its message, and is flushed with that limit. A line over 64 KB loses the end of its `msg` (ending ` [cut]`), then its fields.
 
-`dokkit::set_interval(duration)` (or the environment variable `DOKKIT_INTERVAL_SECS`, read by `start`) sets how long the sender sleeps between sends, 2 seconds unless set and at least 100 ms. While nothing is queued the sender does no work, so an app that logs a few lines now and then can use a long interval and call `dokkit::flush()` when it finishes a batch. A full batch (500 lines), an error report and `flush` send at once whatever the interval, and a failed send is retried within 2 seconds. The sender keeps one connection between sends while the server allows it.
+`dokkit::set_interval(duration)` (or the environment variable `DOKKIT_INTERVAL_SECS`, read by `start`) sets how long the sender sleeps between sends, 2 seconds unless set and at least 100 ms. While nothing is queued the sender does no work, so an app that logs a few lines now and then can use a long interval and call `dokkit::flush()` when it finishes a batch. A full batch (500 lines), an error report, a check in state `down` or `degraded` and `flush` send at once whatever the interval, and a failed send is retried within 2 seconds. The sender keeps one connection between sends while the server allows it.
 
 `dokkit::log_fields("info", "paid", &[("order", 42.into()), ("who", "x".into())])` sends fields as a flat object.
 

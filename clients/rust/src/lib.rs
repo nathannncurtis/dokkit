@@ -275,7 +275,7 @@ fn begin(version: &str, url: &str, key: &str, manual: bool) {
     std::thread::spawn(sender);
 }
 
-/// How long the sender waits between sends when nothing wakes it earlier, 2 seconds unless set (or DOKKIT_INTERVAL_SECS, read by `start`). A full batch of lines, an error report and `flush` send at once whatever this is. The shortest is 100 ms.
+/// How long the sender waits between sends when nothing wakes it earlier, 2 seconds unless set (or DOKKIT_INTERVAL_SECS, read by `start`). A full batch of lines, an error report, a check that is not "ok" and `flush` send at once whatever this is. The shortest is 100 ms.
 pub fn set_interval(every: Duration) {
     INTERVAL_MS.store((every.as_millis() as u64).max(MIN_MS), Ordering::Relaxed);
     wake(false);
@@ -293,7 +293,7 @@ fn soon() -> bool {
     STATE.get().is_some_and(|s| s.lock().is_ok_and(|s| s.announce || s.held.is_some() || !s.errors.is_empty()))
 }
 
-// Sleeps until a batch is full, an error is reported, the interval is up, or a retry is due. An idle pass allocates nothing.
+// Sleeps until a batch is full, an error is reported, a check goes bad, the interval is up, or a retry is due. An idle pass allocates nothing.
 fn sender() {
     let mut last = Instant::now();
     loop {
@@ -420,6 +420,9 @@ pub fn beat(name: &str, every_seconds: i64) {
 /// One of the app's own checks. `state` is "ok", "degraded" or "down".
 pub fn check(name: &str, state: &str, value: Option<f64>, note: Option<&str>) {
     add("custom", &[("check", J::S(name)), ("state", J::S(state)), ("value", value.map_or(J::None, J::N)), ("note", opt(note))]);
+    if state != "ok" {
+        wake(true);
+    }
 }
 
 pub fn metric(name: &str, value: f64, unit: Option<&str>) {
