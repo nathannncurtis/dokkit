@@ -159,6 +159,10 @@ defmodule DokkitWeb.ValuesForm do
     end
   end
 
+  @doc "The setting names in the row a Reset click names."
+  def row_keys(scope, %{"group" => group, "row" => row}),
+    do: for(r <- Values.rows(group, scope), r.id == row, k <- keys(r), do: k)
+
   def reset(scope, %{"group" => group, "row" => row} = params) do
     group = params["target"] || group
 

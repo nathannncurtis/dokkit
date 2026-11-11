@@ -722,6 +722,28 @@ defmodule Dokkit.ValuesTest do
       refute has_element?(view, ~s(#machine-values input[name="values[memory_on]"][checked]))
     end
 
+    test "resetting one row keeps the other unsaved edits, and Save clears them all",
+         %{conn: conn} do
+      m = machine("v-reset")
+      set({:machine, m.id}, %{"disk_limit" => 80})
+      {:ok, view, _} = live(signed_in(conn), "/machines/#{m.id}?tab=alerts")
+
+      view
+      |> form("#machine-values-form", %{"values" => %{"memory_on" => "false"}})
+      |> render_change()
+
+      view
+      |> element(~s(#machine-values-disk button[phx-click="values_reset"]))
+      |> render_click()
+
+      assert Values.get("disk_limit", {:machine, m.id}) == 90
+      assert Values.get("memory_on", {:machine, m.id}) == true
+      refute has_element?(view, ~s(#machine-values input[name="values[memory_on]"][checked]))
+
+      view |> form("#machine-values-form") |> render_submit()
+      assert Values.get("memory_on", {:machine, m.id}) == false
+    end
+
     test "the public demo turns every settings save and reset off" do
       for view <- [DokkitWeb.SettingsLive, DokkitWeb.MachineLive, DokkitWeb.JobsLive],
           event <- ~w(values_save values_reset),

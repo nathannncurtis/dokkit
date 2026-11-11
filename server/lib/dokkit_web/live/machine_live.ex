@@ -134,7 +134,18 @@ defmodule DokkitWeb.MachineLive do
           do: DokkitWeb.ValuesForm.save(scope, params),
           else: DokkitWeb.ValuesForm.reset(scope, params)
 
-      draft = if elem(result, 1) == :ok, do: %{}, else: socket.assigns.values_draft
+      draft =
+        cond do
+          elem(result, 1) != :ok ->
+            socket.assigns.values_draft
+
+          event == "values_save" ->
+            %{}
+
+          true ->
+            Map.drop(socket.assigns.values_draft, DokkitWeb.ValuesForm.row_keys(scope, params))
+        end
+
       {:noreply, assign(load(socket), values_result: result, values_draft: draft)}
     end
   end
