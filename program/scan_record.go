@@ -118,7 +118,7 @@ func parseTaskRecord(lines []string, unit string) (systemRun, bool) {
 		}
 		when, code := row[cols["Last Run Time"]], row[cols["Last Result"]]
 		at, result := windowsLast(when, code)
-		n, err := strconv.ParseInt(strings.TrimSpace(code), 10, 64)
+		n, err := strconv.ParseInt(strings.TrimSpace(code), 10, 32)
 		if n == stillRunning {
 			return systemRun{}, false
 		}

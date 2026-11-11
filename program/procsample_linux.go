@@ -72,7 +72,9 @@ func parseProcStat(b []byte) (r procRow, ok bool) {
 	}
 	num := func(i int) uint64 { n, _ := strconv.ParseUint(f[i], 10, 64); return n }
 	r.name = s[open+1 : end]
-	r.ppid = int(num(1))
+	if ppid, err := strconv.ParseInt(f[1], 10, 32); err == nil && ppid >= 0 {
+		r.ppid = int(ppid)
+	}
 	r.cpu = num(11) + num(12)
 	r.start = num(19)
 	return r, true
