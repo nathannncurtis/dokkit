@@ -119,6 +119,7 @@ if config_env() == :prod do
         port: port,
         certfile: cert,
         keyfile: System.fetch_env!("DOKKIT_CERT_KEY"),
+        http_2_options: Application.fetch_env!(:dokkit, :http_2_options),
         # Tickets let a client that reconnects every minute or so resume instead of a full handshake.
         thousand_island_options: [
           transport_options: [sni_fun: &Dokkit.Certificate.sni/1, session_tickets: :stateless]

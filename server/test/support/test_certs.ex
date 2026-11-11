@@ -30,6 +30,28 @@ defmodule Dokkit.TestCerts do
     %{cert: cert, key: key, der: root, path: Path.join(dir, "installed.pem")}
   end
 
+  @doc "Like self_signed/2 with an ECDSA P-256 key, which Go's TLS client accepts (it rejects the RSA ones made here)."
+  def self_signed_ec(names, dir) do
+    key = :public_key.generate_key({:namedCurve, :secp256r1})
+
+    config =
+      :public_key.pkix_test_data(%{
+        server_chain: %{root: [key: key, digest: :sha256, extensions: [san(names)]], peer: []},
+        client_chain: %{root: [], peer: []}
+      })
+
+    root = Enum.find(config.server_config[:cacerts], &(:binary.match(&1, hd(names)) != :nomatch))
+    File.mkdir_p!(dir)
+    File.write!(Path.join(dir, "ec.pem"), pem(:Certificate, root))
+
+    File.write!(
+      Path.join(dir, "ec-key.pem"),
+      pem(:ECPrivateKey, :public_key.der_encode(:ECPrivateKey, key))
+    )
+
+    %{der: root, path: Path.join(dir, "ec.pem"), key_path: Path.join(dir, "ec-key.pem")}
+  end
+
   @doc "A certificate for the names signed by an intermediate of a throwaway root. cert holds the leaf then the intermediate."
   def issued(names, opts \\ []) do
     peer =
