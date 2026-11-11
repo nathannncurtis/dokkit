@@ -17,10 +17,13 @@ use std::collections::VecDeque;
 use std::hash::{BuildHasher, Hasher};
 use std::panic::Location;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 const QUEUE: usize = 1000;
+const BATCH: usize = 500; // lines that wake the sender before its interval is up
+const DEFAULT_MS: u64 = 2000;
+const MIN_MS: u64 = 100;
 const MAX_BYTES: usize = 8 << 20;
 const MAX_LINE: usize = 65536;
 const MAX_BATCH: usize = 4 << 20; // the server refuses an unzipped batch over 5 MB
@@ -54,6 +57,20 @@ static ENVIRONMENT: Mutex<Option<String>> = Mutex::new(None);
 static ANNOUNCE: AtomicBool = AtomicBool::new(true);
 
 static FLUSH_MS: AtomicU64 = AtomicU64::new(5000);
+
+// 0 until `start` or `set_interval` decides: DOKKIT_INTERVAL_SECS, else 2 seconds.
+static INTERVAL_MS: AtomicU64 = AtomicU64::new(0);
+
+// True when the sender should send now; `set_interval` only wakes it to move its deadline.
+static SEND_NOW: Mutex<bool> = Mutex::new(false);
+static WOKEN: Condvar = Condvar::new();
+
+fn wake(send: bool) {
+    let mut now = SEND_NOW.lock().unwrap_or_else(|e| e.into_inner());
+    *now |= send;
+    drop(now);
+    WOKEN.notify_one();
+}
 
 // Set once catch_unhandled is on: the hook reports panics, so job does not.
 static HOOKED: AtomicBool = AtomicBool::new(false);
@@ -166,10 +183,50 @@ pub fn start_with(version: &str, url: &str, key: &str) {
     if STATE.set(Mutex::new(state)).is_err() {
         return;
     }
-    std::thread::spawn(|| loop {
-        std::thread::sleep(Duration::from_secs(2));
+    if INTERVAL_MS.load(Ordering::Relaxed) == 0 {
+        let secs = var("DOKKIT_INTERVAL_SECS").and_then(|v| v.parse::<f64>().ok()).filter(|s| s.is_finite() && *s > 0.0);
+        let ms = secs.map_or(DEFAULT_MS, |s| (s * 1000.0) as u64).max(MIN_MS);
+        let _ = INTERVAL_MS.compare_exchange(0, ms, Ordering::Relaxed, Ordering::Relaxed);
+    }
+    std::thread::spawn(sender);
+}
+
+/// How long the sender waits between sends when nothing wakes it earlier, 2 seconds unless set (or DOKKIT_INTERVAL_SECS, read by `start`). A full batch of lines and `flush` send at once whatever this is. The shortest is 100 ms.
+pub fn set_interval(every: Duration) {
+    INTERVAL_MS.store((every.as_millis() as u64).max(MIN_MS), Ordering::Relaxed);
+    wake(false);
+}
+
+fn interval() -> Duration {
+    Duration::from_millis(match INTERVAL_MS.load(Ordering::Relaxed) {
+        0 => DEFAULT_MS,
+        ms => ms,
+    })
+}
+
+// The version still to announce, or a failed send to retry, is due within two seconds.
+fn soon() -> bool {
+    STATE.get().is_some_and(|s| s.lock().is_ok_and(|s| s.announce || s.held.is_some() || !s.errors.is_empty()))
+}
+
+// Sleeps until a batch is full, the interval is up, or a retry is due. An idle pass allocates nothing.
+fn sender() {
+    let mut last = Instant::now();
+    loop {
+        let mut now = SEND_NOW.lock().unwrap_or_else(|e| e.into_inner());
+        while !*now {
+            let wait = if soon() { interval().min(Duration::from_millis(DEFAULT_MS)) } else { interval() };
+            let left = (last + wait).saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                break;
+            }
+            now = WOKEN.wait_timeout(now, left).unwrap_or_else(|e| e.into_inner()).0;
+        }
+        *now = false;
+        drop(now);
         send_all();
-    });
+        last = Instant::now();
+    }
 }
 
 /// `announce_version(false)`, called before `start`, stops the deploy line `start` sends with the version. The server records a deploy only when the version changes.
@@ -252,6 +309,10 @@ fn add(kind: &str, pairs: &[(&str, J)]) {
     }
     s.bytes += line.len();
     s.lines.push_back(line);
+    if s.lines.len() == BATCH {
+        drop(s);
+        wake(true);
+    }
 }
 
 /// How many lines were dropped: the queue was full, or they could not be sent.
@@ -533,6 +594,7 @@ pub fn flush() {
     let (done, wait) = std::sync::mpsc::channel();
     let sender = std::thread::Builder::new().spawn(move || {
         send_all();
+        wake(false);
         let _ = done.send(());
     });
     if sender.is_ok() {
@@ -551,7 +613,13 @@ enum Sent {
 fn send_all() {
     let Some(state) = STATE.get() else { return };
     let Ok(_flushing) = FLUSHING.lock() else { return };
-    let announce = state.lock().ok().and_then(|mut s| std::mem::take(&mut s.announce).then(|| s.version.clone()));
+    let announce = {
+        let Ok(mut s) = state.lock() else { return };
+        if s.lines.is_empty() && s.errors.is_empty() && s.held.is_none() && !s.announce {
+            return;
+        }
+        std::mem::take(&mut s.announce).then(|| s.version.clone())
+    };
     if let Some(version) = announce {
         add("deploy", &[("version", J::S(&version))]);
     }
