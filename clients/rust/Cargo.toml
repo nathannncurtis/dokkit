@@ -6,7 +6,7 @@ license = "Apache-2.0"
 description = "The Dokkit client library"
 
 [dependencies]
-ureq = "3"
+ureq = { version = "3", default-features = false, features = ["rustls"] }
 log = { version = "0.4", optional = true }
 
 [features]
