@@ -249,6 +249,14 @@ jobs:
           key: clients-deps-otp29.1.1-ex1.20.4-${{ hashFiles('server/mix.lock') }}
       - run: mix deps.get
         working-directory: server
+      - name: Rust client
+        working-directory: clients/rust
+        run: |
+          rustup component add clippy
+          cargo clippy --all-targets -- -D warnings
+          cargo clippy --all-targets --features log -- -D warnings
+          cargo test
+          cargo test --features log
       - name: Conformance
         run: python clients/conformance/run.py --server-dir server --deps-path "$PWD/server/deps"
       - name: Server log

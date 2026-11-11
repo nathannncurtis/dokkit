@@ -904,7 +904,8 @@ mod tests {
     }
 
     // A TLS 1.3 server that issues tickets and answers each request with 200, reporting how each connection's handshake went.
-    fn ticket_server(connections: usize) -> (u16, ureq::tls::Certificate<'static>, std::sync::mpsc::Receiver<rustls::HandshakeKind>) {
+    // Connections from slow_from on wait 5 seconds before answering.
+    fn ticket_server(connections: usize, slow_from: usize) -> (u16, ureq::tls::Certificate<'static>, std::sync::mpsc::Receiver<rustls::HandshakeKind>) {
         use std::io::{Read, Write};
         let made = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
         let key = rustls::pki_types::PrivateKeyDer::Pkcs8(made.signing_key.serialize_der().into());
@@ -920,7 +921,7 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         let (tell, told) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            for socket in listener.incoming().take(connections) {
+            for (n, socket) in listener.incoming().take(connections).enumerate() {
                 let mut tls = rustls::StreamOwned::new(rustls::ServerConnection::new(config.clone()).unwrap(), socket.unwrap());
                 let (mut got, mut buf) = (Vec::new(), [0; 4096]);
                 // The whole request, body too: Windows resets a socket closed with bytes unread, and the reset can beat the reply.
@@ -931,6 +932,9 @@ mod tests {
                     }
                 }
                 let _ = tell.send(tls.conn.handshake_kind().unwrap());
+                if n >= slow_from {
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                }
                 let _ = tls.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n");
                 let _ = tls.flush();
                 while matches!(tls.read(&mut buf), Ok(n) if n > 0) {}
@@ -941,7 +945,7 @@ mod tests {
 
     #[test]
     fn a_reconnect_resumes_the_tls_session_instead_of_a_full_handshake() {
-        let (port, cert, told) = ticket_server(4);
+        let (port, cert, told) = ticket_server(5, 4);
         let tls = ureq::tls::TlsConfig::builder().root_certs(ureq::tls::RootCerts::new_with_certs(&[cert])).build();
         let net = Net::with_tls(Local(port), true, tls);
         let url = format!("https://localhost:{port}/api/v1/report");
@@ -958,6 +962,11 @@ mod tests {
         send();
         FLUSH_MS.store(was, Ordering::Relaxed);
         assert_eq!(told.recv().unwrap(), rustls::HandshakeKind::Resumed);
+        // A shorter flush timeout set later cuts off a reply that is slow to come, and the request is not counted as sent.
+        let was = FLUSH_MS.swap(300, Ordering::Relaxed);
+        let slow = post(&net, &url, "Bearer k", "application/x-ndjson", "1", "{}");
+        FLUSH_MS.store(was, Ordering::Relaxed);
+        assert!(matches!(slow, Sent::Failed));
     }
 
     #[cfg(unix)]
