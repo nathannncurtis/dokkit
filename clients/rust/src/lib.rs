@@ -11,14 +11,21 @@
 //! Nothing here panics into the app or waits on the network. Lines wait in a queue of fixed
 //! size and a thread sends them. Error message text is never sent. Lines carry no time of
 //! their own: the server stamps them when they arrive, at most two seconds later.
+//!
+//! `start_manual` starts no thread: lines wait until the app calls `flush`, which sends them on its own thread.
 
 use std::collections::hash_map::RandomState;
 use std::collections::VecDeque;
 use std::hash::{BuildHasher, Hasher};
 use std::panic::Location;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Condvar, Mutex, OnceLock};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
+
+use ureq::config::Config;
+use ureq::http::Uri;
+use ureq::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver};
+use ureq::unversioned::transport::{DefaultConnector, NextTimeout};
 
 const QUEUE: usize = 1000;
 const BATCH: usize = 500; // lines that wake the sender before its interval is up
@@ -51,6 +58,64 @@ struct State {
 }
 
 static FLUSHING: Mutex<()> = Mutex::new(());
+
+// Set by `start_manual`: no sender thread, `flush` sends on the caller's thread.
+static MANUAL: AtomicBool = AtomicBool::new(false);
+
+type Found = Arc<Mutex<Option<(String, ResolvedSocketAddrs)>>>;
+
+/// The address a name resolved to, kept until a connection fails.
+#[derive(Debug)]
+struct Cached<R> {
+    inner: R,
+    found: Found,
+}
+
+impl<R: Resolver> Resolver for Cached<R> {
+    fn resolve(&self, uri: &Uri, config: &Config, timeout: NextTimeout) -> Result<ResolvedSocketAddrs, ureq::Error> {
+        let name = uri.authority().map(|a| a.as_str().to_string()).unwrap_or_default();
+        let mut found = self.found.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((was, addresses)) = &*found {
+            if *was == name {
+                return Ok(addresses.clone());
+            }
+        }
+        let addresses = self.inner.resolve(uri, config, timeout)?;
+        *found = Some((name, addresses.clone()));
+        Ok(addresses)
+    }
+}
+
+/// One agent for the process: its pool keeps a connection between sends, and its TLS config
+/// keeps the session tickets, so a reconnect resumes instead of a full handshake.
+struct Net {
+    agent: ureq::Agent,
+    found: Found,
+}
+
+impl Net {
+    // Manual mode keeps no idle connection between flushes.
+    fn new(resolver: impl Resolver, manual: bool) -> Net {
+        let found: Found = Arc::new(Mutex::new(None));
+        let mut config = ureq::Agent::config_builder();
+        if manual {
+            config = config.max_idle_connections(0);
+        }
+        let agent = ureq::Agent::with_parts(config.build(), DefaultConnector::default(), Cached { inner: resolver, found: found.clone() });
+        Net { agent, found }
+    }
+
+    fn forget(&self) {
+        *self.found.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+}
+
+// Built at the first send, so start does no network or TLS setup.
+static NET: OnceLock<Net> = OnceLock::new();
+
+fn net() -> &'static Net {
+    NET.get_or_init(|| Net::new(DefaultResolver::default(), MANUAL.load(Ordering::Relaxed)))
+}
 
 static ENVIRONMENT: Mutex<Option<String>> = Mutex::new(None);
 
@@ -158,11 +223,26 @@ fn hostname() -> Option<String> {
 /// Turns the library on. With no address or key it stays off and every call does nothing.
 pub fn start(version: &str) {
     let var = |name| std::env::var(name).unwrap_or_default();
-    start_with(version, &var("DOKKIT_URL"), &var("DOKKIT_KEY"));
+    begin(version, &var("DOKKIT_URL"), &var("DOKKIT_KEY"), false);
 }
 
 /// `start` with the address and key given instead of read from the environment.
 pub fn start_with(version: &str, url: &str, key: &str) {
+    begin(version, url, key, false);
+}
+
+/// `start` with no sender thread and no work between calls, for a small resident service. Lines wait in memory and `flush` sends them on the caller's thread; so does the retry of a failed batch, and the version is announced on the first `flush`. See the README for how often to call it.
+pub fn start_manual(version: &str) {
+    let var = |name| std::env::var(name).unwrap_or_default();
+    begin(version, &var("DOKKIT_URL"), &var("DOKKIT_KEY"), true);
+}
+
+/// `start_manual` with the address and key given instead of read from the environment.
+pub fn start_manual_with(version: &str, url: &str, key: &str) {
+    begin(version, url, key, true);
+}
+
+fn begin(version: &str, url: &str, key: &str, manual: bool) {
     if url.is_empty() || key.is_empty() || !secure(url) {
         return;
     }
@@ -172,7 +252,7 @@ pub fn start_with(version: &str, url: &str, key: &str) {
         key: key.to_string(),
         version: version.to_string(),
         environment: ENVIRONMENT.lock().ok().and_then(|e| e.clone()).or_else(|| var("DOKKIT_ENV")),
-        host: var("COMPUTERNAME").or(var("HOSTNAME")).or_else(hostname).unwrap_or_else(|| "unknown".into()),
+        host: var("COMPUTERNAME").or(var("HOSTNAME")).unwrap_or_default(),
         lines: VecDeque::new(),
         errors: VecDeque::new(),
         bytes: 0,
@@ -181,6 +261,10 @@ pub fn start_with(version: &str, url: &str, key: &str) {
         announce: ANNOUNCE.load(Ordering::Relaxed) && !version.is_empty(),
     };
     if STATE.set(Mutex::new(state)).is_err() {
+        return;
+    }
+    if manual {
+        MANUAL.store(true, Ordering::Relaxed);
         return;
     }
     if INTERVAL_MS.load(Ordering::Relaxed) == 0 {
@@ -289,9 +373,17 @@ fn cut(kind: &str, host: &str, environment: Option<&str>, pairs: &[(&str, J)]) -
     }
 }
 
+// The hostname is looked up when the first line or report needs it, not at start.
+fn host_known(s: &mut State) {
+    if s.host.is_empty() {
+        s.host = hostname().unwrap_or_else(|| "unknown".into());
+    }
+}
+
 fn add(kind: &str, pairs: &[(&str, J)]) {
     let Some(state) = STATE.get() else { return };
     let Ok(mut s) = state.lock() else { return };
+    host_known(&mut s);
     let mut line = line_of(kind, &s.host, s.environment.as_deref(), pairs);
     if line.len() > MAX_LINE {
         match cut(kind, &s.host, s.environment.as_deref(), pairs) {
@@ -570,6 +662,7 @@ fn report(kind: &str, handled: bool, from: &Location, function: Option<&str>, tr
     let mut frames = if trace { backtrace_frames() } else { Vec::new() };
     frames.push(frame(from.file(), function, from.line() as i64));
     let Ok(mut s) = state.lock() else { return };
+    host_known(&mut s);
     if s.errors.len() >= 100 {
         s.dropped += 1;
         return;
@@ -586,9 +679,13 @@ fn report(kind: &str, handled: bool, from: &Location, function: Option<&str>, tr
     s.errors.push_back(report);
 }
 
-/// Sends what is waiting and returns after at most 5 seconds, or what `flush_timeout` set. Call it before the app exits.
+/// Sends what is waiting and returns after at most 5 seconds, or what `flush_timeout` set. Call it before the app exits. After `start_manual` it sends on the calling thread, each request taking at most that long.
 pub fn flush() {
     if STATE.get().is_none() {
+        return;
+    }
+    if MANUAL.load(Ordering::Relaxed) {
+        send_all();
         return;
     }
     let (done, wait) = std::sync::mpsc::channel();
@@ -627,12 +724,15 @@ fn send_all() {
     while send_error(state) {}
 }
 
-fn post(url: &str, key: &str, path: &str, kind: &str, id: &str, body: &str) -> Sent {
+fn post(net: &Net, url: &str, key: &str, path: &str, kind: &str, id: &str, body: &str) -> Sent {
     #[cfg(feature = "log")]
     SENDING.with(|s| s.set(true));
-    let sent = ureq::post(&format!("{url}{path}"))
+    let limit = if MANUAL.load(Ordering::Relaxed) { Duration::from_millis(FLUSH_MS.load(Ordering::Relaxed)) } else { Duration::from_secs(10) };
+    let sent = net
+        .agent
+        .post(&format!("{url}{path}"))
         .config()
-        .timeout_global(Some(Duration::from_secs(10)))
+        .timeout_global(Some(limit))
         .build()
         .header("Authorization", &format!("Bearer {key}"))
         .header("Content-Type", kind)
@@ -640,10 +740,19 @@ fn post(url: &str, key: &str, path: &str, kind: &str, id: &str, body: &str) -> S
         .send(body);
     #[cfg(feature = "log")]
     SENDING.with(|s| s.set(false));
+    outcome(net, sent.map(|_| ()))
+}
+
+// A status error means the connection worked; any other error forgets the resolved address.
+fn outcome(net: &Net, sent: Result<(), ureq::Error>) -> Sent {
     match sent {
-        Ok(_) => Sent::Taken,
+        Ok(()) => Sent::Taken,
         Err(ureq::Error::StatusCode(code)) if code < 500 && code != 429 => Sent::Refused,
-        Err(_) => Sent::Failed,
+        Err(ureq::Error::StatusCode(_)) => Sent::Failed,
+        Err(_) => {
+            net.forget();
+            Sent::Failed
+        }
     }
 }
 
@@ -669,7 +778,7 @@ fn send_lines(state: &Mutex<State>) -> bool {
     if batch.items.is_empty() {
         return false;
     }
-    let result = post(&url, &key, batch.path, "application/x-ndjson", &batch.id, &batch.items.join("\n"));
+    let result = post(net(), &url, &key, batch.path, "application/x-ndjson", &batch.id, &batch.items.join("\n"));
     let Ok(mut s) = state.lock() else { return false };
     match result {
         Sent::Taken => true,
@@ -699,7 +808,7 @@ fn send_error(state: &Mutex<State>) -> bool {
             None => return false,
         }
     };
-    let result = post(&url, &key, "/api/v1/errors", "application/json", &id(), &body);
+    let result = post(net(), &url, &key, "/api/v1/errors", "application/json", &id(), &body);
     if matches!(result, Sent::Failed) {
         return false;
     }
@@ -723,6 +832,37 @@ mod tests {
             assert!(!secure(bad), "{bad}");
         }
         assert!(secure("HTTP://LOCALHOST:4000"));
+    }
+
+    #[derive(Debug)]
+    struct Counting(Arc<std::sync::atomic::AtomicUsize>);
+
+    impl Resolver for Counting {
+        fn resolve(&self, _: &Uri, _: &Config, _: NextTimeout) -> Result<ResolvedSocketAddrs, ureq::Error> {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            let mut found = DefaultResolver::default().empty();
+            found.push(std::net::SocketAddr::from(([127, 0, 0, 1], 4000)));
+            Ok(found)
+        }
+    }
+
+    #[test]
+    fn the_address_is_looked_up_once_and_again_only_after_a_connection_error() {
+        let asked = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let net = Net::new(Counting(asked.clone()), false);
+        let cached = Cached { inner: Counting(asked.clone()), found: net.found.clone() };
+        let (config, uri) = (Config::default(), Uri::from_static("https://localhost:4000"));
+        let lookup = |c: &Cached<Counting>| c.resolve(&uri, &config, NextTimeout::default()).unwrap();
+        assert_eq!(lookup(&cached).len(), 1);
+        lookup(&cached);
+        assert_eq!(asked.load(Ordering::Relaxed), 1, "the name was looked up for every call");
+        assert!(matches!(outcome(&net, Err(ureq::Error::StatusCode(500))), Sent::Failed));
+        assert!(matches!(outcome(&net, Err(ureq::Error::StatusCode(404))), Sent::Refused));
+        lookup(&cached);
+        assert_eq!(asked.load(Ordering::Relaxed), 1, "a status error cleared the address");
+        assert!(matches!(outcome(&net, Err(ureq::Error::ConnectionFailed)), Sent::Failed));
+        lookup(&cached);
+        assert_eq!(asked.load(Ordering::Relaxed), 2, "a connection error did not force a new lookup");
     }
 
     #[cfg(unix)]
