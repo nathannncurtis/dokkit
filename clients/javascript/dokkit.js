@@ -270,7 +270,6 @@ function where(file) {
   return { file: i >= 0 ? path.slice(i + 1) : path.slice(path.lastIndexOf("/") + 1), own: false };
 }
 
-// "file:line:column" to its file and line, or null.
 const digits = (text) => text.length > 0 && [...text].every((c) => c >= "0" && c <= "9");
 function position(text) {
   const b = text.lastIndexOf(":");
