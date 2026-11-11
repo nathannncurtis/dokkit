@@ -19,8 +19,8 @@ defmodule Dokkit.Alerts do
     "night_to" => "7",
     "night_offset" => "0"
   }
-  @secrets ~w(pagerduty_key pagerduty_api_key ntfy_token pushover_token pushover_user smtp_password twilio_token)
-  @plain ~w(disk_limit memory_limit ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to digest_at heartbeat_url imessage_machine imessage_to twilio_sid twilio_from sms_to self_down self_degraded night_zone pagerduty_schedule)
+  @secrets ~w(pagerduty_key pagerduty_api_key ntfy_token pushover_token pushover_user smtp_password twilio_token github_secret)
+  @plain ~w(disk_limit memory_limit github_org github_mail_to ntfy_url webhook_url smtp_host smtp_port smtp_user mail_from email_to digest_at heartbeat_url imessage_machine imessage_to twilio_sid twilio_from sms_to self_down self_degraded night_zone pagerduty_schedule)
   @choices ~w(down degraded self_down self_degraded)
   @smtp_ports [25, 465, 587, 2525]
   @kept_blank ~w(disk_limit memory_limit)
