@@ -37,15 +37,12 @@ const MAX_BATCH: usize = 4 << 20; // the server refuses an unzipped batch over 5
 
 /// What one request carries. One that fails is kept for a second try.
 struct Batch {
-    path: &'static str,
     items: Vec<String>,
     id: String,
     tried: bool,
 }
 
 struct State {
-    url: String,
-    key: String,
     version: String,
     environment: Option<String>,
     host: String,
@@ -58,6 +55,15 @@ struct State {
 }
 
 static FLUSHING: Mutex<()> = Mutex::new(());
+
+/// Where lines and error reports go, and the Authorization header, made once at start.
+struct Address {
+    report: String,
+    errors: String,
+    auth: String,
+}
+
+static ADDRESS: OnceLock<Address> = OnceLock::new();
 
 // Set by `start_manual`: no sender thread, `flush` sends on the caller's thread.
 static MANUAL: AtomicBool = AtomicBool::new(false);
@@ -91,18 +97,38 @@ impl<R: Resolver> Resolver for Cached<R> {
 struct Net {
     agent: ureq::Agent,
     found: Found,
+    manual: bool,
+    limit: Duration,
+}
+
+// The longest one request may take: the flush timeout in manual mode, else 10 seconds.
+fn limit(manual: bool) -> Duration {
+    if manual { Duration::from_millis(FLUSH_MS.load(Ordering::Relaxed)) } else { Duration::from_secs(10) }
 }
 
 impl Net {
-    // Manual mode keeps no idle connection between flushes.
+    // Manual mode keeps no idle connection between flushes: the server closes one idle for a minute.
     fn new(resolver: impl Resolver, manual: bool) -> Net {
+        Net::with_tls(resolver, manual, ureq::tls::TlsConfig::default())
+    }
+
+    // The timeout is set on the agent: ureq builds a new TLS config, with an empty session cache,
+    // for every connection of a request that sets its own.
+    fn with_tls(resolver: impl Resolver, manual: bool, tls: ureq::tls::TlsConfig) -> Net {
         let found: Found = Arc::new(Mutex::new(None));
-        let mut config = ureq::Agent::config_builder();
+        let limit = limit(manual);
+        // ureq's 128 KB buffers, two per layer, were most of what each new connection allocated;
+        // 16 KB holds a TLS record and the server's small replies.
+        let mut config = ureq::Agent::config_builder()
+            .timeout_global(Some(limit))
+            .tls_config(tls)
+            .input_buffer_size(16 << 10)
+            .output_buffer_size(16 << 10);
         if manual {
             config = config.max_idle_connections(0);
         }
         let agent = ureq::Agent::with_parts(config.build(), DefaultConnector::default(), Cached { inner: resolver, found: found.clone() });
-        Net { agent, found }
+        Net { agent, found, manual, limit }
     }
 
     fn forget(&self) {
@@ -248,8 +274,6 @@ fn begin(version: &str, url: &str, key: &str, manual: bool) {
     }
     let var = |name| std::env::var(name).ok().filter(|v| !v.is_empty());
     let state = State {
-        url: url.trim_end_matches('/').to_string(),
-        key: key.to_string(),
         version: version.to_string(),
         environment: ENVIRONMENT.lock().ok().and_then(|e| e.clone()).or_else(|| var("DOKKIT_ENV")),
         host: var("COMPUTERNAME").or(var("HOSTNAME")).unwrap_or_default(),
@@ -263,6 +287,8 @@ fn begin(version: &str, url: &str, key: &str, manual: bool) {
     if STATE.set(Mutex::new(state)).is_err() {
         return;
     }
+    let url = url.trim_end_matches('/');
+    let _ = ADDRESS.set(Address { report: format!("{url}/api/v1/report"), errors: format!("{url}/api/v1/errors"), auth: format!("Bearer {key}") });
     if manual {
         MANUAL.store(true, Ordering::Relaxed);
         return;
@@ -729,20 +755,15 @@ fn send_all() {
     while send_error(state) {}
 }
 
-fn post(net: &Net, url: &str, key: &str, path: &str, kind: &str, id: &str, body: &str) -> Sent {
+fn post(net: &Net, url: &str, auth: &str, kind: &str, id: &str, body: &str) -> Sent {
     #[cfg(feature = "log")]
     SENDING.with(|s| s.set(true));
-    let limit = if MANUAL.load(Ordering::Relaxed) { Duration::from_millis(FLUSH_MS.load(Ordering::Relaxed)) } else { Duration::from_secs(10) };
-    let sent = net
-        .agent
-        .post(&format!("{url}{path}"))
-        .config()
-        .timeout_global(Some(limit))
-        .build()
-        .header("Authorization", &format!("Bearer {key}"))
-        .header("Content-Type", kind)
-        .header("Dokkit-Batch", id)
-        .send(body);
+    let mut request = net.agent.post(url);
+    let limit = limit(net.manual);
+    if limit != net.limit {
+        request = request.config().timeout_global(Some(limit)).build();
+    }
+    let sent = request.header("Authorization", auth).header("Content-Type", kind).header("Dokkit-Batch", id).send(body);
     #[cfg(feature = "log")]
     SENDING.with(|s| s.set(false));
     outcome(net, sent.map(|_| ()))
@@ -764,9 +785,10 @@ fn outcome(net: &Net, sent: Result<(), ureq::Error>) -> Sent {
 // Sends the held batch or the next one, and says whether to go on. A batch that fails is held
 // for one more try, then counted as dropped.
 fn send_lines(state: &Mutex<State>) -> bool {
-    let (url, key, mut batch) = {
+    let Some(to) = ADDRESS.get() else { return false };
+    let mut batch = {
         let Ok(mut s) = state.lock() else { return false };
-        let batch = match s.held.take() {
+        match s.held.take() {
             Some(held) => held,
             None => {
                 let (mut n, mut size) = (0, 0);
@@ -775,15 +797,14 @@ fn send_lines(state: &Mutex<State>) -> bool {
                     n += 1;
                 }
                 s.bytes -= size;
-                Batch { path: "/api/v1/report", items: s.lines.drain(..n).collect(), id: id(), tried: false }
+                Batch { items: s.lines.drain(..n).collect(), id: id(), tried: false }
             }
-        };
-        (s.url.clone(), s.key.clone(), batch)
+        }
     };
     if batch.items.is_empty() {
         return false;
     }
-    let result = post(net(), &url, &key, batch.path, "application/x-ndjson", &batch.id, &batch.items.join("\n"));
+    let result = post(net(), &to.report, &to.auth, "application/x-ndjson", &batch.id, &batch.items.join("\n"));
     let Ok(mut s) = state.lock() else { return false };
     match result {
         Sent::Taken => true,
@@ -806,14 +827,15 @@ fn send_lines(state: &Mutex<State>) -> bool {
 // Sends the oldest error report, and says whether to go on. One the server did not answer for
 // stays for the next pass; the hundred that report keeps is the bound.
 fn send_error(state: &Mutex<State>) -> bool {
-    let (url, key, body) = {
+    let Some(to) = ADDRESS.get() else { return false };
+    let body = {
         let Ok(s) = state.lock() else { return false };
         match s.errors.front() {
-            Some(error) => (s.url.clone(), s.key.clone(), error.clone()),
+            Some(error) => error.clone(),
             None => return false,
         }
     };
-    let result = post(net(), &url, &key, "/api/v1/errors", "application/json", &id(), &body);
+    let result = post(net(), &to.errors, &to.auth, "application/json", &id(), &body);
     if matches!(result, Sent::Failed) {
         return false;
     }
@@ -870,6 +892,83 @@ mod tests {
         assert_eq!(asked.load(Ordering::Relaxed), 2, "a connection error did not force a new lookup");
     }
 
+    #[derive(Debug)]
+    struct Local(u16);
+
+    impl Resolver for Local {
+        fn resolve(&self, _: &Uri, _: &Config, _: NextTimeout) -> Result<ResolvedSocketAddrs, ureq::Error> {
+            let mut found = DefaultResolver::default().empty();
+            found.push(std::net::SocketAddr::from(([127, 0, 0, 1], self.0)));
+            Ok(found)
+        }
+    }
+
+    // A TLS 1.3 server that issues tickets and answers each request with 200, reporting how each connection's handshake went.
+    // Connections from slow_from on wait 5 seconds before answering.
+    fn ticket_server(connections: usize, slow_from: usize) -> (u16, ureq::tls::Certificate<'static>, std::sync::mpsc::Receiver<rustls::HandshakeKind>) {
+        use std::io::{Read, Write};
+        let made = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+        let key = rustls::pki_types::PrivateKeyDer::Pkcs8(made.signing_key.serialize_der().into());
+        let mut config = rustls::ServerConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+            .with_protocol_versions(&[&rustls::version::TLS13])
+            .unwrap()
+            .with_no_client_auth()
+            .with_single_cert(vec![made.cert.der().clone()], key)
+            .unwrap();
+        config.ticketer = rustls::crypto::ring::Ticketer::new().unwrap();
+        let config = Arc::new(config);
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (tell, told) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for (n, socket) in listener.incoming().take(connections).enumerate() {
+                let mut tls = rustls::StreamOwned::new(rustls::ServerConnection::new(config.clone()).unwrap(), socket.unwrap());
+                let (mut got, mut buf) = (Vec::new(), [0; 4096]);
+                // The whole request, body too: Windows resets a socket closed with bytes unread, and the reset can beat the reply.
+                while !got.ends_with(b"\r\n\r\n{}") {
+                    match tls.read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => got.extend_from_slice(&buf[..n]),
+                    }
+                }
+                let _ = tell.send(tls.conn.handshake_kind().unwrap());
+                if n >= slow_from {
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                }
+                let _ = tls.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n");
+                let _ = tls.flush();
+                while matches!(tls.read(&mut buf), Ok(n) if n > 0) {}
+            }
+        });
+        (port, ureq::tls::Certificate::from_der(made.cert.der()).to_owned(), told)
+    }
+
+    #[test]
+    fn a_reconnect_resumes_the_tls_session_instead_of_a_full_handshake() {
+        let (port, cert, told) = ticket_server(5, 4);
+        let tls = ureq::tls::TlsConfig::builder().root_certs(ureq::tls::RootCerts::new_with_certs(&[cert])).build();
+        let net = Net::with_tls(Local(port), true, tls);
+        let url = format!("https://localhost:{port}/api/v1/report");
+        let send = || assert!(matches!(post(&net, &url, "Bearer k", "application/x-ndjson", "1", "{}"), Sent::Taken));
+        let kinds: Vec<_> = (0..3)
+            .map(|_| {
+                send();
+                told.recv().unwrap()
+            })
+            .collect();
+        assert_eq!(kinds, [rustls::HandshakeKind::Full, rustls::HandshakeKind::Resumed, rustls::HandshakeKind::Resumed]);
+        // A flush timeout changed after the first send still applies, and still resumes: the agent's TLS config is cached by then.
+        let was = FLUSH_MS.swap(FLUSH_MS.load(Ordering::Relaxed) + 1, Ordering::Relaxed);
+        send();
+        FLUSH_MS.store(was, Ordering::Relaxed);
+        assert_eq!(told.recv().unwrap(), rustls::HandshakeKind::Resumed);
+        // A shorter flush timeout set later cuts off a reply that is slow to come, and the request is not counted as sent.
+        let was = FLUSH_MS.swap(300, Ordering::Relaxed);
+        let slow = post(&net, &url, "Bearer k", "application/x-ndjson", "1", "{}");
+        FLUSH_MS.store(was, Ordering::Relaxed);
+        assert!(matches!(slow, Sent::Failed));
+    }
+
     #[cfg(unix)]
     #[test]
     fn hostname_is_found() {
@@ -887,7 +986,7 @@ mod tests {
 
     #[test]
     fn a_full_queue_drops_the_oldest_and_counts_it() {
-        let state = State { url: String::new(), key: String::new(), version: String::new(), environment: None, host: "h".into(), lines: VecDeque::new(), errors: VecDeque::new(), bytes: 0, held: None, dropped: 0, announce: false };
+        let state = State { version: String::new(), environment: None, host: "h".into(), lines: VecDeque::new(), errors: VecDeque::new(), bytes: 0, held: None, dropped: 0, announce: false };
         let _ = STATE.set(Mutex::new(state));
         let big = "x".repeat(60 << 10);
         for _ in 0..200 {

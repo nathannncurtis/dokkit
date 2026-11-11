@@ -2,7 +2,7 @@ defmodule Dokkit.RuntimeSettingsTest do
   # Reads real environment variables, so it cannot run beside other tests.
   use ExUnit.Case, async: false
 
-  @names ~w(ProgramData DATABASE_URL SECRET_KEY_BASE PHX_HOST PORT DOKKIT_LOG_DIR)
+  @names ~w(ProgramData DATABASE_URL SECRET_KEY_BASE PHX_HOST PORT DOKKIT_LOG_DIR DOKKIT_CERT DOKKIT_CERT_KEY)
 
   setup do
     saved = for n <- @names, do: {n, System.get_env(n)}
@@ -30,6 +30,18 @@ defmodule Dokkit.RuntimeSettingsTest do
     assert config[:dokkit][Dokkit.Repo][:url] == "ecto://u:p@localhost/d"
     assert config[:dokkit][DokkitWeb.Endpoint][:http][:port] == 4001
     assert config[:logger][:default_handler][:config][:file] == ~c"C:/logs/dokkit.log"
+  end
+
+  test "with its own certificate the server issues TLS session tickets", %{env_file: file} do
+    File.write!(
+      file,
+      "DATABASE_URL=ecto://u:p@localhost/d\nSECRET_KEY_BASE=abc\nPHX_HOST=dokkit.test\nDOKKIT_CERT=c.pem\nDOKKIT_CERT_KEY=k.pem\n"
+    )
+
+    options =
+      read()[:dokkit][DokkitWeb.Endpoint][:https][:thousand_island_options][:transport_options]
+
+    assert options[:session_tickets] == :stateless
   end
 
   test "a missing PHX_HOST is an error, not example.com", %{env_file: file} do
