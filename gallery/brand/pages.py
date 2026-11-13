@@ -6,7 +6,7 @@ from html import escape as e
 
 here = os.path.dirname(os.path.abspath(__file__))
 read = lambda n: json.load(open(os.path.join(here, n), encoding="utf-8"))
-V = "20"
+V = "21"
 ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff9a4d'/%3E%3Cg fill='%232a1203'%3E%3Ccircle cx='27.5' cy='30.5' r='5.4'/%3E%3Cpath d='M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z'/%3E%3C/g%3E%3C/svg%3E"
 MARK = '<circle cx="27.5" cy="30.5" r="5.4"/><path d="M39 25H53A23 23 0 0 1 53 71H28A4 4 0 0 1 24 67V43A4 4 0 0 1 28 39H33A4 4 0 0 1 37 43V60H53A12 12 0 0 0 53 36H39A3.5 3.5 0 0 1 35.5 32.5V28.5A3.5 3.5 0 0 1 39 25Z"/>'
 NAV = [("install.html", "Install"), ("https://demo.dokkit.dev/", "Demo"), ("agents.html", "Agents"), ("api.html", "Docs"), ("phone.html", "Phone"), ("security.html", "Security"), (None, "Status"), ("https://github.com/nathannncurtis/dokkit", "Source")]
@@ -30,9 +30,7 @@ def page(file, title, desc, crumbs, h1, lede, steps, body, nxt, js=None, current
 <meta name="description" content="{e(desc)}">
 <meta name="theme-color" content="#1e1917">
 <link rel="icon" href="{ICON}">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="vendor/fonts/site.css">
 <link rel="stylesheet" href="site.css?v={V}">
 {sheet}<script>(() => {{ let m = null; try {{ m = localStorage.getItem("motion"); }} catch {{}} const on = m !== "off"; if (!on) document.documentElement.classList.add("still"); }})();</script>
 </head>
@@ -83,9 +81,9 @@ def page(file, title, desc, crumbs, h1, lede, steps, body, nxt, js=None, current
     <p>Server AGPL. Program and libraries Apache 2.0. Also accepts reports from Sentry's open-source SDKs, and is not affiliated with Sentry.</p>
   </div>
 </footer>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-<script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+<script src="vendor/gsap-3.12.5/gsap.min.js"></script>
+<script src="vendor/gsap-3.12.5/ScrollTrigger.min.js"></script>
+<script src="vendor/lenis-1.1.13/lenis.min.js"></script>
 <script src="site.js?v={V}"></script>
 {script}<script>railFor($$(".step"), $$(".rail a"));</script>
 <script src="motion.js?v={V}"></script>
@@ -417,7 +415,7 @@ def privacy_page():
     site = """        <ul class="did">
           <li>dokkit.dev is a static site served by Cloudflare. It sets no cookies and has no forms that send anything.</li>
           <li>It counts visits with Cloudflare Web Analytics: which page was seen, roughly where from, and how fast it loaded. That counter sets no cookies and keeps nothing that identifies you.</li>
-          <li>Its pages load fonts from Google Fonts and scripts from cdnjs and unpkg, so those services see your address when a page loads, as Cloudflare does for the page itself.</li>
+          <li>Its fonts and scripts are served from dokkit.dev itself, so no service but Cloudflare sees your address when a page loads.</li>
           <li>The install scripts (<code>install.sh</code>, <code>compose.yml</code>, <code>get.sh</code>, <code>get.ps1</code>, <code>install.ps1</code>) are counted from Cloudflare's request totals, kept as a number per week: how many downloads, not who made them.</li>
           <li>The Check a file and Move over pages work entirely in your browser. What you type or drop there is not sent anywhere.</li>
         </ul>"""
