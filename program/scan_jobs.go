@@ -143,7 +143,7 @@ func parseSchtasks(lines []string, offset int) (jobs []found) {
 }
 
 func windowsLast(when, code string) (string, string) {
-	n, err := strconv.ParseInt(code, 10, 64)
+	n, err := strconv.ParseInt(code, 10, 32)
 	if err != nil {
 		return "", ""
 	}

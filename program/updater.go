@@ -479,8 +479,9 @@ func startServerAgain() {
 
 // safeJoin is where a zip entry goes, or an error when it would land outside dest.
 func safeJoin(dest, name string) (string, error) {
-	p := filepath.Join(dest, name)
-	if p != filepath.Clean(dest) && !strings.HasPrefix(p, filepath.Clean(dest)+string(filepath.Separator)) {
+	root := filepath.Clean(dest)
+	p := filepath.Join(root, name)
+	if !filepath.IsLocal(name) || p != root && !strings.HasPrefix(p, root+string(filepath.Separator)) {
 		return "", fmt.Errorf("the zip has an entry, %q, that would land outside its folder", name)
 	}
 	return p, nil
@@ -502,7 +503,10 @@ func unzip(zipFile, dest string) error {
 	}
 	os.RemoveAll(dest)
 	for _, f := range r.File {
-		p, _ := safeJoin(dest, f.Name)
+		p, err := safeJoin(dest, f.Name)
+		if err != nil {
+			return err
+		}
 		if f.FileInfo().IsDir() {
 			if err := os.MkdirAll(p, 0o700); err != nil {
 				return err

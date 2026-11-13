@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -114,20 +115,26 @@ func sha256Hex(s string) string {
 	return hex.EncodeToString(h[:])
 }
 
+var idPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
+
 func validID(s string) bool {
-	if len(s) != 32 {
-		return false
+	return idPattern.MatchString(s)
+}
+
+// mailboxPath is the folder for id, or a file in it, and refuses any id the relay would not make.
+func (s *relayServer) mailboxPath(id string, file ...string) (string, error) {
+	if !validID(id) {
+		return "", fmt.Errorf("%q is not a mailbox id", id)
 	}
-	for _, c := range s {
-		if !strings.ContainsRune("0123456789abcdef", c) {
-			return false
-		}
-	}
-	return true
+	return filepath.Join(append([]string{s.dir, id}, file...)...), nil
 }
 
 func (s *relayServer) readMailbox(id string) (*relayMailbox, error) {
-	b, err := os.ReadFile(filepath.Join(s.dir, id, "mailbox.json"))
+	p, err := s.mailboxPath(id, "mailbox.json")
+	if err != nil {
+		return nil, err
+	}
+	b, err := os.ReadFile(p)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +143,12 @@ func (s *relayServer) readMailbox(id string) (*relayMailbox, error) {
 }
 
 func (s *relayServer) writeMailbox(id string, m *relayMailbox) error {
+	p, err := s.mailboxPath(id, "mailbox.json")
+	if err != nil {
+		return err
+	}
 	b, _ := json.MarshalIndent(m, "", "  ")
-	return writeFile(filepath.Join(s.dir, id, "mailbox.json"), b)
+	return writeFile(p, b)
 }
 
 func (s *relayServer) mailboxes() (map[string]*relayMailbox, error) {
@@ -179,7 +190,11 @@ func (s *relayServer) makeMailbox(name, key string) (string, error) {
 	if name == "" {
 		name = "signup-" + id[:8]
 	}
-	if err := os.MkdirAll(filepath.Join(s.dir, id), 0o700); err != nil {
+	dir, err := s.mailboxPath(id)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	return id, s.writeMailbox(id, &relayMailbox{Name: name, KeySha256: sha256Hex(key), Created: s.now().UTC()})
@@ -334,7 +349,7 @@ func (s *relayServer) sweep(idle time.Duration) int {
 			if m.LastUpload != nil {
 				last = *m.LastUpload
 			}
-			if s.now().Sub(last) > idle && os.RemoveAll(filepath.Join(s.dir, id)) == nil {
+			if dir, err := s.mailboxPath(id); err == nil && s.now().Sub(last) > idle && os.RemoveAll(dir) == nil {
 				removed++
 			}
 		}
@@ -407,7 +422,11 @@ func (s *relayServer) upload(w http.ResponseWriter, r *http.Request, id string) 
 		}
 	}
 	m.LastFetch, m.LastUpload = fetched, &now
-	if err := writeFile(filepath.Join(s.dir, id, "envelope.json"), body); err != nil {
+	p, err := s.mailboxPath(id, "envelope.json")
+	if err == nil {
+		err = writeFile(p, body)
+	}
+	if err != nil {
 		relayError(w, 500, "store_failed", "The envelope could not be stored.")
 		return
 	}
@@ -419,7 +438,11 @@ func (s *relayServer) upload(w http.ResponseWriter, r *http.Request, id string) 
 }
 
 func (s *relayServer) readEnvelope(id string) (*relayEnvelope, error) {
-	b, err := os.ReadFile(filepath.Join(s.dir, id, "envelope.json"))
+	p, err := s.mailboxPath(id, "envelope.json")
+	if err != nil {
+		return nil, err
+	}
+	b, err := os.ReadFile(p)
 	if err != nil {
 		return nil, err
 	}
@@ -548,7 +571,11 @@ func relayCommand(args []string) int {
 		}
 		for id, m := range all {
 			if m.Name == args[1] {
-				if err := os.RemoveAll(filepath.Join(s.dir, id)); err != nil {
+				dir, err := s.mailboxPath(id)
+				if err == nil {
+					err = os.RemoveAll(dir)
+				}
+				if err != nil {
 					return fail(err)
 				}
 				fmt.Printf("Removed the mailbox %s.\n", args[1])
