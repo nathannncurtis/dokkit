@@ -36,6 +36,12 @@ const size = (text) => enc.encode(text).length;
 /** How many lines were dropped because the queue was full. */
 export let dropped = 0;
 
+const trimSlashes = (text) => {
+  let end = text.length;
+  while (end > 0 && text[end - 1] === "/") end--;
+  return text.slice(0, end);
+};
+
 const env = (name) => (typeof process !== "undefined" && process.env && process.env[name]) || "";
 const now = () => new Date().toISOString();
 
@@ -50,7 +56,7 @@ export function start({ version, environment, url, key, host, insecure, announce
       return;
     }
     state = {
-      url: url.replace(/\/+$/, ""),
+      url: trimSlashes(url),
       key,
       version,
       environment: environment || env("DOKKIT_ENV") || undefined,
@@ -253,7 +259,7 @@ export async function job(name, work) {
 
 // Paths under the folder the app runs from are sent relative to it; others keep only what follows node_modules, or their name.
 function where(file) {
-  const root = typeof process !== "undefined" && process.cwd ? process.cwd().replace(/\\/g, "/").replace(/\/+$/, "") : "";
+  const root = typeof process !== "undefined" && process.cwd ? trimSlashes(process.cwd().replace(/\\/g, "/")) : "";
   if (!root) return { file, own: !file.includes("node_modules") && !file.startsWith("node:") };
   let path = file.replace(/^file:\/\//, "").replace(/\\/g, "/").replace(/^\/(\w:)/, "$1");
   try {
@@ -264,15 +270,43 @@ function where(file) {
   return { file: i >= 0 ? path.slice(i + 1) : path.slice(path.lastIndexOf("/") + 1), own: false };
 }
 
+const digits = (text) => text.length > 0 && [...text].every((c) => c >= "0" && c <= "9");
+function position(text) {
+  const b = text.lastIndexOf(":");
+  if (b < 1 || !digits(text.slice(b + 1))) return null;
+  const a = text.lastIndexOf(":", b - 1);
+  if (a < 0 || !digits(text.slice(a + 1, b))) return null;
+  return { file: text.slice(0, a), line: text.slice(a + 1, b) };
+}
+
+// V8 prints "at fn (file:1:2)" or "at file:1:2"; Firefox and Safari "fn@file:1:2".
+function frame(l) {
+  l = l.trimStart();
+  if (/[\r\u2028\u2029]/.test(l)) return null;
+  if (l.startsWith("at ")) {
+    const rest = l.slice(3);
+    const p = position(rest.endsWith(")") ? rest.slice(0, -1) : rest);
+    if (p && p.file) {
+      const i = p.file.indexOf(" (", 1);
+      if (i > 0 && i + 2 < p.file.length) return [, p.file.slice(0, i), p.file.slice(i + 2), p.line];
+      return [, undefined, p.file, p.line];
+    }
+  }
+  const p = position(l);
+  if (!p) return null;
+  const i = p.file.indexOf("@");
+  if (i < 0 || i + 1 >= p.file.length) return null;
+  return [, p.file.slice(0, i), p.file.slice(i + 1), p.line];
+}
+
 /** Sends an error: its type and stack, never its message. */
 export function capture(error, { handled = true, tags = {} } = {}) {
   try {
     if (!state || !error) return;
     // Innermost last, as the format asks. Only the "at" lines are read, so the message stays behind.
-    // V8 prints "at fn (file:1:2)", Firefox and Safari "fn@file:1:2".
     const frames = String(error.stack || "")
       .split("\n")
-      .map((l) => /^\s*at (?:(.+?) \()?(.+?):(\d+):\d+\)?$/.exec(l) || /^\s*(.*?)@(.+?):(\d+):\d+$/.exec(l))
+      .map(frame)
       .filter(Boolean)
       .reverse()
       .map(([, fn, file, line]) => ({ ...where(file), function: fn || "(anonymous)", line: Number(line) }));

@@ -136,6 +136,32 @@ test("Firefox and Safari stack lines are read", async () => {
   assert.deepStrictEqual(r.got[0].lines[0].frames.map((f) => [f.function, f.line]), [["(anonymous)", 5], ["run", 3]]);
 });
 
+test("V8 stack line shapes are read, and a long hostile line is quick", async () => {
+  const r = await scenario(`
+    dokkit.start({ url, key: "k" });
+    dokkit.capture({ name: "E", stack: [
+      "Error: boom",
+      "    at fn (/a/one.js:1:2)",
+      "    at /a/two.js:3:4",
+      "    at Foo.bar (a (b) c) (/a/three.js:5:6)",
+      "    at new Foo (/a/four.js:7:8)",
+      "    at async Promise.all (index 0)",
+    ].join("\\n") });
+    const t = Date.now();
+    dokkit.capture({ name: "E", stack: "at " + " (".repeat(50000) + "x\\n" + "\\t".repeat(50000) + "@".repeat(50000) + ":1\\nat " + "a".repeat(100000) + ":1:x" });
+    console.log(Date.now() - t);
+    await dokkit.flush();`);
+  assert.ok(r.got[0], r.stderr);
+  assert.deepStrictEqual(r.got[0].lines[0].frames.map((f) => [f.function, f.file, f.line]), [
+    ["new Foo", "four.js", 7],
+    ["Foo.bar", "three.js", 5],
+    ["(anonymous)", "two.js", 3],
+    ["fn", "one.js", 1],
+  ]);
+  assert.deepStrictEqual(r.got[1].lines[0].frames, []);
+  assert.ok(Number(r.stdout.trim()) < 500, r.stdout);
+});
+
 test("patchConsole sends console calls through log and can be undone", async () => {
   const r = await scenario(`
     dokkit.start({ url, key: "k" });

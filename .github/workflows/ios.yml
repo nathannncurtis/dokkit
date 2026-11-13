@@ -3,6 +3,9 @@ name: ios
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 # Run by hand. A step that fails is reported in the last step and does not fail the run.
 jobs:
   build:
