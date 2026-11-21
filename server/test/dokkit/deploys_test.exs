@@ -122,9 +122,9 @@ defmodule Dokkit.DeploysTest do
     view |> element("button", "Let it") |> render_click()
     assert Repo.reload!(installer).deployer
 
-    deploy.(%{service: "Label Printer", version: "1.0.0"})
-    deploy.(%{service: "Label Printer", version: "1.0.0"})
-    deploy.(%{service: "Label Printer", version: "1.1.0"})
+    deploy.(%{service: "Label Printer", version: "1.0.0", at: "2026-01-01T00:00:00Z"})
+    deploy.(%{service: "Label Printer", version: "1.0.0", at: "2026-01-01T00:00:01Z"})
+    deploy.(%{service: "Label Printer", version: "1.1.0", at: "2026-01-01T00:00:02Z"})
 
     assert [%{from: "1.0.0", version: "1.1.0"}, %{from: nil, version: "1.0.0"}] =
              Dokkit.Deploys.list(service: printer.id)
