@@ -132,7 +132,7 @@ defmodule Dokkit.Quiet do
     Repo.all(
       from w in QuietWindow,
         where: w.machine_id == ^machine_id,
-        order_by: [desc: w.started_at],
+        order_by: [desc: w.started_at, desc_nulls_first: w.ended_at],
         limit: ^limit
     )
   end
@@ -158,7 +158,7 @@ defmodule Dokkit.Quiet do
         where:
           w.machine_id == ^machine_id and
             coalesce(w.ended_at, w.until) >= ^(last_seen_at || ~U[1970-01-01 00:00:00Z]),
-        order_by: [desc: w.started_at],
+        order_by: [desc: w.started_at, desc_nulls_first: w.ended_at],
         limit: 1
     )
   end
