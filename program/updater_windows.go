@@ -410,3 +410,6 @@ func trustedRecipe(p string) error {
 }
 
 func cloneOwner(from, to string) {}
+
+// trustedHandle on Windows checks the path; openTrusted confirms it is the file that was opened.
+func trustedHandle(f *os.File, p string) error { return trustedRecipe(p) }

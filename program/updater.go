@@ -514,7 +514,7 @@ func safeJoin(dest, name string) (string, error) {
 	return p, nil
 }
 
-func unzip(zipFile, dest string) error {
+func unzip(zipFile, dest string) (err error) {
 	r, err := zip.OpenReader(zipFile)
 	if err != nil {
 		return err
@@ -529,7 +529,13 @@ func unzip(zipFile, dest string) error {
 		}
 	}
 	os.RemoveAll(dest)
+	defer func() {
+		if err != nil {
+			os.RemoveAll(dest)
+		}
+	}()
 	root := filepath.Clean(dest) + string(filepath.Separator)
+	left := extractLimit
 	for _, f := range r.File {
 		p := filepath.Join(root, f.Name)
 		if p+string(filepath.Separator) == root {
@@ -553,8 +559,13 @@ func unzip(zipFile, dest string) error {
 		}
 		out, err := os.Create(p)
 		if err == nil {
-			_, err = io.Copy(out, in)
+			var n int64
+			n, err = io.Copy(out, io.LimitReader(in, left+1))
+			left -= n
 			out.Close()
+			if err == nil && left < 0 {
+				err = errTooBig
+			}
 		}
 		in.Close()
 		if err != nil {

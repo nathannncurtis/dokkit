@@ -49,6 +49,7 @@ type appRig struct {
 	signer   string
 	valid    bool
 	trustBad string
+	ctxErrs  []error
 }
 
 func newAppRig(t *testing.T) *appRig {
@@ -65,12 +66,12 @@ func newAppRig(t *testing.T) *appRig {
 	}))
 	r.srv = httptest.NewServer(http.HandlerFunc(r.handle))
 	oldWhere, oldOps, oldRetry, oldOS, oldEvery, oldUnit := where, ops, retryFor, appOS, healthEvery, healthUnit
-	oldTrusted, oldAuth, oldRun := trusted, authenticode, runApp
+	oldTrusted, oldFile, oldAuth, oldRun, oldLimit := trusted, trustedFile, authenticode, runApp, extractLimit
 	t.Cleanup(func() {
 		r.srv.Close()
 		r.health.Close()
 		where, ops, retryFor, appOS, healthEvery, healthUnit = oldWhere, oldOps, oldRetry, oldOS, oldEvery, oldUnit
-		trusted, authenticode, runApp = oldTrusted, oldAuth, oldRun
+		trusted, trustedFile, authenticode, runApp, extractLimit = oldTrusted, oldFile, oldAuth, oldRun, oldLimit
 	})
 	where = layout{data: filepath.Join(r.dir, "data")}
 	retryFor, healthEvery, healthUnit = -time.Second, time.Millisecond, 20*time.Millisecond
@@ -90,6 +91,7 @@ func newAppRig(t *testing.T) *appRig {
 			return nil
 		},
 	}
+	trustedFile = func(f *os.File, p string) error { return trusted(p) }
 	trusted = func(p string) error {
 		if r.trustBad != "" && strings.Contains(p, r.trustBad) {
 			return errors.New("someone else can write it")
@@ -99,6 +101,7 @@ func newAppRig(t *testing.T) *appRig {
 	authenticode = func(p string) (string, bool, error) { return r.signer, r.valid, nil }
 	runApp = func(ctx context.Context, name string, args ...string) (string, error) {
 		r.calls = append(r.calls, strings.TrimSpace(filepath.Base(name)+" "+strings.Join(args, " ")))
+		r.ctxErrs = append(r.ctxErrs, ctx.Err())
 		if r.runFn != nil {
 			return r.runFn(name, args)
 		}

@@ -127,6 +127,7 @@ var (
 	healthUnit   = time.Second
 	appRunLimit  = 30 * time.Minute
 	trusted      = trustedRecipe
+	trustedFile  = trustedHandle
 	authenticode = realAuthenticode
 	runApp       = func(ctx context.Context, name string, args ...string) (string, error) {
 		out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
@@ -167,6 +168,10 @@ func appsOnce(ctx context.Context, c *client) int {
 	}
 	failed := 0
 	for _, it := range ans.Items {
+		if slices.ContainsFunc(st.UnsentApps, func(r appResult) bool { return r.Service == it.Service && r.Version == it.Version }) {
+			logf("%s %s was already installed; its result is still to be sent", it.Service, it.Version)
+			continue
+		}
 		logf("asked to move %s to %s", it.Service, it.Version)
 		res := installApp(ctx, c, it)
 		logf("%s %s: ok=%v %s", res.Service, res.Version, res.OK, res.Note)
@@ -254,25 +259,58 @@ func onThisSystem(kind string) error {
 func recipeFor(c *client, service string) (*declaration, error) {
 	var untrusted error
 	for _, p := range declarations(c.foldersNow()) {
-		d, err := readDeclaration(p)
-		if err != nil || d.Service.ID != service || d.App == nil {
+		text, bad, err := readTrusted(p, func(text []byte) bool {
+			d, err := parseDeclaration(p, string(text))
+			return err == nil && d.Service.ID == service && d.App != nil
+		})
+		if err != nil {
 			continue
 		}
-		bad := ""
-		for _, x := range []string{p, filepath.Dir(p)} {
-			if trusted(x) != nil && bad == "" {
-				bad = x
-			}
+		if bad != "" {
+			untrusted = fmt.Errorf("%s can be changed by accounts other than administrators, so its [app] is not used", bad)
+			continue
 		}
-		if bad == "" {
-			return d, nil
-		}
-		untrusted = fmt.Errorf("%s can be changed by accounts other than administrators, so its [app] is not used", bad)
+		return parseDeclaration(p, string(text))
 	}
 	if untrusted != nil {
 		return nil, untrusted
 	}
 	return nil, fmt.Errorf("no dokkit.toml in this machine's folders declares [app] for %s", service)
+}
+
+// readTrusted checks the file it read, not just its path; bad is the first path that failed.
+func readTrusted(p string, wanted func([]byte) bool) (text []byte, bad string, err error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return nil, "", err
+	}
+	defer f.Close()
+	text, err = io.ReadAll(io.LimitReader(f, 4<<20))
+	if err != nil || wanted != nil && !wanted(text) {
+		return nil, "", errors.New("not wanted")
+	}
+	switch {
+	case stillTheFile(f, p) != nil || trustedFile(f, p) != nil:
+		return nil, p, nil
+	case trusted(filepath.Dir(p)) != nil:
+		return nil, filepath.Dir(p), nil
+	}
+	return text, "", nil
+}
+
+func stillTheFile(f *os.File, path string) error {
+	a, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	b, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(a, b) {
+		return fmt.Errorf("%s is no longer the file that was read", path)
+	}
+	return nil
 }
 
 func fetchAppFile(ctx context.Context, c *client, it appItem, work string) (string, error) {
@@ -326,6 +364,11 @@ func parseSignature(out string) (signer string, valid bool) {
 		signer = strings.TrimSpace(lines[1])
 	}
 	return
+}
+
+// rollbackContext outlives the run's own limit, so putting the old version back is not cut short.
+func rollbackContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
 }
 
 func runChecked(ctx context.Context, name string, args ...string) error {
@@ -393,6 +436,9 @@ func swapFiles(ctx context.Context, d *declaration, it appItem, file, work strin
 	if err != nil {
 		return "", err
 	}
+	if fi, err := os.Lstat(path); err == nil && (isDir && fi.Mode().Type() != fs.ModeDir || !isDir && !fi.Mode().IsRegular()) {
+		return "", fmt.Errorf("%s is a link or not a plain file or folder. Nothing was changed", path)
+	}
 	stop, start := control(ctx, a)
 	if stop != nil {
 		if err := stop(); err != nil {
@@ -406,6 +452,9 @@ func swapFiles(ctx context.Context, d *declaration, it appItem, file, work strin
 		return "", fmt.Errorf("could not keep the old files: %v. Nothing was changed", err)
 	}
 	fail := func(what string, err error) (string, error) {
+		rctx, cancel := rollbackContext(ctx)
+		defer cancel()
+		stop, start := control(rctx, a)
 		if stop != nil {
 			stop()
 		}
@@ -502,6 +551,8 @@ func untar(file, dest string) (err error) {
 		}
 	}()
 	os.RemoveAll(dest)
+	root := filepath.Clean(dest) + string(filepath.Separator)
+	left := extractLimit
 	tr := tar.NewReader(gz)
 	for {
 		h, err := tr.Next()
@@ -517,9 +568,12 @@ func untar(file, dest string) (err error) {
 		if h.Typeflag != tar.TypeDir && h.Typeflag != tar.TypeReg {
 			return fmt.Errorf("the archive has an entry, %q, that is a link or not a plain file", h.Name)
 		}
-		p, err := safeJoin(dest, h.Name)
-		if err != nil {
-			return err
+		p := filepath.Join(root, h.Name)
+		if p+string(filepath.Separator) == root {
+			continue
+		}
+		if !filepath.IsLocal(h.Name) || !strings.HasPrefix(p, root) {
+			return fmt.Errorf("the archive has an entry, %q, that would land outside its folder", h.Name)
 		}
 		if h.Typeflag == tar.TypeDir {
 			if err := os.MkdirAll(p, 0o700); err != nil {
@@ -534,15 +588,24 @@ func untar(file, dest string) (err error) {
 		if err != nil {
 			return err
 		}
-		_, err = io.Copy(out, tr)
+		n, err := io.Copy(out, io.LimitReader(tr, left+1))
+		left -= n
 		if cerr := out.Close(); err == nil {
 			err = cerr
+		}
+		if err == nil && left < 0 {
+			err = errTooBig
 		}
 		if err != nil {
 			return err
 		}
 	}
 }
+
+// extractLimit is the most an archive may unpack to, in bytes.
+var extractLimit int64 = 4 << 30
+
+var errTooBig = errors.New("the archive unpacks to more than the limit set for it, so it was refused")
 
 // backup keeps the target as <target>.dokkit-previous and says whether there was one to keep.
 func backup(path string, isDir bool) (bool, error) {
@@ -631,13 +694,24 @@ func putTree(src, dst string) error {
 		_, gone := os.Lstat(t)
 		fresh := gone != nil
 		switch {
+		case e.IsDir() && !fresh:
+			if err := realDir(t); err != nil {
+				return err
+			}
 		case e.IsDir():
-			if fresh {
-				if err := os.MkdirAll(t, 0o755); err != nil {
+			if rel != "." {
+				if err := realDir(filepath.Dir(t)); err != nil {
 					return err
 				}
 			}
+			if err := os.MkdirAll(t, 0o755); err != nil {
+				return err
+			}
 		default:
+			// looked at again just before each write, so a link put in meanwhile is seen
+			if err := realDir(filepath.Dir(t)); err != nil {
+				return err
+			}
 			if err := putFile(p, t); err != nil {
 				return err
 			}
@@ -647,6 +721,18 @@ func putTree(src, dst string) error {
 		}
 		return nil
 	})
+}
+
+// realDir refuses a path that is a link or a junction, or not a folder.
+func realDir(p string) error {
+	fi, err := os.Lstat(p)
+	if err != nil {
+		return err
+	}
+	if fi.Mode().Type() != fs.ModeDir {
+		return fmt.Errorf("%s is a link or not a folder, so nothing was written through it", p)
+	}
+	return nil
 }
 
 // replaceBytes writes the file whole beside its place, then renames it in.
@@ -673,9 +759,12 @@ func composeTag(tag, version string) string {
 
 func composeApp(ctx context.Context, d *declaration, it appItem) (string, error) {
 	a := d.App
-	orig, err := os.ReadFile(a.ComposeFile)
+	orig, bad, err := readTrusted(a.ComposeFile, nil)
 	if err != nil {
 		return "", err
+	}
+	if bad != "" {
+		return "", fmt.Errorf("%s can be changed by accounts other than administrators, so it is not run", bad)
 	}
 	next, err := retag(string(orig), a.ComposeService, composeTag(a.Tag, it.Version))
 	if err != nil {
@@ -692,6 +781,8 @@ func composeApp(ctx context.Context, d *declaration, it appItem) (string, error)
 	}
 	cloneOwner(a.ComposeFile, prev)
 	fail := func(what string, err error, up bool) (string, error) {
+		ctx, cancel := rollbackContext(ctx)
+		defer cancel()
 		if rerr := replaceBytes(a.ComposeFile, orig); rerr != nil {
 			return "", fmt.Errorf("%s: %v; the old compose file could not be put back: %v", what, err, rerr)
 		}
@@ -773,8 +864,11 @@ func versionFile(d *declaration) string {
 	if !filepath.IsAbs(from) {
 		from = filepath.Join(dir, from)
 	}
-	if !within(dir, from) {
+	if !insideFolder(dir, from) || exists(from) && !within(dir, from) {
 		return ""
+	}
+	if !exists(from) && strings.ContainsAny(d.Service.VersionFrom, " \t") {
+		return "" // a command, not a file
 	}
 	return from
 }

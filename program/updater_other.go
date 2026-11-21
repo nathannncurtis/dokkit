@@ -25,3 +25,5 @@ func updaterCommand([]string) int {
 func trustedRecipe(p string) error { return errors.New("this system does not run app updates") }
 
 func cloneOwner(from, to string) {}
+
+func trustedHandle(f *os.File, p string) error { return trustedRecipe(p) }

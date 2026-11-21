@@ -33,6 +33,8 @@ defmodule DokkitWeb.InboxLiveTest do
     assert html =~ "Nothing here needs you"
 
     Intake.ping(key, "backup", "fail", nil, "")
+    # Other async tests broadcast too, so this change may be waiting out the debounce.
+    send(view.pid, {:settled, :page})
     assert render(view) =~ "Nightly backup failed"
     assert render(view) =~ "1 needs a look"
 

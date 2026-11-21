@@ -18,7 +18,7 @@ defmodule Dokkit.AppUpdates do
   }
   @fields Map.keys(@defaults)
   @by "Dokkit updater"
-  @check "app-update"
+  @check "dokkit.app-update"
   @api "https://api.github.com"
 
   def kinds, do: @kinds
@@ -122,7 +122,25 @@ defmodule Dokkit.AppUpdates do
               {k, v}, acc -> Map.put(acc, k, v)
             end)
 
+          was = settings(app)
           Setting.put(key(app), stored)
+          next = settings(app)
+
+          # Another repository's release of the same tag is other bytes; nothing held before stays.
+          if next["repo"] != was["repo"] do
+            Repo.delete_all(from r in AppRelease, where: r.app == ^app)
+            File.rm_rf(Path.join([Releases.dir(), ".apps", app]))
+          end
+
+          if next["hold"] do
+            Repo.update_all(
+              from(t in AppTarget,
+                where: t.app == ^app and not is_nil(t.wanted_version) and is_nil(t.asked_at)
+              ),
+              set: [wanted_version: nil, started_at: nil, auto: false]
+            )
+          end
+
           Issues.changed(false)
           {:ok, view(app)}
         end
@@ -550,6 +568,9 @@ defmodule Dokkit.AppUpdates do
       is_nil(t) ->
         "#{m.name} has no [app] for #{app} in a dokkit.toml its Dokkit program reads, so the updater there has no way to install it."
 
+      t.wanted_version && t.asked_at ->
+        "#{m.name} is installing #{t.wanted_version} of #{app} now. Wait for its result."
+
       not m.has_updater ->
         "#{m.name} has no Dokkit updater. On it, from an administrator prompt: dokkit updater install"
 
@@ -683,6 +704,7 @@ defmodule Dokkit.AppUpdates do
                 where: t.machine_id == ^machine_id and not is_nil(t.wanted_version),
                 order_by: t.app
             ),
+          not settings(t.app)["hold"],
           item = item(t, platform),
           item != nil,
           do: item
@@ -803,29 +825,40 @@ defmodule Dokkit.AppUpdates do
     if service.version != version,
       do: Repo.update!(Ecto.Changeset.change(service, version: version))
 
-    case Repo.get_by(Check, service_id: service.id, name: @check) do
+    case update_check(service) do
       %Check{state: state} = check when state != :ok -> Issues.record(check, :ok)
+      _ -> nil
+    end
+  end
+
+  # Only the row this module made: a check of the same name from a dokkit.toml is left alone.
+  defp update_check(service) do
+    case Repo.get_by(Check, service_id: service.id, name: @check) do
+      %Check{source: :reported, config: %{"app_update" => true}} = check -> check
       _ -> nil
     end
   end
 
   defp failed(service, t, version, note) do
     check =
-      Repo.get_by(Check, service_id: service.id, name: @check) ||
-        Repo.insert!(%Check{
-          service_id: service.id,
-          name: @check,
-          type: :custom,
-          fail_after: 1,
-          config: %{"app_update" => true}
-        })
+      update_check(service) ||
+        (is_nil(Repo.get_by(Check, service_id: service.id, name: @check)) &&
+           Repo.insert!(%Check{
+             service_id: service.id,
+             name: @check,
+             type: :custom,
+             fail_after: 1,
+             config: %{"app_update" => true}
+           }))
 
-    Issues.record(check, :down,
-      title:
-        "#{service.name} did not update to #{version}" <>
-          if(t.auto, do: "; automatic updates stopped", else: ""),
-      note: note || "The updater gave no reason."
-    )
+    if check,
+      do:
+        Issues.record(check, :down,
+          title:
+            "#{service.name} did not update to #{version}" <>
+              if(t.auto, do: "; automatic updates stopped", else: ""),
+          note: note || "The updater gave no reason."
+        )
   end
 
   def expire(now \\ DateTime.utc_now()) do

@@ -416,6 +416,72 @@ defmodule Dokkit.AppUpdatesTest do
       assert [%{require_signature: false, signer: ""}] = AppUpdates.ask(b.id, %{})
     end
 
+    test "an install that started is not replaced, and a hold stops one not yet picked up", %{
+      build01: b
+    } do
+      {:ok, 1} = AppUpdates.approve("acme-intake", b.id)
+      assert [_] = AppUpdates.ask(b.id, %{})
+
+      assert {:error, "not_eligible", "build01 is installing v1.4.0 of acme-intake now" <> _} =
+               AppUpdates.approve("acme-intake", b.id)
+
+      assert {:ok, 0} = AppUpdates.approve("acme-intake", :all)
+
+      :ok =
+        AppUpdates.result(b.id, %{
+          "service" => "acme-intake",
+          "version" => "v1.4.0",
+          "ok" => false
+        })
+
+      {:ok, 1} = AppUpdates.approve("acme-intake", b.id)
+      {:ok, _} = AppUpdates.save("acme-intake", %{"hold" => true})
+      assert target(b).wanted_version == nil
+      assert AppUpdates.ask(b.id, %{}) == []
+    end
+
+    test "a held app's queued job is not handed out", %{build01: b} do
+      {:ok, 1} = AppUpdates.approve("acme-intake", b.id)
+      [_] = AppUpdates.ask(b.id, %{})
+      {:ok, _} = AppUpdates.save("acme-intake", %{"hold" => true})
+      assert target(b).wanted_version == "v1.4.0"
+      assert AppUpdates.ask(b.id, %{}) == []
+    end
+
+    test "another repository's releases are not reused" do
+      assert AppUpdates.newest("acme-intake")
+      {:ok, _} = AppUpdates.save("acme-intake", %{"repo" => "example/other"})
+      assert AppUpdates.newest("acme-intake") == nil
+      refute File.exists?(AppUpdates.dir("acme-intake", "v1.4.0"))
+    end
+
+    test "a check of the same name from the file is never touched by update results", %{
+      build01: b
+    } do
+      service = Repo.get_by!(Service, machine_id: b.id, slug: "acme-intake")
+
+      own =
+        Repo.insert!(%Check{
+          service_id: service.id,
+          name: "dokkit.app-update",
+          type: :tcp,
+          source: :file,
+          config: %{"port" => 8443}
+        })
+
+      {:ok, 1} = AppUpdates.approve("acme-intake", b.id)
+
+      :ok =
+        AppUpdates.result(b.id, %{
+          "service" => "acme-intake",
+          "version" => "v1.4.0",
+          "ok" => false
+        })
+
+      assert Repo.reload!(own).state == :unknown
+      assert Repo.all(from i in Issue, where: is_nil(i.closed_at)) == []
+    end
+
     test "a failed install opens an issue, and the next good one closes it", %{build01: b} do
       {:ok, 1} = AppUpdates.approve("acme-intake", b.id)
 
@@ -437,7 +503,7 @@ defmodule Dokkit.AppUpdatesTest do
         AppUpdates.result(b.id, %{"service" => "acme-intake", "version" => "v1.4.0", "ok" => true})
 
       assert Repo.all(from i in Issue, where: is_nil(i.closed_at)) == []
-      assert %Check{state: :ok} = Repo.get_by(Check, name: "app-update")
+      assert %Check{state: :ok} = Repo.get_by(Check, name: "dokkit.app-update")
     end
 
     test "an install that never reports back counts as failed", %{build01: b} do
