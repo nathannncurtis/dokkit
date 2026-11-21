@@ -31,7 +31,7 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `versions` | `read` | Lists the versions of the apps Dokkit watches. |
 | `rules` | `read` | Lists the alert rules. |
 | `proposals` | `read` | Lists what Dokkit found and a person may accept or dismiss, each with `origin` and `why`. Leaves out the operating system's own things unless `system` is true. Always answers `{"items": [...], "next": ..., "hidden": {"total": n, "machines": {"<machine name>": n}}}`, where `hidden` counts what was left out. |
-| `series` | `read` | Shows numbers over time for a service (`id`), or for a machine's own disks, memory and processor (`machine`). |
+| `series` | `read` | Shows numbers over time for a service (`id`), or for a machine's own disks, memory, processor and hardware readings (`machine`). |
 | `processes` | `read` | Shows a machine's newest process list (`machine` is its id or name): `sort`, `q`, `pid`, `limit`. |
 | `process_history` | `read` | Shows the top 10 processes by memory or processor kept for a machine over up to 24 hours: `kind`, `from`, `to`. |
 | `day` | `read` | Shows the last 24 hours in half hours: for each machine whether something was down, needed a look, or nothing happened, or it was not heard from, and the issues that opened. |

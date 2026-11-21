@@ -122,7 +122,8 @@ rsync: disk full
       report(app, [body], [{"content-encoding", "gzip"}, {"dokkit-batch", Ecto.UUID.generate()}])
       |> json_response(200)
 
-    assert answer == %{"accepted" => 2, "refused" => []}
+    assert %{"accepted" => 2, "refused" => [], "server_ms" => ms} = answer
+    assert is_integer(ms) and map_size(answer) == 3
 
     assert %JobRun{result: :fail, exit_code: 3, duration_ms: 2100} =
              Repo.get_by!(JobRun, run: run)

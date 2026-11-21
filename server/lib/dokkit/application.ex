@@ -8,6 +8,7 @@ defmodule Dokkit.Application do
     Dokkit.Slots.init()
     Dokkit.Errors.init()
     Dokkit.Values.init()
+    Dokkit.Accounts.init()
     Dokkit.Certificate.load()
     demo = Dokkit.Demo.on?()
     watch = Application.get_env(:dokkit, :watch, true) and not demo

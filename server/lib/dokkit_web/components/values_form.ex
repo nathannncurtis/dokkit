@@ -45,67 +45,17 @@ defmodule DokkitWeb.ValuesForm do
       <form phx-submit="values_save" phx-change={@change} id={"#{@id}-form"}>
         <input type="hidden" name="group" value={@group} />
         <input :if={@target} type="hidden" name="target" value={@target} />
-        <div
+        <.row
           :for={r <- @rows}
-          class={["cfg-row", differs?(r, @changed) && "changed", off?(r, @values) && "off"]}
-          id={"#{@id}-#{r.id}"}
-        >
-          <div>
-            <h3>{r.title}</h3>
-            <p class="mute">{r.sub}</p>
-          </div>
-          <div class="ctl">
-            <%= if r[:toggle] do %>
-              <input type="hidden" name={"values[#{elem(r.toggle, 0)}]"} value="false" />
-              <input
-                type="checkbox"
-                class="switch"
-                name={"values[#{elem(r.toggle, 0)}]"}
-                value="true"
-                checked={on?(@values[elem(r.toggle, 0)])}
-                disabled={@disabled}
-                aria-label={r.title}
-              />
-            <% end %>
-            <%= for {w, f} <- pairs(r) do %>
-              <span :if={w != ""}>{w}</span>
-              <input
-                :if={f && tuple_size(f) == 4}
-                class="inp sm"
-                type="number"
-                name={"values[#{elem(f, 0)}]"}
-                value={@values[elem(f, 0)]}
-                min={elem(f, 2)}
-                max={elem(f, 3)}
-                step="1"
-                disabled={@disabled}
-                aria-label={"#{r.title}: #{String.trim(w)}"}
-              />
-              <input
-                :if={f && tuple_size(f) == 3}
-                class="inp"
-                type="text"
-                name={"values[#{elem(f, 0)}]"}
-                value={@values[elem(f, 0)]}
-                disabled={@disabled}
-                aria-label={r.title}
-              />
-            <% end %>
-          </div>
-          <span class="def">
-            Default: {Values.say(r, @base)}
-            <button
-              :if={differs?(r, @changed) and not @disabled}
-              type="button"
-              phx-click="values_reset"
-              phx-value-group={@group}
-              phx-value-row={r.id}
-              phx-value-target={@target}
-            >
-              Reset
-            </button>
-          </span>
-        </div>
+          r={r}
+          id={@id}
+          group={@group}
+          target={@target}
+          values={@values}
+          base={@base}
+          changed={@changed}
+          disabled={@disabled}
+        />
         <div class="foot">
           <span
             :if={@result && elem(@result, 0) == (@target || @group)}
@@ -123,6 +73,132 @@ defmodule DokkitWeb.ValuesForm do
         </div>
       </form>
     </details>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :group, :string, required: true
+  attr :scope, :any, required: true
+  attr :rows, :list, required: true, doc: "the ids of the group's rows to show"
+  attr :disabled, :boolean, default: false
+  attr :result, :any, default: nil
+  attr :draft, :map, default: %{}
+  attr :change, :string, default: nil
+
+  @doc "Some rows of a group with their own Save, to sit beside what they act on."
+  def inline(assigns) do
+    view = Values.view(assigns.scope)
+
+    assigns =
+      assign(assigns,
+        list: for(r <- Values.rows(assigns.group, assigns.scope), r.id in assigns.rows, do: r),
+        values: Map.merge(view["values"], Map.take(assigns.draft, Map.keys(view["values"]))),
+        base: view["defaults"],
+        changed: view["changed"]
+      )
+
+    ~H"""
+    <form :if={@list != []} phx-submit="values_save" phx-change={@change} id={"#{@id}-form"}>
+      <input type="hidden" name="group" value={@group} />
+      <input type="hidden" name="target" value={@id} />
+      <.row
+        :for={r <- @list}
+        r={r}
+        id={@id}
+        group={@group}
+        target={@id}
+        values={@values}
+        base={@base}
+        changed={@changed}
+        disabled={@disabled}
+      />
+      <div class="foot">
+        <span
+          :if={@result && elem(@result, 0) == @id}
+          class={elem(@result, 1) == :error && "bad"}
+          role="status"
+        >
+          {elem(@result, 2)}
+        </span>
+        <span class="end">
+          <button class="btn primary sm" type="submit" disabled={@disabled}>Save</button>
+        </span>
+      </div>
+    </form>
+    """
+  end
+
+  attr :r, :map, required: true
+  attr :id, :string, required: true
+  attr :group, :string, required: true
+  attr :target, :string, default: nil
+  attr :values, :map, required: true
+  attr :base, :map, required: true
+  attr :changed, :list, required: true
+  attr :disabled, :boolean, required: true
+
+  defp row(assigns) do
+    ~H"""
+    <div
+      class={["cfg-row", differs?(@r, @changed) && "changed", off?(@r, @values) && "off"]}
+      id={"#{@id}-#{@r.id}"}
+    >
+      <div>
+        <h3>{@r.title}</h3>
+        <p class="mute">{@r.sub}</p>
+      </div>
+      <div class="ctl">
+        <%= if @r[:toggle] do %>
+          <input type="hidden" name={"values[#{elem(@r.toggle, 0)}]"} value="false" />
+          <input
+            type="checkbox"
+            class="switch"
+            name={"values[#{elem(@r.toggle, 0)}]"}
+            value="true"
+            checked={on?(@values[elem(@r.toggle, 0)])}
+            disabled={@disabled}
+            aria-label={@r.title}
+          />
+        <% end %>
+        <%= for {w, f} <- pairs(@r) do %>
+          <span :if={w != ""}>{w}</span>
+          <input
+            :if={f && tuple_size(f) == 4}
+            class="inp sm"
+            type="number"
+            name={"values[#{elem(f, 0)}]"}
+            value={@values[elem(f, 0)]}
+            min={elem(f, 2)}
+            max={elem(f, 3)}
+            step="1"
+            disabled={@disabled}
+            aria-label={"#{@r.title}: #{String.trim(w)}"}
+          />
+          <input
+            :if={f && tuple_size(f) == 3}
+            class="inp"
+            type="text"
+            name={"values[#{elem(f, 0)}]"}
+            value={@values[elem(f, 0)]}
+            disabled={@disabled}
+            aria-label={@r.title}
+          />
+        <% end %>
+      </div>
+      <span class="def">
+        Default: {Values.say(@r, @base)}
+        <button
+          :if={differs?(@r, @changed) and not @disabled}
+          type="button"
+          phx-click="values_reset"
+          phx-value-group={@group}
+          phx-value-row={@r.id}
+          phx-value-target={@target}
+        >
+          Reset
+        </button>
+      </span>
+    </div>
     """
   end
 

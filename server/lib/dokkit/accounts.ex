@@ -131,8 +131,20 @@ defmodule Dokkit.Accounts do
     :ok
   end
 
-  @doc "Microseconds, the time a session carries and is compared by."
-  def stamp, do: System.os_time(:microsecond)
+  def init, do: :persistent_term.put({__MODULE__, :stamp}, :atomics.new(1, signed: true))
+
+  @doc "Microseconds a session carries, each later than the last: Windows' clock moves in whole milliseconds."
+  def stamp, do: next_stamp(:persistent_term.get({__MODULE__, :stamp}))
+
+  defp next_stamp(last) do
+    seen = :atomics.get(last, 1)
+    want = max(System.os_time(:microsecond), seen + 1)
+
+    case :atomics.compare_exchange(last, 1, seen, want) do
+      :ok -> want
+      _ -> next_stamp(last)
+    end
+  end
 
   def change_password(%User{} = user, old, new) do
     cond do

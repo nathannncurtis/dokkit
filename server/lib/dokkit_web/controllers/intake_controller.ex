@@ -18,7 +18,8 @@ defmodule DokkitWeb.IntakeController do
          {:ok, text} <- plain(conn, body),
          {:ok, batch} <- batch(conn),
          {:ok, answer} <- Intake.report(key, batch, text) do
-      json(conn, answer)
+      # The program takes the middle of its round trip against this to measure its clock's drift.
+      json(conn, Map.put(answer, :server_ms, System.os_time(:millisecond)))
     else
       :unauthorized -> fail(conn, 401, "bad_key", "Missing or bad key.")
       :bad_batch -> fail(conn, 422, "bad_batch", "Dokkit-Batch must be a UUID.")

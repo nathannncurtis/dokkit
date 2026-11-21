@@ -1,0 +1,14 @@
+systmp	32 C/90 F
+cputmp	57 C/134 F
+sysfannum	1
+sysfan 1	750 RPM
+hdnum	9
+hdtmp 1	35 C/95 F
+hdtmp 2	35 C/95 F
+hdtmp 3	36 C/96 F
+hdtmp 4	35 C/95 F
+hdtmp 5	35 C/95 F
+hdtmp 6	28 C/82 F
+hdtmp 7	29 C/84 F
+hdtmp 8	29 C/84 F
+hdtmp 9	26 C/78 F

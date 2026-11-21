@@ -50,14 +50,18 @@ defmodule DokkitWeb.Show do
   attr :points, :list, required: true
   attr :limit, :any, default: nil
   attr :label, :string, required: true
+  attr :unit, :string, default: "%"
 
-  @doc "A line of percent readings across the points' span. A gap is a time with no number."
+  @doc "A line of readings across the points' span, percent unless a unit is given. A gap is a time with no number."
   def line(assigns) do
     values = assigns.points |> Enum.map(& &1.value) |> Enum.reject(&is_nil/1)
     limit = assigns.limit
     all = if limit, do: [limit | values], else: values
-    lo = max(0, floor((Enum.min(all, fn -> 0 end) - 3) / 10) * 10)
-    hi = min(100, max(lo + 10, ceil((Enum.max(all, fn -> 100 end) + 3) / 10) * 10))
+    percent? = assigns.unit == "%"
+    lo = floor((Enum.min(all, fn -> 0 end) - 3) / 10) * 10
+    lo = if percent?, do: max(0, lo), else: lo
+    hi = max(lo + 10, ceil((Enum.max(all, fn -> 100 end) + 3) / 10) * 10)
+    hi = if percent?, do: min(100, hi), else: hi
     n = max(length(assigns.points) - 1, 1)
     x = fn i -> Float.round(54 + 538 * i / n, 1) end
     y = fn v -> Float.round(120 - 110 * (v - lo) / (hi - lo), 1) end
@@ -92,10 +96,12 @@ defmodule DokkitWeb.Show do
     ~H"""
     <svg viewBox="0 0 600 150" role="img" aria-label={@label} class="line">
       <line :for={v <- [@lo, @mid, @hi]} x1="54" x2="592" y1={@y.(v)} y2={@y.(v)} />
-      <text :for={v <- [@lo, @mid, @hi]} x="48" y={@y.(v) + 4} text-anchor="end">{round(v)}%</text>
+      <text :for={v <- [@lo, @mid, @hi]} x="48" y={@y.(v) + 4} text-anchor="end">
+        {round(v)}{@unit}
+      </text>
       <line :if={@limit} class="mk" x1="54" x2="592" y1={@y.(@limit)} y2={@y.(@limit)} />
       <text :if={@limit} class="mk" x="592" y={@y.(@limit) - 4} text-anchor="end">
-        limit {round(@limit)}%
+        limit {round(@limit)}{@unit}
       </text>
       <path d={@path} />
       <text x="54" y="144">{at(@first)}</text>
