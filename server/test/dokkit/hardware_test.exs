@@ -60,6 +60,76 @@ defmodule Dokkit.HardwareTest do
     assert [%{title: "GPU 1 memory at 99% on gpu-02", state: :degraded}] = open_on(m)
   end
 
+  test "a limit opens when its time is up, though the unchanged reading is not sent again yet" do
+    {m, key} = machine("gpu-08")
+    now = DateTime.utc_now()
+    report(key, [reading("gpu.0.temp_c", 93, now, -200)])
+    assert open_on(m) == []
+
+    Numbers.overdue(DateTime.add(now, -100))
+    assert open_on(m) == []
+
+    Numbers.overdue(now)
+    assert [%{title: "GPU at 93 °C on gpu-08", state: :down}] = open_on(m)
+  end
+
+  test "a machine that stopped reporting does not open a limit on its last reading" do
+    {m, key} = machine("gpu-09")
+    now = DateTime.utc_now()
+    report(key, [reading("gpu.0.temp_c", 93, now, -200)])
+    Numbers.overdue(DateTime.add(now, 600))
+    assert open_on(m) == []
+  end
+
+  test "a machine's own minutes or down level for a hardware row replaces a file's threshold" do
+    {m, key} = machine("gpu-10")
+
+    doc = %{
+      schema: 1,
+      service: %{id: "trainer"},
+      check: [%{type: "threshold", name: "hot", metric: "gpu.0.temp_c", limit: 99, fail_after: 1}]
+    }
+
+    as = put_req_header(build_conn(), "authorization", "Bearer " <> key)
+    assert %{"service" => _} = json_response(put(as, "/api/v1/declare", doc), 200)
+    {:ok, _} = Values.save({:machine, m.id}, %{"gpu_temp_minutes" => 2})
+
+    t = ago()
+    report(key, for(s <- [0, 60], do: reading("gpu.0.temp_c", 93, t, s)))
+    assert [%{title: "GPU at 93 °C on gpu-10"}] = open_on(m)
+  end
+
+  test "a stats line between two metric lines keeps the threshold's count" do
+    {m, key} = machine("web-06")
+
+    doc = %{
+      schema: 1,
+      service: %{id: "portal"},
+      check: [
+        %{
+          type: "threshold",
+          name: "busy",
+          metric: "requests.per_minute",
+          limit: 10,
+          fail_after: 3
+        }
+      ]
+    }
+
+    as = put_req_header(build_conn(), "authorization", "Bearer " <> key)
+    assert %{"service" => _} = json_response(put(as, "/api/v1/declare", doc), 200)
+    busy = %{type: "metric", service: "portal", name: "requests.per_minute", value: 50}
+
+    stats = %{
+      type: "stats",
+      service: "portal",
+      document: %{schema: 1, requests: %{"5m" => %{per_minute: 50}}}
+    }
+
+    report(key, [busy, stats, busy])
+    assert [%{service: %{slug: "portal"}}] = open_on(m)
+  end
+
   test "a fan that never turned is not watched; one that stops is" do
     {m, key} = machine("web-01")
     t = ago()

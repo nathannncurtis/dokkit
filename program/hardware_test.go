@@ -150,6 +150,28 @@ func TestNvidiaFallsBackToTheOldField(t *testing.T) {
 	}
 }
 
+func TestAnAMDCardIsNumberedAfterTheNVIDIAOnes(t *testing.T) {
+	root := hwReset(t)
+	for card, busy := range map[string]string{"card0": "40", "card10": "60", "card2": "50"} {
+		dev := filepath.Join(root, "class", "drm", card, "device")
+		write(t, filepath.Join(dev, "vendor"), "0x1002\n")
+		write(t, filepath.Join(dev, "gpu_busy_percent"), busy+"\n")
+	}
+	write(t, filepath.Join(root, "class", "drm", "card0-DP-1", "device", "vendor"), "0x1002\n")
+	f := &hwFound{}
+	parseNvidia(fixture(t, "nvidia", "new-idle.txt"), f)
+	amdGPUs(f)
+	got := readingsOf(f)
+	for name, v := range map[string]float64{"gpu.0.used_percent": 0, "gpu.1.used_percent": 40, "gpu.2.used_percent": 50, "gpu.3.used_percent": 60} {
+		if r, ok := got[name]; !ok || r.value != v {
+			t.Errorf("%s = %+v, want %v", name, r, v)
+		}
+	}
+	if _, ok := got["gpu.4.used_percent"]; ok {
+		t.Error("a connector folder is not a card")
+	}
+}
+
 func TestHwmonOnATowerWithManyCores(t *testing.T) {
 	root := hwReset(t)
 	hwmonTree(t, root, fixture(t, "hwmon", "dell-tower.txt"))

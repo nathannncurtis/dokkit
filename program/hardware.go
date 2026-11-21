@@ -310,14 +310,23 @@ var cardDir = regexp.MustCompile(`^card(\d+)$`)
 
 func amdGPUs(f *hwFound) {
 	dirs, _ := filepath.Glob(filepath.Join(sysRoot, "class", "drm", "card*"))
+	sort.Slice(dirs, func(i, j int) bool { return cardNum(dirs[i]) < cardNum(dirs[j]) })
+	// AMD cards are numbered after the NVIDIA ones, so no two cards share a name.
+	next := 0
+	for _, r := range f.readings {
+		var n int
+		if _, err := fmt.Sscanf(r.name, "gpu.%d.", &n); err == nil && n >= next {
+			next = n + 1
+		}
+	}
 	cards := 0
 	for _, d := range dirs {
 		m := cardDir.FindStringSubmatch(filepath.Base(d))
 		if m == nil || readText(filepath.Join(d, "device", "vendor")) != "0x1002" {
 			continue
 		}
+		g, dev := "gpu."+strconv.Itoa(next+cards)+".", filepath.Join(d, "device")
 		cards++
-		g, dev := "gpu."+m[1]+".", filepath.Join(d, "device")
 		if v, ok := readNum(filepath.Join(dev, "gpu_busy_percent")); ok {
 			f.add(g+"used_percent", v, 0)
 		}
@@ -341,6 +350,15 @@ func amdGPUs(f *hwFound) {
 	} else {
 		f.say("AMD cards: %d", cards)
 	}
+}
+
+func cardNum(dir string) int {
+	m := cardDir.FindStringSubmatch(filepath.Base(dir))
+	if m == nil {
+		return -1
+	}
+	n, _ := strconv.Atoi(m[1])
+	return n
 }
 
 var unsafeLabel = regexp.MustCompile(`[^a-z0-9]+`)

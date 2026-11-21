@@ -178,6 +178,10 @@ defmodule Dokkit.Intake do
             {:ok, %{"type" => "metric"} = line} ->
               metric(key, line, at(line, now), numbers)
 
+            # A stats line records numbers on its own, so the checks are read again after it.
+            {:ok, %{"type" => "stats"} = line} ->
+              {guarded(fn -> line(key, "stats", line, at(line, now)) end), %{}}
+
             {:ok, %{"type" => t} = line} ->
               {guarded(fn -> line(key, t, line, at(line, now)) end), numbers}
 

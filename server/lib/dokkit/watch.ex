@@ -29,7 +29,11 @@ defmodule Dokkit.Watch do
 
     steps =
       if(settled?(booted, now),
-        do: [fn -> Issues.machines_sweep(now) end, fn -> sweep(now, booted) end],
+        do: [
+          fn -> Issues.machines_sweep(now) end,
+          fn -> sweep(now, booted) end,
+          fn -> Dokkit.Numbers.overdue(now) end
+        ],
         else: []
       ) ++
         [

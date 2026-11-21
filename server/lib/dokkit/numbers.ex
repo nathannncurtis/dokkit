@@ -144,8 +144,14 @@ defmodule Dokkit.Numbers do
 
   defp own_limit?(name, own) do
     case limit_from(name) do
-      nil -> false
-      from -> Map.has_key?(own, from) or Map.has_key?(own, row(from) <> "_on")
+      nil ->
+        false
+
+      from when from in @by_readings ->
+        Map.has_key?(own, from) or Map.has_key?(own, row(from) <> "_on")
+
+      from ->
+        Enum.any?(~w(_on _limit _down _minutes), &Map.has_key?(own, row(from) <> &1))
     end
   end
 
@@ -236,19 +242,65 @@ defmodule Dokkit.Numbers do
         Issues.record(once, :ok, at: at, value: value / 1)
 
       DateTime.diff(at, started) >= need ->
-        {limit, down} = levels(check, values)
-
-        Issues.record(once, level(direction(check), value, down),
-          at: at,
-          value: value / 1,
-          title: hardware_title(check.name, value, machine),
-          note: hardware_note(check.name, direction(check), value, limit)
-        )
+        opened(once, value, at, values, machine)
 
       true ->
         check
     end
     |> kept(check)
+  end
+
+  defp opened(check, value, at, values, machine) do
+    {limit, down} = levels(check, values)
+
+    Issues.record(check, level(direction(check), value, down),
+      at: at,
+      value: value / 1,
+      title: hardware_title(check.name, value, machine),
+      note: hardware_note(check.name, direction(check), value, limit)
+    )
+  end
+
+  @doc "Each minute: opens a minutes-counted limit whose time is up, since an unchanged reading is re-sent only every five minutes."
+  def overdue(now \\ DateTime.utc_now()) do
+    checks =
+      Repo.all(
+        from c in Check,
+          join: s in assoc(c, :service),
+          join: m in assoc(s, :machine),
+          where: c.type == :threshold and fragment("? \\? 'over_since'", c.config),
+          where: c.state not in [:degraded, :down],
+          preload: [service: {s, machine: m}]
+      )
+
+    for %Check{service: %{machine: machine}} = check <- checks do
+      values = Values.all({:machine, machine.id})
+      {:ok, since, _} = DateTime.from_iso8601(check.config["over_since"])
+      need = values[row(check.config["limit_from"]) <> "_minutes"] * 60 - values["report_seconds"]
+      {limit, _} = levels(check, values)
+
+      latest =
+        Repo.one(
+          from m in Metric,
+            where: m.machine_id == ^machine.id and is_nil(m.service_id) and m.name == ^check.name,
+            order_by: [desc: m.at],
+            limit: 1,
+            select: m.value
+        )
+
+      reporting? =
+        machine.last_seen_at &&
+          DateTime.diff(now, machine.last_seen_at) <= 2 * values["report_seconds"] + 60
+
+      if reporting? and is_number(latest) and is_number(limit) and
+           DateTime.diff(now, since) >= need and
+           beyond?(direction(check), latest, limit, nil) do
+        once = %{check | fail_after: 1, config: Map.put(check.config, "own_fail_after", true)}
+        opened(once, latest, now, values, machine.name)
+      end
+    end
+
+    :ok
   end
 
   defp judge(check, bad?, value, at, values, _) do
