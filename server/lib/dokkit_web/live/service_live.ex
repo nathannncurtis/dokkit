@@ -1,6 +1,6 @@
 defmodule DokkitWeb.ServiceLive do
   use DokkitWeb, :live_view
-  alias Dokkit.{Alerts, Estate, Issue, Issues}
+  alias Dokkit.{Alerts, AppUpdates, Estate, Issue, Issues}
   alias DokkitWeb.{ChannelPick, WhoPick}
   alias Phoenix.LiveView.JS
 
@@ -18,7 +18,8 @@ defmodule DokkitWeb.ServiceLive do
              page_title: service.name,
              id: id,
              timing_error: nil,
-             timing: %{}
+             timing: %{},
+             app_error: nil
            )
          )}
     end
@@ -86,6 +87,27 @@ defmodule DokkitWeb.ServiceLive do
     {:noreply, load(socket)}
   end
 
+  def handle_event("app_save", %{"app" => p}, socket),
+    do:
+      owner_app(
+        socket,
+        &AppUpdates.save(&1, Map.take(p, ~w(repo mode hold require_signature signer assets)))
+      )
+
+  def handle_event("app_reset", %{"field" => field}, socket),
+    do: owner_app(socket, &AppUpdates.save(&1, %{field => nil}))
+
+  def handle_event("app_update", %{"machine" => id}, socket),
+    do: owner_app(socket, &AppUpdates.approve(&1, id))
+
+  def handle_event("app_update_all", _, socket),
+    do: owner_app(socket, &AppUpdates.approve(&1, :all))
+
+  def handle_event("app_fetch", _, socket), do: owner_app(socket, &AppUpdates.fetch/1)
+
+  def handle_event("app_token", %{"token" => token}, socket),
+    do: owner_app(socket, fn _ -> AppUpdates.save_token(token) end)
+
   def handle_event("quiet_end", _, socket) do
     DokkitWeb.QuietBand.stop(socket, socket.assigns.service.machine_id)
     {:noreply, load(socket)}
@@ -112,6 +134,59 @@ defmodule DokkitWeb.ServiceLive do
     end
 
     {:noreply, load(socket)}
+  end
+
+  defp owner_app(socket, act) do
+    result =
+      if socket.assigns.current_user.role == :owner,
+        do: act.(socket.assigns.service.slug),
+        else: {:error, "owner", "An owner changes app updates."}
+
+    error =
+      case result do
+        {:error, _, why} -> why
+        _ -> nil
+      end
+
+    {:noreply, assign(load(socket), app_error: error)}
+  end
+
+  defp updatable?(service), do: service.kind in [:service, :app] and service.slug != "machine"
+
+  defp checked(iso) do
+    case DateTime.from_iso8601(iso) do
+      {:ok, t, _} -> at(t)
+      _ -> iso
+    end
+  end
+
+  defp app_state(%{state: "installing", wanted: v}), do: "Installing #{v}"
+  defp app_state(%{state: "waiting", wanted: v}), do: "Asked to move to #{v}"
+  defp app_state(%{state: "failed", result_version: v}), do: "Update to #{v} failed"
+  defp app_state(%{state: "done", result_version: v}), do: "Updated to #{v}"
+  defp app_state(%{behind: true}), do: "Behind"
+  defp app_state(_), do: "Current"
+
+  attr :updates, :map, required: true
+  attr :field, :string, required: true
+  attr :words, :string, required: true
+  attr :user, :map, required: true
+
+  defp app_default(assigns) do
+    ~H"""
+    <span class="hint">
+      Default: {@words}
+      <button
+        :if={@field in @updates.changed and @user.role == :owner}
+        class="btn sm"
+        type="button"
+        phx-click="app_reset"
+        phx-value-field={@field}
+      >
+        Reset
+      </button>
+    </span>
+    """
   end
 
   defp machine_path(%{kind: :group}), do: ~p"/apps"
@@ -148,7 +223,9 @@ defmodule DokkitWeb.ServiceLive do
       logs: Dokkit.Logs.list(service: service.id, limit: 20),
       defaults: Alerts.config(),
       people: Dokkit.People.list(),
-      who: Dokkit.People.audience_rows()
+      who: Dokkit.People.audience_rows(),
+      updates: if(updatable?(service), do: AppUpdates.view(service.slug)),
+      token: AppUpdates.token_view()
     )
   end
 
@@ -528,6 +605,253 @@ defmodule DokkitWeb.ServiceLive do
                 </span>
               </dd>
             </dl>
+          </div>
+
+          <div :if={@updates} class="card" id="updates">
+            <h2>
+              Updates<span :if={@updates.url} class="end"><a
+                href={@updates.url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >{@updates.repo}</a></span>
+            </h2>
+
+            <form phx-submit="app_save" id="app-update-form">
+              <dl class="kv">
+                <dt>GitHub repository</dt>
+
+                <dd>
+                  <input
+                    class="inp mono"
+                    style="flex: 1 1 220px"
+                    name="app[repo]"
+                    value={@updates.repo}
+                    placeholder="owner/name"
+                    aria-label="GitHub repository"
+                    disabled={@current_user.role != :owner}
+                  />
+                  <.app_default updates={@updates} field="repo" words="None" user={@current_user} />
+                </dd>
+
+                <dt>Mode</dt>
+
+                <dd>
+                  <select
+                    class="inp"
+                    name="app[mode]"
+                    aria-label="Update mode"
+                    disabled={@current_user.role != :owner}
+                  >
+                    <option value="click" selected={@updates.mode == "click"}>Click to update</option>
+                    <option value="automatic" selected={@updates.mode == "automatic"}>
+                      Automatic
+                    </option>
+                  </select>
+                  <span class="hint">
+                    Automatic installs a release once it is fetched and checked, one machine at a time, and stops at the first failure.
+                  </span>
+                  <.app_default
+                    updates={@updates}
+                    field="mode"
+                    words="Click to update"
+                    user={@current_user}
+                  />
+                </dd>
+
+                <dt>Hold</dt>
+
+                <dd>
+                  <input type="hidden" name="app[hold]" value="false" />
+                  <label>
+                    <input
+                      type="checkbox"
+                      name="app[hold]"
+                      value="true"
+                      checked={@updates.hold}
+                      disabled={@current_user.role != :owner}
+                    /> Hold every update of this app
+                  </label>
+                  <.app_default updates={@updates} field="hold" words="Off" user={@current_user} />
+                </dd>
+
+                <dt>Signed installer</dt>
+
+                <dd>
+                  <input type="hidden" name="app[require_signature]" value="false" />
+                  <label>
+                    <input
+                      type="checkbox"
+                      name="app[require_signature]"
+                      value="true"
+                      checked={@updates.require_signature}
+                      disabled={@current_user.role != :owner}
+                    /> Require a signed installer
+                  </label>
+                  <span class="hint">
+                    On Windows, an .exe or .msi must carry a valid Authenticode signature, from the signer below when one is named. Off, only its SHA-256 is checked.
+                  </span>
+                  <.app_default
+                    updates={@updates}
+                    field="require_signature"
+                    words="On"
+                    user={@current_user}
+                  />
+                </dd>
+
+                <dt>Signer</dt>
+
+                <dd>
+                  <input
+                    class="inp"
+                    style="flex: 1 1 220px"
+                    name="app[signer]"
+                    value={@updates.signer}
+                    placeholder="Example Software Ltd"
+                    aria-label="Signer"
+                    disabled={@current_user.role != :owner}
+                  />
+                  <span class="hint">
+                    The Authenticode signer a signed installer must come from. Empty takes any valid signature.
+                  </span>
+                  <.app_default updates={@updates} field="signer" words="None" user={@current_user} />
+                </dd>
+
+                <dt>Release files</dt>
+
+                <dd>
+                  <textarea
+                    class="inp mono"
+                    style="height:auto; padding:8px 10px; flex: 1 1 100%; resize:vertical"
+                    name="app[assets]"
+                    rows="3"
+                    spellcheck="false"
+                    placeholder="windows/amd64 acme-intake-*-windows-amd64.zip"
+                    aria-label="Release files"
+                    disabled={@current_user.role != :owner}
+                  >{Enum.map_join(@updates.assets, "\n", fn {k, v} -> "#{k} #{v}" end)}</textarea>
+                  <span class="hint">
+                    One line for each system and processor: the release file to install there, where * is any text. A machine's dokkit.toml can name its own with asset.
+                  </span>
+                  <.app_default updates={@updates} field="assets" words="None" user={@current_user} />
+                </dd>
+
+                <dt></dt>
+
+                <dd>
+                  <button class="btn sm" type="submit" disabled={@current_user.role != :owner}>
+                    Save
+                  </button>
+                  <span :if={@app_error} class="bad" role="alert">{@app_error}</span>
+                  <span :if={@current_user.role != :owner} class="hint">An owner changes these.</span>
+                </dd>
+              </dl>
+            </form>
+
+            <dl class="kv">
+              <dt>GitHub token</dt>
+
+              <dd>
+                <form
+                  phx-submit="app_token"
+                  id="github-token-form"
+                  style="display: flex; gap: 8px; flex: 1 1 100%; min-width: 0"
+                >
+                  <input
+                    class="inp mono"
+                    style="flex: 1 1 200px"
+                    type="password"
+                    name="token"
+                    autocomplete="off"
+                    placeholder={
+                      if @token.github_token == "set",
+                        do: "Set, ending #{@token.ending}",
+                        else: "Not set"
+                    }
+                    aria-label="GitHub read token"
+                    disabled={@current_user.role != :owner}
+                  />
+                  <button class="btn sm" type="submit" disabled={@current_user.role != :owner}>
+                    Save
+                  </button>
+                </form>
+                <span class="hint">
+                  One read token for every app's releases, kept on this server and never shown again. Saving it empty clears it. Public repositories need none.
+                </span>
+              </dd>
+
+              <dt>Newest release</dt>
+
+              <dd>
+                <a
+                  :if={@updates.newest && @updates.newest.url}
+                  href={@updates.newest.url}
+                  class="mono"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >{@updates.newest.version}</a>
+                <span :if={@updates.newest && !@updates.newest.url} class="mono">
+                  {@updates.newest.version}
+                </span>
+                <span :if={!@updates.newest} class="mute">None held yet.</span>
+                <span :for={f <- (@updates.newest && @updates.newest.files) || []} class="tag mono">
+                  {f.name} {String.slice(f.sha256 || "", 0, 12)}
+                </span>
+                <span :if={@updates.check_note} class="st warn">{@updates.check_note}</span>
+                <span :if={@updates.checked_at} class="hint">
+                  Looked at GitHub {checked(@updates.checked_at)} UTC.
+                </span>
+                <button
+                  :if={@current_user.role == :owner and @updates.repo != ""}
+                  class="btn sm"
+                  type="button"
+                  phx-click="app_fetch"
+                >
+                  Look now
+                </button>
+              </dd>
+
+              <%= for m <- @updates.machines do %>
+                <dt><.link navigate={~p"/machines/#{m.id}"}>{m.name}</.link></dt>
+
+                <dd id={"app-machine-#{m.id}"}>
+                  <span class="mono">{m.version || "Version unknown"}</span>
+                  <span class={["tag", m.state == "failed" && "warn", m.state == "done" && "ok"]}>
+                    {app_state(m)}
+                  </span>
+                  <span :if={m.note && m.state in ["done", "failed"]} class="st">{m.note}</span>
+                  <button
+                    :if={@current_user.role == :owner and m.can_update and !@updates.hold}
+                    class="btn sm"
+                    type="button"
+                    phx-click="app_update"
+                    phx-value-machine={m.id}
+                  >
+                    Update to {@updates.newest.version}
+                  </button>
+                  <span :if={m.behind and m.why} class="hint">{m.why}</span>
+                </dd>
+              <% end %>
+
+              <dt :if={@updates.machines == []}>Machines</dt>
+
+              <dd :if={@updates.machines == []} class="mute">
+                No machine installs it yet. The Dokkit updater on a monitored machine installs it once that machine's dokkit.toml has an [app] table.
+              </dd>
+            </dl>
+
+            <div
+              :if={
+                @current_user.role == :owner and !@updates.hold and
+                  Enum.count(@updates.machines, & &1.can_update) > 1
+              }
+              class="foot"
+            >
+              <span class="end">
+                <button class="btn sm" type="button" phx-click="app_update_all" id="app-update-all">
+                  Update all to {@updates.newest.version}
+                </button>
+              </span>
+            </div>
           </div>
 
           <div class="card">

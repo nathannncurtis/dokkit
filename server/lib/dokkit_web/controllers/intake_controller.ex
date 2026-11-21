@@ -262,6 +262,41 @@ defmodule DokkitWeb.IntakeController do
     end
   end
 
+  @doc "The app releases the updater on this machine is to install now."
+  def app_updates(conn, params) do
+    with {:ok, machine} <- machine(conn),
+         do: json(conn, %{items: Dokkit.AppUpdates.ask(machine, params)})
+  end
+
+  def app_file(conn, %{"app" => app, "version" => version, "file" => file}) do
+    with {:ok, machine} <- machine(conn) do
+      case Dokkit.AppUpdates.file_path(machine, app, version, file) do
+        nil ->
+          fail(conn, 404, "not_found", "This machine was not asked to install that file.")
+
+        path ->
+          conn |> put_resp_content_type("application/octet-stream") |> send_file(200, path)
+      end
+    end
+  end
+
+  def app_result(conn, params) do
+    with {:ok, machine} <- machine(conn) do
+      case Dokkit.AppUpdates.result(machine, params) do
+        :ok ->
+          json(conn, %{ok: true})
+
+        :error ->
+          fail(
+            conn,
+            422,
+            "bad_result",
+            "Needs service, a version this machine was asked to install, ok, and at most 2000 characters of note."
+          )
+      end
+    end
+  end
+
   defp machine(conn) do
     case bearer(conn) do
       {:ok, %{kind: :machine, machine_id: machine}} -> {:ok, machine}

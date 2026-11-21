@@ -48,7 +48,7 @@ func (d *declaration) validate() error {
 			}
 		}
 	}
-	return nil
+	return d.readApp()
 }
 
 // misplaced is what `dokkit check` refuses beyond the server's rules. watch keeps such a file and

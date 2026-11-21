@@ -10,11 +10,13 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 )
@@ -62,6 +64,9 @@ type state struct {
 	LastAt  string   `json:"last_at,omitempty"`
 	Last    *outcome `json:"last,omitempty"`
 	Unsent  *outcome `json:"unsent,omitempty"` // a result the server has not taken yet
+
+	Apps       map[string]appLast `json:"apps,omitempty"`
+	UnsentApps []appResult        `json:"unsent_apps,omitempty"`
 }
 
 func (l layout) statePath() string { return filepath.Join(l.data, "state.json") }
@@ -135,6 +140,9 @@ func updaterRun() int {
 		return 1
 	}
 	code := updateOnce(ctx, c)
+	if appsOnce(ctx, c) != 0 {
+		code = 1
+	}
 	if st, err := readState(); err == nil {
 		st.Ran = now()
 		saveState(st)
@@ -171,6 +179,10 @@ var sendResults = true
 // postResult is false when the result should be sent again later. A 4xx answer will not change
 // by sending it again, so it is dropped.
 func postResult(c *client, r outcome) bool {
+	return postJSON(c, "/api/v1/update/result", r, r.Version)
+}
+
+func postJSON(c *client, path string, r any, what string) bool {
 	if !sendResults {
 		return true
 	}
@@ -178,12 +190,12 @@ func postResult(c *client, r outcome) bool {
 	// the server may be restarting into this same release
 	deadline := time.Now().Add(retryFor)
 	for {
-		code, err := c.call("POST", "/api/v1/update/result", "application/json", b, nil)
+		code, err := c.call("POST", path, "application/json", b, nil)
 		if err == nil && code >= 200 && code < 300 {
 			return true
 		}
 		if err == nil && code >= 400 && code < 500 {
-			logf("the server refused the result for %s (%d); it is not sent again", r.Version, code)
+			logf("the server refused the result for %s (%d); it is not sent again", what, code)
 			return true
 		}
 		if time.Now().After(deadline) {
@@ -373,7 +385,11 @@ func clearWork() {
 var fetchTimeout = 15 * time.Minute
 
 func (c *client) fetch(ctx context.Context, version, name string, to io.Writer) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", c.url+"/api/v1/releases/"+url.PathEscape(version)+"/"+url.PathEscape(name), nil)
+	return c.fetchPath(ctx, "/api/v1/releases/"+url.PathEscape(version)+"/"+url.PathEscape(name), name, to)
+}
+
+func (c *client) fetchPath(ctx context.Context, path, name string, to io.Writer) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.url+path, nil)
 	if err != nil {
 		return err
 	}
@@ -403,9 +419,13 @@ func fetchBytes(ctx context.Context, c *client, version, name string) ([]byte, e
 // fetchRetrying starts the file again from the top for a minute, since the server may be
 // restarting into this same release.
 func fetchRetrying(ctx context.Context, c *client, version, name string, fresh func() io.Writer) error {
+	return retrying(ctx, name, func() error { return c.fetch(ctx, version, name, fresh()) })
+}
+
+func retrying(ctx context.Context, name string, get func() error) error {
 	deadline := time.Now().Add(retryFor)
 	for {
-		err := c.fetch(ctx, version, name, fresh())
+		err := get()
 		var code answered
 		if err == nil || ctx.Err() != nil || time.Now().After(deadline) || errors.As(err, &code) && code < 500 {
 			return err
@@ -420,13 +440,20 @@ func download(ctx context.Context, c *client, version, name, hash string) (strin
 	if hash == "" {
 		return "", fmt.Errorf("%s is not in the signed list", name)
 	}
-	p := filepath.Join(where.work(), name)
+	return downloadTo(filepath.Join(where.work(), name), name, hash, "the signed list", func(fresh func() io.Writer) error {
+		return fetchRetrying(ctx, c, version, name, fresh)
+	})
+}
+
+// downloadTo keeps the file at p only if its hash is the given one. get fills the writer fresh
+// returns, and asks for a new one when it starts the file again.
+func downloadTo(p, name, hash, against string, get func(fresh func() io.Writer) error) (string, error) {
 	f, err := os.Create(p)
 	if err != nil {
 		return "", err
 	}
 	h := sha256.New()
-	err = fetchRetrying(ctx, c, version, name, func() io.Writer {
+	err = get(func() io.Writer {
 		f.Truncate(0)
 		f.Seek(0, io.SeekStart)
 		h.Reset()
@@ -438,7 +465,7 @@ func download(ctx context.Context, c *client, version, name, hash string) (strin
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != hash {
 		os.Remove(p)
-		return "", fmt.Errorf("%s does not match the signed list (got %s, expected %s)", name, got, hash)
+		return "", fmt.Errorf("%s does not match %s (got %s, expected %s)", name, against, got, hash)
 	}
 	return p, nil
 }
@@ -482,12 +509,12 @@ func safeJoin(dest, name string) (string, error) {
 	root := filepath.Clean(dest)
 	p := filepath.Join(root, name)
 	if !filepath.IsLocal(name) || p != root && !strings.HasPrefix(p, root+string(filepath.Separator)) {
-		return "", fmt.Errorf("the zip has an entry, %q, that would land outside its folder", name)
+		return "", fmt.Errorf("the archive has an entry, %q, that would land outside its folder", name)
 	}
 	return p, nil
 }
 
-func unzip(zipFile, dest string) error {
+func unzip(zipFile, dest string) (err error) {
 	r, err := zip.OpenReader(zipFile)
 	if err != nil {
 		return err
@@ -498,18 +525,24 @@ func unzip(zipFile, dest string) error {
 			return err
 		}
 		if f.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("the zip has a link, %q", f.Name)
+			return fmt.Errorf("the archive has a link, %q", f.Name)
 		}
 	}
 	os.RemoveAll(dest)
+	defer func() {
+		if err != nil {
+			os.RemoveAll(dest)
+		}
+	}()
 	root := filepath.Clean(dest) + string(filepath.Separator)
+	left := extractLimit
 	for _, f := range r.File {
 		p := filepath.Join(root, f.Name)
 		if p+string(filepath.Separator) == root {
 			continue
 		}
 		if !strings.HasPrefix(p, root) {
-			return fmt.Errorf("the zip has an entry, %q, that would land outside its folder", f.Name)
+			return fmt.Errorf("the archive has an entry, %q, that would land outside its folder", f.Name)
 		}
 		if f.FileInfo().IsDir() {
 			if err := os.MkdirAll(p, 0o700); err != nil {
@@ -526,8 +559,13 @@ func unzip(zipFile, dest string) error {
 		}
 		out, err := os.Create(p)
 		if err == nil {
-			_, err = io.Copy(out, in)
+			var n int64
+			n, err = io.Copy(out, io.LimitReader(in, left+1))
+			left -= n
 			out.Close()
+			if err == nil && left < 0 {
+				err = errTooBig
+			}
 		}
 		in.Close()
 		if err != nil {
@@ -675,6 +713,17 @@ func updaterStatus() int {
 	}
 	if st.Unsent != nil {
 		fmt.Println("That result has not reached the server yet.")
+	}
+	for _, s := range slices.Sorted(maps.Keys(st.Apps)) {
+		a := st.Apps[s]
+		word := "failed"
+		if a.OK {
+			word = "ok"
+		}
+		fmt.Printf("App %s: %s, %s, %s: %s\n", s, a.Version, word, a.At, a.Note)
+	}
+	if n := len(st.UnsentApps); n > 0 {
+		fmt.Printf("%d app result(s) have not reached the server yet.\n", n)
 	}
 	return 0
 }

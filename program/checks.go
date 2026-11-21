@@ -40,6 +40,7 @@ type declaration struct {
 	}
 	Check []check
 	Job   []struct{ ID string }
+	App   *appRecipe `toml:"-"`
 }
 
 type check struct {

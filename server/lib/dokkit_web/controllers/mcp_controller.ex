@@ -278,6 +278,35 @@ defmodule DokkitWeb.McpController do
     {"releases", "read",
      "The program releases this server holds, each with its files and whether it is complete. Only a complete release can be approved.",
      Map.merge(%{"q" => @text}, @paging), []},
+    {"app_updates", "read",
+     "Every app Dokkit can update, with its GitHub repository, mode (click or automatic), hold, newest release held and, for each machine that can install it, its version, state and last result.",
+     %{}, []},
+    {"app_update", "read",
+     "One app's updates, as app_updates shows them. Takes the app's service id, such as acme-intake.",
+     %{"app" => @text}, ["app"]},
+    {"set_app_update", "admin",
+     "Change an app's update settings: repo (owner/name on GitHub), mode (click or automatic), hold (true or false), require_signature (true by default: a Windows .exe or .msi must carry a valid Authenticode signature; false checks only its SHA-256), signer (the Authenticode signer it must come from; empty takes any valid signature) and assets (an object from system/processor, such as windows/amd64, to a release file pattern, where * is any text). null or an empty text puts one back to its default; a setting left out stays as it was.",
+     %{
+       "app" => @text,
+       "repo" => @text,
+       "mode" => %{"type" => "string", "enum" => ~w(click automatic)},
+       "hold" => @bool,
+       "signer" => @text,
+       "require_signature" => @bool,
+       "assets" => %{"type" => "object"}
+     }, ["app"]},
+    {"update_app", "admin",
+     "Ask the Dokkit updater to install an app's newest held release (or version) on one machine (machine, an id from app_update), or on every machine that can take it. Only a monitored machine with the updater and an [app] recipe in its own dokkit.toml installs.",
+     %{"app" => @text, "machine" => @text, "version" => @text}, ["app"]},
+    {"fetch_app_releases", "admin",
+     "Look at the app's GitHub repository now and keep its newest release's files.",
+     %{"app" => @text}, ["app"]},
+    {"github_token", "admin",
+     "Whether the read token the server fetches app releases from GitHub with is set, and its last four characters. The token is never shown.",
+     %{}, []},
+    {"set_github_token", "admin",
+     "Set the read token the server fetches app releases from GitHub with; an empty one clears it.",
+     %{"github_token" => @text}, ["github_token"]},
     {"certificate", "read",
      "The certificates this server serves itself: the installed one and the uploaded one, each with its names, issuer, when it runs out, whether it is self-signed and its SHA-256 fingerprint.",
      %{}, []},
@@ -610,6 +639,16 @@ defmodule DokkitWeb.McpController do
   defp tool("update_program", %{"id" => id}), do: Api.fetch_program(id, "an AI tool") |> r()
   defp tool("releases", args), do: listed(:releases, args) |> releases()
 
+  defp tool("app_updates", _), do: %{items: Dokkit.AppUpdates.list()}
+  defp tool("app_update", %{"app" => app}), do: seen(Dokkit.AppUpdates.view(app))
+
+  defp tool("set_app_update", %{"app" => app} = args),
+    do: Api.save_app_update(app, Map.delete(args, "app")) |> r()
+
+  defp tool("update_app", %{"app" => app} = args), do: Api.approve_app(app, args) |> r()
+  defp tool("fetch_app_releases", %{"app" => app}), do: Api.fetch_app_releases(app) |> r()
+  defp tool("github_token", _), do: Dokkit.AppUpdates.token_view()
+  defp tool("set_github_token", args), do: Api.save_github_token(args) |> r()
   defp tool("certificate", _), do: Dokkit.Certificate.view()
   defp tool("set_certificate", args), do: Api.new_certificate(args) |> r()
   defp tool("remove_certificate", _), do: Api.drop_certificate() |> r()

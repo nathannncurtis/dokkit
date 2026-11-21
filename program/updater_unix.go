@@ -431,3 +431,42 @@ func updaterRehearse(dir string) int {
 	fmt.Println("Rehearsing in", dir, "- nothing outside it is changed and no result is sent.")
 	return updaterRun()
 }
+
+// trustedRecipe is nil for a path and every folder above it that only root can change.
+func trustedRecipe(p string) error {
+	p, err := filepath.Abs(p)
+	if err != nil {
+		return err
+	}
+	for {
+		if err := rootOnly(p); err != nil {
+			return err
+		}
+		if parent := filepath.Dir(p); parent != p {
+			p = parent
+			continue
+		}
+		return nil
+	}
+}
+
+// trustedHandle checks the open file itself, so the file read is the file checked.
+func trustedHandle(f *os.File, p string) error {
+	fi, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); !ok || st.Uid != 0 || st.Nlink != 1 || fi.Mode().Perm()&0o022 != 0 {
+		return fmt.Errorf("%s is not owned by root, has other names or can be changed by others", p)
+	}
+	return nil
+}
+
+// cloneOwner gives to the owner and group of from; a link is not followed.
+func cloneOwner(from, to string) {
+	if fi, err := os.Lstat(from); err == nil {
+		if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+			os.Lchown(to, int(st.Uid), int(st.Gid))
+		}
+	}
+}

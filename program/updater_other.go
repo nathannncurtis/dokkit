@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 )
@@ -20,3 +21,9 @@ func updaterCommand([]string) int {
 	fmt.Fprintln(os.Stderr, "dokkit: the updater is built for Windows, Linux and macOS.")
 	return 1
 }
+
+func trustedRecipe(p string) error { return errors.New("this system does not run app updates") }
+
+func cloneOwner(from, to string) {}
+
+func trustedHandle(f *os.File, p string) error { return trustedRecipe(p) }

@@ -49,6 +49,7 @@ degraded = "push"
 | `[logs]` | Files to read. Paths are relative to the file and must stay inside its folder. Each line is a JSON object (`t`, `level`, `msg`, `service`, `fields`) or a CLEF line; any other line is kept as its message. |
 | `[[job]]` | A scheduled job: when it should run, how late it may be (`grace`, 30 minutes by default) and how long it may take (`max_runtime`). A `max_runtime` in the file turns the limit on for that job; without one, a run is flagged only when "Too long" is on in the job's settings (60 minutes by default). `schedule` is a five-field cron line read as UTC, and `@reboot` is refused. |
 | `[alert]` | A starting suggestion for who is told. |
+| `[app]` | How the updater installs a release of this service. `kind` is `windows-service`, `installer`, `compose`, `systemd` or `launchd`. See Updating the app. |
 
 ## Rules
 
@@ -64,6 +65,58 @@ Two ways, both supported:
 
 1. **`dokkit` reads it.** `dokkit`'s own configuration lists the folders it may read `dokkit.toml` files from. That configuration is only editable by an administrator. `dokkit` re-reads a file when it changes.
 2. **It is sent.** `dokkit apply` sends the file from anywhere that has a key, for example from CI. A machine key may declare any service on its machine. An app key may declare only the service it belongs to: `[service] id` must match, the machine and kind stay as they are, `[service]` may set the name and environment, `[[job]]` keeps `id`, `schedule`, `grace` and `max_runtime`, `[[check]]` may be of type `beat` or `custom` only (any other type is refused), and the other sections are dropped.
+
+## Updating the app
+
+`[app]` tells the updater (`dokkit updater run`, installed by an administrator) what to do with a release the server hands it. The updater reads it from this machine's own file and never from the server's copy, and uses it only when the file and its folder are owned by administrators (root on Linux and macOS) and cannot be changed by anyone else. The release file comes from the server; its SHA-256 must match, and on Windows a `.exe` or `.msi` must carry a valid Authenticode signature (from the signer pinned for the app in Dokkit, when one is) unless "Require a signed installer" is turned off in the app's update settings. A failed start or failed checks puts the old files back and starts them again.
+
+| Field | Meaning |
+|---|---|
+| `kind` | `windows-service`, `installer`, `compose`, `systemd` or `launchd`. |
+| `name` | The service, unit or label to restart (`windows-service`, `systemd`, `launchd`). |
+| `folder` or `file` | What to replace, one of the two (`windows-service`, `systemd`, `launchd`). A `folder` takes a `.zip`, `.tar.gz` or `.tgz` that is extracted over it, so files not in the archive stay. A `file` takes the file itself, or the one entry of an archive with the same file name. The old copy is kept beside it as `.dokkit-previous`. |
+| `args` | A list of arguments for an `installer`, `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-` when left out. A `.msi` runs as `msiexec /i file /qn /norestart` plus these. |
+| `compose_file`, `compose_service` | The Compose file and the service whose image tag is changed (`compose`). |
+| `tag` | The image tag for `compose`: `{version}` is the release tag and `{number}` is the same without a leading `v`. `{version}` when left out. |
+| `asset` | A file name pattern the server uses to pick the release file when a release has several. |
+| `health_wait` | How long to wait for the checks to pass after the start, from `10s` to `1h`. The release's own value, else `5m`, when left out. |
+
+After the start the updater runs every check in the same file every 5 seconds until all pass. If `[service] version_from` is a file, its first line must also match the release. A file with neither checks nor a version file is healthy straight after the start.
+
+```toml
+# a Windows service whose folder is replaced from a .zip
+[app]
+kind = "windows-service"
+name = "AcmeIntake"
+folder = 'C:\Program Files\Acme Intake'
+
+# a silent installer
+[app]
+kind = "installer"
+args = ["/VERYSILENT", "/NORESTART"]
+
+# a Compose service: the image tag in compose.yml is changed, pulled and started
+[app]
+kind = "compose"
+compose_file = "/srv/acme/compose.yml"
+compose_service = "intake"
+tag = "{number}"
+
+# a systemd service whose one binary is replaced
+[app]
+kind = "systemd"
+name = "acme-intake"
+file = "/usr/local/bin/acme-intake"
+health_wait = "2m"
+
+# a launchd job whose folder is replaced
+[app]
+kind = "launchd"
+name = "com.example.intake"
+folder = "/usr/local/acme"
+```
+
+Each file has one `[app]`, for its own `[service]`. The examples show one `[app]` each; a file holds only one.
 
 ## Which processes can be seen
 

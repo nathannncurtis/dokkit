@@ -32,5 +32,20 @@
   {"name": "schedule: month 13", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "job": [{"id": "j", "schedule": "0 0 1 13 *"}]}},
   {"name": "schedule: weekday 8", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "job": [{"id": "j", "schedule": "0 0 * * 8"}]}},
   {"name": "schedule: step of zero", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "job": [{"id": "j", "schedule": "*/0 * * * *"}]}},
-  {"name": "schedule: not a string", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "job": [{"id": "j", "schedule": 5}]}}
+  {"name": "schedule: not a string", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "job": [{"id": "j", "schedule": 5}]}},
+  {"name": "app: windows service from a zip", "ok": true, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"kind": "windows-service", "name": "AcmeIntake", "folder": "C:\\Program Files\\Acme Intake"}}},
+  {"name": "app: silent installer", "ok": true, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"kind": "installer", "args": ["/VERYSILENT", "/NORESTART"]}}},
+  {"name": "app: compose", "ok": true, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"kind": "compose", "compose_file": "/srv/acme/compose.yml", "compose_service": "intake"}}},
+  {"name": "app: systemd swapping one file", "ok": true, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"kind": "systemd", "name": "acme-intake", "file": "/usr/local/bin/acme-intake", "health_wait": "2m"}}},
+  {"name": "app: launchd swapping a folder", "ok": true, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"kind": "launchd", "name": "com.example.intake", "folder": "/usr/local/acme"}}},
+  {"name": "app: unknown kind", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"kind": "msi"}}},
+  {"name": "app: no kind", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"name": "x", "folder": "/x"}}},
+  {"name": "app: service without a name", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"kind": "systemd", "file": "/usr/local/bin/x"}}},
+  {"name": "app: service with neither folder nor file", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"kind": "windows-service", "name": "X"}}},
+  {"name": "app: service with both folder and file", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"kind": "systemd", "name": "x", "folder": "/x", "file": "/x/y"}}},
+  {"name": "app: compose without its service", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"kind": "compose", "compose_file": "/srv/compose.yml"}}},
+  {"name": "app: health_wait not a time", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"kind": "installer", "health_wait": "soon"}}},
+  {"name": "app: health_wait over an hour", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"kind": "installer", "health_wait": "2h"}}},
+  {"name": "app: args not a list of text", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "app": {"kind": "installer", "args": "/VERYSILENT"}}},
+  {"name": "app: a list of tables", "ok": false, "doc": {"schema": 1, "service": {"id": "a"}, "app": [{"kind": "installer"}]}}
 ]

@@ -415,6 +415,16 @@ defmodule Dokkit.Values do
         "How long a machine has to report back after an update starts, and how long its updater may take: at most 55 minutes, since Windows stops the updater task after an hour.",
       fields: [{"update_run_minutes", 50, 1, 1440}, {"updater_minutes", 45, 1, 55}],
       words: ["", "minutes to report,", "minutes to install"]
+    },
+    %{
+      group: "server",
+      id: "app_updates",
+      scope: :server,
+      title: "App updates",
+      sub:
+        "How often each app's GitHub releases are looked at, and how long an app just installed has to pass its checks before it is put back. A dokkit.toml's health_wait replaces the second.",
+      fields: [{"app_poll_minutes", 15, 1, 1440}, {"app_health_minutes", 5, 1, 60}],
+      words: ["Look every", "minutes; checks pass within", "minutes"]
     }
   ]
 

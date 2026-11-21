@@ -116,6 +116,16 @@ defmodule DokkitWeb.Router do
     get "/program/:target", IntakeController, :program
     get "/update", IntakeController, :update
     post "/update/result", IntakeController, :update_result
+    get "/update/apps", IntakeController, :app_updates
+    get "/update/apps/:app/:version/:file", IntakeController, :app_file
+    post "/update/apps/result", IntakeController, :app_result
+    get "/app-updates", ApiController, :app_updates
+    get "/app-updates/:app", ApiController, :app_update
+    put "/app-updates/:app", ApiController, :put_app_update
+    post "/app-updates/:app/update", ApiController, :update_app
+    post "/app-updates/:app/fetch", ApiController, :fetch_app
+    get "/github-token", ApiController, :github_token
+    put "/github-token", ApiController, :put_github_token
     get "/releases", ApiController, :releases
     get "/certificate", ApiController, :certificate
     put "/certificate", ApiController, :put_certificate
