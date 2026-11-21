@@ -226,6 +226,39 @@ defmodule Dokkit.Deploy do
   end
 end
 
+defmodule Dokkit.AppRelease do
+  use Dokkit.Schema
+
+  schema "app_releases" do
+    field :app, :string
+    field :version, :string
+    field :url, :string
+    field :files, :map, default: %{}
+    field :published_at, :utc_datetime_usec
+    timestamps()
+  end
+end
+
+defmodule Dokkit.AppTarget do
+  use Dokkit.Schema
+
+  schema "app_targets" do
+    field :app, :string
+    field :recipe, :map, default: %{}
+    field :wanted_version, :string
+    field :from_version, :string
+    field :auto, :boolean, default: false
+    field :started_at, :utc_datetime_usec
+    field :asked_at, :utc_datetime_usec
+    field :result_version, :string
+    field :ok, :boolean
+    field :note, :string
+    field :result_at, :utc_datetime_usec
+    belongs_to :machine, Dokkit.Machine
+    timestamps()
+  end
+end
+
 defmodule Dokkit.ErrorGroup do
   use Dokkit.Schema
 

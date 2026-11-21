@@ -236,6 +236,8 @@ defmodule Dokkit.Estate do
   end
 
   @app_checks 100
+  @app_check_types ~w(beat custom)
+  @app_job_fields ~w(id schedule grace max_runtime)
   @doc """
   Adds something outside that is depended on. Nothing here can reach it, so its check is
   assigned to an enrolled machine and run by that machine's program; without a check it
@@ -330,8 +332,49 @@ defmodule Dokkit.Estate do
   name and environment, and may list jobs (schedule, grace, max_runtime) and checks of type beat
   or custom, which only wait for reports. Any other check type is refused; other sections are dropped.
   """
-  def declare(machine_id, %{"service" => %{"id" => slug} = about} = doc)
-      when is_binary(machine_id) and is_binary(slug) do
+  def declare(machine_id, %{"service" => %{"id" => slug}} = doc)
+      when is_binary(machine_id) and is_binary(slug),
+      do: declare_on(machine_id, doc, true)
+
+  def declare(%Service{} = own, %{"service" => %{"id" => slug} = about} = doc) do
+    checks = List.wrap(doc["check"])
+    jobs = List.wrap(doc["job"])
+
+    cond do
+      slug != own.slug ->
+        {:error, "This key belongs to #{inspect(own.slug)}, so service.id must be that."}
+
+      bad = Enum.find(checks, &(not is_map(&1) or &1["type"] not in @app_check_types)) ->
+        {:error,
+         "An app key may declare checks of type #{Enum.join(@app_check_types, " or ")} only, not #{inspect(is_map(bad) && bad["type"])}."}
+
+      length(checks) + length(jobs) > @app_checks ->
+        {:error, "A service takes at most #{@app_checks} checks from an app key."}
+
+      Enum.any?(jobs, &(not is_map(&1))) ->
+        {:error, "Every job needs an id."}
+
+      true ->
+        about =
+          Map.merge(about, %{"kind" => to_string(own.kind), "name" => about["name"] || own.name})
+
+        # An app key never reaches [app]: only the machine's own file says how to install it.
+        declare_on(
+          own.machine_id,
+          %{
+            "schema" => doc["schema"],
+            "service" => about,
+            "check" => checks,
+            "job" => Enum.map(jobs, &Map.take(&1, @app_job_fields))
+          },
+          false
+        )
+    end
+  end
+
+  def declare(_, _), do: {:error, "A declaration needs [service] with an id."}
+
+  defp declare_on(machine_id, %{"service" => %{"id" => slug} = about} = doc, machine_key?) do
     checks = named(List.wrap(doc["check"]))
     jobs = List.wrap(doc["job"])
 
@@ -361,6 +404,9 @@ defmodule Dokkit.Estate do
               not (is_nil(&1["fail_after"]) or &1["fail_after"] in 1..100//1))
       ) ->
         {:error, "fail_after is a whole number from 1 to 100."}
+
+      why = Dokkit.AppUpdates.recipe_error(doc["app"]) ->
+        {:error, why}
 
       true ->
         Repo.transaction(fn ->
@@ -432,46 +478,11 @@ defmodule Dokkit.Estate do
             end
           end
 
+          if machine_key?, do: Dokkit.AppUpdates.declared(machine_id, slug, doc["app"])
           service
         end)
     end
   end
-
-  @app_check_types ~w(beat custom)
-  @app_job_fields ~w(id schedule grace max_runtime)
-
-  def declare(%Service{} = own, %{"service" => %{"id" => slug} = about} = doc) do
-    checks = List.wrap(doc["check"])
-    jobs = List.wrap(doc["job"])
-
-    cond do
-      slug != own.slug ->
-        {:error, "This key belongs to #{inspect(own.slug)}, so service.id must be that."}
-
-      bad = Enum.find(checks, &(not is_map(&1) or &1["type"] not in @app_check_types)) ->
-        {:error,
-         "An app key may declare checks of type #{Enum.join(@app_check_types, " or ")} only, not #{inspect(is_map(bad) && bad["type"])}."}
-
-      length(checks) + length(jobs) > @app_checks ->
-        {:error, "A service takes at most #{@app_checks} checks from an app key."}
-
-      Enum.any?(jobs, &(not is_map(&1))) ->
-        {:error, "Every job needs an id."}
-
-      true ->
-        about =
-          Map.merge(about, %{"kind" => to_string(own.kind), "name" => about["name"] || own.name})
-
-        declare(own.machine_id, %{
-          "schema" => doc["schema"],
-          "service" => about,
-          "check" => checks,
-          "job" => Enum.map(jobs, &Map.take(&1, @app_job_fields))
-        })
-    end
-  end
-
-  def declare(_, _), do: {:error, "A declaration needs [service] with an id."}
 
   # A check that names its own fail_after keeps it when the server's default changes.
   defp own_fail_after(config, %{"fail_after" => n}) when is_integer(n),

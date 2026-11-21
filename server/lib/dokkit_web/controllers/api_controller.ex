@@ -637,6 +637,46 @@ defmodule DokkitWeb.ApiController do
 
   def releases(conn, params), do: list(conn, Read.list(:releases, params))
 
+  def app_updates(conn, _), do: json(conn, %{items: Dokkit.AppUpdates.list()})
+  def app_update(conn, %{"app" => app}), do: one(conn, Dokkit.AppUpdates.view(app))
+
+  def put_app_update(conn, %{"app" => app} = p),
+    do: reply(conn, save_app_update(app, Map.drop(p, ["app"])))
+
+  def update_app(conn, %{"app" => app} = p), do: reply(conn, approve_app(app, p))
+  def fetch_app(conn, %{"app" => app}), do: reply(conn, fetch_app_releases(app))
+  def github_token(conn, _), do: json(conn, Dokkit.AppUpdates.token_view())
+  def put_github_token(conn, p), do: reply(conn, save_github_token(p))
+
+  def save_app_update(app, p) do
+    case Dokkit.AppUpdates.save(app, p) do
+      {:ok, view} -> view
+      error -> error
+    end
+  end
+
+  @doc "Asks the updater on one machine, or on every machine that can take it, to install an app's release."
+  def approve_app(app, p) do
+    case Dokkit.AppUpdates.approve(app, p["machine"] || :all, version: p["version"]) do
+      {:ok, n} -> %{ok: true, machines: n}
+      error -> error
+    end
+  end
+
+  def fetch_app_releases(app) do
+    case Dokkit.AppUpdates.fetch(app) do
+      {:ok, release} -> %{ok: true, version: release.version, files: Map.keys(release.files)}
+      error -> error
+    end
+  end
+
+  def save_github_token(p) do
+    case Dokkit.AppUpdates.save_token(p["github_token"]) do
+      {:ok, view} -> view
+      error -> error
+    end
+  end
+
   def update_all(conn, params), do: reply(conn, approve_update(params["version"], :all))
 
   def certificate(conn, _), do: json(conn, Dokkit.Certificate.view())
@@ -900,7 +940,11 @@ defmodule DokkitWeb.ApiController do
   # changes something.
   def needs(method, path) do
     case {method, Enum.at(path, 2), List.last(path)} do
-      {_, area, _} when area in ["keys", "users", "update-all", "phones", "add-script"] ->
+      {_, area, _}
+      when area in ["keys", "users", "update-all", "phones", "add-script", "github-token"] ->
+        "admin"
+
+      {method, "app-updates", _} when method != "GET" ->
         "admin"
 
       {"GET", "certificate", last} when last in ["settings", "name"] ->

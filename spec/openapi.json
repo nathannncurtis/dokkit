@@ -15429,6 +15429,1245 @@
           }
         ]
       }
+    },
+    "/api/v1/update/apps": {
+      "get": {
+        "operationId": "askAppUpdates",
+        "summary": "Ask which app releases to install",
+        "tags": [
+          "Work"
+        ],
+        "description": "The Dokkit updater asks which app releases a person or automatic mode wants installed on this machine. Each item names the file to fetch, its SHA-256, the signer a Windows .exe or .msi must carry, and how long the app's checks have to pass. `file` and `sha256` are empty for a Compose app, which installs an image tag. The updater installs only by the `[app]` table of the machine's own dokkit.toml. Takes a machine key (`dkm_`). An app key is refused: only the Dokkit updater on a monitored machine installs apps.",
+        "parameters": [
+          {
+            "name": "os",
+            "in": "query",
+            "description": "The machine's system, as Go names it, such as windows.",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "arch",
+            "in": "query",
+            "description": "The machine's processor, as Go names it, such as amd64.",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What to install, in order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "service": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "file": {
+                            "type": "string"
+                          },
+                          "sha256": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "integer"
+                          },
+                          "signer": {
+                            "type": "string"
+                          },
+                          "health_seconds": {
+                            "type": "integer"
+                          },
+                          "require_signature": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "service": "acme-intake",
+                      "version": "v1.4.0",
+                      "kind": "windows-service",
+                      "file": "acme-intake-1.4.0-windows-amd64.zip",
+                      "sha256": "9f2c...",
+                      "size": 18213044,
+                      "signer": "Example Software Ltd",
+                      "health_seconds": 300,
+                      "require_signature": true
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Needs a machine key."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "machineKey": []
+          }
+        ]
+      }
+    },
+    "/api/v1/update/apps/{app}/{version}/{file}": {
+      "get": {
+        "operationId": "getAppReleaseFile",
+        "summary": "Fetch an app release file",
+        "tags": [
+          "Work"
+        ],
+        "description": "The file a machine was asked to install, as the server fetched it from GitHub. Only for a machine asked to install that version; 404 otherwise. Takes a machine key (`dkm_`). An app key is refused: only the Dokkit updater on a monitored machine installs apps.",
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "description": "The app's service id, such as `acme-intake`.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "description": "The release tag.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "file",
+            "in": "path",
+            "description": "The file's name in the release.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Needs a machine key."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not asked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "This machine was not asked to install that file."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "machineKey": []
+          }
+        ]
+      }
+    },
+    "/api/v1/update/apps/result": {
+      "post": {
+        "operationId": "appUpdateResult",
+        "summary": "Report how an app install went",
+        "tags": [
+          "Work"
+        ],
+        "description": "Ends the install. A good one is a deploy of the service on this machine, by Dokkit updater. A failed one opens an issue on the service; in automatic mode the rollout stops there. Takes a machine key (`dkm_`). An app key is refused: only the Dokkit updater on a monitored machine installs apps.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "service",
+                  "version",
+                  "ok"
+                ],
+                "properties": {
+                  "service": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "ok": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "description": "What was done, or what went wrong and whether the old version was put back."
+                  }
+                }
+              },
+              "example": {
+                "service": "acme-intake",
+                "version": "v1.4.0",
+                "ok": true,
+                "note": "installed v1.4.0; checks ok after 12 s"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Kept.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Needs a machine key."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_result",
+                    "message": "Needs service, a version this machine was asked to install, ok, and at most 2000 characters of note."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "machineKey": []
+          }
+        ]
+      }
+    },
+    "/api/v1/app-updates": {
+      "get": {
+        "operationId": "appUpdates",
+        "summary": "Every app Dokkit can update",
+        "tags": [
+          "Read"
+        ],
+        "description": "Each app with update settings or a machine that can install it: its GitHub repository, mode, hold, newest release held and, for each machine, its version, state and last result. Takes a user token (`dku_`) with the `read` scope.",
+        "responses": {
+          "200": {
+            "description": "The apps.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppUpdate"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "app": "acme-intake",
+                      "repo": "example/acme-intake",
+                      "url": "https://github.com/example/acme-intake",
+                      "mode": "click",
+                      "hold": false,
+                      "signer": "Example Software Ltd",
+                      "assets": {
+                        "windows/amd64": "acme-intake-*-windows-amd64.zip"
+                      },
+                      "defaults": {
+                        "repo": "",
+                        "assets": {},
+                        "mode": "click",
+                        "hold": false,
+                        "signer": ""
+                      },
+                      "changed": [
+                        "assets",
+                        "repo",
+                        "signer"
+                      ],
+                      "checked_at": "2026-11-20T09:00:00Z",
+                      "check_note": null,
+                      "newest": {
+                        "version": "v1.4.0",
+                        "url": "https://github.com/example/acme-intake/releases/tag/v1.4.0",
+                        "published_at": "2026-11-19T17:00:00Z",
+                        "files": [
+                          {
+                            "name": "acme-intake-1.4.0-windows-amd64.zip",
+                            "sha256": "9f2c...",
+                            "size": 18213044
+                          }
+                        ]
+                      },
+                      "machines": [
+                        {
+                          "id": "6f1c0d4e-0000-4000-8000-000000000001",
+                          "name": "build01",
+                          "kind": "windows-service",
+                          "version": "v1.3.2",
+                          "state": "idle",
+                          "wanted": null,
+                          "result_version": null,
+                          "note": null,
+                          "at": null,
+                          "behind": true,
+                          "can_update": true,
+                          "why": null
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/app-updates/{app}": {
+      "get": {
+        "operationId": "appUpdate",
+        "summary": "One app's updates",
+        "tags": [
+          "Read"
+        ],
+        "description": "As in the list. Takes a user token (`dku_`) with the `read` scope.",
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "description": "The app's service id, such as `acme-intake`.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdate"
+                },
+                "example": {
+                  "app": "acme-intake",
+                  "repo": "example/acme-intake",
+                  "url": "https://github.com/example/acme-intake",
+                  "mode": "click",
+                  "hold": false,
+                  "signer": "Example Software Ltd",
+                  "assets": {
+                    "windows/amd64": "acme-intake-*-windows-amd64.zip"
+                  },
+                  "defaults": {
+                    "repo": "",
+                    "assets": {},
+                    "mode": "click",
+                    "hold": false,
+                    "signer": ""
+                  },
+                  "changed": [
+                    "assets",
+                    "repo",
+                    "signer"
+                  ],
+                  "checked_at": "2026-11-20T09:00:00Z",
+                  "check_note": null,
+                  "newest": {
+                    "version": "v1.4.0",
+                    "url": "https://github.com/example/acme-intake/releases/tag/v1.4.0",
+                    "published_at": "2026-11-19T17:00:00Z",
+                    "files": [
+                      {
+                        "name": "acme-intake-1.4.0-windows-amd64.zip",
+                        "sha256": "9f2c...",
+                        "size": 18213044
+                      }
+                    ]
+                  },
+                  "machines": [
+                    {
+                      "id": "6f1c0d4e-0000-4000-8000-000000000001",
+                      "name": "build01",
+                      "kind": "windows-service",
+                      "version": "v1.3.2",
+                      "state": "idle",
+                      "wanted": null,
+                      "result_version": null,
+                      "note": null,
+                      "at": null,
+                      "behind": true,
+                      "can_update": true,
+                      "why": null
+                    }
+                  ],
+                  "require_signature": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not read."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such thing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "read"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "operationId": "setAppUpdate",
+        "summary": "Change an app's update settings",
+        "tags": [
+          "Admin"
+        ],
+        "description": "A setting left out stays as it was; null or an empty text puts it back to its default. `assets` is an object, or text with one `system/processor pattern` per line. Takes a user token (`dku_`) with the `admin` scope.",
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "description": "The app's service id, such as `acme-intake`.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "repo": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "mode": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "click",
+                      "automatic",
+                      null
+                    ]
+                  },
+                  "hold": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "signer": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "assets": {
+                    "type": [
+                      "object",
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "require_signature": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ],
+                    "description": "On (the default), a Windows .exe or .msi must carry a valid Authenticode signature, from `signer` when one is named. Off, only its SHA-256 is checked."
+                  }
+                }
+              },
+              "example": {
+                "repo": "example/acme-intake",
+                "assets": {
+                  "windows/amd64": "acme-intake-*-windows-amd64.zip"
+                },
+                "signer": "Example Software Ltd"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The app after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdate"
+                },
+                "example": {
+                  "app": "acme-intake",
+                  "repo": "example/acme-intake",
+                  "url": "https://github.com/example/acme-intake",
+                  "mode": "click",
+                  "hold": false,
+                  "signer": "Example Software Ltd",
+                  "assets": {
+                    "windows/amd64": "acme-intake-*-windows-amd64.zip"
+                  },
+                  "defaults": {
+                    "repo": "",
+                    "assets": {},
+                    "mode": "click",
+                    "hold": false,
+                    "signer": ""
+                  },
+                  "changed": [
+                    "assets",
+                    "repo",
+                    "signer"
+                  ],
+                  "checked_at": "2026-11-20T09:00:00Z",
+                  "check_note": null,
+                  "newest": {
+                    "version": "v1.4.0",
+                    "url": "https://github.com/example/acme-intake/releases/tag/v1.4.0",
+                    "published_at": "2026-11-19T17:00:00Z",
+                    "files": [
+                      {
+                        "name": "acme-intake-1.4.0-windows-amd64.zip",
+                        "sha256": "9f2c...",
+                        "size": 18213044
+                      }
+                    ]
+                  },
+                  "machines": [
+                    {
+                      "id": "6f1c0d4e-0000-4000-8000-000000000001",
+                      "name": "build01",
+                      "kind": "windows-service",
+                      "version": "v1.3.2",
+                      "state": "idle",
+                      "wanted": null,
+                      "result_version": null,
+                      "note": null,
+                      "at": null,
+                      "behind": true,
+                      "can_update": true,
+                      "why": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such thing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The input is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_setting",
+                    "message": "mode is click or automatic."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/app-updates/{app}/update": {
+      "post": {
+        "operationId": "updateApp",
+        "summary": "Install an app release",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Asks the Dokkit updater on one machine (`machine`), or on every machine that can take it, to install the newest held release, or `version`. A machine takes it only when it is monitored, its Dokkit program is reporting, the updater is installed, and its own dokkit.toml has an `[app]` table for the app: 422 `not_eligible` says which is missing. 422 `held` while the app is on hold. Takes a user token (`dku_`) with the `admin` scope.",
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "description": "The app's service id, such as `acme-intake`.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "machine": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "machine": "6f1c0d4e-0000-4000-8000-000000000001"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Asked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "machines": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "ok": true,
+                  "machines": 1
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such thing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Refused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_eligible",
+                    "message": "laptop7 is not a monitored machine. Only a machine where the Dokkit program and updater are installed receives updates; logging through an app key does not unlock them."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/app-updates/{app}/fetch": {
+      "post": {
+        "operationId": "fetchAppReleases",
+        "summary": "Look at GitHub now",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Fetches the app's newest GitHub release and keeps the files its patterns name, with their SHA-256. A file listed in the release's own checksum file must match it or nothing is kept. In automatic mode the first machine starts. Takes a user token (`dku_`) with the `admin` scope.",
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "description": "The app's service id, such as `acme-intake`.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Held.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "ok": true,
+                  "version": "v1.4.0",
+                  "files": [
+                    "acme-intake-1.4.0-windows-amd64.zip"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such thing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "No such thing."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "GitHub refused or the release is not right.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_checksum",
+                    "message": "acme-intake-1.4.0-windows-amd64.zip does not match the release's own checksums."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/github-token": {
+      "get": {
+        "operationId": "githubToken",
+        "summary": "The GitHub read token",
+        "tags": [
+          "Admin"
+        ],
+        "description": "Whether the one read token the server fetches every app's releases with is set, and its last four characters. The token is never shown. Takes a user token (`dku_`) with the `admin` scope.",
+        "responses": {
+          "200": {
+            "description": "The token's state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "github_token": {
+                      "type": "string",
+                      "enum": [
+                        "set",
+                        "not set"
+                      ]
+                    },
+                    "ending": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "github_token": "set",
+                  "ending": "a1b2"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "operationId": "setGithubToken",
+        "summary": "Set the GitHub read token",
+        "tags": [
+          "Admin"
+        ],
+        "description": "An empty one clears it. Machines never get it: they fetch release files from this server. Takes a user token (`dku_`) with the `admin` scope.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "github_token"
+                ],
+                "properties": {
+                  "github_token": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "github_token": "github_pat_..."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The token's state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "github_token": {
+                      "type": "string",
+                      "enum": [
+                        "set",
+                        "not set"
+                      ]
+                    },
+                    "ending": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "github_token": "set",
+                  "ending": "a1b2"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_key",
+                    "message": "Missing or bad key."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key may not do this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "no_scope",
+                    "message": "This token may not admin."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Not a token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "code": "bad_token",
+                    "message": "github_token is a GitHub token, such as github_pat_..., or empty."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "userToken": [
+              "admin"
+            ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -16890,6 +18129,189 @@
               "type": "string"
             },
             "description": "The names whose value differs from its default."
+          }
+        }
+      },
+      "AppUpdate": {
+        "type": "object",
+        "description": "One app's updates.",
+        "properties": {
+          "app": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string",
+            "description": "owner/name on GitHub; empty until set."
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "click",
+              "automatic"
+            ]
+          },
+          "hold": {
+            "type": "boolean"
+          },
+          "signer": {
+            "type": "string",
+            "description": "The Authenticode signer a signed installer must come from; empty takes any valid signature."
+          },
+          "assets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "system/processor, such as windows/amd64, to a release file pattern where * is any text."
+          },
+          "defaults": {
+            "type": "object"
+          },
+          "changed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "checked_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "check_note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why the last look at GitHub failed, if it did."
+          },
+          "newest": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "version": {
+                "type": "string"
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "published_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "machines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "windows-service",
+                    "installer",
+                    "compose",
+                    "systemd",
+                    "launchd"
+                  ]
+                },
+                "version": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "idle",
+                    "waiting",
+                    "installing",
+                    "done",
+                    "failed"
+                  ]
+                },
+                "wanted": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "result_version": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "note": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "behind": {
+                  "type": "boolean"
+                },
+                "can_update": {
+                  "type": "boolean"
+                },
+                "why": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Why this machine cannot take the newest release now."
+                }
+              }
+            }
+          },
+          "require_signature": {
+            "type": "boolean",
+            "description": "On (the default), a Windows .exe or .msi must carry a valid Authenticode signature, from `signer` when one is named. Off, only its SHA-256 is checked."
           }
         }
       }

@@ -401,3 +401,12 @@ func updaterUninstall() int {
 	fmt.Println("Done: the task and the updater's file are removed. Its state and log are still in", where.data)
 	return 0
 }
+
+func trustedRecipe(p string) error {
+	if err := trustedOwner(p); err != nil {
+		return err
+	}
+	return writableByOthers(p)
+}
+
+func cloneOwner(from, to string) {}

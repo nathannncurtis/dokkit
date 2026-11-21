@@ -46,6 +46,11 @@ defmodule DokkitWeb.EverythingLive do
   def handle_event("update_all", _, socket),
     do: owner(socket, fn held -> Dokkit.Releases.approve(held, :all) end)
 
+  def handle_event("app_update_all", %{"app" => app}, socket) do
+    if socket.assigns.current_user.role == :owner, do: Dokkit.AppUpdates.approve(app, :all)
+    {:noreply, load(socket)}
+  end
+
   def handle_event("dismiss_update", _, socket) do
     Dokkit.UpdateRun.dismiss()
     {:noreply, socket}
@@ -79,7 +84,8 @@ defmodule DokkitWeb.EverythingLive do
       planned: for(m <- listed, m.planned, into: %{}, do: {m.id, m.planned}),
       vitals: Dokkit.Numbers.vitals(),
       held: held,
-      movable: Enum.count(machines, &Dokkit.Releases.movable?(&1, held))
+      movable: Enum.count(machines, &Dokkit.Releases.movable?(&1, held)),
+      app_updates: Dokkit.AppUpdates.pending()
     )
   end
 
@@ -148,6 +154,31 @@ defmodule DokkitWeb.EverythingLive do
               <.link navigate={~p"/machines/#{m.id}"}>{m.name}</.link>: {m.note}
             </li>
           </ul>
+        </div>
+
+        <div :if={@app_updates != []} class="card" id="app-updates">
+          <h2>App updates</h2>
+
+          <dl class="kv">
+            <%= for u <- @app_updates do %>
+              <dt><.link navigate={~p"/s/#{u.service_id}"}>{u.app}</.link></dt>
+
+              <dd id={"app-update-#{u.app}"}>
+                <span class="mono">{u.version}</span>
+                <span class="st">{plural(u.behind, "machine can", "machines can")} take it</span>
+                <span :if={u.hold} class="tag">On hold</span>
+                <button
+                  :if={@current_user.role == :owner and !u.hold}
+                  class="btn sm"
+                  type="button"
+                  phx-click="app_update_all"
+                  phx-value-app={u.app}
+                >
+                  Update all to {u.version}
+                </button>
+              </dd>
+            <% end %>
+          </dl>
         </div>
 
         <form :if={@dep_open} class="card" id="dependency-form" phx-submit="dependency">

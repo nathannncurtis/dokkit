@@ -37,6 +37,7 @@ defmodule DokkitWeb.ParityTest do
       "quiet_end" => {:member, ["DELETE /api/v1/machines/:id/quiet"]},
       "update" => {:owner, ["POST /api/v1/machines/:id/update"]},
       "update_all" => {:owner, ["POST /api/v1/update-all"]},
+      "app_update_all" => {:owner, ["POST /api/v1/app-updates/:app/update"]},
       "dismiss_update" => @view
     },
     "MachineLive" => %{
@@ -96,7 +97,13 @@ defmodule DokkitWeb.ParityTest do
       "note" => {:member, ["POST /api/v1/issues/:id/notes"]},
       "seen" => {:member, ["POST /api/v1/issues/:id/acknowledge"]},
       "snooze" => {:member, ["POST /api/v1/issues/:id/snooze"]},
-      "back" => {:member, ["POST /api/v1/issues/:id/unsnooze"]}
+      "back" => {:member, ["POST /api/v1/issues/:id/unsnooze"]},
+      "app_save" => {:owner, ["PUT /api/v1/app-updates/:app"]},
+      "app_reset" => {:owner, ["PUT /api/v1/app-updates/:app"]},
+      "app_update" => {:owner, ["POST /api/v1/app-updates/:app/update"]},
+      "app_update_all" => {:owner, ["POST /api/v1/app-updates/:app/update"]},
+      "app_fetch" => {:owner, ["POST /api/v1/app-updates/:app/fetch"]},
+      "app_token" => {:owner, ["PUT /api/v1/github-token"]}
     },
     "SettingsLive" => %{
       "add" => {:owner, ["POST /api/v1/users"]},

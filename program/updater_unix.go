@@ -431,3 +431,14 @@ func updaterRehearse(dir string) int {
 	fmt.Println("Rehearsing in", dir, "- nothing outside it is changed and no result is sent.")
 	return updaterRun()
 }
+
+func trustedRecipe(p string) error { return rootOnly(p) }
+
+// cloneOwner gives to the owner and group of from; a link is not followed.
+func cloneOwner(from, to string) {
+	if fi, err := os.Lstat(from); err == nil {
+		if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+			os.Lchown(to, int(st.Uid), int(st.Gid))
+		}
+	}
+}

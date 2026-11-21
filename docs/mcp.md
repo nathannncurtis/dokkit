@@ -36,6 +36,8 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `process_history` | `read` | Shows the top 10 processes by memory or processor kept for a machine over up to 24 hours: `kind`, `from`, `to`. |
 | `day` | `read` | Shows the last 24 hours in half hours: for each machine whether something was down, needed a look, or nothing happened, or it was not heard from, and the issues that opened. |
 | `releases` | `read` | Lists the program releases the server holds and whether each is complete. |
+| `app_updates` | `read` | Lists every app Dokkit can update: its GitHub repository, mode, hold, whether a signed installer is required, newest release held and, for each machine that can install it, its version, state and last result. |
+| `app_update` | `read` | Shows one app's updates (`app`, its service id). |
 | `certificate` | `read` | Shows the certificates the server serves itself. |
 | `alert_settings` | `read` | Shows the alert settings. Addresses, user names and secrets are only `set` or `not set`. |
 | `settings` | `read` | Shows every value Dokkit decides on its own for the whole server: `values` now, `defaults` that Reset gives, `changed` the ones that differ. |
@@ -82,6 +84,11 @@ claude mcp add --transport http dokkit https://<dokkit address>/mcp --header "Au
 | `update_program` | `admin` | Asks an enrolled machine to fetch the newer `dokkit` program. |
 | `update_machine` | `admin` | Asks the updater on a machine to move to a release the server holds completely. |
 | `update_all` | `admin` | The same for every machine that has an updater. |
+| `set_app_update` | `admin` | Changes an app's update settings: `repo`, `mode` (`click` or `automatic`), `hold`, `require_signature` (on by default), `signer` (empty takes any valid signature) and `assets`. null or an empty text puts one back to its default; a setting left out stays as it was. |
+| `update_app` | `admin` | Asks the Dokkit updater to install an app's newest held release (or `version`) on one `machine`, or on every machine that can take it. Only a monitored machine with the updater and an `[app]` table in its own `dokkit.toml` installs; the refusal says which is missing. |
+| `fetch_app_releases` | `admin` | Looks at the app's GitHub repository now and keeps its newest release's files. |
+| `github_token` | `admin` | Whether the read token for GitHub is set, and its last four characters. Never the token. |
+| `set_github_token` | `admin` | Sets that token; an empty one clears it. |
 | `set_certificate` | `admin` | Puts a certificate for a real name in place. |
 | `remove_certificate` | `admin` | Removes the uploaded certificate. |
 | `certificate_settings` | `admin` | Shows the settings for getting and renewing the uploaded certificate. |
