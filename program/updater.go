@@ -502,10 +502,14 @@ func unzip(zipFile, dest string) error {
 		}
 	}
 	os.RemoveAll(dest)
+	root := filepath.Clean(dest) + string(filepath.Separator)
 	for _, f := range r.File {
-		p, err := safeJoin(dest, f.Name)
-		if err != nil {
-			return err
+		p := filepath.Join(root, f.Name)
+		if p+string(filepath.Separator) == root {
+			continue
+		}
+		if !strings.HasPrefix(p, root) {
+			return fmt.Errorf("the zip has an entry, %q, that would land outside its folder", f.Name)
 		}
 		if f.FileInfo().IsDir() {
 			if err := os.MkdirAll(p, 0o700); err != nil {
