@@ -250,6 +250,23 @@ defmodule Dokkit.Numbers do
     |> kept(check)
   end
 
+  defp judge(check, bad?, value, at, values, _) do
+    {limit, _} = levels(check, values)
+    counted = readings(check, values)
+
+    if bad? do
+      Issues.record(counted, over_state(counted, value, values),
+        at: at,
+        value: value / 1,
+        title: machine_title(check.config["limit_from"], check.name),
+        note: over_note(check.name, value, limit) <> full_in(check.config["full_in_days"])
+      )
+    else
+      Issues.record(counted, :ok, at: at, value: value / 1)
+    end
+    |> kept(check)
+  end
+
   defp opened(check, value, at, values, machine) do
     {limit, down} = levels(check, values)
 
@@ -301,23 +318,6 @@ defmodule Dokkit.Numbers do
     end
 
     :ok
-  end
-
-  defp judge(check, bad?, value, at, values, _) do
-    {limit, _} = levels(check, values)
-    counted = readings(check, values)
-
-    if bad? do
-      Issues.record(counted, over_state(counted, value, values),
-        at: at,
-        value: value / 1,
-        title: machine_title(check.config["limit_from"], check.name),
-        note: over_note(check.name, value, limit) <> full_in(check.config["full_in_days"])
-      )
-    else
-      Issues.record(counted, :ok, at: at, value: value / 1)
-    end
-    |> kept(check)
   end
 
   # The recorded check as the next line of the batch reads it: its counts, with its own config and service.
