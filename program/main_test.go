@@ -423,7 +423,7 @@ func TestStatsVitalsAndExpiry(t *testing.T) {
 	}))
 	defer app.Close()
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "licence"), []byte(time.Now().Add(10*24*time.Hour+time.Hour).Format("2006-01-02")+"\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, "licence"), []byte(time.Now().UTC().AddDate(0, 0, 10).Format("2006-01-02")+"\n"), 0o600)
 	file := filepath.Join(dir, "dokkit.toml")
 	os.WriteFile(file, []byte("schema = 1\n[service]\nid = \"portal\"\n[stats]\nurl = \""+app.URL+"\"\nkey_env = \"DOKKIT_STATS_TEST\"\n[[check]]\ntype = \"expiry\"\ndate_from = \"licence\"\n"), 0o600)
 	d, err := readDeclaration(file)
