@@ -39,7 +39,7 @@
       "hw.throttle",
       "hw.array.md1",
       "hw.array.vol1",
-      "hw.array.tank",
+      "hw.array.zfs_tank",
       "hw.smart.hd3",
       "hw.smart.disk0"
     ]

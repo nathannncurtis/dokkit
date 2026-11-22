@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"os/exec"
 	"regexp"
 	"runtime"
@@ -140,28 +141,37 @@ func firstLineOut(b []byte) string { return strings.TrimSpace(strings.SplitN(str
 // qnapVerdicts reads each volume's status and each drive's SMART verdict from getsysinfo.
 func qnapVerdicts(f *hwFound) {
 	tool := qnapTool()
+	var failed []string
 	get := func(args ...string) string {
 		out, err := runCmd(tool, args...)
 		if err != nil {
+			failed = append(failed, fmt.Sprintf("%s: %v", strings.Join(args, " "), err))
 			return ""
 		}
 		return firstLineOut(out)
 	}
 	vols, _ := firstNum([]byte(get("sysvolnum")))
+	volStates := 0
 	for i := 1; i <= int(vols) && i <= 64; i++ {
 		word := get("vol_status", strconv.Itoa(i))
 		if s, ok := verdict(word, volumeRules); ok {
+			volStates++
 			f.states = append(f.states, hwState{fmt.Sprintf("hw.array.vol%d", i), s, noteUnlessOK(s, "The NAS says the volume is "+word)})
 		}
 	}
 	disks, _ := firstNum([]byte(get("hdnum")))
+	driveStates := 0
 	for i := 1; i <= int(disks) && i <= 64; i++ {
 		word := get("hdsmart", strconv.Itoa(i))
 		if s, ok := verdict(word, driveRules); ok {
+			driveStates++
 			f.states = append(f.states, hwState{fmt.Sprintf("hw.smart.hd%d", i), s, noteUnlessOK(s, "The NAS says the drive is "+word)})
 		}
 	}
-	f.say("QNAP volumes and drive verdicts: %d volume(s), %d drive(s)", int(vols), int(disks))
+	f.say("QNAP volumes: %d of %d with a status; drive verdicts: %d of %d", volStates, int(vols), driveStates, int(disks))
+	for _, e := range failed {
+		f.say("QNAP getsysinfo %s", e)
+	}
 }
 
 func noteUnlessOK(state, note string) string {
@@ -227,6 +237,18 @@ func zfsPools(f *hwFound) {
 	f.say("zpool: %d pool(s)", len(s))
 }
 
+// poolName keeps each pool its own check: zfs_ sets pools apart from md arrays and volumes, and a
+// name the label changed (tank-a, Tank) carries a hash of the real one.
+func poolName(name string) string {
+	l := label(name)
+	if l == name {
+		return "zfs_" + l
+	}
+	h := fnv.New32a()
+	h.Write([]byte(name))
+	return fmt.Sprintf("zfs_%s_%08x", l, h.Sum32())
+}
+
 var zpoolScan = regexp.MustCompile(`(\d+(?:\.\d+)?%) done`)
 
 // parseZpool: a pool that lost a device is down unless it is resilvering, which is degraded.
@@ -251,7 +273,7 @@ func parseZpool(list, status string) []hwState {
 		if !ok || label(name) == "" {
 			continue
 		}
-		s := hwState{check: "hw.array." + label(name), state: "ok"}
+		s := hwState{check: "hw.array." + poolName(name), state: "ok"}
 		switch health = strings.TrimSpace(health); {
 		case health == "ONLINE":
 		case resilver[name] != "":

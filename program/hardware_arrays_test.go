@@ -118,11 +118,43 @@ func TestDiskutilSmartStatus(t *testing.T) {
 
 func TestZpoolHealth(t *testing.T) {
 	wantStates(t, "zpool", parseZpool(fixture(t, "zpool", "list.txt"), fixture(t, "zpool", "status-x.txt")), []hwState{
-		{"hw.array.tank", "degraded", "Resilvering, 20.35% done"},
-		{"hw.array.backup", "ok", ""},
-		{"hw.array.scratch", "down", "The ZFS pool is FAULTED"},
-		{"hw.array.cold", "down", "The ZFS pool is DEGRADED"},
+		{"hw.array.zfs_tank", "degraded", "Resilvering, 20.35% done"},
+		{"hw.array.zfs_backup", "ok", ""},
+		{"hw.array.zfs_scratch", "down", "The ZFS pool is FAULTED"},
+		{"hw.array.zfs_cold", "down", "The ZFS pool is DEGRADED"},
 	})
+}
+
+func TestEveryPoolKeepsItsOwnCheck(t *testing.T) {
+	got := parseZpool("tank-a\tONLINE\ntank_a\tDEGRADED\nTank_A\tONLINE\nmd1\tONLINE\n", "")
+	seen := map[string]bool{}
+	for _, s := range got {
+		if seen[s.check] || s.check == "hw.array.md1" {
+			t.Fatalf("pools share a check or take an md array's name: %v", got)
+		}
+		seen[s.check] = true
+	}
+	if len(got) != 4 || statesOf(got)["hw.array.zfs_tank_a"].state != "down" {
+		t.Fatalf("%v", got)
+	}
+}
+
+func TestQnapSaysWhyAVerdictIsMissing(t *testing.T) {
+	hwReset(t)
+	qnapAnswers(t, nil)
+	answered := runCmd
+	runCmd = func(name string, args ...string) ([]byte, error) {
+		if args[0] == "hdsmart" {
+			return nil, &exec.ExitError{}
+		}
+		return answered(name, args...)
+	}
+	f := &hwFound{}
+	qnapVerdicts(f)
+	said := strings.Join(f.said, "\n")
+	if !strings.Contains(said, "drive verdicts: 0 of 9") || !strings.Contains(said, "getsysinfo hdsmart 1:") {
+		t.Fatalf("said %q", said)
+	}
 }
 
 func TestZpoolStatusIsAskedOnlyWhenAPoolIsUnwell(t *testing.T) {

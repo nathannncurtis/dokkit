@@ -52,6 +52,23 @@ defmodule Dokkit.HardwareStorageTest do
     assert [%{title: "Array vol1 is down on nas-02"}] = open_on(m)
   end
 
+  test "switching Drive health off closes an open drive issue without another report" do
+    {m, key} = machine("nas-05")
+    {other, other_key} = machine("nas-06")
+    failing = times(state("hw.smart.hd2", "down", "The NAS says the drive is Abnormal"), 3)
+    report(key, failing)
+    report(other_key, failing)
+    report(key, times(state("hw.array.md1", "down", "1 of 4 drives missing"), 3))
+    assert length(open_on(m)) == 2
+
+    {:ok, _} = Values.save({:machine, m.id}, %{"smart_on" => false})
+    assert [%{title: "Array md1 is down on nas-05"}] = open_on(m)
+    assert [%{title: "Drive hd2 is failing on nas-06"}] = open_on(other)
+
+    {:ok, _} = Values.save(:server, %{"array_on" => false})
+    assert open_on(m) == []
+  end
+
   test "arrays and drive health settings default on, save and reset for a machine" do
     {m, _} = machine("nas-03")
     scope = {:machine, m.id}

@@ -769,6 +769,34 @@ defmodule Dokkit.Intake do
 
   defp storage_row(check, state, _, _), do: {check, state}
 
+  @doc "After a save: arrays and drives whose setting is now off read as fine at once, so a drive that no longer reports does not keep its issue open."
+  def storage_switched(scope) when scope == :server or elem(scope, 0) == :machine do
+    query =
+      from c in Check,
+        join: s in assoc(c, :service),
+        where: s.slug == "machine" and c.state in [:degraded, :down],
+        where: like(c.name, "hw.array.%") or like(c.name, "hw.smart.%"),
+        preload: [service: s]
+
+    checks =
+      case scope do
+        {:machine, id} -> Repo.all(from [c, s] in query, where: s.machine_id == ^id)
+        :server -> Repo.all(query)
+      end
+
+    for {id, list} <- Enum.group_by(checks, & &1.service.machine_id),
+        values = Dokkit.Values.all({:machine, id}),
+        check <- list,
+        not values[storage_kind(check.name) <> "_on"] do
+      once = %{check | fail_after: 1, config: Map.put(check.config, "own_fail_after", true)}
+      Issues.record(once, :ok, note: check.note)
+    end
+
+    :ok
+  end
+
+  def storage_switched(_), do: :ok
+
   defp storage_kind("hw.array." <> _), do: "array"
   defp storage_kind("hw.smart." <> _), do: "smart"
   defp storage_kind(_), do: nil

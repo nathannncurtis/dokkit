@@ -715,6 +715,10 @@ defmodule Dokkit.Values do
          :ok <- together(Map.merge(all(scope), Map.new(parsed, &settled(&1, base))), parsed) do
       write(scope, parsed)
       forget()
+
+      if Enum.any?(~w(array_on smart_on), &Map.has_key?(parsed, &1)),
+        do: Dokkit.Intake.storage_switched(scope)
+
       {:ok, view(scope)}
     end
   end
