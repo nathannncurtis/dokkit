@@ -43,6 +43,95 @@ defmodule Dokkit.Values do
       words: ["Slow at", "% for", "minutes"]
     },
     %{
+      group: "hardware",
+      id: "gpu_temp",
+      scope: :machine,
+      title: "GPU temperature",
+      sub: "Tell me when a graphics card runs hot.",
+      toggle: {"gpu_temp_on", true},
+      fields: [
+        {"gpu_temp_limit", 85, 1, 150},
+        {"gpu_temp_minutes", 3, 1, 1440},
+        {"gpu_temp_down", 92, 1, 150}
+      ],
+      words: ["Slow at", "°C for", "minutes, down at", "°C"]
+    },
+    %{
+      group: "hardware",
+      id: "gpu_memory",
+      scope: :machine,
+      title: "GPU memory",
+      sub:
+        "Tell me when a graphics card's memory stays full. A machine that runs models sits high on purpose.",
+      toggle: {"gpu_memory_on", true},
+      fields: [{"gpu_memory_limit", 98, 1, 100}, {"gpu_memory_minutes", 10, 1, 1440}],
+      words: ["Slow at", "% for", "minutes"]
+    },
+    %{
+      group: "hardware",
+      id: "cpu_temp",
+      scope: :machine,
+      title: "Processor temperature",
+      sub:
+        "Tell me when the processor runs hot. A processor that names its own critical temperature is slow 10 °C under it and down at it, unless this machine's own setting says otherwise.",
+      toggle: {"cpu_temp_on", true},
+      fields: [
+        {"cpu_temp_limit", 90, 1, 150},
+        {"cpu_temp_minutes", 5, 1, 1440},
+        {"cpu_temp_down", 100, 1, 150}
+      ],
+      words: ["Slow at", "°C for", "minutes, down at", "°C"]
+    },
+    %{
+      group: "hardware",
+      id: "ambient_temp",
+      scope: :machine,
+      title: "Air temperature",
+      sub:
+        "Tell me when the air around the machine, or inside its case, gets warm: the cooling may have failed.",
+      toggle: {"ambient_temp_on", true},
+      fields: [
+        {"ambient_temp_limit", 40, 1, 150},
+        {"ambient_temp_minutes", 3, 1, 1440},
+        {"ambient_temp_down", 45, 1, 150}
+      ],
+      words: ["Slow at", "°C for", "minutes, down at", "°C"]
+    },
+    %{
+      group: "hardware",
+      id: "fan_stop",
+      scope: :machine,
+      title: "Fan stopped",
+      sub: "Tell me when a fan that has turned stops. Fans that never turn are not watched.",
+      toggle: {"fan_stop_on", true},
+      fields: [{"fan_stop_limit", 1, 1, 10_000}, {"fan_stop_minutes", 10, 1, 1440}],
+      words: ["Slow under", "RPM for", "minutes"]
+    },
+    %{
+      group: "hardware",
+      id: "clock",
+      scope: :machine,
+      title: "Clock",
+      sub:
+        "Tell me when the machine's clock drifts from the server's. Sign-in codes fail near 30 seconds.",
+      toggle: {"clock_on", true},
+      fields: [
+        {"clock_limit", 10, 1, 86_400},
+        {"clock_minutes", 3, 1, 1440},
+        {"clock_down", 120, 1, 86_400}
+      ],
+      words: ["Slow when off by", "seconds for", "minutes, down at", "seconds"]
+    },
+    %{
+      group: "hardware",
+      id: "hardware_kept",
+      scope: :server,
+      title: "Hardware readings",
+      sub: "How long temperatures, fans, graphics cards and clock readings are kept.",
+      fields: [{"hardware_days", 30, 1, 3650}],
+      words: ["", "days"]
+    },
+    %{
       group: "machines",
       id: "silent",
       scope: :machine,
@@ -433,6 +522,8 @@ defmodule Dokkit.Values do
      "When alerts go again, what is offered, and how sending is tried."},
     {"machines", "hard-drives", "Defaults for every machine",
      "Each machine can change these on its own page."},
+    {"hardware", "thermometer", "Hardware for every machine",
+     "Graphics cards, temperatures, fans and clocks. Each machine can change these on its own page."},
     {"checks", "pulse", "Checks",
      "How services are checked unless a dokkit.toml says otherwise."},
     {"jobs", "clock-countdown", "Defaults for every job",
@@ -686,6 +777,15 @@ defmodule Dokkit.Values do
        &(&1["disk_down"] >= &1["disk_limit"])},
       {~w(memory_limit memory_down), "memory_down is at or above memory_limit.",
        &(&1["memory_down"] >= &1["memory_limit"])},
+      {~w(gpu_temp_limit gpu_temp_down), "gpu_temp_down is at or above gpu_temp_limit.",
+       &(&1["gpu_temp_down"] >= &1["gpu_temp_limit"])},
+      {~w(cpu_temp_limit cpu_temp_down), "cpu_temp_down is at or above cpu_temp_limit.",
+       &(&1["cpu_temp_down"] >= &1["cpu_temp_limit"])},
+      {~w(ambient_temp_limit ambient_temp_down),
+       "ambient_temp_down is at or above ambient_temp_limit.",
+       &(&1["ambient_temp_down"] >= &1["ambient_temp_limit"])},
+      {~w(clock_limit clock_down), "clock_down is at or above clock_limit.",
+       &(&1["clock_down"] >= &1["clock_limit"])},
       {~w(silent_minutes report_seconds),
        "silent_minutes is at least two reports and a minute: silent_minutes * 60 >= 2 * report_seconds + 60.",
        &(&1["silent_minutes"] * 60 >= 2 * &1["report_seconds"] + 60)},

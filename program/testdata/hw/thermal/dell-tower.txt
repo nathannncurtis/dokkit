@@ -1,0 +1,12 @@
+thermal_zone0 INT3400 Thermal 20000
+thermal_zone1 TVRS 25050
+thermal_zone10 TCPU_PCI 34000
+thermal_zone11 x86_pkg_temp 35000
+thermal_zone2 TPCH 28050
+thermal_zone3 TAMB 24050
+thermal_zone4 DIMM 24050
+thermal_zone5 TRIS 50
+thermal_zone6 T1SD 26050
+thermal_zone7 T2SD 24050
+thermal_zone8 TGTS 27050
+thermal_zone9 TCPU 36050

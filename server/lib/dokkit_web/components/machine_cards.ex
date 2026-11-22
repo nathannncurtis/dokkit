@@ -41,6 +41,90 @@ defmodule DokkitWeb.MachineCards do
     """
   end
 
+  attr :hardware, :list, required: true
+  attr :scope, :any, required: true
+  attr :disabled, :boolean, required: true
+  attr :result, :any, default: nil
+  attr :draft, :map, default: %{}
+
+  @doc "The machine's hardware readings by kind, each with its limits and Save beside it."
+  def hardware(assigns) do
+    ~H"""
+    <div class="card" id="hardware">
+      <h2>Hardware</h2>
+
+      <%= for {kind, label, absent, rows, list} <- @hardware do %>
+        <div class="grp bare">{label}</div>
+
+        <p :if={list == []} class="mute" id={"hw-#{kind}-none"}>{absent}</p>
+
+        <div :for={h <- list} class="chart" id={"hw-chart-" <> h.name}>
+          <div class="top">
+            <b><.lvl :if={h.state in [:degraded, :down]} state={h.state} /> {hardware_title(h.name)}</b>
+            <span class="mono">{latest(h.points) && reading(h.name, latest(h.points))}</span>
+            <span :if={h.note} class="st warn">{h.note}</span>
+          </div>
+
+          <DokkitWeb.Show.line
+            points={h.points}
+            limit={h.limit}
+            label={hardware_title(h.name)}
+            unit={chart_unit(h.name)}
+          />
+        </div>
+
+        <DokkitWeb.ValuesForm.inline
+          :if={list != []}
+          id={"hw-#{kind}"}
+          group="hardware"
+          scope={@scope}
+          rows={rows}
+          disabled={@disabled}
+          result={@result}
+          draft={@draft}
+          change="values_change"
+        />
+      <% end %>
+    </div>
+    """
+  end
+
+  defp reading(name, value) do
+    value = Float.round(value * 1.0, 1)
+    "#{if value == trunc(value), do: trunc(value), else: value}#{Dokkit.Numbers.unit(name)}"
+  end
+
+  defp chart_unit(name) do
+    case Dokkit.Numbers.unit(name) do
+      " °C" -> "°"
+      " RPM" -> ""
+      " W" -> " W"
+      " seconds" -> " s"
+      unit -> unit
+    end
+  end
+
+  def hardware_title(name) do
+    case String.split(name, ".") do
+      ["gpu", n, "temp_c"] -> "GPU #{n} temperature"
+      ["gpu", n, "used_percent"] -> "GPU #{n} in use"
+      ["gpu", n, "memory_percent"] -> "GPU #{n} memory in use"
+      ["gpu", n, "power_w"] -> "GPU #{n} power"
+      ["gpu", n, "fan_percent"] -> "GPU #{n} fan"
+      ["temp", "cpu_c"] -> "Processor"
+      ["temp", "cpu", n] -> "Processor #{String.trim_trailing(n, "_c")}"
+      ["temp", "ambient_c"] -> "Air"
+      ["temp", "system_c"] -> "Inside the case"
+      ["temp", "disk", dev] -> "Disk #{String.trim_trailing(dev, "_c")}"
+      ["temp", label] -> words(String.trim_trailing(label, "_c"))
+      ["fan", label] -> words(String.trim_trailing(label, "_rpm"))
+      ["clock", _] -> "Clock, ahead of the server"
+      _ -> name
+    end
+  end
+
+  defp words(label), do: label |> String.replace("_", " ") |> String.capitalize()
+
   attr :procs, :map, required: true
   attr :procs_q, :string, required: true
   attr :procs_sort, :string, required: true

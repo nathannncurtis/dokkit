@@ -70,7 +70,9 @@ defmodule DokkitWeb.IntakeControllerTest do
 
     assert %JobRun{result: :ok, duration_ms: 1200} = Repo.get_by!(JobRun, run: "a")
 
-    assert json_response(report(mkey, lines, [{"dokkit-batch", batch}]), 200) == answer
+    again = json_response(report(mkey, lines, [{"dokkit-batch", batch}]), 200)
+    assert Map.delete(again, "server_ms") == Map.delete(answer, "server_ms")
+    assert again["server_ms"] >= answer["server_ms"]
     assert Repo.aggregate(JobRun, :count) == 1
   end
 
@@ -122,7 +124,8 @@ rsync: disk full
       report(app, [body], [{"content-encoding", "gzip"}, {"dokkit-batch", Ecto.UUID.generate()}])
       |> json_response(200)
 
-    assert answer == %{"accepted" => 2, "refused" => []}
+    assert %{"accepted" => 2, "refused" => [], "server_ms" => ms} = answer
+    assert is_integer(ms) and map_size(answer) == 3
 
     assert %JobRun{result: :fail, exit_code: 3, duration_ms: 2100} =
              Repo.get_by!(JobRun, run: run)

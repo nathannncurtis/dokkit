@@ -14,8 +14,12 @@ defmodule Dokkit.ErrorsTest do
     {app, _} = Keys.mint(:app, %{service_id: service.id})
     as = put_req_header(build_conn(), "authorization", "Bearer " <> app)
 
+    # Each its own time: two reports in the same millisecond have no order.
+    start = DateTime.add(DateTime.utc_now(), -600)
+
     report = fn line ->
       post(as, "/api/v1/errors", %{
+        at: DateTime.to_iso8601(DateTime.add(start, line)),
         type: "TimeoutError",
         release: "2.3.0",
         handled: true,

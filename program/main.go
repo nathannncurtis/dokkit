@@ -50,6 +50,7 @@ dokkit relay remove <name>
 dokkit relay serve --http <address> [--open-signup] [--max-mailboxes <n>]
 dokkit public-mcp --http <address>
 dokkit doctor
+dokkit hardware
 dokkit service install|uninstall|update|start|stop
 dokkit updater install|uninstall|run|status|rehearse <folder>
 dokkit version
@@ -97,6 +98,9 @@ func cli(args []string) int {
 	if args[0] == "version" {
 		fmt.Println(version)
 		return 0
+	}
+	if args[0] == "hardware" {
+		return hardwareCommand()
 	}
 	if args[0] == "updater" {
 		return updaterCommand(args[1:])
@@ -481,7 +485,7 @@ func enrol(address, token, pin string) int {
 // beat says this machine is alive.
 func (c *client) beat(services []map[string]string) {
 	inventory := map[string]any{"type": "inventory", "at": now(), "os": runtime.GOOS, "arch": runtime.GOARCH, "dokkit": version, "services": services}
-	c.report(append([]any{inventory}, vitals()...)...)
+	c.report(append(append([]any{inventory}, vitals()...), c.hardware()...)...)
 }
 
 // job fills in what every job line carries. A machine key names the service the job belongs to:
@@ -721,6 +725,7 @@ func (c *client) post(batch string, body []byte) (int, []byte, error) {
 	req.Header.Set("Content-Type", "application/x-ndjson")
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Dokkit-Batch", batch)
+	sent := time.Now()
 	res, err := c.http.Do(req)
 	if err != nil {
 		return 0, nil, err
@@ -729,6 +734,7 @@ func (c *client) post(batch string, body []byte) (int, []byte, error) {
 	answer, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if res.StatusCode/100 == 2 {
 		c.lastOK = time.Now()
+		noteClock(sent, c.lastOK, answer)
 	}
 	return res.StatusCode, answer, nil
 }

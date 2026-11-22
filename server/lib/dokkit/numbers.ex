@@ -1,7 +1,7 @@
 defmodule Dokkit.Numbers do
   @moduledoc """
   Numbers over time: what `metric` lines carry, and what is read out of a stats document.
-  A threshold check goes bad when its metric is over its limit.
+  A threshold check goes bad when its metric is past its limit: over, under, outside a band, or risen.
   """
   import Ecto.Query
   alias Dokkit.{Check, Issues, Metric, Repo, Service, Values}
@@ -10,112 +10,338 @@ defmodule Dokkit.Numbers do
   @max_document 256 * 1024
 
   @doc "Stores one number for a machine, or for one of its services."
-  def record(machine_id, service, name, value, at)
-      when is_binary(name) and is_number(value) do
+  def record(machine_id, service, name, value, at) do
+    {result, _} = record(context(machine_id), service, name, value, at, %{})
+    result
+  end
+
+  @doc """
+  What a batch of lines from one machine reads once instead of once a line: its name, its values
+  and its threshold checks by metric. `record/6` hands back the context with the checks it changed.
+  """
+  def context(machine_id) do
+    checks =
+      Repo.all(
+        from c in Check,
+          join: s in assoc(c, :service),
+          where: c.type == :threshold and s.machine_id == ^machine_id,
+          preload: [service: s]
+      )
+
+    %{
+      machine_id: machine_id,
+      name: Repo.one(from m in Dokkit.Machine, where: m.id == ^machine_id, select: m.name),
+      values: Values.all({:machine, machine_id}),
+      own: Values.own({:machine, machine_id}),
+      checks: Enum.group_by(checks, & &1.config["metric"])
+    }
+  end
+
+  def record(ctx, service, name, value, at, extra) when is_binary(name) and is_number(value) do
     name = String.slice(name, 0, 100)
 
     Repo.insert!(%Metric{
-      machine_id: machine_id,
+      machine_id: ctx.machine_id,
       service_id: service && service.id,
       name: name,
       value: value / 1,
       at: at
     })
 
-    thresholds =
-      from c in Check,
-        join: s in assoc(c, :service),
-        where: c.type == :threshold and s.machine_id == ^machine_id,
-        where: fragment("?->>'metric' = ?", c.config, ^name),
-        preload: [service: s]
-
-    values = Values.all({:machine, machine_id})
-    own = own_limit?(name, machine_id)
+    values = ctx.values
+    own = own_limit?(name, ctx.own)
+    found = Map.get(ctx.checks, name, [])
 
     # A machine's own limit is watched even where a file declares one for the same number.
-    if is_nil(service) and
-         not Repo.exists?(from c in thresholds, where: fragment("? \\? 'limit_from'", c.config)) and
-         (own or not Repo.exists?(thresholds)),
-       do: machine_check(machine_id, name, values)
+    made =
+      if is_nil(service) and not Enum.any?(found, &Map.has_key?(&1.config, "limit_from")) and
+           (own or found == []),
+         do: machine_check(ctx.machine_id, name, value, values)
+
+    all = found ++ List.wrap(made)
 
     # A threshold in a service's file reads that service's number, or the machine's.
-    all = Repo.all(thresholds)
-    limit_of = &limit_with(&1, values)
-    declared? = not own and Enum.any?(all, &(&1.source == :file and is_number(limit_of.(&1))))
+    declared? =
+      not own and Enum.any?(all, &(&1.source == :file and is_number(elem(levels(&1, values), 0))))
 
-    for check <- all,
-        is_nil(service) or check.service_id == service.id do
-      limit = limit_of.(check)
-      check = readings(check, values)
+    all =
+      for check <- all do
+        if is_nil(service) or check.service_id == service.id do
+          check = crit(check, extra["crit"])
+          {limit, _} = levels(check, values)
 
-      # A declared threshold replaces the built-in one, which then reads as fine; a machine's own setting replaces both.
-      if is_number(limit) and value > limit and not (declared? and check.source != :file) and
-           not (own and check.source == :file),
-         do:
-           Issues.record(check, over_state(check, value, values),
-             at: at,
-             value: value / 1,
-             title: machine_title(check.config["limit_from"], name),
-             note: over_note(name, value, limit) <> full_in(check.config["full_in_days"])
-           ),
-         else: Issues.record(check, :ok, at: at, value: value / 1)
+          # A declared threshold replaces the built-in one, which then reads as fine; a machine's own setting replaces both.
+          bad? =
+            is_number(limit) and beyond?(direction(check), value, limit, check.value) and
+              not (declared? and check.source != :file) and not (own and check.source == :file)
+
+          judge(check, bad?, value, at, values, ctx.name)
+        else
+          check
+        end
+      end
+
+    {:ok, put_in(ctx.checks[name], all)}
+  end
+
+  def record(ctx, _, _, _, _, _),
+    do: {{:error, "bad_line", "A metric needs a name and a number."}, ctx}
+
+  @doc "Whether a reading is past its limit: over it, under it, further than it from zero either way, or higher than the reading before."
+  def beyond?(:over, value, limit, _), do: value > limit
+  def beyond?(:under, value, limit, _), do: value < limit
+  def beyond?(:band, value, limit, _), do: abs(value) > limit
+  def beyond?(:rose, value, _, previous), do: is_number(previous) and value > previous
+
+  # The limits every machine has without anyone declaring them: {name prefix, name suffix,
+  # direction, settings row}. A prefix that ends in a dot needs something between it and the suffix.
+  @machine_limits [
+    {"disk.used_percent.", "", :over, "disk"},
+    {"memory.used_percent", "", :over, "memory"},
+    {"cpu.percent", "", :over, "cpu"},
+    {"gpu.", ".temp_c", :over, "gpu_temp"},
+    {"gpu.", ".memory_percent", :over, "gpu_memory"},
+    {"temp.cpu_c", "", :over, "cpu_temp"},
+    {"temp.cpu.", "_c", :over, "cpu_temp"},
+    {"temp.ambient_c", "", :over, "ambient_temp"},
+    {"temp.system_c", "", :over, "ambient_temp"},
+    {"fan.", "_rpm", :under, "fan_stop"},
+    {"clock.offset_seconds", "", :band, "clock"}
+  ]
+
+  # These count readings in a row, as they always have; every other row counts minutes, which
+  # holds when an unchanged reading is sent less often.
+  @by_readings ~w(disk_limit memory_limit cpu_limit)
+
+  def machine_limits, do: @machine_limits
+
+  defp limit_entry(name) do
+    Enum.find(@machine_limits, fn {prefix, suffix, _, _} ->
+      middle = byte_size(name) - byte_size(prefix) - byte_size(suffix)
+
+      String.starts_with?(name, prefix) and String.ends_with?(name, suffix) and
+        if(String.ends_with?(prefix, "."), do: middle > 0, else: middle == 0)
+    end)
+  end
+
+  defp limit_from(name) do
+    case limit_entry(name) do
+      {_, _, _, row} -> row <> "_limit"
+      nil -> nil
+    end
+  end
+
+  defp row(from), do: String.replace_suffix(from, "_limit", "")
+
+  defp direction(%Check{config: %{"limit_from" => _}, name: name}) do
+    case limit_entry(name) do
+      {_, _, dir, _} -> dir
+      nil -> :over
+    end
+  end
+
+  defp direction(_), do: :over
+
+  defp own_limit?(name, own) do
+    case limit_from(name) do
+      nil ->
+        false
+
+      from when from in @by_readings ->
+        Map.has_key?(own, from) or Map.has_key?(own, row(from) <> "_on")
+
+      from ->
+        Enum.any?(~w(_on _limit _down _minutes), &Map.has_key?(own, row(from) <> &1))
+    end
+  end
+
+  @doc "The service that holds a machine's own checks, made the first time it is needed."
+  def own_service(machine_id) do
+    Repo.get_by(Service, machine_id: machine_id, slug: "machine") ||
+      Repo.insert!(%Service{machine_id: machine_id, slug: "machine", name: "The machine itself"})
+  end
+
+  # A machine's own numbers are watched without anyone declaring it, against the limits in
+  # Settings. A threshold a file declares for the same number replaces this. A number watched
+  # for going under its limit is watched once it has been above it: a fan that never turns is not.
+  defp machine_check(machine_id, name, value, values) do
+    with from when is_binary(from) <- limit_from(name),
+         true <- from != "cpu_limit" or values["cpu_on"],
+         true <-
+           direction(%Check{name: name, config: %{"limit_from" => from}}) != :under or
+             (values[row(from) <> "_on"] and value >= values[from]) do
+      service = own_service(machine_id)
+
+      %{
+        Repo.insert!(%Check{
+          service_id: service.id,
+          name: name,
+          type: :threshold,
+          config: %{"metric" => name, "limit_from" => from}
+        })
+        | service: service
+      }
+    else
+      _ -> nil
+    end
+  end
+
+  # A sensor that names its own critical temperature keeps it on its check, for the limit.
+  defp crit(%Check{config: %{"limit_from" => "cpu_temp_limit"} = config} = check, crit)
+       when is_number(crit) and crit > 10 do
+    if config["crit"] == crit,
+      do: check,
+      else: set_config(check, Map.put(config, "crit", crit))
+  end
+
+  defp crit(check, _), do: check
+
+  # The slow and down levels of a check. A sensor's own critical temperature counts while the setting is on its default.
+  defp levels(%Check{config: %{"limit_from" => from} = config}, values) do
+    row = row(from)
+    down = row <> "_down"
+
+    cond do
+      not values[row <> "_on"] ->
+        {nil, nil}
+
+      is_number(config["crit"]) and values[from] == Values.default(from) and
+          values[down] == Values.default(down) ->
+        {config["crit"] - 10.0, config["crit"] / 1}
+
+      true ->
+        {values[from] / 1, values[down]}
+    end
+  end
+
+  defp levels(%Check{config: config}, _), do: {config["limit"], nil}
+
+  # A row counted in minutes opens once its readings have been past the limit that long.
+  defp judge(%Check{config: %{"limit_from" => from}} = check, bad?, value, at, values, machine)
+       when from not in @by_readings do
+    since = check.config["over_since"]
+
+    check =
+      cond do
+        bad? and is_nil(since) ->
+          set_config(check, Map.put(check.config, "over_since", DateTime.to_iso8601(at)))
+
+        not bad? and since ->
+          set_config(check, Map.delete(check.config, "over_since"))
+
+        true ->
+          check
+      end
+
+    started = if since, do: elem(DateTime.from_iso8601(since), 1), else: at
+    need = values[row(from) <> "_minutes"] * 60 - values["report_seconds"]
+    once = %{check | fail_after: 1, config: Map.put(check.config, "own_fail_after", true)}
+
+    cond do
+      not bad? ->
+        Issues.record(once, :ok, at: at, value: value / 1)
+
+      DateTime.diff(at, started) >= need ->
+        opened(once, value, at, values, machine)
+
+      true ->
+        check
+    end
+    |> kept(check)
+  end
+
+  defp judge(check, bad?, value, at, values, _) do
+    {limit, _} = levels(check, values)
+    counted = readings(check, values)
+
+    if bad? do
+      Issues.record(counted, over_state(counted, value, values),
+        at: at,
+        value: value / 1,
+        title: machine_title(check.config["limit_from"], check.name),
+        note: over_note(check.name, value, limit) <> full_in(check.config["full_in_days"])
+      )
+    else
+      Issues.record(counted, :ok, at: at, value: value / 1)
+    end
+    |> kept(check)
+  end
+
+  defp opened(check, value, at, values, machine) do
+    {limit, down} = levels(check, values)
+
+    Issues.record(check, level(direction(check), value, down),
+      at: at,
+      value: value / 1,
+      title: hardware_title(check.name, value, machine),
+      note: hardware_note(check.name, direction(check), value, limit)
+    )
+  end
+
+  @doc "Each minute: opens a minutes-counted limit whose time is up, since an unchanged reading is re-sent only every five minutes."
+  def overdue(now \\ DateTime.utc_now()) do
+    checks =
+      Repo.all(
+        from c in Check,
+          join: s in assoc(c, :service),
+          join: m in assoc(s, :machine),
+          where: c.type == :threshold and fragment("? \\? 'over_since'", c.config),
+          where: c.state not in [:degraded, :down],
+          preload: [service: {s, machine: m}]
+      )
+
+    for %Check{service: %{machine: machine}} = check <- checks do
+      values = Values.all({:machine, machine.id})
+      {:ok, since, _} = DateTime.from_iso8601(check.config["over_since"])
+      need = values[row(check.config["limit_from"]) <> "_minutes"] * 60 - values["report_seconds"]
+      {limit, _} = levels(check, values)
+
+      latest =
+        Repo.one(
+          from m in Metric,
+            where: m.machine_id == ^machine.id and is_nil(m.service_id) and m.name == ^check.name,
+            order_by: [desc: m.at],
+            limit: 1,
+            select: m.value
+        )
+
+      reporting? =
+        machine.last_seen_at &&
+          DateTime.diff(now, machine.last_seen_at) <= 2 * values["report_seconds"] + 60
+
+      if reporting? and is_number(latest) and is_number(limit) and
+           DateTime.diff(now, since) >= need and
+           beyond?(direction(check), latest, limit, nil) do
+        once = %{check | fail_after: 1, config: Map.put(check.config, "own_fail_after", true)}
+        opened(once, latest, now, values, machine.name)
+      end
     end
 
     :ok
   end
 
-  def record(_, _, _, _, _), do: {:error, "bad_line", "A metric needs a name and a number."}
+  # The recorded check as the next line of the batch reads it: its counts, with its own config and service.
+  defp kept(recorded, check),
+    do: %{recorded | service: check.service, fail_after: check.fail_after, config: check.config}
 
-  @machine_limits [
-    {"disk.used_percent.", "disk_limit"},
-    {"memory.used_percent", "memory_limit"},
-    {"cpu.percent", "cpu_limit"}
-  ]
-  @limit_rows %{"disk_limit" => "disk", "memory_limit" => "memory", "cpu_limit" => "cpu"}
+  defp set_config(check, config), do: Repo.update!(Ecto.Changeset.change(check, config: config))
 
-  defp limit_from(name) do
-    Enum.find_value(@machine_limits, fn {start, from} ->
-      if name == start or (String.ends_with?(start, ".") and String.starts_with?(name, start)),
-        do: from
-    end)
-  end
-
-  defp own_limit?(name, machine_id) do
-    case limit_from(name) do
-      nil ->
-        false
-
-      from ->
-        own = Values.own({:machine, machine_id})
-        Map.has_key?(own, from) or Map.has_key?(own, @limit_rows[from] <> "_on")
+  # How far past its down level a reading is, so one rule serves every direction.
+  defp level(dir, value, down) do
+    measure = fn v ->
+      case dir do
+        :band -> abs(v)
+        :under -> -v
+        _ -> v
+      end
     end
-  end
 
-  # A machine's own disk, memory and processor are watched without anyone declaring it, against
-  # the limits in Settings. A threshold a file declares for the same number replaces this.
-  defp machine_check(machine_id, name, values) do
-    with from when is_binary(from) <- limit_from(name),
-         true <- from != "cpu_limit" or values["cpu_on"] do
-      service =
-        Repo.get_by(Service, machine_id: machine_id, slug: "machine") ||
-          Repo.insert!(%Service{
-            machine_id: machine_id,
-            slug: "machine",
-            name: "The machine itself"
-          })
-
-      Repo.insert!(%Check{
-        service_id: service.id,
-        name: name,
-        type: :threshold,
-        config: %{"metric" => name, "limit_from" => from}
-      })
-    end
+    if is_number(down) and measure.(value) >= measure.(down), do: :down, else: :degraded
   end
 
   # Over a limit from Settings is a struggle, and a failure from its down level. A limit a file declares is a failure.
   defp over_state(%Check{config: %{"limit_from" => from}}, value, values) do
-    down = values[@limit_rows[from] <> "_down"]
+    down = values[row(from) <> "_down"]
     if is_nil(down) or value < down, do: :degraded, else: :down
   end
 
@@ -126,7 +352,7 @@ defmodule Dokkit.Numbers do
     n =
       if from == "cpu_limit",
         do: max(1, ceil(values["cpu_minutes"] * 60 / values["report_seconds"])),
-        else: values[@limit_rows[from] <> "_after"]
+        else: values[row(from) <> "_after"]
 
     %{check | fail_after: n, config: Map.put(config, "own_fail_after", true)}
   end
@@ -138,6 +364,67 @@ defmodule Dokkit.Numbers do
 
   defp over_note(name, value, limit),
     do: "#{name} is #{num(value)}, over the limit of #{num(limit)}."
+
+  @doc "How a hardware number's unit is written after it."
+  def unit(name) do
+    cond do
+      String.ends_with?(name, "_c") -> " °C"
+      String.ends_with?(name, "_percent") -> "%"
+      String.ends_with?(name, "_rpm") -> " RPM"
+      String.ends_with?(name, "_w") -> " W"
+      String.ends_with?(name, "_seconds") -> " seconds"
+      true -> ""
+    end
+  end
+
+  defp hardware_note(name, :band, value, limit),
+    do: "It is #{num(abs(value))}#{unit(name)} off. The limit is #{num(limit)}#{unit(name)}."
+
+  defp hardware_note(name, _, value, limit),
+    do: "It is #{num(value)}#{unit(name)}. The limit is #{num(limit)}#{unit(name)}."
+
+  @doc "A hardware issue's title: a sentence with the reading and the machine."
+  def hardware_title(name, value, machine) do
+    at = "#{num(value)}#{unit(name)}"
+
+    what =
+      case String.split(name, ".") do
+        ["gpu", "0", "temp_c"] ->
+          "GPU at #{at}"
+
+        ["gpu", n, "temp_c"] ->
+          "GPU #{n} at #{at}"
+
+        ["gpu", "0", "memory_percent"] ->
+          "GPU memory at #{at}"
+
+        ["gpu", n, "memory_percent"] ->
+          "GPU #{n} memory at #{at}"
+
+        ["temp", "cpu_c"] ->
+          "Processor at #{at}"
+
+        ["temp", "cpu", n] ->
+          "Processor #{String.trim_trailing(n, "_c")} at #{at}"
+
+        ["temp", "ambient_c"] ->
+          "Air at #{at}"
+
+        ["temp", "system_c"] ->
+          "Inside the case at #{at}"
+
+        ["fan", fan] ->
+          "Fan #{fan |> String.trim_trailing("_rpm") |> String.replace("_", " ")} stopped"
+
+        ["clock", _] ->
+          "Clock #{num(abs(value))} seconds #{if value > 0, do: "ahead", else: "behind"}"
+
+        _ ->
+          "#{name} at #{at}"
+      end
+
+    "#{what} on #{machine}"
+  end
 
   @full_in ~r/ At this week's rate it is full in about \d+ days?\./
 
@@ -179,17 +466,12 @@ defmodule Dokkit.Numbers do
         true -> Values.all({:machine, machine_id})
       end
 
-    limit_with(check, values)
+    elem(levels(check, values), 0)
   end
 
-  defp limit_with(%Check{config: config}, values),
-    do: config["limit"] || machine_limit(config["limit_from"], values)
-
   # nil when the limit is switched off.
-  defp machine_limit(nil, _), do: nil
-
   defp machine_limit(setting, values) do
-    if values[@limit_rows[setting] <> "_on"], do: values[setting] / 1
+    if values[row(setting) <> "_on"], do: values[setting] / 1
   end
 
   @doc "Keeps a service's latest stats document and the numbers worth charting from it."
@@ -460,8 +742,26 @@ defmodule Dokkit.Numbers do
     )
   end
 
+  @hardware ~w(gpu. temp. fan. clock.)
+
+  @doc "Whether a machine's own number is a hardware reading, shown in its own section and kept for its own time."
+  def hardware?(name), do: String.starts_with?(name, @hardware)
+
   def prune(now) do
     days = Values.get("metrics_days")
-    Repo.delete_all(from m in Metric, where: m.at < ^DateTime.add(now, -days * 86_400))
+    hardware = Values.get("hardware_days")
+    pattern = "^(gpu|temp|fan|clock)\\."
+
+    Repo.delete_all(
+      from m in Metric,
+        where: m.at < ^DateTime.add(now, -hardware * 86_400),
+        where: is_nil(m.service_id) and fragment("? ~ ?", m.name, ^pattern)
+    )
+
+    Repo.delete_all(
+      from m in Metric,
+        where: m.at < ^DateTime.add(now, -days * 86_400),
+        where: not is_nil(m.service_id) or fragment("? !~ ?", m.name, ^pattern)
+    )
   end
 end

@@ -165,24 +165,31 @@ defmodule Dokkit.Intake do
     seen(key)
     hosts(key, for({:ok, %{"host" => host}} <- lines, do: host), now)
 
-    results =
+    # Limits and values are read once for each machine in the batch, not once a metric line.
+    {results, _} =
       lines
       |> Enum.with_index(1)
-      |> Enum.map(fn {decoded, n} ->
-        with {:ok, %{"type" => type} = line} <- decoded,
-             ok when ok == :ok or elem(ok, 0) == :log <-
-               if(type == "log",
-                 do: log_line(key, line, now),
-                 else: guarded(fn -> line(key, type, line, at(line, now)) end)
-               ) do
-          ok
-        else
-          {:error, code, message} ->
-            %{"line" => n, "code" => code, "message" => message}
+      |> Enum.map_reduce(%{}, fn {decoded, n}, numbers ->
+        {result, numbers} =
+          case decoded do
+            {:ok, %{"type" => "log"} = line} ->
+              {log_line(key, line, now), numbers}
 
-          _ ->
-            %{"line" => n, "code" => "bad_line", "message" => "Not a JSON object with a type."}
-        end
+            {:ok, %{"type" => "metric"} = line} ->
+              metric(key, line, at(line, now), numbers)
+
+            # A stats line records numbers on its own, so the checks are read again after it.
+            {:ok, %{"type" => "stats"} = line} ->
+              {guarded(fn -> line(key, "stats", line, at(line, now)) end), %{}}
+
+            {:ok, %{"type" => t} = line} ->
+              {guarded(fn -> line(key, t, line, at(line, now)) end), numbers}
+
+            other ->
+              {other, numbers}
+          end
+
+        {outcome(result, n), numbers}
       end)
 
     Dokkit.Logs.insert(for {:log, row} <- results, do: row)
@@ -201,18 +208,70 @@ defmodule Dokkit.Intake do
 
   defp answer(batch), do: %{accepted: batch.accepted, refused: batch.refused}
 
+  defp outcome(ok, _) when ok == :ok or elem(ok, 0) == :log, do: ok
+
+  defp outcome({:error, code, message}, n),
+    do: %{"line" => n, "code" => code, "message" => message}
+
+  defp outcome(_, n),
+    do: %{"line" => n, "code" => "bad_line", "message" => "Not a JSON object with a type."}
+
+  # A refused line may have rolled back checks the batch's readings hold, so they are read again.
+  defp metric(key, line, at, numbers) do
+    case guarded(fn -> metric_line(key, line, at, numbers) end) do
+      {result, numbers} -> {result, numbers}
+      refusal -> {refusal, %{}}
+    end
+  end
+
+  defp metric_line(key, line, at, numbers) do
+    service =
+      case {key, line} do
+        {%Key{kind: :machine}, line} when not is_map_key(line, "service") -> {:ok, nil}
+        _ -> service(key, line)
+      end
+
+    case service do
+      {:ok, service} ->
+        id = machine(key, service)
+        ctx = numbers[id] || Dokkit.Numbers.context(id)
+        {result, ctx} = Dokkit.Numbers.record(ctx, service, line["name"], line["value"], at, line)
+        {result, Map.put(numbers, id, ctx)}
+
+      refusal ->
+        {refusal, numbers}
+    end
+  end
+
   defp line(%Key{kind: :app}, type, _, _) when type in ~w(state inventory processes),
     do: {:error, "not_allowed", "An app key may not send #{type}."}
 
   defp line(%Key{kind: :machine, machine_id: id}, "processes", line, at),
     do: Dokkit.Processes.record(id, line, at)
 
+  # A machine's hardware states belong to the machine itself, whether or not the line names it.
+  defp line(
+         %Key{kind: :machine, machine_id: id} = key,
+         "state",
+         %{"check" => "hw." <> _} = line,
+         at
+       )
+       when not is_map_key(line, "service"),
+       do: line(key, "state", Map.put(line, "service", Dokkit.Numbers.own_service(id).slug), at)
+
   defp line(key, type, line, at) when type in ~w(state custom) do
     with {:ok, service} <- service(key, line),
          {:ok, state} <- Map.fetch(@states, line["state"]),
          name when is_binary(name) <- line["check"] do
       check = check(key, service, name, :custom, 3)
-      Issues.record(check, state, at: at, note: line["note"], value: number(line["value"]))
+
+      Issues.record(check, state,
+        at: at,
+        note: line["note"],
+        value: number(line["value"]),
+        title: if(state != :ok, do: hardware_title(name, service))
+      )
+
       :ok
     else
       {:error, _, _} = refusal -> refusal
@@ -237,18 +296,6 @@ defmodule Dokkit.Intake do
       {:error, _, _} = refusal -> refusal
       _ -> {:error, "bad_line", "A beat needs a name."}
     end
-  end
-
-  defp line(key, "metric", line, at) do
-    service =
-      case {key, line} do
-        {%Key{kind: :machine}, line} when not is_map_key(line, "service") -> {:ok, nil}
-        _ -> service(key, line)
-      end
-
-    with {:ok, service} <- service,
-         do:
-           Dokkit.Numbers.record(machine(key, service), service, line["name"], line["value"], at)
   end
 
   defp line(key, "stats", line, at) do
@@ -685,6 +732,19 @@ defmodule Dokkit.Intake do
   end
 
   defp at(_, now), do: now
+
+  defp hardware_title("hw." <> what, %Service{slug: "machine", machine_id: id}) do
+    on = " on " <> Repo.one(from m in Machine, where: m.id == ^id, select: m.name)
+
+    case String.split(what, ".") do
+      ["gpu", "0"] -> "GPU is held back" <> on
+      ["gpu", n] -> "GPU #{n} is held back" <> on
+      ["throttle"] -> "The processor is slowing itself down" <> on
+      _ -> nil
+    end
+  end
+
+  defp hardware_title(_, _), do: nil
 
   defp number(v) when is_number(v), do: v / 1
   defp number(_), do: nil

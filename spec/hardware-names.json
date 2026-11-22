@@ -1,0 +1,34 @@
+{
+  "metrics": [
+    {"name": "gpu.<n>.temp_c", "step": 1},
+    {"name": "gpu.<n>.used_percent", "step": 1},
+    {"name": "gpu.<n>.memory_percent", "step": 1},
+    {"name": "gpu.<n>.power_w", "step": 1},
+    {"name": "gpu.<n>.fan_percent", "step": 1},
+    {"name": "temp.cpu_c", "step": 1},
+    {"name": "temp.cpu.<n>_c", "step": 1},
+    {"name": "temp.ambient_c", "step": 1},
+    {"name": "temp.system_c", "step": 1},
+    {"name": "temp.board_c", "step": 1},
+    {"name": "temp.disk.<dev>_c", "step": 1},
+    {"name": "temp.<label>_c", "step": 1},
+    {"name": "fan.<label>_rpm", "step": 50},
+    {"name": "clock.offset_seconds", "step": 1}
+  ],
+  "states": ["hw.gpu.<n>", "hw.throttle"],
+  "examples": {
+    "metrics": [
+      "gpu.0.temp_c",
+      "gpu.1.memory_percent",
+      "temp.cpu_c",
+      "temp.cpu.1_c",
+      "temp.ambient_c",
+      "temp.system_c",
+      "temp.disk.nvme0_c",
+      "temp.video_c",
+      "fan.cpu_fan_rpm",
+      "clock.offset_seconds"
+    ],
+    "states": ["hw.gpu.0", "hw.throttle"]
+  }
+}

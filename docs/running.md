@@ -30,6 +30,12 @@ Log months older than the live limit (12 months unless changed in Settings under
 
 The numbers named below (retention, warning days, retry times, quiet minutes) are defaults. Each is a setting in Settings with a Reset, and in `GET` and `PUT /api/v1/settings`; per-machine and per-job values are on their own pages.
 
+## Hardware readings
+
+With each report, `dokkit watch` sends what the machine's hardware tells an account with no rights: each NVIDIA card's temperature, use, memory, power and fan from `nvidia-smi` (Windows and Linux), AMD cards from Linux's sensor files, temperatures and fans from Linux's hwmon (one processor number per chip, never per core) or a QNAP's `getsysinfo`, whether the processor is throttling (Linux counters, `pmset` on a Mac), and how far the machine's clock is from the server's, measured from the time the server puts in each answer. At most 16 temperatures and 8 fans are sent, and a reading that has not moved by its step (1 °C, 1 %, 1 W, 1 second, 50 RPM) is sent again only every 5 minutes. A machine with no sensors sends none of these and logs nothing about it. `dokkit hardware` prints every source it tried and what it found or why it has nothing; it sends nothing. The names are in `spec/hardware-names.json`.
+
+The machine's page shows them under Hardware, each with its chart and limit, and the limits beside them with their own Save. Each is a setting under Hardware for every machine and per machine, all on by default, each counted in minutes past its limit: GPU temperature slow at 85 °C for 3 minutes and down at 92 °C; GPU memory slow at 98 % for 10 minutes; processor temperature slow at 90 °C for 5 minutes and down at 100 °C, or 10 °C under and at the processor's own critical temperature while those two stay on their defaults; air or case temperature slow at 40 °C for 3 minutes and down at 45 °C; a fan that has turned slow under 1 RPM for 10 minutes; the clock slow when 10 seconds off either way for 3 minutes and down at 120 seconds. A card slowing itself for heat or power (`hw.gpu.<n>`) and a throttling processor (`hw.throttle`) are states on the machine itself. Hardware issues follow the machine's own routing and timing. Hardware readings are kept 30 days, a setting of their own.
+
 ## First start
 
 The first visit to the interface creates the owner account. It asks for a setup code that the server printed when it started, so nobody else on the network can claim it first.

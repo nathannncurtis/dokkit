@@ -187,6 +187,7 @@ defmodule DokkitWeb.MachineLive do
       movable: Releases.movable?(machine, held),
       vitals: Dokkit.Numbers.vitals()[machine.id] || %{},
       history: history(own, machine, a.range, now),
+      hardware: hardware(own, machine, a.range, now),
       procs: processes(machine, a, now),
       services: services(machine),
       issues:
@@ -205,23 +206,49 @@ defmodule DokkitWeb.MachineLive do
   end
 
   defp history(own, machine, range, now) do
-    {_, _, points} = List.keyfind(@ranges, range, 0)
-    from = DateTime.add(now, -String.to_integer(range) * 86_400)
-    checks = (own && own.checks) || []
-
-    for name <- Dokkit.Numbers.names({:machine, machine.id}) do
-      check = Enum.find(checks, &(&1.name == name))
-      open? = check != nil and check.state != :ok
-
-      %{
-        name: name,
-        open: open?,
-        note: open? && check.note,
-        limit: check && Dokkit.Numbers.limit(check),
-        points: Dokkit.Numbers.series({:machine, machine.id}, name, from, now, points)
-      }
+    for name <- Dokkit.Numbers.names({:machine, machine.id}),
+        not Dokkit.Numbers.hardware?(name) do
+      chart(own, machine, name, range, now)
     end
     |> Enum.sort_by(&{!&1.open, !String.starts_with?(&1.name, "disk."), &1.name})
+  end
+
+  defp chart(own, machine, name, range, now) do
+    {_, _, points} = List.keyfind(@ranges, range, 0)
+    from = DateTime.add(now, -String.to_integer(range) * 86_400)
+    check = Enum.find((own && own.checks) || [], &(&1.name == name))
+    open? = check != nil and check.state != :ok
+
+    %{
+      name: name,
+      open: open?,
+      state: check && check.state,
+      note: open? && check.note,
+      limit: check && Dokkit.Numbers.limit(check),
+      points: Dokkit.Numbers.series({:machine, machine.id}, name, from, now, points)
+    }
+  end
+
+  @hardware [
+    {"gpu", "GPU", "gpu.", ~w(gpu_temp gpu_memory),
+     "No GPU readings: the program found no NVIDIA card with nvidia-smi and no AMD card on Linux."},
+    {"temps", "Temperatures", "temp.", ~w(cpu_temp ambient_temp),
+     "No temperature readings: this machine reports none to a program without administrator rights."},
+    {"fans", "Fans", "fan.", ~w(fan_stop),
+     "No fan readings: this machine reports none to a program without administrator rights."},
+    {"clock", "Clock", "clock.", ~w(clock),
+     "No clock readings yet: the program measures them from the server's answers to its reports."}
+  ]
+
+  defp hardware(own, machine, range, now) do
+    names = Dokkit.Numbers.names({:machine, machine.id})
+
+    for {kind, label, prefix, rows, absent} <- @hardware do
+      list =
+        for n <- names, String.starts_with?(n, prefix), do: chart(own, machine, n, range, now)
+
+      {kind, label, absent, rows, list}
+    end
   end
 
   defp processes(machine, a, now) do
@@ -481,6 +508,14 @@ defmodule DokkitWeb.MachineLive do
           </div>
         </div>
         <MachineCards.history history={@history} range={@range} ranges={@ranges} />
+        <MachineCards.hardware
+          :if={@machine.kind == :enrolled}
+          hardware={@hardware}
+          scope={{:machine, @machine.id}}
+          disabled={@current_user.role != :owner}
+          result={@values_result}
+          draft={@values_draft}
+        />
         <MachineCards.processes
           procs={@procs}
           procs_q={@procs_q}
