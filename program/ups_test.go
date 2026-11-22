@@ -73,14 +73,6 @@ func upsReset(t *testing.T) {
 	})
 }
 
-func statesOf(f *hwFound) map[string]hwState {
-	m := map[string]hwState{}
-	for _, s := range f.states {
-		m[s.check] = s
-	}
-	return m
-}
-
 func TestNutOverItsProtocol(t *testing.T) {
 	cases := []struct {
 		file             string
@@ -107,7 +99,7 @@ func TestNutOverItsProtocol(t *testing.T) {
 			if !reflect.DeepEqual(got, c.want) {
 				t.Fatalf("readings %v, want %v", got, c.want)
 			}
-			s := statesOf(f)
+			s := statesOf(f.states)
 			if s["hw.ups.power"].state != c.power || s["hw.ups.battery"].state != c.battery {
 				t.Fatalf("states %+v", f.states)
 			}
@@ -169,7 +161,7 @@ func TestPmsetBatt(t *testing.T) {
 			}
 			continue
 		}
-		if r.value != c.charge || statesOf(f)["hw.ups.power"].state != c.power {
+		if r.value != c.charge || statesOf(f.states)["hw.ups.power"].state != c.power {
 			t.Errorf("%s: %+v", c.file, f)
 		}
 	}
@@ -196,7 +188,7 @@ func TestWindowsBatteryClass(t *testing.T) {
 	if r := readingsOf(f); r["ups.charge_percent"].value != 100 || r["ups.runtime_minutes"].value != 45 {
 		t.Fatalf("%+v", f.readings)
 	}
-	if s := statesOf(f); s["hw.ups.power"].state != "ok" || s["hw.ups.battery"].state != "ok" {
+	if s := statesOf(f.states); s["hw.ups.power"].state != "ok" || s["hw.ups.battery"].state != "ok" {
 		t.Fatalf("%+v", f.states)
 	}
 
@@ -205,7 +197,7 @@ func TestWindowsBatteryClass(t *testing.T) {
 	if _, ok := readingsOf(f)["ups.runtime_minutes"]; ok {
 		t.Fatal("an unknown time left is not sent")
 	}
-	if s := statesOf(f); s["hw.ups.power"].state != "down" || s["hw.ups.battery"].state != "degraded" || readingsOf(f)["ups.charge_percent"].value != 21 {
+	if s := statesOf(f.states); s["hw.ups.power"].state != "down" || s["hw.ups.battery"].state != "degraded" || readingsOf(f)["ups.charge_percent"].value != 21 {
 		t.Fatalf("%+v %+v", f.states, f.readings)
 	}
 }
@@ -220,7 +212,7 @@ func TestARestartWithoutAShutdown(t *testing.T) {
 	look := func() hwState {
 		f := &hwFound{}
 		restartState(f)
-		return statesOf(f)["hw.restart"]
+		return statesOf(f.states)["hw.restart"]
 	}
 
 	boot("a", 1000)
