@@ -15,7 +15,7 @@ hdtmp 9	26 C/78 F
 sysvolnum	3
 vol_status 1	Ready
 vol_status 2	Ready
-vol_status 3	Ready
+vol_status 3	
 hdsmart 1	GOOD
 hdsmart 2	GOOD
 hdsmart 3	GOOD

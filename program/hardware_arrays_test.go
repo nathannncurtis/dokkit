@@ -78,8 +78,11 @@ func TestQnapVolumesAndDriveVerdicts(t *testing.T) {
 	qnapAnswers(t, nil)
 	f := &hwFound{}
 	qnapVerdicts(f)
-	if len(f.states) != 12 {
-		t.Fatalf("3 volumes and 9 drives: %v", f.states)
+	if len(f.states) != 11 {
+		t.Fatalf("2 volumes and 9 drives: %v", f.states)
+	}
+	if _, ok := statesOf(f.states)["hw.array.vol3"]; ok {
+		t.Error("a healthy QNAP counts a third volume and answers nothing for it; that opens nothing")
 	}
 	for _, s := range f.states {
 		if s.state != "ok" || s.note != "" {
@@ -152,8 +155,8 @@ func TestArraysOnALinuxQnap(t *testing.T) {
 	qnapAnswers(t, nil)
 	f := lookHardware()
 	got := statesOf(f.states)
-	if len(got) != 14 || got["hw.array.md1"].state != "ok" || got["hw.smart.hd9"].state != "ok" {
-		t.Fatalf("2 arrays, 3 volumes, 9 drives: %v", f.states)
+	if len(got) != 13 || got["hw.array.md1"].state != "ok" || got["hw.smart.hd9"].state != "ok" {
+		t.Fatalf("2 arrays, 2 volumes, 9 drives: %v", f.states)
 	}
 	if _, ok := got["hw.array.md9"]; ok {
 		t.Error("md9 is the QNAP's own")

@@ -545,7 +545,7 @@ defmodule Dokkit.Values do
     {"machines", "hard-drives", "Defaults for every machine",
      "Each machine can change these on its own page."},
     {"hardware", "thermometer", "Hardware for every machine",
-     "Graphics cards, temperatures, fans and clocks. Each machine can change these on its own page."},
+     "Graphics cards, temperatures, fans, clocks, arrays and drive health. Each machine can change these on its own page."},
     {"checks", "pulse", "Checks",
      "How services are checked unless a dokkit.toml says otherwise."},
     {"jobs", "clock-countdown", "Defaults for every job",
