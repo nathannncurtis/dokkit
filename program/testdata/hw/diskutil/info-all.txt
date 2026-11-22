@@ -1,0 +1,69 @@
+   Device Identifier:         disk0
+   Device Node:               /dev/disk0
+   Whole:                     Yes
+   Part of Whole:             disk0
+   Device / Media Name:       APPLE SSD AP0512Z
+
+   Volume Name:               Not applicable (no file system)
+   Mounted:                   Not applicable (no file system)
+   File System:               None
+
+   Content (IOContent):       GUID_partition_scheme
+   OS Can Be Installed:       No
+   Media Type:                Generic
+   Protocol:                  Apple Fabric
+   SMART Status:              Verified
+
+   Disk Size:                 500.3 GB (500277792768 Bytes) (exactly 977105064 512-Byte-Units)
+   Device Block Size:         4096 Bytes
+
+   Device Location:           Internal
+   Removable Media:           Fixed
+
+   Solid State:               Yes
+   Hardware AES Support:      Yes
+
+**********
+
+   Device Identifier:         disk0s1
+   Device Node:               /dev/disk0s1
+   Whole:                     No
+   Part of Whole:             disk0
+
+   Protocol:                  Apple Fabric
+   SMART Status:              Verified
+
+**********
+
+   Device Identifier:         disk3
+   Device Node:               /dev/disk3
+   Whole:                     Yes
+   Part of Whole:             disk3
+   Device / Media Name:       AppleAPFSMedia
+
+   Protocol:                  Apple Fabric
+   SMART Status:              Verified
+   Virtual:                   Yes
+
+**********
+
+   Device Identifier:         disk4
+   Device Node:               /dev/disk4
+   Whole:                     Yes
+   Part of Whole:             disk4
+   Device / Media Name:       External Drive
+
+   Protocol:                  USB
+   SMART Status:              Not Supported
+
+**********
+
+   Device Identifier:         disk5
+   Device Node:               /dev/disk5
+   Whole:                     Yes
+   Part of Whole:             disk5
+   Device / Media Name:       Second Drive
+
+   Protocol:                  SATA
+   SMART Status:              Failing
+

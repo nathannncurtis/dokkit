@@ -1,0 +1,4 @@
+tank	DEGRADED
+backup	ONLINE
+scratch	FAULTED
+cold	DEGRADED

@@ -109,6 +109,28 @@ defmodule Dokkit.Values do
     },
     %{
       group: "hardware",
+      id: "array",
+      scope: :machine,
+      title: "Arrays",
+      sub:
+        "Tell me when a RAID array, NAS volume or ZFS pool loses a drive (down: the next failure loses data) or is rebuilding (slow).",
+      toggle: {"array_on", true},
+      fields: [{"array_after", 3, 1, 100}],
+      words: ["After", "reports in a row"]
+    },
+    %{
+      group: "hardware",
+      id: "smart",
+      scope: :machine,
+      title: "Drive health",
+      sub:
+        "Tell me when a drive says it is failing (down) or needs a look (slow), from its own SMART verdict.",
+      toggle: {"smart_on", true},
+      fields: [{"smart_after", 3, 1, 100}],
+      words: ["After", "reports in a row"]
+    },
+    %{
+      group: "hardware",
       id: "clock",
       scope: :machine,
       title: "Clock",
@@ -523,7 +545,7 @@ defmodule Dokkit.Values do
     {"machines", "hard-drives", "Defaults for every machine",
      "Each machine can change these on its own page."},
     {"hardware", "thermometer", "Hardware for every machine",
-     "Graphics cards, temperatures, fans and clocks. Each machine can change these on its own page."},
+     "Graphics cards, temperatures, fans, clocks, arrays and drive health. Each machine can change these on its own page."},
     {"checks", "pulse", "Checks",
      "How services are checked unless a dokkit.toml says otherwise."},
     {"jobs", "clock-countdown", "Defaults for every job",
@@ -693,6 +715,10 @@ defmodule Dokkit.Values do
          :ok <- together(Map.merge(all(scope), Map.new(parsed, &settled(&1, base))), parsed) do
       write(scope, parsed)
       forget()
+
+      if Enum.any?(~w(array_on smart_on), &Map.has_key?(parsed, &1)),
+        do: Dokkit.Intake.storage_switched(scope)
+
       {:ok, view(scope)}
     end
   end

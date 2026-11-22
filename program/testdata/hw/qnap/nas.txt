@@ -12,3 +12,16 @@ hdtmp 6	28 C/82 F
 hdtmp 7	29 C/84 F
 hdtmp 8	29 C/84 F
 hdtmp 9	26 C/78 F
+sysvolnum	3
+vol_status 1	Ready
+vol_status 2	Ready
+vol_status 3	
+hdsmart 1	GOOD
+hdsmart 2	GOOD
+hdsmart 3	GOOD
+hdsmart 4	GOOD
+hdsmart 5	GOOD
+hdsmart 6	GOOD
+hdsmart 7	GOOD
+hdsmart 8	GOOD
+hdsmart 9	GOOD

@@ -29,6 +29,8 @@ func hwReset(t *testing.T) string {
 	root := t.TempDir()
 	oldRoot, oldRun, oldNow := sysRoot, runCmd, hwNow
 	sysRoot = root
+	oldMdstat := mdstatPath
+	mdstatPath = filepath.Join(root, "proc", "mdstat")
 	runCmd = func(string, ...string) ([]byte, error) { return nil, exec.ErrNotFound }
 	reset := func() {
 		hwMu.Lock()
@@ -39,6 +41,7 @@ func hwReset(t *testing.T) string {
 	reset()
 	t.Cleanup(func() {
 		sysRoot, runCmd, hwNow = oldRoot, oldRun, oldNow
+		mdstatPath = oldMdstat
 		reset()
 	})
 	return root
@@ -405,6 +408,7 @@ func TestEveryNameIsInTheSpec(t *testing.T) {
 		p = regexp.QuoteMeta(p)
 		p = strings.ReplaceAll(p, "<n>", `\d+`)
 		p = strings.NewReplacer("<dev>", "[a-z0-9_]+", "<label>", "[a-z0-9_]+").Replace(p)
+		p = strings.ReplaceAll(p, "<name>", "[a-z0-9_]+")
 		return regexp.MustCompile("^" + p + "$")
 	}
 	root := hwReset(t)
@@ -419,6 +423,10 @@ func TestEveryNameIsInTheSpec(t *testing.T) {
 	f.add("temp.disk.hd1_c", 30, 0)
 	f.add("temp.cpu.1_c", 30, 0)
 	f.states = append(f.states, pmsetThrottle(""))
+	f.states = append(f.states, parseMdstat(fixture(t, "mdstat", "rebuilding.txt"), false)...)
+	f.states = append(f.states, parseZpool(fixture(t, "zpool", "list.txt"), "")...)
+	f.states = append(f.states, parseDiskutil(fixture(t, "diskutil", "info-all.txt"))...)
+	f.states = append(f.states, hwState{check: "hw.smart.hd1"}, hwState{check: "hw.array.vol1"})
 	for _, r := range f.readings {
 		ok := false
 		for _, m := range spec.Metrics {

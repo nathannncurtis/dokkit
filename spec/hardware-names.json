@@ -15,7 +15,12 @@
     {"name": "fan.<label>_rpm", "step": 50},
     {"name": "clock.offset_seconds", "step": 1}
   ],
-  "states": ["hw.gpu.<n>", "hw.throttle"],
+  "states": [
+    "hw.gpu.<n>",
+    "hw.throttle",
+    "hw.array.<name>",
+    "hw.smart.<dev>"
+  ],
   "examples": {
     "metrics": [
       "gpu.0.temp_c",
@@ -29,6 +34,14 @@
       "fan.cpu_fan_rpm",
       "clock.offset_seconds"
     ],
-    "states": ["hw.gpu.0", "hw.throttle"]
+    "states": [
+      "hw.gpu.0",
+      "hw.throttle",
+      "hw.array.md1",
+      "hw.array.vol1",
+      "hw.array.zfs_tank",
+      "hw.smart.hd3",
+      "hw.smart.disk0"
+    ]
   }
 }

@@ -188,6 +188,7 @@ defmodule DokkitWeb.MachineLive do
       vitals: Dokkit.Numbers.vitals()[machine.id] || %{},
       history: history(own, machine, a.range, now),
       hardware: hardware(own, machine, a.range, now),
+      hardware_states: hardware_states(own),
       procs: processes(machine, a, now),
       services: services(machine),
       issues:
@@ -248,6 +249,21 @@ defmodule DokkitWeb.MachineLive do
         for n <- names, String.starts_with?(n, prefix), do: chart(own, machine, n, range, now)
 
       {kind, label, absent, rows, list}
+    end
+  end
+
+  @hardware_states [
+    {"arrays", "Arrays", "hw.array.", ~w(array),
+     "No arrays: the program found no md arrays, NAS volumes or ZFS pools."},
+    {"drives", "Drives", "hw.smart.", ~w(smart),
+     "No drive health: this machine gives a program without administrator rights no drive verdicts (a Mac and a QNAP do)."}
+  ]
+
+  defp hardware_states(own) do
+    checks = (own && own.checks) || []
+
+    for {kind, label, prefix, rows, absent} <- @hardware_states do
+      {kind, label, absent, rows, Enum.filter(checks, &String.starts_with?(&1.name, prefix))}
     end
   end
 
@@ -511,6 +527,7 @@ defmodule DokkitWeb.MachineLive do
         <MachineCards.hardware
           :if={@machine.kind == :enrolled}
           hardware={@hardware}
+          states={@hardware_states}
           scope={{:machine, @machine.id}}
           disabled={@current_user.role != :owner}
           result={@values_result}

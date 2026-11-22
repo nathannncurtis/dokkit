@@ -76,12 +76,14 @@ func lookHardware() *hwFound {
 	amdGPUs(f)
 	hwmon(f)
 	thermalZones(f)
+	onQNAP := false
 	if runtime.GOOS == "linux" {
-		qnap(f)
+		onQNAP = qnap(f)
 	} else {
 		f.say("QNAP getsysinfo: not Linux")
 	}
 	throttle(f)
+	arrays(f, onQNAP)
 	hwMu.Lock()
 	if !clockAt.IsZero() && hwNow().Sub(clockAt) < 10*time.Minute {
 		f.add("clock.offset_seconds", clockOffset, 0)
@@ -563,11 +565,15 @@ func firstNum(b []byte) (float64, bool) {
 	return v, err == nil
 }
 
-func qnap(f *hwFound) {
-	tool := "getsysinfo"
+func qnapTool() string {
 	if _, err := os.Stat("/sbin/getsysinfo"); err == nil {
-		tool = "/sbin/getsysinfo"
+		return "/sbin/getsysinfo"
 	}
+	return "getsysinfo"
+}
+
+func qnap(f *hwFound) bool {
+	tool := qnapTool()
 	get := func(args ...string) (float64, bool) {
 		out, err := runCmd(tool, args...)
 		if err != nil {
@@ -578,7 +584,7 @@ func qnap(f *hwFound) {
 	sys, ok := get("systmp")
 	if !ok {
 		f.say("QNAP getsysinfo: not a QNAP")
-		return
+		return false
 	}
 	f.add("temp.system_c", sys, 0)
 	if v, ok := get("cputmp"); ok {
@@ -597,6 +603,7 @@ func qnap(f *hwFound) {
 		}
 	}
 	f.say("QNAP getsysinfo: %d fan(s), %d drive(s)", int(fans), int(disks))
+	return true
 }
 
 var speedLimit = regexp.MustCompile(`CPU_Speed_Limit\s*=\s*(\d+)`)
