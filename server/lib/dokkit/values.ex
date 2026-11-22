@@ -168,13 +168,13 @@ defmodule Dokkit.Values do
     },
     %{
       group: "hardware",
-      id: "restart",
+      id: "unexpected_restart",
       scope: :machine,
       title: "Unexpected restart",
       sub:
         "Tell me when the machine starts again after stopping without a shutdown, the trace a power cut leaves where there is no UPS.",
-      toggle: {"restart_on", true},
-      fields: [{"restart_hours", 24, 1, 720}],
+      toggle: {"unexpected_restart_on", true},
+      fields: [{"unexpected_restart_hours", 24, 1, 720}],
       words: ["Open for", "hours"]
     },
     %{

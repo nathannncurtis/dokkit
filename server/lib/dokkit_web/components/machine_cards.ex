@@ -75,7 +75,7 @@ defmodule DokkitWeb.MachineCards do
         </div>
 
         <DokkitWeb.ValuesForm.inline
-          :if={list != []}
+          :if={list != [] or kind == "restart"}
           id={"hw-#{kind}"}
           group="hardware"
           scope={@scope}

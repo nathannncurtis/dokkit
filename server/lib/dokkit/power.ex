@@ -20,10 +20,13 @@ defmodule Dokkit.Power do
 
   defp judge("hw.ups.power", check, machine, values, state, charge, _, at) do
     cfg = check.config
+    on = values["ups_power_on"]
 
     cond do
-      not values["ups_power_on"] ->
-        check |> set(Map.drop(cfg, ~w(out_since back_since lowest))) |> Issues.record(:ok, at: at)
+      state != :ok and not on ->
+        check
+        |> set(cfg |> Map.put_new("out_since", iso(at)) |> Map.drop(~w(back_since mains_since)))
+        |> Issues.record(:ok, at: at, value: charge)
 
       state != :ok ->
         cfg =
@@ -67,15 +70,18 @@ defmodule Dokkit.Power do
             )
           end
         else
-          check
-          |> set(Map.put(cfg, "back_since", back))
-          |> Issues.record(:down,
-            at: at,
-            value: charge,
-            title: "Power is out at #{machine.name}",
-            note:
-              "Back on mains for #{span(back, at)}; closes after #{values["ups_power_minutes"]} minutes."
-          )
+          check = set(check, Map.put(cfg, "back_since", back))
+
+          if on,
+            do:
+              Issues.record(check, :down,
+                at: at,
+                value: charge,
+                title: "Power is out at #{machine.name}",
+                note:
+                  "Back on mains for #{span(back, at)}; closes after #{values["ups_power_minutes"]} minutes."
+              ),
+            else: Issues.record(check, :ok, at: at, value: charge)
         end
 
       true ->
@@ -87,8 +93,9 @@ defmodule Dokkit.Power do
     power = Repo.get_by(Check, service_id: check.service_id, name: "hw.ups.power")
     out? = power != nil and power.config["out_since"] != nil and power.config["back_since"] == nil
     mains = power && power.config["mains_since"]
-    charge = charge || latest(machine.id, "ups.charge_percent")
-    runtime = latest(machine.id, "ups.runtime_minutes")
+    since = DateTime.add(at, -(300 + 2 * values["report_seconds"]))
+    charge = charge || latest(machine.id, "ups.charge_percent", since)
+    runtime = latest(machine.id, "ups.runtime_minutes", since)
 
     reasons =
       [
@@ -121,10 +128,14 @@ defmodule Dokkit.Power do
   end
 
   defp judge("hw.restart", check, machine, values, state, boot, _, at) do
-    started = is_number(boot) && DateTime.from_unix!(trunc(boot))
+    started =
+      with true <- is_number(boot),
+           {:ok, t} <- DateTime.from_unix(trunc(boot)),
+           do: t,
+           else: (_ -> false)
 
-    if (state != :ok and values["restart_on"] and started) &&
-         DateTime.diff(at, started) < values["restart_hours"] * 3600 do
+    if (state != :ok and values["unexpected_restart_on"] and started) &&
+         DateTime.diff(at, started) < values["unexpected_restart_hours"] * 3600 do
       Issues.record(check, :degraded,
         at: at,
         value: boot,
@@ -137,10 +148,12 @@ defmodule Dokkit.Power do
     end
   end
 
-  defp latest(machine_id, name) do
+  # An unchanged reading is sent again every five minutes, so anything older is gone.
+  defp latest(machine_id, name, since) do
     Repo.one(
       from m in Metric,
         where: m.machine_id == ^machine_id and is_nil(m.service_id) and m.name == ^name,
+        where: m.at >= ^since,
         order_by: [desc: m.at],
         limit: 1,
         select: m.value

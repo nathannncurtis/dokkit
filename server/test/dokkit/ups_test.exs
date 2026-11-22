@@ -136,7 +136,7 @@ defmodule Dokkit.UpsTest do
     assert [%{title: "web-11 restarted without shutting down", state: :degraded} = i] = open_on(m)
     assert i.check.note =~ "It started again at #{Calendar.strftime(boot, "%Y-%m-%d %H:%M")} UTC"
 
-    {:ok, _} = Values.save({:machine, m.id}, %{"restart_hours" => 1})
+    {:ok, _} = Values.save({:machine, m.id}, %{"unexpected_restart_hours" => 1})
     report(key, [%{line | value: DateTime.to_unix(boot) - 3600}])
     assert open_on(m) == []
 
@@ -159,8 +159,8 @@ defmodule Dokkit.UpsTest do
           {"ups_load_on", true},
           {"ups_load_limit", 80},
           {"ups_load_minutes", 3},
-          {"restart_on", true},
-          {"restart_hours", 24}
+          {"unexpected_restart_on", true},
+          {"unexpected_restart_hours", 24}
         ],
         do: assert(Values.default(k) == v, k)
 
@@ -190,5 +190,55 @@ defmodule Dokkit.UpsTest do
     {other, _} = machine("ups-10")
     {:ok, view, _} = live(signed_in(conn), "/machines/#{other.id}")
     assert has_element?(view, "#hw-ups-none")
+    refute has_element?(view, "#hw-ups-form")
+
+    view
+    |> form("#hw-restart-form", %{"values" => %{"unexpected_restart_hours" => "6"}})
+    |> render_submit()
+
+    assert Values.get("unexpected_restart_hours", {:machine, other.id}) == 6
+  end
+
+  test "with power-cut alerts off, a battery running low during a cut still warns" do
+    {m, key} = machine("ups-11")
+    {:ok, _} = Values.save({:machine, m.id}, %{"ups_power_on" => false})
+    t = ago()
+
+    report(key, [
+      metric("ups.runtime_minutes", 6, t, 0),
+      power("down", 50, t, 0),
+      battery("ok", 50, t, 0)
+    ])
+
+    assert [%{title: "The UPS battery is running low at ups-11"}] = open_on(m)
+  end
+
+  test "a time left from long ago does not count in a later cut" do
+    {m, key} = machine("ups-12")
+    t = ago(3)
+    report(key, [metric("ups.runtime_minutes", 6, t, 0)])
+    report(key, [power("down", 95, t, 7200), battery("ok", 95, t, 7200)])
+    assert [%{title: "Power is out at ups-12"}] = open_on(m)
+  end
+
+  test "a boot time out of range refuses nothing else in the report" do
+    {m, key} = machine("web-12")
+    bad = %{type: "state", check: "hw.restart", state: "degraded", value: 1.0e20}
+
+    assert %{"refused" => []} =
+             json_response(report(key, [bad, metric("ups.load_percent", 10, ago(), 0)]), 200)
+
+    assert open_on(m) == []
+  end
+
+  test "Reset on the Restarts setting under Checks still resets that setting" do
+    {:ok, _} =
+      Values.save(:server, %{"restart_gap_minutes" => 30, "unexpected_restart_hours" => 6})
+
+    {:ok, _} = Values.reset(:server, "restart")
+    assert Values.get("restart_gap_minutes") == 10
+    assert Values.get("unexpected_restart_hours") == 6
+    {:ok, _} = Values.reset(:server, "unexpected_restart")
+    assert Values.get("unexpected_restart_hours") == 24
   end
 end

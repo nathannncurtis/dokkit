@@ -241,7 +241,9 @@ defmodule DokkitWeb.MachineLive do
     {"clock", "Clock", "clock.", ~w(clock),
      "No clock readings yet: the program measures them from the server's answers to its reports."},
     {"ups", "UPS", "ups.", ~w(ups_power ups_battery ups_load),
-     "No UPS: none is plugged into this machine by USB, or NUT is not running on it."}
+     "No UPS: none is plugged into this machine by USB, or NUT is not running on it."},
+    {"restart", "Restarts", "restart.", ~w(unexpected_restart),
+     "A start after a stop without a shutdown, as after a power cut, opens an issue."}
   ]
 
   # The UPS charge row carries an open power cut, or else an open battery issue.
