@@ -1,0 +1,2 @@
+Now drawing from 'UPS Power'
+ -Example 1500 (id=1234567)	82%; discharging; 0:31 remaining present: true

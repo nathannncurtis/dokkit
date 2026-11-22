@@ -1,0 +1,7 @@
+battery.charge: 100
+battery.runtime: 610
+driver.name: blazer_usb
+input.voltage: 230.4
+ups.load: 18
+ups.status: OL RB
+ups.test.result: Done and error

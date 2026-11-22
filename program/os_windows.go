@@ -111,6 +111,7 @@ func (service) Execute(_ []string, requests <-chan svc.ChangeRequest, says chan<
 		case svc.Stop, svc.Shutdown:
 			// What is unsent is in the spool and goes on the next start.
 			says <- svc.Status{State: svc.StopPending}
+			markClean(c.spool)
 			return false, 0
 		}
 	}

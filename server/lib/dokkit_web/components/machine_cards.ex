@@ -138,6 +138,7 @@ defmodule DokkitWeb.MachineCards do
       " RPM" -> ""
       " W" -> " W"
       " seconds" -> " s"
+      " minutes" -> " min"
       unit -> unit
     end
   end
@@ -157,6 +158,10 @@ defmodule DokkitWeb.MachineCards do
       ["temp", label] -> words(String.trim_trailing(label, "_c"))
       ["fan", label] -> words(String.trim_trailing(label, "_rpm"))
       ["clock", _] -> "Clock, ahead of the server"
+      ["ups", "charge_percent"] -> "UPS charge"
+      ["ups", "runtime_minutes"] -> "UPS time left on battery"
+      ["ups", "load_percent"] -> "UPS load"
+      ["ups", "input_v"] -> "Mains voltage at the UPS"
       _ -> name
     end
   end

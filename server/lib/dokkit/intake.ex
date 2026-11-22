@@ -266,15 +266,9 @@ defmodule Dokkit.Intake do
       check = check(key, service, name, :custom, 3)
       {check, state} = storage_row(check, state, name, service)
 
-      Issues.record(check, state,
-        at: at,
-        note: line["note"],
-        value: number(line["value"]),
-        title:
-          if(state != :ok,
-            do: storage_title(name, state, service) || hardware_title(name, service)
-          )
-      )
+      if service.slug == "machine" and Dokkit.Power.check?(name),
+        do: Dokkit.Power.record(check, service, state, line, at),
+        else: record_state(check, service, name, state, line, at)
 
       :ok
     else
@@ -736,6 +730,18 @@ defmodule Dokkit.Intake do
   end
 
   defp at(_, now), do: now
+
+  defp record_state(check, service, name, state, line, at) do
+    Issues.record(check, state,
+      at: at,
+      note: line["note"],
+      value: number(line["value"]),
+      title:
+        if(state != :ok,
+          do: storage_title(name, state, service) || hardware_title(name, service)
+        )
+    )
+  end
 
   defp hardware_title("hw." <> what, %Service{slug: "machine", machine_id: id}) do
     on = " on " <> Repo.one(from m in Machine, where: m.id == ^id, select: m.name)
