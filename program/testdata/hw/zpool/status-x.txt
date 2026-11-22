@@ -1,0 +1,48 @@
+  pool: tank
+ state: DEGRADED
+status: One or more devices is currently being resilvered.  The pool will
+	continue to function, possibly in a degraded state.
+action: Wait for the resilver to complete.
+  scan: resilver in progress since Sat Nov 21 10:00:00 2026
+	1.20T scanned at 400M/s, 500G issued at 166M/s, 2.40T total
+	120G resilvered, 20.35% done, 03:20:00 to go
+config:
+
+	NAME          STATE     READ WRITE CKSUM
+	tank          DEGRADED     0     0     0
+	  raidz1-0    DEGRADED     0     0     0
+	    sda       ONLINE       0     0     0
+	    replacing-1  DEGRADED  0     0     0
+	      sdb     UNAVAIL      0     0     0
+	      sdd     ONLINE       0     0     0  (resilvering)
+	    sdc       ONLINE       0     0     0
+
+errors: No known data errors
+
+  pool: scratch
+ state: FAULTED
+status: One or more devices could not be opened.  There are insufficient
+	replicas for the pool to continue functioning.
+config:
+
+	NAME        STATE     READ WRITE CKSUM
+	scratch     FAULTED      0     0     0
+	  sde       UNAVAIL      0     0     0
+
+errors: No known data errors
+
+  pool: cold
+ state: DEGRADED
+status: One or more devices could not be used because the label is missing or
+	invalid.  Sufficient replicas exist for the pool to continue
+	functioning in a degraded state.
+  scan: scrub repaired 0B in 01:00:00 with 0 errors on Sun Nov  1 02:00:00 2026
+config:
+
+	NAME        STATE     READ WRITE CKSUM
+	cold        DEGRADED     0     0     0
+	  mirror-0  DEGRADED     0     0     0
+	    sdf     ONLINE       0     0     0
+	    sdg     UNAVAIL      0     0     0
+
+errors: No known data errors

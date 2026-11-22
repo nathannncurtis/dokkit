@@ -264,12 +264,16 @@ defmodule Dokkit.Intake do
          {:ok, state} <- Map.fetch(@states, line["state"]),
          name when is_binary(name) <- line["check"] do
       check = check(key, service, name, :custom, 3)
+      {check, state} = storage_row(check, state, name, service)
 
       Issues.record(check, state,
         at: at,
         note: line["note"],
         value: number(line["value"]),
-        title: if(state != :ok, do: hardware_title(name, service))
+        title:
+          if(state != :ok,
+            do: storage_title(name, state, service) || hardware_title(name, service)
+          )
       )
 
       :ok
@@ -745,6 +749,43 @@ defmodule Dokkit.Intake do
   end
 
   defp hardware_title(_, _), do: nil
+
+  # Arrays and drive verdicts follow the machine's Arrays and Drive health settings: switched off reads as fine.
+  defp storage_row(check, state, name, %Service{slug: "machine", machine_id: id}) do
+    case storage_kind(name) do
+      nil ->
+        {check, state}
+
+      row ->
+        values = Dokkit.Values.all({:machine, id})
+
+        {%{
+           check
+           | fail_after: values[row <> "_after"],
+             config: Map.put(check.config, "own_fail_after", true)
+         }, if(values[row <> "_on"], do: state, else: :ok)}
+    end
+  end
+
+  defp storage_row(check, state, _, _), do: {check, state}
+
+  defp storage_kind("hw.array." <> _), do: "array"
+  defp storage_kind("hw.smart." <> _), do: "smart"
+  defp storage_kind(_), do: nil
+
+  defp storage_title(name, state, %Service{slug: "machine", machine_id: id}) do
+    on = fn -> " on " <> Repo.one(from m in Machine, where: m.id == ^id, select: m.name) end
+
+    case {name, state} do
+      {"hw.array." <> a, :down} -> "Array #{a} is down" <> on.()
+      {"hw.array." <> a, _} -> "Array #{a} needs a look" <> on.()
+      {"hw.smart." <> d, :down} -> "Drive #{d} is failing" <> on.()
+      {"hw.smart." <> d, _} -> "Drive #{d} needs a look" <> on.()
+      _ -> nil
+    end
+  end
+
+  defp storage_title(_, _, _), do: nil
 
   defp number(v) when is_number(v), do: v / 1
   defp number(_), do: nil

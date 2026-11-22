@@ -109,6 +109,28 @@ defmodule Dokkit.Values do
     },
     %{
       group: "hardware",
+      id: "array",
+      scope: :machine,
+      title: "Arrays",
+      sub:
+        "Tell me when a RAID array, NAS volume or ZFS pool loses a drive (down: the next failure loses data) or is rebuilding (slow).",
+      toggle: {"array_on", true},
+      fields: [{"array_after", 3, 1, 100}],
+      words: ["After", "reports in a row"]
+    },
+    %{
+      group: "hardware",
+      id: "smart",
+      scope: :machine,
+      title: "Drive health",
+      sub:
+        "Tell me when a drive says it is failing (down) or needs a look (slow), from its own SMART verdict.",
+      toggle: {"smart_on", true},
+      fields: [{"smart_after", 3, 1, 100}],
+      words: ["After", "reports in a row"]
+    },
+    %{
+      group: "hardware",
       id: "clock",
       scope: :machine,
       title: "Clock",

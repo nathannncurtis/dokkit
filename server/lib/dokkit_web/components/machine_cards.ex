@@ -46,6 +46,7 @@ defmodule DokkitWeb.MachineCards do
   attr :disabled, :boolean, required: true
   attr :result, :any, default: nil
   attr :draft, :map, default: %{}
+  attr :states, :list, default: []
 
   @doc "The machine's hardware readings by kind, each with its limits and Save beside it."
   def hardware(assigns) do
@@ -85,9 +86,46 @@ defmodule DokkitWeb.MachineCards do
           change="values_change"
         />
       <% end %>
+
+      <%= for {kind, label, absent, rows, list} <- @states do %>
+        <div class="grp bare">{label}</div>
+
+        <p :if={list == []} class="mute" id={"hw-#{kind}-none"}>{absent}</p>
+
+        <div :for={c <- list} class="chart" id={"hw-state-" <> c.name}>
+          <div class="top">
+            <b><.lvl :if={c.state in [:degraded, :down]} state={c.state} /> {state_title(c.name)}</b>
+            <span class="mono">{state_word(c.state)}</span>
+            <span :if={c.note} class={if c.state in [:degraded, :down], do: "st warn", else: "mute"}>
+              {c.note}
+            </span>
+          </div>
+        </div>
+
+        <DokkitWeb.ValuesForm.inline
+          :if={list != []}
+          id={"hw-#{kind}"}
+          group="hardware"
+          scope={@scope}
+          rows={rows}
+          disabled={@disabled}
+          result={@result}
+          draft={@draft}
+          change="values_change"
+        />
+      <% end %>
     </div>
     """
   end
+
+  defp state_title("hw.array." <> name), do: "Array #{name}"
+  defp state_title("hw.smart." <> dev), do: "Drive #{dev}"
+  defp state_title(name), do: name
+
+  defp state_word(:ok), do: "Fine"
+  defp state_word(:degraded), do: "Needs a look"
+  defp state_word(:down), do: "Down"
+  defp state_word(_), do: "No signal yet"
 
   defp reading(name, value) do
     value = Float.round(value * 1.0, 1)
