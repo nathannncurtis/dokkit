@@ -955,6 +955,7 @@ func TestClaimTurnstile(t *testing.T) {
 		ok := r.PostForm.Get("secret") == "ts-secret" && r.PostForm.Get("response") == "good"
 		json.NewEncoder(w).Encode(map[string]any{"success": ok, "action": "claim"})
 	}))
+	t.Cleanup(verify.Close)
 	rg.app.Human = &Turnstile{SiteKey: "site-1", Secret: "ts-secret", URL: verify.URL}
 
 	resp, _ = c.Get(rg.srv.URL + "/")
