@@ -84,7 +84,8 @@ Dokkit.Client.Log("info", new string('\u00e9', 50000));
 Dokkit.Client.Log("info", new string('a', 70000));
 Dokkit.Client.Flush();
 var cut = got.Where(g => g.Body.Contains("\"msg\":\"")).Select(g => g.Body).Where(b => b.Contains(" [cut]\",")).ToList();
-var cutOk = cut.Count == 2 && cut.All(b => Encoding.UTF8.GetByteCount(b) <= 65536);
+var fieldsOk = got.Any(g => g.Body.Contains("\"msg\":\"with fields\"") && g.Body.Contains("\"fields\":{\"order\":42,\"who\":\"x\",\"ok\":true,\"none\":null}"));
+var cutOk = cut.Count == 3 && !got.Any(g => g.Body.Contains("kept?")) && cut.All(b => Encoding.UTF8.GetByteCount(b) <= 65536);
 
 var started = typeof(Dokkit.Client).GetField("http", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
 Dokkit.Client.Start(version: "9.9.9", url: "http://localhost:47912", key: "dka_test");
@@ -138,7 +139,8 @@ if (!keptWhileDown) missing.Add("a line is sent while error posts fail, and the 
 if (!got.Any(g => g.Path == "/api/v1/errors" && g.Body.Contains("ArgumentException"))) missing.Add("kept error sent later");
 if (!got.Any(g => g.Body.Contains("FormatException")) || !got.Any(g => g.Body.Contains("line retried"))) missing.Add("failed batch retried");
 if (!independent) missing.Add("a failed log batch does not skip error reports");
-if (!cutOk) missing.Add("long lines cut under 64 KB with the marker, got " + cut.Count);
+if (!fieldsOk) missing.Add("log fields sent as a flat object");
+if (!cutOk) missing.Add("long lines cut under 64 KB with the marker and fields dropped, got " + cut.Count);
 if (!announcedOnce) missing.Add("second Start announces nothing");
 if (!quiet) missing.Add("announceVersion false sends no deploy line");
 if (!devOk) missing.Add("dev environment on log, beat and job lines");

@@ -14,7 +14,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PROGRAMS = os.path.join(HERE, "programs")
 WORK = os.path.join(tempfile.gettempdir(), "dokkit_conformance")
 LANGS = ["python", "javascript", "go", "rust", "dotnet", "java", "php", "powershell", "shell", "elixir"]
-FIELDS = {"python", "javascript", "go", "rust", "php"}
+FIELDS = {"python", "javascript", "go", "rust", "php", "dotnet", "elixir", "powershell"}
 KINDS = ["version", "beat", "job", "check", "metric", "log", "fields", "error", "isolation"]
 PSQL = shutil.which("psql") or r"C:\Program Files\PostgreSQL\17\bin\psql.exe"
 

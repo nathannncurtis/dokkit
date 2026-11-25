@@ -90,6 +90,10 @@ namespace Dokkit
         public static void Log(string level, string message) =>
             Add(Line("log", "t", Now(), "level", level, "msg", message));
 
+        /// <summary>A log line with fields: a flat object of names and values. A line over 64 KB loses its fields first.</summary>
+        public static void Log(string level, string message, IDictionary<string, object> fields) =>
+            Add(Line("log", "t", Now(), "level", level, "msg", message, "fields", fields == null || fields.Count == 0 ? null : new Dictionary<string, object>(fields)));
+
         /// <summary>Sends a stats document already written as JSON, for an app dokkit cannot reach.</summary>
         public static void Stats(string documentJson) =>
             Add(Line("stats", "document", new Raw(documentJson)));
@@ -300,6 +304,12 @@ namespace Dokkit
             var text = Json(line);
             var over = Size(text) - MaxLine;
             if (over <= 0) return text;
+            if (line.Remove("fields"))
+            {
+                text = Json(line);
+                over = Size(text) - MaxLine;
+                if (over <= 0) return text;
+            }
             if (!(line.TryGetValue("msg", out var m) && m is string msg)) return null;
             var n = msg.Length;
             while (over > 0 && n > 0)

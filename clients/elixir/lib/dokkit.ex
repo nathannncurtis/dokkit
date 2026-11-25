@@ -178,6 +178,15 @@ defmodule Dokkit do
     :skip -> :ok
   end
 
+  @doc "A log line with fields, a keyword list or a map sent as a flat object. A line over 64 KB loses its msg's end first, then its fields."
+  def log(level, msg, fields) when is_binary(level) and (is_list(fields) or is_map(fields)) do
+    line = %{type: "log", t: now(), level: level, msg: msg}
+    fields = Map.new(fields, fn {k, v} -> {to_string(k), v} end)
+    add(if fields == %{}, do: line, else: Map.put(line, :fields, fields))
+  rescue
+    _ -> log(level, msg)
+  end
+
   # What the sender logs about our own requests is never fed back in. The HTTP client and the TLS
   # library log from processes of their own, so their records count as ours only while a send is
   # running (or just ended), or when they carry `dokkit: true`. An app's own TLS or HTTP record at
