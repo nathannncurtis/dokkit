@@ -42,7 +42,12 @@ function Add-Line([hashtable]$Line) {
     foreach ($name in @($Line.Keys)) { if ($null -eq $Line[$name] -or ($Line[$name] -is [string] -and $Line[$name] -eq '')) { $Line.Remove($name) } }
     try { $text = ConvertTo-Json $Line -Depth 10 -Compress } catch { $script:Dropped++; return }
     $size = [Text.Encoding]::UTF8.GetByteCount($text)
-    # A line over 65536 bytes loses the end of its message, which then ends with a marker.
+    # A line over 65536 bytes loses its fields, then the end of its message, which then ends with a marker.
+    if ($size -gt 65536 -and $Line.Contains('fields')) {
+        $Line.Remove('fields')
+        $text = ConvertTo-Json $Line -Depth 10 -Compress
+        $size = [Text.Encoding]::UTF8.GetByteCount($text)
+    }
     while ($size -gt 65536 -and $Line.msg -is [string] -and $Line.msg -ne ' [cut]') {
         $keep = [Math]::Max(0, [int][Math]::Floor($Line.msg.Length * (65536 - 64) / $size))
         if ($keep -gt 0 -and [char]::IsHighSurrogate($Line.msg[$keep - 1])) { $keep-- }
@@ -75,9 +80,11 @@ function Send-DokkitMetric {
 }
 
 function Write-DokkitLog {
-    # Level is trace, debug, info, warn, error or fatal.
-    param([Parameter(Mandatory)][string]$Level, [Parameter(Mandatory)][AllowEmptyString()][string]$Message)
-    Add-Line @{ type = 'log'; t = [DateTime]::UtcNow.ToString('o'); level = $Level; msg = $Message }
+    # Level is trace, debug, info, warn, error or fatal. Fields is a hashtable sent as a flat object.
+    param([Parameter(Mandatory)][string]$Level, [Parameter(Mandatory)][AllowEmptyString()][string]$Message, [hashtable]$Fields)
+    $line = @{ type = 'log'; t = [DateTime]::UtcNow.ToString('o'); level = $Level; msg = $Message }
+    if ($Fields -and $Fields.Count -gt 0) { $line.fields = $Fields.Clone() }
+    Add-Line $line
 }
 
 function Send-DokkitStats {
@@ -142,7 +149,11 @@ function Send-DokkitError {
 
 function Send-Dokkit {
     # Sends what is waiting. Call it at the end of a script that does not use Invoke-DokkitJob.
+    # It gives up after TimeoutSeconds (5 by default), so an unreachable server never holds the script; what is left stays queued.
+    param([ValidateRange(1, 3600)][int]$TimeoutSeconds = 5)
     if (-not $script:On) { return }
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    $left = { [Math]::Max(0, $TimeoutSeconds - $watch.Elapsed.TotalSeconds) }
     # Returns ok, keep (no answer, 5xx or 429: try again later) or drop (the server refused it).
     $post = {
         param($path, $body, $kind, $id)
@@ -156,7 +167,9 @@ function Send-Dokkit {
                 $bytes = $packed.ToArray()
                 $headers['Content-Encoding'] = 'gzip'
             }
-            $null = Invoke-WebRequest -Uri ($script:On.Url + $path) -Method Post -Body $bytes -ContentType $kind -Headers $headers -TimeoutSec 10 -UseBasicParsing
+            $limit = [Math]::Min(10, [int][Math]::Ceiling((& $left)))
+            if ($limit -lt 1) { return 'keep' }
+            $null = Invoke-WebRequest -Uri ($script:On.Url + $path) -Method Post -Body $bytes -ContentType $kind -Headers $headers -TimeoutSec $limit -UseBasicParsing
             'ok'
         }
         catch {
@@ -165,13 +178,13 @@ function Send-Dokkit {
             if ($status -ge 400 -and $status -lt 500 -and $status -ne 429) { 'drop' } else { 'keep' }
         }
     }
-    while ($script:Errors.Count -gt 0) {
+    while ($script:Errors.Count -gt 0 -and (& $left) -gt 0) {
         $result = & $post '/api/v1/errors' (ConvertTo-Json $script:Errors[0] -Depth 6 -Compress) 'application/json' ([guid]::NewGuid().ToString())
         if ($result -eq 'keep') { break }
         $script:Errors.RemoveAt(0)
         if ($result -eq 'drop') { $script:Dropped++ }
     }
-    while ($script:Lines.Count -gt 0) {
+    while ($script:Lines.Count -gt 0 -and (& $left) -gt 0) {
         $take = [Math]::Min(500, $script:Lines.Count)
         $batch = $script:Lines.GetRange(0, $take).ToArray(); $script:Lines.RemoveRange(0, $take)
         foreach ($l in $batch) { $script:Bytes -= [Text.Encoding]::UTF8.GetByteCount($l) }

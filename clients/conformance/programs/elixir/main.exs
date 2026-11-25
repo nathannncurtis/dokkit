@@ -10,7 +10,7 @@ Dokkit.beat("conf-beat", 60)
 Dokkit.job("conf-job", fn _progress -> :ok end)
 Dokkit.check("conf-check", "ok", 1)
 Dokkit.metric("conf.metric", 5, "n")
-Dokkit.log("info", "conformance " <> tag)
+Dokkit.log("info", "conformance " <> tag, tag: tag, n: 1)
 
 try do
   raise ConformanceError

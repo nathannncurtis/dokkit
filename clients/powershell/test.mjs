@@ -1,8 +1,13 @@
 // Runs try.ps1 against a small local server.   node --test
 import assert from "node:assert";
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import http from "node:http";
+import { X509Certificate } from "node:crypto";
+import fs from "node:fs";
+import https from "node:https";
+import net from "node:net";
 import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import zlib from "node:zlib";
 
@@ -173,3 +178,69 @@ test("an error report the server did not answer for is kept for the next pass; a
   const limited = await raw(`try { throw 'x' } catch { Send-DokkitError $_ }; Send-Dokkit; & (Get-Module Dokkit) { $script:Errors.Count }`, { status: () => 429 });
   assert.strictEqual(limited.stdout.trim(), "1");
 });
+
+// A local HTTPS listener with a certificate made for this run. The PowerShell side trusts only that
+// certificate, by thumbprint, inside the test process.
+async function tls(code, shell) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dokkit-ps-"));
+  try {
+    const key = path.join(dir, "k.pem");
+    const crt = path.join(dir, "c.pem");
+    execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", crt, "-days", "1", "-subj", "/CN=localhost"], { stdio: "ignore" });
+    const cert = fs.readFileSync(crt);
+    const thumb = new X509Certificate(cert).fingerprint.replaceAll(":", "");
+    const lines = [];
+    const server = https.createServer({ key: fs.readFileSync(key), cert }, (req, res) => {
+      const chunks = [];
+      req.on("data", (c) => chunks.push(c));
+      req.on("end", () => {
+        lines.push(...unpack(req, chunks).split("\n").map((l) => JSON.parse(l)));
+        res.end("{}");
+      });
+    });
+    await new Promise((done) => server.listen(0, "127.0.0.1", done));
+    const here = new URL(".", import.meta.url).pathname.replace(/^\/(\w:)/, "$1");
+    const pin = `$global:pin = '${thumb}'
+      if ($PSVersionTable.PSVersion.Major -lt 6) {
+        [Net.ServicePointManager]::ServerCertificateValidationCallback = { param($s, $c, $ch, $e) $c.GetCertHashString() -eq $global:pin }
+      } else {
+        function Invoke-WebRequest {
+          $i = [array]::IndexOf(@($args | ForEach-Object { "$_" }), '-Uri')
+          $u = [uri]$args[$i + 1]
+          $tcp = New-Object Net.Sockets.TcpClient($u.Host, $u.Port)
+          $ssl = New-Object Net.Security.SslStream($tcp.GetStream(), $false, { param($s, $c, $ch, $e) $c.GetCertHashString() -eq $global:pin })
+          try { $ssl.AuthenticateAsClient($u.Host) } finally { $ssl.Dispose(); $tcp.Dispose() }
+          & (Get-Command Invoke-WebRequest -CommandType Cmdlet) @args -SkipCertificateCheck
+        }
+      }`;
+    const script = `${pin}; Import-Module '${here}Dokkit.psm1'; Start-Dokkit -Url 'https://127.0.0.1:${server.address().port}/' -Key k; ${code}`;
+    const run = await new Promise((done) => execFile(shell, ["-NoProfile", "-Command", script], (error, stdout, stderr) => done({ stdout, stderr })));
+    server.close();
+    return { lines, ...run };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+for (const shell of ["pwsh", "powershell"]) {
+  const skip = shell === "powershell" && process.platform !== "win32";
+
+  test(`${shell}: Write-DokkitLog -Fields sends a flat object; a line over 64 KB loses its fields first`, { skip }, async () => {
+    const r = await tls(`Write-DokkitLog info paid -Fields @{ order = 42; who = 'x'; ok = $true }; Write-DokkitLog info plain; Write-DokkitLog info big -Fields @{ blob = [string]::new('z', 70000) }; Send-Dokkit`, shell);
+    assert.deepStrictEqual(r.lines[0].fields, { order: 42, who: "x", ok: true }, r.stderr);
+    assert.ok(!("fields" in r.lines[1]));
+    assert.ok(r.lines[2].msg === "big" && !("fields" in r.lines[2]));
+  });
+
+  test(`${shell}: Send-Dokkit gives up on a server that never answers, after its time limit`, { skip }, async () => {
+    const sockets = [];
+    const silent = net.createServer((s) => { s.on("error", () => {}); sockets.push(s); });
+    await new Promise((done) => silent.listen(0, "127.0.0.1", done));
+    const here = new URL(".", import.meta.url).pathname.replace(/^\/(\w:)/, "$1");
+    const script = `Import-Module '${here}Dokkit.psm1'; Start-Dokkit -Url 'https://127.0.0.1:${silent.address().port}/' -Key k; Write-DokkitLog info a; Write-DokkitLog info b; $t = [Diagnostics.Stopwatch]::StartNew(); Send-Dokkit -TimeoutSeconds 2; [int]$t.Elapsed.TotalSeconds`;
+    const out = await new Promise((done) => execFile(shell, ["-NoProfile", "-Command", script], (e, stdout) => done(stdout)));
+    sockets.forEach((x) => x.destroy());
+    silent.close();
+    assert.ok(Number(out.trim()) <= 5, `took ${out.trim()} seconds`);
+  });
+}

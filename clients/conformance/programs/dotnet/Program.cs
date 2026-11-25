@@ -13,7 +13,7 @@ static class Program
         run.Done();
         Client.Check("conf-check", "ok", 1);
         Client.Metric("conf.metric", 5, "n");
-        Client.Log("info", "conformance " + args[0]);
+        Client.Log("info", "conformance " + args[0], new System.Collections.Generic.Dictionary<string, object> { ["tag"] = args[0], ["n"] = 1 });
         try { throw new ConformanceError(); }
         catch (Exception e) { Client.Capture(e); }
         Client.Flush();

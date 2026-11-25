@@ -11,6 +11,10 @@ dotnet add reference path/to/dokkit/clients/dotnet/Dokkit/Dokkit.csproj
 dotnet add reference path/to/dokkit/clients/dotnet/Dokkit.Logging/Dokkit.Logging.csproj
 ```
 
+## Fields
+
+`Client.Log("info", "paid", new Dictionary<string, object> { ["order"] = 42, ["who"] = "x" })` sends the dictionary as a flat `fields` object on the log line. A line over 64 KB loses its fields first, then the end of its `msg`.
+
 ## Logging
 
 `builder.Logging.AddDokkit()` sends `Microsoft.Extensions.Logging` through `Log`. It needs `Dokkit.Logging`.

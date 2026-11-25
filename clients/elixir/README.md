@@ -2,6 +2,8 @@
 
 One file, no packages, Elixir 1.18 or later. `Dokkit.beat`, `job`, `check`, `metric`, `capture`, `log`, `stats`.
 
+`Dokkit.log("info", "paid", order: 42, who: "x")` sends a keyword list or a map as a flat `fields` object on the log line. A line over 64 KB loses the end of its `msg` first, then its fields.
+
 ## Install
 
 Nothing is published to a registry yet. In `mix.exs`, point at a clone of the repo:

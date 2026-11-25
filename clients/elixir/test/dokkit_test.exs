@@ -261,6 +261,18 @@ defmodule DokkitTest do
     assert JSON.decode!(small)["msg"] == "x"
   end
 
+  test "log with fields sends them as a flat object, from a keyword list or a map" do
+    Dokkit.start(url: mock(), key: "dka_test")
+    Dokkit.log("info", "paid", order: 42, who: "x")
+    Dokkit.log("info", "mapped", %{"ok" => true})
+    Dokkit.log("info", "plain", [])
+    Dokkit.flush()
+    lines = received([]) |> Enum.flat_map(fn {_, body} -> String.split(body, "\n", trim: true) end) |> Enum.map(&JSON.decode!/1)
+    assert Enum.find(lines, &(&1["msg"] == "paid"))["fields"] == %{"order" => 42, "who" => "x"}
+    assert Enum.find(lines, &(&1["msg"] == "mapped"))["fields"] == %{"ok" => true}
+    refute Map.has_key?(Enum.find(lines, &(&1["msg"] == "plain")), "fields")
+  end
+
   test "a start with announce_version false sends no deploy line" do
     Dokkit.start(version: "2.3.0", announce_version: false, url: "http://127.0.0.1:1", key: "dka_test")
     assert :sys.get_state(Dokkit).count == 0
