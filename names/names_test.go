@@ -939,3 +939,47 @@ func TestOffensiveNames(t *testing.T) {
 		}
 	}
 }
+
+func TestClaimTurnstile(t *testing.T) {
+	rg := newRig(t)
+	c := rg.browser(31)
+	resp, _ := c.Get(rg.srv.URL + "/")
+	if html := body(t, resp); strings.Contains(html, "data-sitekey") || strings.Contains(resp.Header.Get("Content-Security-Policy"), "challenges.cloudflare.com") {
+		t.Fatal("Turnstile shows while it is off")
+	}
+
+	var gotIP string
+	verify := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		gotIP = r.PostForm.Get("remoteip")
+		ok := r.PostForm.Get("secret") == "ts-secret" && r.PostForm.Get("response") == "good"
+		json.NewEncoder(w).Encode(map[string]any{"success": ok, "action": "claim"})
+	}))
+	rg.app.Human = &Turnstile{SiteKey: "site-1", Secret: "ts-secret", URL: verify.URL}
+
+	resp, _ = c.Get(rg.srv.URL + "/")
+	csp := resp.Header.Get("Content-Security-Policy")
+	if html := body(t, resp); !strings.Contains(html, `data-sitekey="site-1"`) || !strings.Contains(html, "turnstile/v0/api.js") {
+		t.Fatalf("page has no widget: %s", html)
+	}
+	if !strings.Contains(csp, "script-src 'self' https://challenges.cloudflare.com") || !strings.Contains(csp, "frame-src https://challenges.cloudflare.com") {
+		t.Fatalf("CSP: %s", csp)
+	}
+	if status, html := rg.post(c, "/claim", url.Values{"name": {"human"}}); status != 403 || !strings.Contains(html, "Wait for the check") {
+		t.Fatalf("no token: %d %s", status, html)
+	}
+	if status, html := rg.post(c, "/claim", url.Values{"name": {"human"}, "cf-turnstile-response": {"bot"}}); status != 403 || !strings.Contains(html, "did not pass") {
+		t.Fatalf("bad token: %d %s", status, html)
+	}
+	status, html := rg.post(c, "/claim", url.Values{"name": {"human"}, "cf-turnstile-response": {"good"}})
+	if status != 200 || codeRe.FindStringSubmatch(html) == nil {
+		t.Fatalf("good token: %d %s", status, html)
+	}
+	if gotIP != "127.0.0.1" {
+		t.Fatalf("remoteip %q", gotIP)
+	}
+	verify.Close()
+	if status, html := rg.post(c, "/claim", url.Values{"name": {"human2"}, "cf-turnstile-response": {"good"}}); status != 503 || !strings.Contains(html, "could not be confirmed") {
+		t.Fatalf("verifier down: %d %s", status, html)
+	}
+}

@@ -62,6 +62,13 @@ func main() {
 		Sender:  NewSender(),
 		signups: Limiter{Burst: 3, PerSecond: 3.0 / 3600},
 	}
+	siteKey, tsSecret := os.Getenv("NAMES_TURNSTILE_SITE_KEY"), os.Getenv("NAMES_TURNSTILE_SECRET")
+	if (siteKey == "") != (tsSecret == "") {
+		log.Fatal("NAMES_TURNSTILE_SITE_KEY and NAMES_TURNSTILE_SECRET are set together or not at all")
+	}
+	if siteKey != "" {
+		app.Human = &Turnstile{SiteKey: siteKey, Secret: tsSecret}
+	}
 	go func() {
 		for {
 			svc.Sweep()

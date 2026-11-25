@@ -57,6 +57,7 @@ Build it with `go build` in `names/`. Settings come from the environment:
 | `NAMES_BLOCKED` | More words no name may contain, separated by spaces or commas, added to the built-in list. |
 | `NAMES_BEAT_URL` | The address given out for outside heartbeats. Default `https://beat.dokkit.dev`. |
 | `NAMES_ABUSE_EMAIL` | Where report links go. Default `abuse@dokkit.dev`. |
+| `NAMES_TURNSTILE_SITE_KEY`, `NAMES_TURNSTILE_SECRET` | A Cloudflare Turnstile widget for the names host, in managed mode. Both together put a check that you are a person on the claim form; a claim without a passing check is refused. Leave both unset to run without it. |
 
 ### Sign-in
 
