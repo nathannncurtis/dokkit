@@ -33,6 +33,7 @@ type App struct {
 	Secret  []byte
 	Beat    string
 	Sender  *Sender
+	Human   *Turnstile
 	replays Replays
 	checks  Limiter
 	Limits  Limiter
@@ -86,7 +87,11 @@ func (a *App) Routes() http.Handler {
 func (a *App) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+		scripts, frames := "'self'", ""
+		if a.Human != nil {
+			scripts, frames = "'self' https://challenges.cloudflare.com", "; frame-src https://challenges.cloudflare.com"
+		}
+		h.Set("Content-Security-Policy", "default-src 'none'; script-src "+scripts+"; connect-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"+frames)
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
 		if r.URL.Path != "/check" && !a.Limits.Allow(clientIP(r), time.Now()) {
@@ -253,6 +258,7 @@ type row struct {
 
 type view struct {
 	Login, Via, CSRF, Error, Done, Code, CodeFor string
+	SiteKey                                      string
 	Signins                                      []*Provider
 	Rows                                         []row
 	Zone                                         string
@@ -293,6 +299,11 @@ func (a *App) form(fn func(*session, *http.Request) (view, error)) http.HandlerF
 }
 
 func (a *App) claim(s *session, r *http.Request) (view, error) {
+	if a.Human != nil {
+		if err := a.Human.Verify(r.PostFormValue("cf-turnstile-response"), clientIP(r)); err != nil {
+			return view{}, err
+		}
+	}
 	label := strings.ToLower(strings.TrimSpace(r.PostFormValue("name")))
 	code, err := a.Svc.Claim(s.Account, s.Login, label)
 	return view{Code: code, CodeFor: a.Svc.fqdn(label)}, err
@@ -316,6 +327,9 @@ func (a *App) home(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) page(w http.ResponseWriter, r *http.Request, status int, v view) {
 	v.Zone, v.Abuse, v.Max, v.Signins = a.Svc.Zone, a.Abuse, perAccount, a.Signins
+	if a.Human != nil {
+		v.SiteKey = a.Human.SiteKey
+	}
 	if s, csrf := a.session(r); s != nil {
 		v.Login, v.Via, v.CSRF = s.Login, s.Via, csrf
 		for _, n := range a.Svc.Mine(s.Account) {
@@ -506,7 +520,7 @@ h2{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color
 .claim .f{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 .claim input{font:500 17px var(--mono);padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--well);color:var(--ink);width:min(100%,280px)}
 .claim input:focus{outline:2px solid var(--acc);outline-offset:2px}.claim .z{font:500 17px var(--mono);color:var(--mute)}
-.claim{transition:border-color .2s}.claim .m{margin:12px 0 0;color:var(--mute);font-size:14px;transition:color .2s}.claim.bad{border-color:var(--bad)}.claim.bad .m{color:var(--bad)}.claim.good{border-color:var(--ok)}.claim.good .m{color:var(--ok)}.claim button:disabled{opacity:.45;cursor:not-allowed}
+.claim .ts{margin:16px 0 0;min-height:65px}.claim{transition:border-color .2s}.claim .m{margin:12px 0 0;color:var(--mute);font-size:14px;transition:color .2s}.claim.bad{border-color:var(--bad)}.claim.bad .m{color:var(--bad)}.claim.good{border-color:var(--ok)}.claim.good .m{color:var(--ok)}.claim button:disabled{opacity:.45;cursor:not-allowed}
 .steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:48px 0 0;padding:0;list-style:none;counter-reset:s}
 .steps li{counter-increment:s;padding:20px;border:1px solid var(--line);border-radius:14px;color:var(--mute);font-size:15px}
 .steps li::before{content:counter(s);transition:background .3s,color .3s;display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--chip);color:var(--ink);font:500 12px var(--mono);margin-bottom:10px}
@@ -534,6 +548,7 @@ h2{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color
 <p class="foot">To report a name used for abuse, write to <a href="mailto:{{.Abuse}}">{{.Abuse}}</a>.</p>
 </main>
 <script src="/app.js"></script>
+{{if .SiteKey}}<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&amp;onload=dokkitHuman" async defer></script>{{end}}
 </html>
 {{define "acct"}}{{if .Error}}<p class="msg bad" role="alert">{{.Error}}</p>{{end}}
 {{if .Done}}<p class="msg ok" role="status">{{.Done}}</p>{{end}}
@@ -558,6 +573,7 @@ h2{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color
 <input type="hidden" name="csrf" value="{{.CSRF}}">
 <div class="f"><input name="name" aria-label="Name" placeholder="yours" autofocus required maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="claim-say"><span class="z">.{{.Zone}}</span><button class="pri">Claim</button></div>
 <p class="m" id="claim-say" aria-live="polite" data-zone="{{.Zone}}" data-hint="3 to 40 lower-case letters, digits and hyphens. At most {{.Max}} names per account.">3 to 40 lower-case letters, digits and hyphens. At most {{.Max}} names per account.</p>
+{{if .SiteKey}}<div class="ts" data-sitekey="{{.SiteKey}}"></div>{{end}}
 </form>{{end}}
 {{else}}
 <div class="start">{{range .Main}}<a class="sso {{.Key}}" href="/login/{{.Key}}">{{template "mark" .}}<span>Sign in with {{.Title}}</span></a>{{end}}
@@ -611,9 +627,18 @@ const appJS = `(() => {
     say.textContent = text ?? say.dataset.hint;
     form.querySelector("button").disabled = state !== "good";
   }
+  function human() {
+    if (!window.turnstile) return;
+    document.querySelectorAll(".ts:not([data-on])").forEach(el => {
+      el.dataset.on = "1";
+      turnstile.render(el, { sitekey: el.dataset.sitekey, action: "claim", theme: "dark" });
+    });
+  }
+  window.dokkitHuman = human;
   function armed() {
     const box = document.querySelector("form.claim input[name=name]");
     if (box && !box.value) box.form.querySelector("button").disabled = true;
+    human();
   }
   armed();
   document.addEventListener("input", e => {

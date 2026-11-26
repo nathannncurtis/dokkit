@@ -22,6 +22,7 @@ jobs:
     outputs:
       server: ${{ steps.f.outputs.server }}
       program: ${{ steps.f.outputs.program }}
+      names: ${{ steps.f.outputs.names }}
       clients: ${{ steps.f.outputs.clients }}
       apps-ios: ${{ steps.f.outputs.apps-ios }}
       apps-android: ${{ steps.f.outputs.apps-android }}
@@ -41,6 +42,9 @@ jobs:
               - '.github/workflows/ci.yml'
             program:
               - 'program/**'
+              - '.github/workflows/ci.yml'
+            names:
+              - 'names/**'
               - '.github/workflows/ci.yml'
             clients:
               - 'clients/**'
@@ -212,6 +216,27 @@ jobs:
       - run: go test ./...
       - name: Known vulnerabilities in reachable code
         if: matrix.os == 'ubuntu-latest'
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  names:
+    needs: changes
+    if: needs.changes.outputs.names == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: names
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: names/go.mod
+          cache-dependency-path: names/go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Known vulnerabilities in reachable code
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
   clients:
@@ -533,7 +558,7 @@ jobs:
           if-no-files-found: ignore
 
   ci-ok:
-    needs: [changes, rules, server, server-windows-upgrade, program, clients, clients-swift, apps-ios, apps-android, apps-desktop, plugin, site, zap-site, zap-server, deps-owasp]
+    needs: [changes, rules, server, server-windows-upgrade, program, names, clients, clients-swift, apps-ios, apps-android, apps-desktop, plugin, site, zap-site, zap-server, deps-owasp]
     if: always() && github.repository == 'nathannncurtis/dokkit'
     runs-on: ubuntu-latest
     steps:

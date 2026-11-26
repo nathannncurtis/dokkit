@@ -425,6 +425,7 @@ def privacy_page():
           <li>The account you signed in with: the provider (GitHub, Google, Microsoft or ChatGPT), the stable id it gives for you, and the display name it sends. Your email address is not asked for and not kept.</li>
           <li>Each name you claim, when you claimed it, the public key your server registered, the addresses your server set for it, and when it last checked in.</li>
           <li>A sign-in cookie, only while you are signed in, to keep you signed in and to stop forged requests.</li>
+          <li>Nothing from the check on the claim form. That check is Cloudflare Turnstile: it sees your address and your browser to tell a person from a script, and names.dokkit.dev only learns whether it passed.</li>
         </ul>
         <p class="note">A name's records are public DNS, kept and served by Azure DNS, so anyone can look up the address it points to. Released or lapsed names are deleted, with their records. Your address is held in memory for a few minutes to limit how often one connection can make requests, and is not written down.</p>"""
     relay = """        <ul class="did">
@@ -433,7 +434,7 @@ def privacy_page():
           <li>Both hold your address in memory for a short while to limit requests, and do not write it down.</li>
         </ul>"""
     ask = """        <p class="sub-p">To see what names.dokkit.dev holds for you, sign in there. To have anything removed, release your names there, or write to <a href="mailto:abuse@dokkit.dev">abuse@dokkit.dev</a>. The source of every service is public, so you can check all of this.</p>
-        <p class="note">Last changed 19 October 2026.</p>"""
+        <p class="note">Last changed 24 November 2026.</p>"""
     page("privacy.html", "Dokkit privacy", "What dokkit.dev and its small services keep, and what they do not.",
          [], "Privacy", "Dokkit is software you run yourself. These pages cover the few things dokkit.dev runs for everyone: the site, names, the shared relay and the public MCP.",
          [("software", "The software"), ("site", "This site"), ("names", "Names"), ("relay", "Relay and MCP"), ("ask", "Ask or remove")],

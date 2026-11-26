@@ -74,6 +74,7 @@
           <li>The account you signed in with: the provider (GitHub, Google, Microsoft or ChatGPT), the stable id it gives for you, and the display name it sends. Your email address is not asked for and not kept.</li>
           <li>Each name you claim, when you claimed it, the public key your server registered, the addresses your server set for it, and when it last checked in.</li>
           <li>A sign-in cookie, only while you are signed in, to keep you signed in and to stop forged requests.</li>
+          <li>Nothing from the check on the claim form. That check is Cloudflare Turnstile: it sees your address and your browser to tell a person from a script, and names.dokkit.dev only learns whether it passed.</li>
         </ul>
         <p class="note">A name's records are public DNS, kept and served by Azure DNS, so anyone can look up the address it points to. Released or lapsed names are deleted, with their records. Your address is held in memory for a few minutes to limit how often one connection can make requests, and is not written down.</p>
       </section>
@@ -88,7 +89,7 @@
       <section class="step" id="ask">
         <h2 data-type>Ask or remove</h2>
         <p class="sub-p">To see what names.dokkit.dev holds for you, sign in there. To have anything removed, release your names there, or write to <a href="mailto:abuse@dokkit.dev">abuse@dokkit.dev</a>. The source of every service is public, so you can check all of this.</p>
-        <p class="note">Last changed 19 October 2026.</p>
+        <p class="note">Last changed 24 November 2026.</p>
       </section>
 
       <section class="next" aria-label="Where to go next">

@@ -1,3 +1,3 @@
 module dokkit.dev/names
 
-go 1.25
+go 1.26.11
