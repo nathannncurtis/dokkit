@@ -217,7 +217,8 @@ defmodule DokkitWeb.MachineLive do
   defp chart(own, machine, name, range, now) do
     {_, _, points} = List.keyfind(@ranges, range, 0)
     from = DateTime.add(now, -String.to_integer(range) * 86_400)
-    check = Enum.find((own && own.checks) || [], &(&1.name == name))
+    checks = (own && own.checks) || []
+    check = ups_state(checks, name) || Enum.find(checks, &(&1.name == name))
     open? = check != nil and check.state != :ok
 
     %{
@@ -238,8 +239,20 @@ defmodule DokkitWeb.MachineLive do
     {"fans", "Fans", "fan.", ~w(fan_stop),
      "No fan readings: this machine reports none to a program without administrator rights."},
     {"clock", "Clock", "clock.", ~w(clock),
-     "No clock readings yet: the program measures them from the server's answers to its reports."}
+     "No clock readings yet: the program measures them from the server's answers to its reports."},
+    {"ups", "UPS", "ups.", ~w(ups_power ups_battery ups_load),
+     "No UPS: none is plugged into this machine by USB, or NUT is not running on it."},
+    {"restart", "Restarts", "restart.", ~w(unexpected_restart),
+     "A start after a stop without a shutdown, as after a power cut, opens an issue."}
   ]
+
+  # The UPS charge row carries an open power cut, or else an open battery issue.
+  defp ups_state(checks, "ups.charge_percent") do
+    for(n <- ~w(hw.ups.power hw.ups.battery), c <- checks, c.name == n, c.state != :ok, do: c)
+    |> List.first()
+  end
+
+  defp ups_state(_, _), do: nil
 
   defp hardware(own, machine, range, now) do
     names = Dokkit.Numbers.names({:machine, machine.id})
@@ -461,6 +474,7 @@ defmodule DokkitWeb.MachineLive do
               <span class="mono r">{round(v)}%<span :if={v >= 90}> high</span></span>
             </div>
           </div>
+
           <div class="card" id="versions">
             <h2>Program versions</h2>
 
@@ -698,6 +712,7 @@ defmodule DokkitWeb.MachineLive do
             </span>
           </div>
         </form>
+
         <DokkitWeb.ValuesForm.fold
           :if={@machine.kind == :enrolled}
           id="machine-values"

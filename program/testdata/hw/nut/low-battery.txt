@@ -1,0 +1,7 @@
+battery.charge: 9
+battery.runtime: 240
+driver.name: usbhid-ups
+input.voltage: 0.0
+ups.load: 30
+ups.status: OB DISCHRG LB
+ups.test.result: No test initiated

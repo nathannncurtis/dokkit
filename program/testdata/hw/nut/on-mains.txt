@@ -1,0 +1,14 @@
+battery.charge: 100
+battery.charge.low: 10
+battery.runtime: 2830
+battery.type: PbAc
+battery.voltage: 13.6
+device.mfr: Example Power
+device.model: Example 1500
+device.type: ups
+driver.name: usbhid-ups
+input.voltage: 121.0
+output.voltage: 121.0
+ups.load: 23
+ups.status: OL
+ups.test.result: Done and passed

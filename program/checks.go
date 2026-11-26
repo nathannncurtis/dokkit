@@ -819,6 +819,8 @@ func (c *client) watch() int {
 	if b, err := os.ReadFile(filepath.Join(c.spool, "logs.json")); err == nil {
 		json.Unmarshal(b, &w.logs)
 	}
+	noteBoot(c.spool)
+	stopCleanly(c.spool)
 	fmt.Println("Reporting to", c.url)
 	if len(w.folders) == 0 {
 		fmt.Println("No folders to read dokkit.toml files from. Set DOKKIT_FOLDERS, or add folders to the saved configuration.")

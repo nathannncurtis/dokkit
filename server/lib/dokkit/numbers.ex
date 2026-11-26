@@ -106,7 +106,8 @@ defmodule Dokkit.Numbers do
     {"temp.ambient_c", "", :over, "ambient_temp"},
     {"temp.system_c", "", :over, "ambient_temp"},
     {"fan.", "_rpm", :under, "fan_stop"},
-    {"clock.offset_seconds", "", :band, "clock"}
+    {"clock.offset_seconds", "", :band, "clock"},
+    {"ups.load_percent", "", :over, "ups_load"}
   ]
 
   # These count readings in a row, as they always have; every other row counts minutes, which
@@ -373,6 +374,8 @@ defmodule Dokkit.Numbers do
       String.ends_with?(name, "_rpm") -> " RPM"
       String.ends_with?(name, "_w") -> " W"
       String.ends_with?(name, "_seconds") -> " seconds"
+      String.ends_with?(name, "_minutes") -> " minutes"
+      String.ends_with?(name, "_v") -> " V"
       true -> ""
     end
   end
@@ -415,6 +418,9 @@ defmodule Dokkit.Numbers do
 
         ["fan", fan] ->
           "Fan #{fan |> String.trim_trailing("_rpm") |> String.replace("_", " ")} stopped"
+
+        ["ups", "load_percent"] ->
+          "UPS load at #{at}"
 
         ["clock", _] ->
           "Clock #{num(abs(value))} seconds #{if value > 0, do: "ahead", else: "behind"}"
@@ -742,7 +748,7 @@ defmodule Dokkit.Numbers do
     )
   end
 
-  @hardware ~w(gpu. temp. fan. clock.)
+  @hardware ~w(gpu. temp. fan. clock. ups.)
 
   @doc "Whether a machine's own number is a hardware reading, shown in its own section and kept for its own time."
   def hardware?(name), do: String.starts_with?(name, @hardware)
@@ -750,7 +756,7 @@ defmodule Dokkit.Numbers do
   def prune(now) do
     days = Values.get("metrics_days")
     hardware = Values.get("hardware_days")
-    pattern = "^(gpu|temp|fan|clock)\\."
+    pattern = "^(gpu|temp|fan|clock|ups)\\."
 
     Repo.delete_all(
       from m in Metric,

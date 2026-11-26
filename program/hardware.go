@@ -41,6 +41,7 @@ type hwFound struct {
 	readings []reading
 	states   []hwState
 	said     []string
+	values   map[string]float64
 }
 
 func (f *hwFound) say(format string, a ...any) { f.said = append(f.said, fmt.Sprintf(format, a...)) }
@@ -84,6 +85,8 @@ func lookHardware() *hwFound {
 	}
 	throttle(f)
 	arrays(f, onQNAP)
+	ups(f)
+	restartState(f)
 	hwMu.Lock()
 	if !clockAt.IsZero() && hwNow().Sub(clockAt) < 10*time.Minute {
 		f.add("clock.offset_seconds", clockOffset, 0)
@@ -126,6 +129,9 @@ func hardwareLines(f *hwFound, changeOnly bool) (lines []any) {
 		l := map[string]any{"type": "state", "at": at, "check": s.check, "state": s.state}
 		if s.note != "" {
 			l["note"] = s.note
+		}
+		if v, ok := f.values[s.check]; ok {
+			l["value"] = v
 		}
 		lines = append(lines, l)
 	}

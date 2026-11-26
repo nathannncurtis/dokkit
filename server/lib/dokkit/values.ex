@@ -131,6 +131,54 @@ defmodule Dokkit.Values do
     },
     %{
       group: "hardware",
+      id: "ups_power",
+      scope: :machine,
+      title: "Power cut",
+      sub:
+        "Tell me when the UPS this machine is plugged into runs on battery. The issue closes once power has been back this long, with the length of the cut in its notes.",
+      toggle: {"ups_power_on", true},
+      fields: [{"ups_power_minutes", 2, 1, 1440}],
+      words: ["Down while on battery; closes after", "minutes back on mains"]
+    },
+    %{
+      group: "hardware",
+      id: "ups_battery",
+      scope: :machine,
+      title: "UPS battery",
+      sub:
+        "Tell me when the UPS battery runs low during a cut, needs replacing, fails its self-test, or does not charge back up.",
+      toggle: {"ups_battery_on", true},
+      fields: [
+        {"ups_runtime_limit", 10, 1, 1440},
+        {"ups_charge_limit", 30, 1, 100},
+        {"ups_charge_mains", 80, 1, 100},
+        {"ups_charge_hours", 24, 1, 720}
+      ],
+      words: ["Slow on battery under", "minutes left or", "%; on mains under", "% after", "hours"]
+    },
+    %{
+      group: "hardware",
+      id: "ups_load",
+      scope: :machine,
+      title: "UPS load",
+      sub: "Tell me when the machines on the UPS draw near what it can carry.",
+      toggle: {"ups_load_on", true},
+      fields: [{"ups_load_limit", 80, 1, 100}, {"ups_load_minutes", 3, 1, 1440}],
+      words: ["Slow at", "% for", "minutes"]
+    },
+    %{
+      group: "hardware",
+      id: "unexpected_restart",
+      scope: :machine,
+      title: "Unexpected restart",
+      sub:
+        "Tell me when the machine starts again after stopping without a shutdown, the trace a power cut leaves where there is no UPS.",
+      toggle: {"unexpected_restart_on", true},
+      fields: [{"unexpected_restart_hours", 24, 1, 720}],
+      words: ["Open for", "hours"]
+    },
+    %{
+      group: "hardware",
       id: "clock",
       scope: :machine,
       title: "Clock",
@@ -149,7 +197,7 @@ defmodule Dokkit.Values do
       id: "hardware_kept",
       scope: :server,
       title: "Hardware readings",
-      sub: "How long temperatures, fans, graphics cards and clock readings are kept.",
+      sub: "How long temperatures, fans, graphics cards, clock and UPS readings are kept.",
       fields: [{"hardware_days", 30, 1, 3650}],
       words: ["", "days"]
     },
@@ -545,7 +593,7 @@ defmodule Dokkit.Values do
     {"machines", "hard-drives", "Defaults for every machine",
      "Each machine can change these on its own page."},
     {"hardware", "thermometer", "Hardware for every machine",
-     "Graphics cards, temperatures, fans, clocks, arrays and drive health. Each machine can change these on its own page."},
+     "Graphics cards, temperatures, fans, clocks, arrays, drive health, UPS and restarts. Each machine can change these on its own page."},
     {"checks", "pulse", "Checks",
      "How services are checked unless a dokkit.toml says otherwise."},
     {"jobs", "clock-countdown", "Defaults for every job",

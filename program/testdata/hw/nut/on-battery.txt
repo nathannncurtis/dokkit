@@ -1,0 +1,10 @@
+battery.charge: 87
+battery.charge.low: 10
+battery.runtime: 1720
+battery.voltage: 12.4
+device.model: Example 1500
+driver.name: usbhid-ups
+input.voltage: 0.0
+ups.load: 31
+ups.status: OB DISCHRG
+ups.test.result: Done and passed

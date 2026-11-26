@@ -13,13 +13,20 @@
     {"name": "temp.disk.<dev>_c", "step": 1},
     {"name": "temp.<label>_c", "step": 1},
     {"name": "fan.<label>_rpm", "step": 50},
-    {"name": "clock.offset_seconds", "step": 1}
+    {"name": "clock.offset_seconds", "step": 1},
+    {"name": "ups.charge_percent", "step": 1},
+    {"name": "ups.runtime_minutes", "step": 1},
+    {"name": "ups.load_percent", "step": 1},
+    {"name": "ups.input_v", "step": 1}
   ],
   "states": [
     "hw.gpu.<n>",
     "hw.throttle",
     "hw.array.<name>",
-    "hw.smart.<dev>"
+    "hw.smart.<dev>",
+    "hw.ups.power",
+    "hw.ups.battery",
+    "hw.restart"
   ],
   "examples": {
     "metrics": [
@@ -32,7 +39,9 @@
       "temp.disk.nvme0_c",
       "temp.video_c",
       "fan.cpu_fan_rpm",
-      "clock.offset_seconds"
+      "clock.offset_seconds",
+      "ups.charge_percent",
+      "ups.input_v"
     ],
     "states": [
       "hw.gpu.0",
@@ -41,7 +50,9 @@
       "hw.array.vol1",
       "hw.array.zfs_tank",
       "hw.smart.hd3",
-      "hw.smart.disk0"
+      "hw.smart.disk0",
+      "hw.ups.power",
+      "hw.restart"
     ]
   }
 }
